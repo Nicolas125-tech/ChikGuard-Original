@@ -1,6 +1,12 @@
 # ChikGuard
 
-Sistema de monitoramento para criação de frangos usando visão computacional.
+Sistema de monitoramento para criação de frangos usando visão computacional. Este documento fornece as instruções necessárias para configurar e executar os ambientes de backend, frontend e mobile.
+
+## Funcionalidades (Exemplo)
+
+- Monitoramento de comportamento das aves.
+- Contagem de aves em tempo real.
+- Detecção de anomalias (ex: aves paradas por muito tempo).
 
 ## Pré-requisitos
 
@@ -9,6 +15,7 @@ Sistema de monitoramento para criação de frangos usando visão computacional.
 - npm ou yarn
 - Expo CLI
 - OpenCV
+- Ngrok
 
 ## Instalação
 

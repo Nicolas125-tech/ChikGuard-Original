@@ -7,13 +7,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WebView } from 'react-native-webview';
 import { 
   Thermometer, Activity, AlertTriangle, CheckCircle, 
-  Settings, Save, Zap, Wind, LayoutDashboard, History, LogOut, Lock, User, Key 
+  Settings, Save, Zap, Wind, LayoutDashboard, History, LogOut, Lock, User, Key, Users
 } from 'lucide-react-native';
 
 // --- COMPONENTES DE TELA ---
 
 // 1. TELA DE MONITORAMENTO (HOME)
-const MonitorScreen = ({ serverUrl, dados, loading }) => {
+const MonitorScreen = ({ serverUrl, dados, loading, chickCount, dispositivos, controlarDispositivo, loadingAcao }) => {
   const getStatusColor = () => {
     if (!dados) return "#334155";
     if (dados.status === 'CALOR') return "#dc2626";
@@ -40,8 +40,22 @@ const MonitorScreen = ({ serverUrl, dados, loading }) => {
         <Text style={styles.statusMsg}>{dados?.mensagem || "Verificando sensores..."}</Text>
       </View>
 
+      {/* Novo Card de Contagem de Aves */}
+      <View style={styles.countCard}>
+        <View style={styles.cardHeader}>
+          <View>
+            <Text style={styles.cardLabel}>AVES DETECTADAS</Text>
+            <Text style={styles.countText}>{chickCount}</Text>
+          </View>
+          <View style={[styles.iconBox, { backgroundColor: 'rgba(16, 185, 129, 0.2)' }]}>
+            <Users size={32} color="#10b981"/>
+          </View>
+        </View>
+        <Text style={styles.statusMsg}>Contagem em tempo real via IA.</Text>
+      </View>
+
       {/* Vídeo */}
-      <Text style={styles.sectionTitle}>Câmera Térmica (Ao Vivo)</Text>
+      <Text style={styles.sectionTitle}>Transmissão da Câmera</Text>
       <View style={styles.videoContainer}>
         <WebView 
           source={{ uri: `${serverUrl}/api/video` }} 
@@ -52,14 +66,29 @@ const MonitorScreen = ({ serverUrl, dados, loading }) => {
       </View>
 
       {/* Ações */}
+      <Text style={styles.sectionTitle}>Controlo Ambiental</Text>
       <View style={styles.actionGrid}>
-        <TouchableOpacity style={styles.actionButton}>
-          <Wind size={24} color="#3b82f6" />
-          <Text style={styles.actionLabel}>Ventilação</Text>
+        <TouchableOpacity 
+          style={[styles.actionButton, dispositivos.ventilacao && styles.actionButtonActiveBlue]} 
+          onPress={() => controlarDispositivo('ventilacao', !dispositivos.ventilacao)}
+          disabled={loadingAcao}
+        >
+          <Wind size={24} color={dispositivos.ventilacao ? "#fff" : "#3b82f6"} />
+          <Text style={[styles.actionLabel, dispositivos.ventilacao && {color: '#fff'}]}>Ventilação</Text>
+          <Text style={[styles.actionStatus, dispositivos.ventilacao && {color: 'rgba(255,255,255,0.7)'}]}>
+            {dispositivos.ventilacao ? 'LIGADO' : 'DESLIGADO'}
+          </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton}>
-          <Zap size={24} color="#f97316" />
-          <Text style={styles.actionLabel}>Aquecedor</Text>
+        <TouchableOpacity 
+          style={[styles.actionButton, dispositivos.aquecedor && styles.actionButtonActiveOrange]} 
+          onPress={() => controlarDispositivo('aquecedor', !dispositivos.aquecedor)}
+          disabled={loadingAcao}
+        >
+          <Zap size={24} color={dispositivos.aquecedor ? "#fff" : "#f97316"} />
+          <Text style={[styles.actionLabel, dispositivos.aquecedor && {color: '#fff'}]}>Aquecedor</Text>
+          <Text style={[styles.actionStatus, dispositivos.aquecedor && {color: 'rgba(255,255,255,0.7)'}]}>
+            {dispositivos.aquecedor ? 'LIGADO' : 'DESLIGADO'}
+          </Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -154,6 +183,9 @@ export default function App() {
   const [serverUrl, setServerUrl] = useState('');
   const [activeTab, setActiveTab] = useState('monitor'); // monitor, history, config
   const [dados, setDados] = useState(null);
+  const [chickCount, setChickCount] = useState(0);
+  const [dispositivos, setDispositivos] = useState({ ventilacao: false, aquecedor: false });
+  const [loadingAcao, setLoadingAcao] = useState(false);
 
   // Login States
   const [user, setUser] = useState('');
@@ -178,9 +210,35 @@ export default function App() {
           setDados(json);
         } catch (e) { console.log("Erro conexão polling"); }
       };
+
+      const fetchChickCount = async () => {
+        try {
+          const res = await fetch(`${serverUrl}/api/chick_count`);
+          const json = await res.json();
+          if (res.ok) setChickCount(json.count);
+        } catch (e) { console.log("Erro conexão contagem"); }
+      };
+
+      const fetchDeviceStatus = async () => {
+        try {
+          const res = await fetch(`${serverUrl}/api/estado-dispositivos`);
+          const json = await res.json();
+          if (res.ok) setDispositivos(json);
+        } catch (e) { console.log("Erro conexão dispositivos"); }
+      };
+
       fetchStatus();
-      const interval = setInterval(fetchStatus, 2000);
-      return () => clearInterval(interval);
+      fetchChickCount();
+      fetchDeviceStatus();
+
+      const intervalStatus = setInterval(fetchStatus, 2000);
+      const intervalCount = setInterval(fetchChickCount, 2000);
+      const intervalDevices = setInterval(fetchDeviceStatus, 5000);
+      return () => {
+        clearInterval(intervalStatus);
+        clearInterval(intervalCount);
+        clearInterval(intervalDevices);
+      };
     }
   }, [token, serverUrl, activeTab]);
 
@@ -202,6 +260,30 @@ export default function App() {
       }
     } catch (e) { Alert.alert("Erro", "Falha de conexão com " + serverUrl); }
     finally { setLoadingLogin(false); }
+  };
+
+  const controlarDispositivo = async (tipo, ligar) => {
+    setLoadingAcao(true);
+    try {
+      const req = await fetch(`${serverUrl}/api/${tipo}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ ligar })
+      });
+      if (req.ok) {
+        const data = await req.json();
+        setDispositivos(prev => ({ ...prev, [tipo]: data[tipo] }));
+      } else {
+        Alert.alert("Erro", `Falha ao controlar ${tipo}`);
+      }
+    } catch (e) {
+      Alert.alert("Erro", "Falha de conexão com o servidor.");
+    } finally {
+      setLoadingAcao(false);
+    }
   };
 
   // TELA DE LOGIN
@@ -254,7 +336,16 @@ export default function App() {
 
       {/* Conteúdo Dinâmico */}
       <View style={{flex:1}}>
-        {activeTab === 'monitor' && <MonitorScreen serverUrl={serverUrl} dados={dados} loading={!dados}/>}
+        {activeTab === 'monitor' && 
+          <MonitorScreen 
+            serverUrl={serverUrl} 
+            dados={dados} 
+            loading={!dados}
+            chickCount={chickCount}
+            dispositivos={dispositivos}
+            controlarDispositivo={controlarDispositivo}
+            loadingAcao={loadingAcao}
+          />}
         {activeTab === 'history' && <HistoryScreen serverUrl={serverUrl} />}
         {activeTab === 'config' && <ConfigScreen serverUrl={serverUrl} setServerUrl={setServerUrl} logout={() => {setToken(null); AsyncStorage.removeItem('cg_token');}} />}
       </View>
@@ -302,6 +393,8 @@ const styles = StyleSheet.create({
   iconBox: { backgroundColor: 'rgba(255,255,255,0.2)', padding: 10, borderRadius: 12 },
   statusTitle: { fontSize: 20, fontWeight: 'bold', color: 'white', marginTop: 10 },
   statusMsg: { color: 'rgba(255,255,255,0.9)', marginTop: 5 },
+  countCard: { padding: 20, borderRadius: 24, marginBottom: 20, backgroundColor: '#1e293b' },
+  countText: { fontSize: 56, fontWeight: 'bold', color: '#FFF' },
 
   // Inputs
   inputContainer: { flexDirection:'row', alignItems:'center', backgroundColor:'#1e293b', borderRadius:12, paddingHorizontal:15, marginBottom:15, borderWidth:1, borderColor:'#334155' },
@@ -329,6 +422,9 @@ const styles = StyleSheet.create({
   // Action Grid
   actionGrid: { flexDirection:'row', gap:15 },
   actionButton: { flex:1, backgroundColor:'#1e293b', padding:20, borderRadius:16, alignItems:'center', borderWidth:1, borderColor:'#334155' },
+  actionButtonActiveBlue: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
+  actionButtonActiveOrange: { backgroundColor: '#f97316', borderColor: '#f97316' },
   actionLabel: { color:'#cbd5e1', marginTop:10, fontWeight:'bold', fontSize:12 },
+  actionStatus: { color: '#94a3b8', marginTop: 5, fontSize: 10, fontWeight: 'bold' },
   label: { color:'#94a3b8', marginBottom:10, fontSize:12, fontWeight:'bold' }
 });

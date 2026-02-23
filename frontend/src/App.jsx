@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Thermometer, Activity, AlertTriangle, CheckCircle, 
   Settings, Wifi, LayoutDashboard, Zap, Wind, Save, 
-  WifiOff, Maximize, LogOut, Lock, User, Key, LogIn, ExternalLink,
-  Power
+  WifiOff, Maximize, LogOut, Lock, User, Key, LogIn, ExternalLink, Power,
+  Users
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -179,6 +179,7 @@ function Dashboard({ token, serverIP, logout }) {
   const [historico, setHistorico] = useState([]);
   const [dispositivos, setDispositivos] = useState({ ventilacao: false, aquecedor: false });
   const [loadingAcao, setLoadingAcao] = useState(false);
+  const [contagemPintinhos, setContagemPintinhos] = useState(0); // Novo estado para contagem
 
   const baseUrl = getBaseUrl(serverIP);
   const API_URL = `${baseUrl}/api/status`;
@@ -248,6 +249,24 @@ function Dashboard({ token, serverIP, logout }) {
     }
   }, [token, baseUrl]);
 
+  const buscarContagemPintinhos = useCallback(async () => {
+    try {
+      const response = await fetch(`${baseUrl}/api/chick_count`, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'ngrok-skip-browser-warning': 'true' 
+        } 
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setContagemPintinhos(data.count);
+      }
+    } catch (error) {
+      console.error("Erro ao buscar contagem de pintinhos:", error);
+    }
+  }, [token, baseUrl]);
+
+
   const controlarDispositivo = async (tipo, ligar) => {
     setLoadingAcao(true);
     try {
@@ -275,17 +294,20 @@ function Dashboard({ token, serverIP, logout }) {
     buscarDados();
     buscarHistorico();
     buscarEstadoDispositivos();
+    buscarContagemPintinhos();
     
     const intervalDados = setInterval(buscarDados, 2000);
     const intervalHistorico = setInterval(buscarHistorico, 10000);
     const intervalDispositivos = setInterval(buscarEstadoDispositivos, 5000);
+    const intervalContagem = setInterval(buscarContagemPintinhos, 2000); // Buscar contagem a cada 2 segundos
     
     return () => {
       clearInterval(intervalDados);
       clearInterval(intervalHistorico);
       clearInterval(intervalDispositivos);
+      clearInterval(intervalContagem);
     };
-  }, [buscarDados, buscarHistorico, buscarEstadoDispositivos]);
+  }, [buscarDados, buscarHistorico, buscarEstadoDispositivos, buscarContagemPintinhos]);
 
   const tentarRecarregarVideo = () => {
     setVideoBloqueadoNgrok(false);
@@ -363,6 +385,28 @@ function Dashboard({ token, serverIP, logout }) {
               <div className={`absolute -right-10 -bottom-10 w-40 h-40 rounded-full blur-[80px] opacity-20 transition-colors duration-500 ${getTextColor().replace('text-', 'bg-')}`}></div>
             </div>
 
+            {/* Novo Card para Contagem de Aves */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg">
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex items-center gap-2 text-slate-300 font-bold text-xs uppercase tracking-widest">
+                  <Users size={16} /> Contagem de Aves
+                </div>
+                {loading && contagemPintinhos === 0 ? <Activity className="animate-spin" size={20}/> : 
+                  <CheckCircle className="text-emerald-500" />
+                }
+              </div>
+              <div className="text-7xl font-bold text-white mb-2 tracking-tighter">
+                {erro ? '--' : contagemPintinhos}
+              </div>
+              <div className={`inline-block px-3 py-1 rounded-lg font-bold text-sm bg-slate-950/40 border border-white/10 backdrop-blur-md text-emerald-400`}>
+                AVES DETECTADAS
+              </div>
+              <p className="mt-4 text-slate-300 text-sm leading-relaxed border-l-2 border-white/10 pl-3">
+                Contagem em tempo real via visão computacional.
+              </p>
+            </div>
+
+
             {/* Gráfico de Histórico */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg">
               <h3 className="text-slate-400 text-xs font-bold uppercase mb-4 flex items-center gap-2 tracking-widest">
@@ -429,7 +473,7 @@ function Dashboard({ token, serverIP, logout }) {
             <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl h-full min-h-[400px] flex flex-col relative group">
               <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950/50 backdrop-blur-sm absolute top-0 left-0 right-0 z-20">
                 <h3 className="font-bold text-slate-200 flex items-center gap-2 text-sm">
-                  <Maximize size={16} className="text-slate-500" /> Transmissão Térmica
+                  <Maximize size={16} className="text-slate-500" /> Transmissão da Câmera
                 </h3>
                 {!erro && !videoBloqueadoNgrok && <span className="flex items-center gap-2 text-[10px] font-bold text-red-500 animate-pulse bg-red-500/10 px-2 py-1 rounded border border-red-500/20"><span className="w-1.5 h-1.5 bg-red-500 rounded-full"></span> AO VIVO</span>}
               </div>
@@ -471,7 +515,7 @@ function Dashboard({ token, serverIP, logout }) {
                   <img 
                     id="camera-feed"
                     src={VIDEO_URL} 
-                    alt="Visão Térmica" 
+                    alt="Visão da Câmera" 
                     className="w-full h-full object-contain"
                     onError={(e) => { 
                       if(window.location.hostname.includes('ngrok') || serverIP.includes('ngrok')) {
@@ -487,7 +531,7 @@ function Dashboard({ token, serverIP, logout }) {
                 {!erro && !videoBloqueadoNgrok && (
                   <>
                     <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur px-3 py-1.5 rounded border border-white/10 z-20">
-                      <p className="text-[10px] text-emerald-500 font-mono tracking-wider">SENSOR: TÉRMICO</p>
+                      <p className="text-[10px] text-emerald-500 font-mono tracking-wider">CÂMERA COM DETECÇÃO IA</p>
                     </div>
                     <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.1)_50%),linear-gradient(90deg,rgba(255,0,0,0.03),rgba(0,255,0,0.01),rgba(0,0,255,0.03))] bg-[length:100%_2px,3px_100%] pointer-events-none z-10"></div>
                   </>
