@@ -37,22 +37,27 @@ pip install -r requirements.txt
 pip install flask-bcrypt flask-sqlalchemy flask-jwt-extended
 ```
 
-5. Configure servidor Ngrok:
 
-```bash
-ngrok config add-authtoken 1a2b3c4d5e6f7g8h9i0_token_falso_aqui
-```
-5.1 
-```bash
-ngrok http 5000
-```
-
-6. Execute o servidor:
+5. Execute o servidor:
 ```bash
 python app.py
 ```
 
 O backend estará disponível em `http://localhost:5000`
+
+### Ngrok
+
+1. Configure servidor Ngrok:
+
+```bash
+ngrok config add-authtoken 1a2b3c4d5e6f7g8h9i0_token_falso_aqui
+```
+
+2.
+```bash
+ngrok http 5000
+```
+3. Colouque o link do Ngrok na chave ip de login.
 
 ### Frontend
 
