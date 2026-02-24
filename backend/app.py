@@ -10,6 +10,76 @@ import time
 import os
 import random
 
+class ObjectDetector:
+    """
+    Encapsula a lógica de deteção de objetos YOLO para uma melhor organização e robustez.
+    """
+    def __init__(self, weights_path, config_path, names_path):
+        self.yolo_loaded = False
+        self.classes = []
+        try:
+            self.net = cv2.dnn.readNet(weights_path, config_path)
+            with open(names_path, "r") as f:
+                self.classes = [line.strip() for line in f.readlines()]
+            
+            layer_names = self.net.getLayerNames()
+            output_layers_indices = self.net.getUnconnectedOutLayers()
+            if hasattr(output_layers_indices, 'flatten'):
+                output_layers_indices = output_layers_indices.flatten()
+            
+            self.output_layers = [layer_names[i - 1] for i in output_layers_indices]
+            self.yolo_loaded = True
+            print("✅ Modelo YOLO carregado com sucesso para a classe ObjectDetector.")
+        except (cv2.error, FileNotFoundError) as e:
+            print(f"⚠️ Erro ao carregar o modelo YOLO na classe ObjectDetector: {e}")
+            print("   Certifique-se de que a pasta 'backend/yolo' existe e contém os arquivos necessários.")
+
+    def detect(self, frame, confidence_threshold=0.4, nms_threshold=0.4):
+        if not self.yolo_loaded:
+            return [], [], []
+
+        height, width, _ = frame.shape
+        # A rede YOLOv3-tiny foi treinada com imagens 416x416
+        blob = cv2.dnn.blobFromImage(frame, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
+        self.net.setInput(blob)
+        outs = self.net.forward(self.output_layers)
+
+        class_ids = []
+        confidences = []
+        boxes = []
+
+        raw_detections_count = 0
+        for out in outs:
+            for detection in out:
+                scores = detection[5:]
+                class_id = np.argmax(scores)
+                confidence = scores[class_id]
+                if confidence > confidence_threshold:
+                    raw_detections_count += 1
+                    center_x = int(detection[0] * width)
+                    center_y = int(detection[1] * height)
+                    w = int(detection[2] * width)
+                    h = int(detection[3] * height)
+                    x = int(center_x - w / 2)
+                    y = int(center_y - h / 2)
+                    boxes.append([x, y, w, h])
+                    confidences.append(float(confidence))
+                    class_ids.append(class_id)
+        
+        # Log para diagnóstico: mostra quantas detecções brutas foram encontradas
+        print(f"[DETECTOR] Deteções brutas (conf > {confidence_threshold}): {raw_detections_count}")
+        
+        # Aplica Non-Max Suppression para refinar as caixas de deteção
+        indexes = cv2.dnn.NMSBoxes(boxes, confidences, confidence_threshold, nms_threshold)
+
+        if indexes is not None:
+            if hasattr(indexes, 'flatten'):
+                indexes = indexes.flatten()
+            # Retorna apenas os resultados filtrados pelo NMS
+            return [boxes[i] for i in indexes], [class_ids[i] for i in indexes], [confidences[i] for i in indexes]
+
+        return [], [], []
+
 app = Flask(__name__)
 # Configuração do Banco SQLite
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///chickguard.db'
@@ -33,34 +103,27 @@ with app.app_context():
 # --- VARIÁVEIS GLOBAIS ---
 CAMERA_INDEX = 0 
 global_frame = None
-last_save_time = 0
+fps_last_time = 0
+db_last_save_time = 0
 lock = threading.Lock()
-chick_count = 0 # Nova variável para contagem
+object_count = 0 # Variável para contagem de objetos
 
 # --- CONFIGURAÇÃO DA REDE NEURAL (YOLO) ---
-# Constrói caminhos absolutos para os arquivos do YOLO para evitar erros de diretório
 basedir = os.path.abspath(os.path.dirname(__file__))
 weights_path = os.path.join(basedir, "yolo", "yolov3-tiny.weights")
 config_path = os.path.join(basedir, "yolo", "yolov3-tiny.cfg")
 names_path = os.path.join(basedir, "yolo", "coco.names")
 
-try:
-    net = cv2.dnn.readNet(weights_path, config_path)
-    classes = []
-    with open(names_path, "r") as f:
-        classes = [line.strip() for line in f.readlines()]
-    layer_names = net.getLayerNames()
-    output_layers_indices = net.getUnconnectedOutLayers()
-    if hasattr(output_layers_indices, 'flatten'):
-        output_layers_indices = output_layers_indices.flatten()
-    output_layers = [layer_names[i - 1] for i in output_layers_indices]
-    yolo_loaded = True
-    print("✅ Modelo YOLO carregado com sucesso.")
-except (cv2.error, FileNotFoundError) as e:
-    yolo_loaded = False
-    print(f"⚠️ Erro ao carregar o modelo YOLO: {e}")
-    print("   Certifique-se de que a pasta 'backend/yolo' existe e contém os arquivos 'yolov3-tiny.weights', 'yolov3-tiny.cfg' e 'coco.names'.")
+# Instancia o detector de objetos
+detector = ObjectDetector(weights_path, config_path, names_path)
 
+if detector.yolo_loaded:
+    print("\n" + "="*60)
+    print("ℹ️  MODO DE TESTE ATIVADO: O sistema irá detetar objetos gerais.")
+    print("   Aponte a câmara para um dos seguintes itens para testar:")
+    test_objects = ['person', 'cell phone', 'bottle', 'cup', 'book', 'keyboard', 'mouse', 'tvmonitor', 'laptop']
+    print(f"   ➡️  {', '.join(test_objects)}")
+    print("="*60 + "\n")
 
 # Estado dos dispositivos (simulado)
 estado_dispositivos = {
@@ -69,139 +132,170 @@ estado_dispositivos = {
 }
 
 # --- FUNÇÃO DE DETECÇÃO ---
-def detectar_aves(frame):
-    global chick_count
-    if not yolo_loaded:
-        with lock:
-            chick_count = 0
-        return frame
-
-    height, width, channels = frame.shape
+def detectar_objetos(frame):
+    global object_count
     
-    # Criar um blob da imagem para a entrada da rede
-    blob = cv2.dnn.blobFromImage(frame, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
-    net.setInput(blob)
-    outs = net.forward(output_layers)
+    # Copia o frame para não desenhar sobre o original que pode ser usado em outro lugar
+    draw_frame = frame.copy()
 
-    class_ids = []
-    confidences = []
-    boxes = []
+    # Usa o detector para encontrar objetos. O limiar de confiança foi reduzido para 0.4 para ser mais permissivo.
+    # Aumentamos o limiar de confiança de volta para 0.5 para reduzir falsos positivos.
+    boxes, class_ids, confidences = detector.detect(draw_frame, confidence_threshold=0.5, nms_threshold=0.4)
     
-    # Processar as saídas da rede
-    for out in outs:
-        for detection in out:
-            scores = detection[5:]
-            class_id = np.argmax(scores)
-            confidence = scores[class_id]
-            # A classe 'bird' no COCO é um bom substituto para 'chick'
-            if confidence > 0.5 and classes[class_id] == "bird":
-                center_x = int(detection[0] * width)
-                center_y = int(detection[1] * height)
-                w = int(detection[2] * width)
-                h = int(detection[3] * height)
-                
-                # Coordenadas do retângulo
-                x = int(center_x - w / 2)
-                y = int(center_y - h / 2)
-                
-                boxes.append([x, y, w, h])
-                confidences.append(float(confidence))
-                class_ids.append(class_id)
-
-    # Aplicar Non-Max Suppression para remover caixas sobrepostas
-    indexes = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
-    
-    current_chick_count = 0
-    if indexes is not None:
-        # Em algumas versões, indexes é um array 2D
-        if hasattr(indexes, 'flatten'):
-            indexes = indexes.flatten()
-        current_chick_count = len(indexes)
-        font = cv2.FONT_HERSHEY_PLAIN
-        for i in indexes:
-            x, y, w, h = boxes[i]
-            color = (0, 255, 0) # Verde
-            cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+    if detector.yolo_loaded:
+        print(f"[DETECTOR] Objetos finais encontrados: {len(boxes)}")
 
     with lock:
-        chick_count = current_chick_count
+        object_count = len(boxes)
+
+    # Desenha as caixas e os rótulos no frame
+    if detector.yolo_loaded:
+        font = cv2.FONT_HERSHEY_PLAIN
+        for i in range(len(boxes)):
+            x, y, w, h = boxes[i]
+            label = str(detector.classes[class_ids[i]])
+            confidence = confidences[i]
+            color = (0, 255, 0) # Verde
+            cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+            # Exibe o rótulo e a confiança para melhor diagnóstico
+            text = f"{label} ({confidence:.2f})"
+            cv2.putText(frame, text, (x, y - 5), font, 1.5, color, 2)
+
+    # --- DIAGNOSTIC FEEDBACK ---
+    if object_count == 0 and detector.yolo_loaded:
+        height, _, _ = frame.shape
+        # Adiciona texto no canto inferior para feedback constante
+        cv2.putText(draw_frame, "IA ATIVA (NENHUM OBJETO DETECTADO)", (10, height - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
 
     # Desenhar a contagem no frame
     font = cv2.FONT_HERSHEY_PLAIN
-    cv2.putText(frame, f"Aves: {chick_count}", (10, 30), font, 2, (0, 255, 0), 2)
+    cv2.putText(draw_frame, f"Objetos: {object_count}", (10, 30), font, 2, (0, 255, 0), 2)
     
-    return frame
+    return draw_frame
 
 # --- THREAD DE CÂMERA (COM GRAVAÇÃO AUTOMÁTICA) ---
 def camera_loop():
-    global global_frame, last_save_time
+    global global_frame, db_last_save_time, fps_last_time
 
     cap = None
-    is_video_file = False
     use_basic_simulation = False
+    last_error_print_time = 0
 
-    # 1. Tenta abrir a câmera real
+    print("\n" + "="*60)
+    print("🚀 INICIANDO PIPELINE DE VÍDEO PROFISSIONAL 🚀")
+    print("1. Procurando por câmera real...")
     cap = cv2.VideoCapture(CAMERA_INDEX)
-    if not cap.isOpened():
-        print("⚠️ Câmera real não encontrada. Tentando usar vídeo de simulação 'video_granja.mp4'.")
-        # 2. Se falhar, tenta abrir o arquivo de vídeo
-        video_path = os.path.join(basedir, 'video_granja.mp4')
-        cap = cv2.VideoCapture(video_path)
-        is_video_file = True
-        if not cap.isOpened():
-            print("❌ Vídeo de simulação não encontrado. Usando simulação básica (tela preta).")
-            print("   Para um teste visual, execute 'python gerar_video.py' na pasta 'backend'.")
-            use_basic_simulation = True
+    
+    if cap.isOpened():
+        print("✅ Câmera real encontrada!")
+        use_basic_simulation = False
+        # AUMENTANDO A RESOLUÇÃO PARA MELHORAR A DETECÇÃO
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+        height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        print(f"   - Resolução da câmera definida para: {int(width)}x{int(height)}")
     else:
-        print("✅ Câmera real encontrada.")
-        # Configura resolução baixa para performance
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+        print("❌ Câmera real não encontrada.")
+        print("2. Ativando MODO DE TESTE AUTOMÁTICO com 'TEST_OBJECT'.")
+        use_basic_simulation = True
+            
+    print("="*60 + "\n")
 
+    frame_counter = 0
     while True:
-        if use_basic_simulation:
-            # Simulação básica (se tudo falhar)
-            frame = np.zeros((240, 320, 3), dtype=np.uint8)
-            cv2.putText(frame, "SIMULACAO", (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
-            temp_atual = 28 + random.uniform(-5, 5)
-        else:
-            ret, frame = cap.read()
-            if not ret:
-                if is_video_file: # Se for um vídeo, reinicia do começo
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                    continue
-                else: # Se for uma câmera real que falhou, usa simulação básica
-                    print("❌ Perda de sinal da câmera. Alternando para simulação básica.")
+        try:
+            frame_counter += 1
+            if use_basic_simulation:
+                # Simulação básica (se tudo falhar)
+                frame = np.zeros((480, 640, 3), dtype=np.uint8) # Usar a mesma resolução
+                
+                # Desenha um objeto falso para teste
+                fake_object_x, fake_object_y, fake_object_w, fake_object_h = 200, 150, 150, 150
+                label = "TEST_OBJECT"
+                color = (0, 255, 0) # Verde
+                font = cv2.FONT_HERSHEY_PLAIN
+                
+                cv2.rectangle(frame, (fake_object_x, fake_object_y), (fake_object_x + fake_object_w, fake_object_y + fake_object_h), color, 2)
+                cv2.putText(frame, label, (fake_object_x, fake_object_y - 5), font, 2, color, 3)
+                
+                # Força a contagem para 1 no modo de teste
+                with lock:
+                    object_count = 1
+                cv2.putText(frame, f"Objetos: {object_count}", (10, 30), font, 2, (0, 255, 0), 2)
+                
+                processed_frame = frame
+                temp_atual = 28 + random.uniform(-5, 5)
+            else:
+                ret, frame = cap.read()
+                if not ret:
+                    print("❌ Perda de sinal da câmera. Alternando para simulação de teste.")
                     use_basic_simulation = True
                     continue
+
+                # --- PIPELINE DE PROCESSAMENTO ---
+                # 1. Overlay de Diagnóstico (Indiscutível)
+                # Se isto não aparecer, o problema é na captura de vídeo ou no streaming.
+                timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                cv2.putText(frame, timestamp, (10, frame.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                cv2.circle(frame, (frame.shape[1] - 30, 30), 10, (0, 0, 255), -1) # Círculo vermelho no canto superior direito
+
+                # 2. Deteção de Objetos
+                processed_frame = detectar_objetos(frame)
+
+                # Simula temperatura a partir do brilho (se não for um sensor térmico real)
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                brilho = np.mean(gray)
+                temp_atual = 20 + (brilho / 255) * 20
             
-            # Leitura real (estimada via brilho se for webcam comum)
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            brilho = np.mean(gray)
-            temp_atual = 20 + (brilho / 255) * 20
+            new_time = time.time()
+            # Calcula e exibe FPS
+            # Evita divisão por zero no primeiro frame
+            fps = 1 / (new_time - fps_last_time) if (new_time - fps_last_time) > 0 else 0
+            fps_last_time = new_time
 
-        # --- DETECÇÃO DE AVES ---
-        processed_frame = detectar_aves(frame.copy())
+            # Adiciona um contador de frames e FPS ao vídeo para feedback visual
+            cv2.putText(processed_frame, f"FPS: {int(fps)}", (processed_frame.shape[1] - 120, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 255), 2)
 
-        # Atualiza frame global
-        with lock:
-            global_frame = processed_frame
+            # Atualiza frame global
+            with lock:
+                global_frame = processed_frame
 
-        # --- GRAVAR NO BANCO A CADA 30 SEGUNDOS ---
-        current_time = time.time()
-        if current_time - last_save_time > 30: # Intervalo de salvamento
-            with app.app_context():
-                status = "NORMAL"
-                if temp_atual < 26: status = "FRIO"
-                elif temp_atual > 32: status = "CALOR"
+            # --- GRAVAR NO BANCO A CADA 30 SEGUNDOS ---
+            current_time = time.time()
+            if current_time - db_last_save_time > 30: # Intervalo de salvamento
+                with app.app_context():
+                    status = "NORMAL"
+                    if temp_atual < 26: status = "FRIO"
+                    elif temp_atual > 32: status = "CALOR"
+                    
+                    nova_leitura = Reading(temperatura=round(temp_atual, 1), status=status)
+                    db.session.add(nova_leitura)
+                    db.session.commit()
+                    print(f"💾 Dados salvos: {temp_atual:.1f}°C")
+                db_last_save_time = current_time
                 
-                nova_leitura = Reading(temperatura=round(temp_atual, 1), status=status)
-                db.session.add(nova_leitura)
-                db.session.commit()
-                print(f"💾 Dados salvos: {temp_atual:.1f}°C")
-            last_save_time = current_time
+            time.sleep(0.01)
+
+        except Exception as e:
+            # "CAIXA PRETA": Captura QUALQUER erro que aconteça na thread
+            current_time = time.time()
+            # Imprime o erro na consola apenas a cada 5 segundos para não sobrecarregar
+            if current_time - last_error_print_time > 5:
+                print("\n" + "!"*80)
+                print(f"CRITICAL ERROR IN CAMERA THREAD: {e}")
+                import traceback
+                traceback.print_exc()
+                print("A thread de vídeo encontrou um erro fatal. Verifique a mensagem acima.")
+                print("!"*80 + "\n")
+                last_error_print_time = current_time
             
-        time.sleep(0.1)
+            # Desenha um frame de erro para feedback visual imediato no vídeo
+            error_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+            cv2.putText(error_frame, "THREAD ERROR", (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 3)
+            with lock:
+                global_frame = error_frame
+            time.sleep(1)
 
 # Inicia thread
 t = threading.Thread(target=camera_loop)
@@ -252,9 +346,9 @@ def get_history():
 # --- NOVA ROTA PARA CONTAGEM ---
 @app.route('/api/chick_count', methods=['GET'])
 def get_chick_count():
-    global chick_count
+    global object_count
     with lock:
-        count = chick_count
+        count = object_count
     return jsonify({"count": count})
 
 # --- ROTAS DE CONTROLE ---
@@ -293,6 +387,14 @@ def controlar_aquecedor():
 def get_estado_dispositivos():
     """Retorna o estado atual dos dispositivos"""
     return jsonify(estado_dispositivos)
+
+@app.route('/api/health')
+def health_check():
+    """Verifica a saúde do sistema, incluindo a thread da câmera."""
+    return jsonify({
+        "status": "ok",
+        "camera_thread_alive": t.is_alive()
+    })
 
 if __name__ == '__main__':
     # Roda em todas as interfaces

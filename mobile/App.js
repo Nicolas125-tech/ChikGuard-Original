@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  StyleSheet, Text, View, TextInput, TouchableOpacity, 
-  SafeAreaView, StatusBar, ScrollView, ActivityIndicator, Alert, Dimensions 
+  StyleSheet, Text, View, TextInput, TouchableOpacity,
+  SafeAreaView, StatusBar, ScrollView, ActivityIndicator, Alert, Linking
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WebView } from 'react-native-webview';
 import { 
   Thermometer, Activity, AlertTriangle, CheckCircle, 
-  Settings, Save, Zap, Wind, LayoutDashboard, History, LogOut, Lock, User, Key, Users
+  Settings, Save, Zap, Wind, LayoutDashboard, History, LogOut, Lock, User, Key, ScanSearch
 } from 'lucide-react-native';
 
 // --- COMPONENTES DE TELA ---
@@ -20,6 +20,8 @@ const MonitorScreen = ({ serverUrl, dados, loading, chickCount, dispositivos, co
     if (dados.status === 'FRIO') return "#2563eb";
     return "#10b981";
   };
+
+  const videoUrl = `${serverUrl}/api/video`;
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -44,11 +46,11 @@ const MonitorScreen = ({ serverUrl, dados, loading, chickCount, dispositivos, co
       <View style={styles.countCard}>
         <View style={styles.cardHeader}>
           <View>
-            <Text style={styles.cardLabel}>AVES DETECTADAS</Text>
+            <Text style={styles.cardLabel}>OBJETOS DETECTADOS</Text>
             <Text style={styles.countText}>{chickCount}</Text>
           </View>
           <View style={[styles.iconBox, { backgroundColor: 'rgba(16, 185, 129, 0.2)' }]}>
-            <Users size={32} color="#10b981"/>
+            <ScanSearch size={32} color="#10b981"/>
           </View>
         </View>
         <Text style={styles.statusMsg}>Contagem em tempo real via IA.</Text>
@@ -58,9 +60,10 @@ const MonitorScreen = ({ serverUrl, dados, loading, chickCount, dispositivos, co
       <Text style={styles.sectionTitle}>Transmissão da Câmera</Text>
       <View style={styles.videoContainer}>
         <WebView 
-          source={{ uri: `${serverUrl}/api/video` }} 
-          style={{ flex: 1, backgroundColor: 'transparent' }}
-          scrollEnabled={false}
+          source={{ uri: videoUrl }} 
+          style={{ flex: 1, backgroundColor: 'black' }}
+          scrollEnabled={true}
+          nestedScrollEnabled={true}
         />
         <View style={styles.liveBadge}><Text style={styles.liveText}>AO VIVO</Text></View>
       </View>
@@ -412,6 +415,13 @@ const styles = StyleSheet.create({
   videoContainer: { height: 220, backgroundColor: 'black', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#334155', marginBottom: 20, position:'relative' },
   liveBadge: { position:'absolute', top:10, left:10, backgroundColor:'red', paddingHorizontal:8, paddingVertical:4, borderRadius:4 },
   liveText: { color:'white', fontSize:10, fontWeight:'bold' },
+
+  // Ngrok Blocker
+  ngrokBlockerContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#1e293b', padding: 20 },
+  ngrokTitle: { color: 'white', fontSize: 18, fontWeight: 'bold', marginTop: 10, marginBottom: 5 },
+  ngrokText: { color: '#94a3b8', textAlign: 'center', marginBottom: 20 },
+  ngrokButton: { backgroundColor: '#2563eb', padding: 12, borderRadius: 8, width: '100%', alignItems: 'center', marginBottom: 10 },
+  ngrokButtonText: { color: 'white', fontWeight: 'bold' },
 
   // History List
   historyItem: { flexDirection:'row', alignItems:'center', backgroundColor:'#1e293b', padding:15, borderRadius:12, marginBottom:10 },

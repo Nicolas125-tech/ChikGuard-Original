@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Thermometer, Activity, AlertTriangle, CheckCircle, 
   Settings, Wifi, LayoutDashboard, Zap, Wind, Save, 
-  WifiOff, Maximize, LogOut, Lock, User, Key, LogIn, ExternalLink, Power,
-  Users
+  WifiOff, Maximize, LogOut, Lock, User, Key, LogIn, ExternalLink, Power, 
+  ScanSearch
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -389,7 +389,7 @@ function Dashboard({ token, serverIP, logout }) {
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg">
               <div className="flex justify-between items-start mb-4">
                 <div className="flex items-center gap-2 text-slate-300 font-bold text-xs uppercase tracking-widest">
-                  <Users size={16} /> Contagem de Aves
+                  <ScanSearch size={16} /> Contagem de Objetos
                 </div>
                 {loading && contagemPintinhos === 0 ? <Activity className="animate-spin" size={20}/> : 
                   <CheckCircle className="text-emerald-500" />
@@ -399,7 +399,7 @@ function Dashboard({ token, serverIP, logout }) {
                 {erro ? '--' : contagemPintinhos}
               </div>
               <div className={`inline-block px-3 py-1 rounded-lg font-bold text-sm bg-slate-950/40 border border-white/10 backdrop-blur-md text-emerald-400`}>
-                AVES DETECTADAS
+                OBJETOS DETECTADOS
               </div>
               <p className="mt-4 text-slate-300 text-sm leading-relaxed border-l-2 border-white/10 pl-3">
                 Contagem em tempo real via visão computacional.
