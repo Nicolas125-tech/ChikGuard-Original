@@ -294,34 +294,34 @@ export default function App() {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#0f172a"/>
-        <View style={styles.centerContainer}>
-          <View style={{alignItems:'center', marginBottom:40}}>
-            <View style={{backgroundColor:'rgba(16,185,129,0.1)', padding:20, borderRadius:50, marginBottom:15}}>
+        <ScrollView contentContainerStyle={styles.centerContainer}>
+          <View style={{alignItems:'center', marginBottom:30}}>
+            <View style={{backgroundColor:'rgba(16,185,129,0.1)', padding:20, borderRadius:99, marginBottom:15, borderWidth:1, borderColor: 'rgba(16,185,129,0.2)'}}>
               <Lock size={48} color="#10b981" />
             </View>
             <Text style={{fontSize:28, fontWeight:'bold', color:'white'}}>ChickGuard</Text>
-            <Text style={{color:'#64748b'}}>Acesso Granja</Text>
+            <Text style={{color:'#64748b'}}>Acesso Profissional</Text>
           </View>
 
           {/* Config rápida de IP no login */}
           <View style={{marginBottom:20, width:'100%'}}>
-             <Text style={{color:'#64748b', fontSize:10, marginBottom:5}}>SERVIDOR (NGROK OU IP)</Text>
-             <TextInput style={styles.inputSmall} value={serverUrl} onChangeText={setServerUrl} placeholder="https://..." placeholderTextColor="#444" autoCapitalize='none'/>
+             <Text style={styles.label}>ENDEREÇO DO SERVIDOR</Text>
+             <TextInput style={styles.input} value={serverUrl} onChangeText={setServerUrl} placeholder="https://exemplo.ngrok-free.app" placeholderTextColor="#64748b" autoCapitalize='none'/>
           </View>
 
           <View style={styles.inputContainer}>
             <User color="#64748b" size={20}/>
-            <TextInput style={styles.inputField} placeholder="Usuário" placeholderTextColor="#64748b" value={user} onChangeText={setUser} autoCapitalize='none'/>
+            <TextInput style={styles.inputField} placeholder="Usuário" placeholderTextColor="#64748b" value={user} onChangeText={setUser} autoCapitalize='none' autoCorrect={false}/>
           </View>
           <View style={styles.inputContainer}>
             <Key color="#64748b" size={20}/>
-            <TextInput style={styles.inputField} placeholder="Senha" placeholderTextColor="#64748b" secureTextEntry value={pass} onChangeText={setPass}/>
+            <TextInput style={styles.inputField} placeholder="Senha" placeholderTextColor="#64748b" secureTextEntry value={pass} onChangeText={setPass} autoCapitalize='none'/>
           </View>
 
           <TouchableOpacity style={styles.btnPrimary} onPress={handleLogin}>
-            {loadingLogin ? <ActivityIndicator color="#fff"/> : <Text style={styles.btnText}>ENTRAR</Text>}
+            {loadingLogin ? <ActivityIndicator color="#fff"/> : <Text style={styles.btnText}>ACEDER AO SISTEMA</Text>}
           </TouchableOpacity>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -393,11 +393,11 @@ const styles = StyleSheet.create({
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   cardLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: 'bold' },
   tempText: { fontSize: 56, fontWeight: 'bold', color: '#FFF' },
-  iconBox: { backgroundColor: 'rgba(255,255,255,0.2)', padding: 10, borderRadius: 12 },
+  iconBox: { backgroundColor: 'rgba(255,255,255,0.1)', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
   statusTitle: { fontSize: 20, fontWeight: 'bold', color: 'white', marginTop: 10 },
   statusMsg: { color: 'rgba(255,255,255,0.9)', marginTop: 5 },
   countCard: { padding: 20, borderRadius: 24, marginBottom: 20, backgroundColor: '#1e293b' },
-  countText: { fontSize: 56, fontWeight: 'bold', color: '#FFF' },
+  countText: { fontSize: 48, fontWeight: 'bold', color: '#FFF', letterSpacing: -2 },
 
   // Inputs
   inputContainer: { flexDirection:'row', alignItems:'center', backgroundColor:'#1e293b', borderRadius:12, paddingHorizontal:15, marginBottom:15, borderWidth:1, borderColor:'#334155' },
@@ -406,12 +406,12 @@ const styles = StyleSheet.create({
   input: { backgroundColor:'#1e293b', color:'white', padding:15, borderRadius:12, marginBottom:20, borderWidth:1, borderColor:'#334155' },
   
   // Buttons
-  btnPrimary: { backgroundColor: '#10b981', width:'100%', padding:15, borderRadius:12, alignItems:'center', flexDirection:'row', justifyContent:'center', gap:10 },
+  btnPrimary: { backgroundColor: '#10b981', width:'100%', padding:18, borderRadius:16, alignItems:'center', flexDirection:'row', justifyContent:'center', gap:10 },
   btnText: { color: 'white', fontWeight: 'bold', fontSize:16 },
   btnLogout: { flexDirection:'row', alignItems:'center', padding:15, backgroundColor:'#1e293b', borderRadius:12, justifyContent:'center' },
 
   // Video
-  sectionTitle: { color: '#e2e8f0', fontSize: 16, fontWeight: 'bold', marginBottom: 10 },
+  sectionTitle: { color: '#94a3b8', fontSize: 12, fontWeight: 'bold', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
   videoContainer: { height: 220, backgroundColor: 'black', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#334155', marginBottom: 20, position:'relative' },
   liveBadge: { position:'absolute', top:10, left:10, backgroundColor:'red', paddingHorizontal:8, paddingVertical:4, borderRadius:4 },
   liveText: { color:'white', fontSize:10, fontWeight:'bold' },
@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
 
   // Action Grid
   actionGrid: { flexDirection:'row', gap:15 },
-  actionButton: { flex:1, backgroundColor:'#1e293b', padding:20, borderRadius:16, alignItems:'center', borderWidth:1, borderColor:'#334155' },
+  actionButton: { flex:1, backgroundColor:'#1e2b3b', padding:15, borderRadius:20, alignItems:'center', borderWidth:1, borderColor:'#334155' },
   actionButtonActiveBlue: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
   actionButtonActiveOrange: { backgroundColor: '#f97316', borderColor: '#f97316' },
   actionLabel: { color:'#cbd5e1', marginTop:10, fontWeight:'bold', fontSize:12 },
