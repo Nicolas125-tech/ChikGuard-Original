@@ -303,10 +303,13 @@ def video_feed():
     def generate():
         while True:
             with lock:
-                if global_frame is None: continue
+                if global_frame is None:
+                    time.sleep(0.1)
+                    continue
                 # O frame já vem processado da thread da câmera
                 ret, buffer = cv2.imencode('.jpg', global_frame)
             yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+            time.sleep(0.05) # Limita a taxa de envio para economizar recursos (~20 FPS)
     return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/api/status', methods=['GET'])

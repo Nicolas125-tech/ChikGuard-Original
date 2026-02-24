@@ -41,7 +41,7 @@ pip install -r requirements.txt
 4. Instale as dependências:
 
 ```bash
-pip install flask-bcrypt flask-sqlalchemy flask-jwt-extended
+pip install flask-bcrypt flask-sqlalchemy flask-jwt-extended flask-cors ultralytics opencv-python numpy
 ```
 
 
