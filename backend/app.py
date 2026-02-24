@@ -9,76 +9,50 @@ import threading
 import time
 import os
 import random
+from ultralytics import YOLO # Importação da IA Profissional
+
+# ======================================================================================
+# --- CONFIGURAÇÃO DE DETECÇÃO ---
+# Mude para 'aves' para o modo de produção ou 'objetos' para teste geral.
+MODO_DETECCAO = 'aves'
+# ======================================================================================
 
 class ObjectDetector:
     """
-    Encapsula a lógica de deteção de objetos YOLO para uma melhor organização e robustez.
+    Encapsula a lógica de deteção de objetos usando a biblioteca Ultralytics.
+    Esta abordagem é mais moderna, eficiente e precisa que a implementação com OpenCV DNN.
     """
-    def __init__(self, weights_path, config_path, names_path):
+    def __init__(self, model_path='yolov8n.pt'): # YOLOv8 Nano é pequeno, rápido e eficiente.
         self.yolo_loaded = False
-        self.classes = []
+        self.model = None
         try:
-            self.net = cv2.dnn.readNet(weights_path, config_path)
-            with open(names_path, "r") as f:
-                self.classes = [line.strip() for line in f.readlines()]
-            
-            layer_names = self.net.getLayerNames()
-            output_layers_indices = self.net.getUnconnectedOutLayers()
-            if hasattr(output_layers_indices, 'flatten'):
-                output_layers_indices = output_layers_indices.flatten()
-            
-            self.output_layers = [layer_names[i - 1] for i in output_layers_indices]
+            # Carrega o modelo. A Ultralytics faz o download automático na primeira vez.
+            self.model = YOLO(model_path)
             self.yolo_loaded = True
-            print("✅ Modelo YOLO carregado com sucesso para a classe ObjectDetector.")
-        except (cv2.error, FileNotFoundError) as e:
-            print(f"⚠️ Erro ao carregar o modelo YOLO na classe ObjectDetector: {e}")
-            print("   Certifique-se de que a pasta 'backend/yolo' existe e contém os arquivos necessários.")
+            print(f"✅ Modelo Ultralytics '{model_path}' carregado com sucesso.")
+            # Aquece o modelo para a primeira inferência ser mais rápida
+            self.model.predict(np.zeros((480, 640, 3)), verbose=False)
+            print("✅ Modelo aquecido e pronto para uso.")
+        except Exception as e:
+            print(f"⚠️ Erro ao carregar o modelo Ultralytics: {e}")
+            print("   Verifique sua conexão com a internet para o download do modelo ou o caminho do arquivo.")
 
-    def detect(self, frame, confidence_threshold=0.4, nms_threshold=0.4):
+    def detect(self, frame):
         if not self.yolo_loaded:
             return [], [], []
 
-        height, width, _ = frame.shape
-        # A rede YOLOv3-tiny foi treinada com imagens 416x416
-        blob = cv2.dnn.blobFromImage(frame, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
-        self.net.setInput(blob)
-        outs = self.net.forward(self.output_layers)
+        # Realiza a predição. `verbose=False` para não poluir a consola.
+        # Otimização: Definimos um tamanho de imagem menor (imgsz=320) para acelerar a inferência.
+        results = self.model.predict(frame, verbose=False, conf=0.5, imgsz=320)
+        result = results[0] # Pega os resultados do primeiro frame
 
-        class_ids = []
-        confidences = []
-        boxes = []
-
-        raw_detections_count = 0
-        for out in outs:
-            for detection in out:
-                scores = detection[5:]
-                class_id = np.argmax(scores)
-                confidence = scores[class_id]
-                if confidence > confidence_threshold:
-                    raw_detections_count += 1
-                    center_x = int(detection[0] * width)
-                    center_y = int(detection[1] * height)
-                    w = int(detection[2] * width)
-                    h = int(detection[3] * height)
-                    x = int(center_x - w / 2)
-                    y = int(center_y - h / 2)
-                    boxes.append([x, y, w, h])
-                    confidences.append(float(confidence))
-                    class_ids.append(class_id)
+        # Extrai as informações necessárias
+        # Bounding boxes no formato (x1, y1, x2, y2)
+        boxes = result.boxes.xyxy.cpu().numpy().astype(int) 
+        class_ids = result.boxes.cls.cpu().numpy().astype(int)
+        confidences = result.boxes.conf.cpu().numpy()
         
-        # Log para diagnóstico: mostra quantas detecções brutas foram encontradas
-        print(f"[DETECTOR] Deteções brutas (conf > {confidence_threshold}): {raw_detections_count}")
-        
-        # Aplica Non-Max Suppression para refinar as caixas de deteção
-        indexes = cv2.dnn.NMSBoxes(boxes, confidences, confidence_threshold, nms_threshold)
-
-        if indexes is not None:
-            if hasattr(indexes, 'flatten'):
-                indexes = indexes.flatten()
-            # Retorna apenas os resultados filtrados pelo NMS
-            return [boxes[i] for i in indexes], [class_ids[i] for i in indexes], [confidences[i] for i in indexes]
-
-        return [], [], []
+        return boxes, class_ids, confidences
 
 app = Flask(__name__)
 # Configuração do Banco SQLite
@@ -109,20 +83,18 @@ lock = threading.Lock()
 object_count = 0 # Variável para contagem de objetos
 
 # --- CONFIGURAÇÃO DA REDE NEURAL (YOLO) ---
-basedir = os.path.abspath(os.path.dirname(__file__))
-weights_path = os.path.join(basedir, "yolo", "yolov3-tiny.weights")
-config_path = os.path.join(basedir, "yolo", "yolov3-tiny.cfg")
-names_path = os.path.join(basedir, "yolo", "coco.names")
-
 # Instancia o detector de objetos
-detector = ObjectDetector(weights_path, config_path, names_path)
+detector = ObjectDetector()
 
 if detector.yolo_loaded:
     print("\n" + "="*60)
-    print("ℹ️  MODO DE TESTE ATIVADO: O sistema irá detetar objetos gerais.")
-    print("   Aponte a câmara para um dos seguintes itens para testar:")
-    test_objects = ['person', 'cell phone', 'bottle', 'cup', 'book', 'keyboard', 'mouse', 'tvmonitor', 'laptop']
-    print(f"   ➡️  {', '.join(test_objects)}")
+    if MODO_DETECCAO == 'objetos':
+        print("ℹ️  MODO DE TESTE ATIVADO: O sistema irá detetar objetos gerais.")
+        print("   Aponte a câmara para um dos seguintes itens para testar:")
+        test_objects = ['person', 'cell phone', 'bottle', 'cup', 'book', 'keyboard', 'mouse', 'tvmonitor', 'laptop']
+        print(f"   ➡️  {', '.join(test_objects)}")
+    else:
+        print("✅ MODO DE PRODUÇÃO ATIVADO: O sistema irá detetar apenas 'aves'.")
     print("="*60 + "\n")
 
 # Estado dos dispositivos (simulado)
@@ -139,37 +111,56 @@ def detectar_objetos(frame):
     draw_frame = frame.copy()
 
     # Usa o detector para encontrar objetos. O limiar de confiança foi reduzido para 0.4 para ser mais permissivo.
-    # Aumentamos o limiar de confiança de volta para 0.5 para reduzir falsos positivos.
-    boxes, class_ids, confidences = detector.detect(draw_frame, confidence_threshold=0.5, nms_threshold=0.4)
+    # A confiança já é filtrada dentro do método `detect` da Ultralytics.
+    boxes, class_ids, confidences = detector.detect(draw_frame)
     
+    # --- FILTRAGEM BASEADA NO MODO ---
+    filtered_boxes = []
+    filtered_class_ids = []
+    filtered_confidences = []
+
+    if MODO_DETECCAO == 'aves':
+        for i in range(len(class_ids)):
+            # A classe 'bird' no dataset COCO é o que procuramos.
+            if detector.model.names[class_ids[i]] == 'bird':
+                filtered_boxes.append(boxes[i])
+                filtered_class_ids.append(class_ids[i])
+                filtered_confidences.append(confidences[i])
+    else: # modo 'objetos'
+        filtered_boxes = boxes
+        filtered_class_ids = class_ids
+        filtered_confidences = confidences
+
     if detector.yolo_loaded:
-        print(f"[DETECTOR] Objetos finais encontrados: {len(boxes)}")
+        print(f"[DETECTOR] Itens '{MODO_DETECCAO}' encontrados: {len(filtered_boxes)}")
 
     with lock:
-        object_count = len(boxes)
+        object_count = len(filtered_boxes)
 
     # Desenha as caixas e os rótulos no frame
     if detector.yolo_loaded:
         font = cv2.FONT_HERSHEY_PLAIN
-        for i in range(len(boxes)):
-            x, y, w, h = boxes[i]
-            label = str(detector.classes[class_ids[i]])
-            confidence = confidences[i]
+        for i in range(len(filtered_boxes)):
+            x1, y1, x2, y2 = filtered_boxes[i]
+            label = str(detector.model.names[filtered_class_ids[i]])
+            confidence = filtered_confidences[i]
             color = (0, 255, 0) # Verde
-            cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+            cv2.rectangle(draw_frame, (x1, y1), (x2, y2), color, 2)
             # Exibe o rótulo e a confiança para melhor diagnóstico
             text = f"{label} ({confidence:.2f})"
-            cv2.putText(frame, text, (x, y - 5), font, 1.5, color, 2)
+            cv2.putText(draw_frame, text, (x1, y1 - 5), font, 1.5, color, 2)
 
     # --- DIAGNOSTIC FEEDBACK ---
     if object_count == 0 and detector.yolo_loaded:
         height, _, _ = frame.shape
+        feedback_text = "IA ATIVA (NENHUMA AVE DETECTADA)" if MODO_DETECCAO == 'aves' else "IA ATIVA (NENHUM OBJETO DETECTADO)"
         # Adiciona texto no canto inferior para feedback constante
-        cv2.putText(draw_frame, "IA ATIVA (NENHUM OBJETO DETECTADO)", (10, height - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+        cv2.putText(draw_frame, feedback_text, (10, height - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
 
     # Desenhar a contagem no frame
     font = cv2.FONT_HERSHEY_PLAIN
-    cv2.putText(draw_frame, f"Objetos: {object_count}", (10, 30), font, 2, (0, 255, 0), 2)
+    label_text = "Aves" if MODO_DETECCAO == 'aves' else "Objetos"
+    cv2.putText(draw_frame, f"{label_text}: {object_count}", (10, 30), font, 2, (0, 255, 0), 2)
     
     return draw_frame
 
@@ -181,17 +172,17 @@ def camera_loop():
     use_basic_simulation = False
     last_error_print_time = 0
 
-    print("\n" + "="*60)
-    print("🚀 INICIANDO PIPELINE DE VÍDEO PROFISSIONAL 🚀")
+    print("\n" + "="*70)
+    print("🚀 INICIANDO PIPELINE DE VÍDEO PROFISSIONAL COM ULTRALYTICS YOLOv8 🚀")
     print("1. Procurando por câmera real...")
     cap = cv2.VideoCapture(CAMERA_INDEX)
     
     if cap.isOpened():
         print("✅ Câmera real encontrada!")
         use_basic_simulation = False
-        # AUMENTANDO A RESOLUÇÃO PARA MELHORAR A DETECÇÃO
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        # Otimização: Reduzimos a resolução da captura para aumentar o FPS.
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 480)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 360)
         width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
         height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
         print(f"   - Resolução da câmera definida para: {int(width)}x{int(height)}")
@@ -200,7 +191,7 @@ def camera_loop():
         print("2. Ativando MODO DE TESTE AUTOMÁTICO com 'TEST_OBJECT'.")
         use_basic_simulation = True
             
-    print("="*60 + "\n")
+    print("="*70 + "\n")
 
     frame_counter = 0
     while True:
@@ -233,14 +224,7 @@ def camera_loop():
                     use_basic_simulation = True
                     continue
 
-                # --- PIPELINE DE PROCESSAMENTO ---
-                # 1. Overlay de Diagnóstico (Indiscutível)
-                # Se isto não aparecer, o problema é na captura de vídeo ou no streaming.
-                timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-                cv2.putText(frame, timestamp, (10, frame.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
-                cv2.circle(frame, (frame.shape[1] - 30, 30), 10, (0, 0, 255), -1) # Círculo vermelho no canto superior direito
-
-                # 2. Deteção de Objetos
+                # Deteção de Objetos
                 processed_frame = detectar_objetos(frame)
 
                 # Simula temperatura a partir do brilho (se não for um sensor térmico real)
@@ -274,8 +258,9 @@ def camera_loop():
                     db.session.commit()
                     print(f"💾 Dados salvos: {temp_atual:.1f}°C")
                 db_last_save_time = current_time
-                
-            time.sleep(0.01)
+            
+            # O sleep foi removido para permitir que o loop rode na velocidade máxima possível.
+            # time.sleep(0.01)
 
         except Exception as e:
             # "CAIXA PRETA": Captura QUALQUER erro que aconteça na thread

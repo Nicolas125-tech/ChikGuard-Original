@@ -6,3 +6,4 @@ Flask-SQLAlchemy
 Flask-Migrate
 opencv-python
 numpy
+ultralytics

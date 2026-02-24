@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WebView } from 'react-native-webview';
 import { 
   Thermometer, Activity, AlertTriangle, CheckCircle, 
-  Settings, Save, Zap, Wind, LayoutDashboard, History, LogOut, Lock, User, Key, ScanSearch
+  Settings, Save, Zap, Wind, LayoutDashboard, History, LogOut, Lock, User, Key, Users
 } from 'lucide-react-native';
 
 // --- COMPONENTES DE TELA ---
@@ -46,11 +46,11 @@ const MonitorScreen = ({ serverUrl, dados, loading, chickCount, dispositivos, co
       <View style={styles.countCard}>
         <View style={styles.cardHeader}>
           <View>
-            <Text style={styles.cardLabel}>OBJETOS DETECTADOS</Text>
+            <Text style={styles.cardLabel}>AVES DETECTADAS</Text>
             <Text style={styles.countText}>{chickCount}</Text>
           </View>
           <View style={[styles.iconBox, { backgroundColor: 'rgba(16, 185, 129, 0.2)' }]}>
-            <ScanSearch size={32} color="#10b981"/>
+            <Users size={32} color="#10b981"/>
           </View>
         </View>
         <Text style={styles.statusMsg}>Contagem em tempo real via IA.</Text>
