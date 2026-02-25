@@ -273,25 +273,32 @@ function OverviewPanel({ token, serverIP, prefs }) {
   const fetchHistory = useCallback(async () => {
     try {
       const r = await fetch(`${baseUrl}/api/history`, { headers: { Authorization: `Bearer ${token}`, 'ngrok-skip-browser-warning': 'true' } });
-      if (r.ok) setHistorico(await r.json());
-    } catch {}
+      if (!r.ok) throw new Error('History fetch failed');
+      setHistorico(await r.json());
+    } catch {
+      setErro(true);
+    }
   }, [baseUrl, token]);
 
   const fetchDevices = useCallback(async () => {
     try {
       const r = await fetch(`${baseUrl}/api/estado-dispositivos`, { headers: { Authorization: `Bearer ${token}`, 'ngrok-skip-browser-warning': 'true' } });
-      if (r.ok) setDispositivos(await r.json());
-    } catch {}
+      if (!r.ok) throw new Error('Device state fetch failed');
+      setDispositivos(await r.json());
+    } catch {
+      setErro(true);
+    }
   }, [baseUrl, token]);
 
   const fetchCount = useCallback(async () => {
     try {
       const r = await fetch(`${baseUrl}/api/chick_count`, { headers: { Authorization: `Bearer ${token}`, 'ngrok-skip-browser-warning': 'true' } });
-      if (r.ok) {
-        const data = await r.json();
-        setContagem(data.count || 0);
-      }
-    } catch {}
+      if (!r.ok) throw new Error('Count fetch failed');
+      const data = await r.json();
+      setContagem(data.count || 0);
+    } catch {
+      setErro(true);
+    }
   }, [baseUrl, token]);
 
   useEffect(() => {
@@ -382,10 +389,10 @@ function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServer }) {
   const saveAll = () => {
     onSaveServer(serverDraft);
     onSavePrefs({
-      statusMs: Number(draft.statusMs),
-      historyMs: Number(draft.historyMs),
-      devicesMs: Number(draft.devicesMs),
-      countMs: Number(draft.countMs),
+      statusMs: Number(draft.statusMs) || DEFAULT_PREFS.statusMs,
+      historyMs: Number(draft.historyMs) || DEFAULT_PREFS.historyMs,
+      devicesMs: Number(draft.devicesMs) || DEFAULT_PREFS.devicesMs,
+      countMs: Number(draft.countMs) || DEFAULT_PREFS.countMs,
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 1600);
