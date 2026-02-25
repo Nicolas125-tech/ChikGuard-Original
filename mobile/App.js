@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WebView } from 'react-native-webview';
 import { 
   Thermometer, Activity, AlertTriangle, CheckCircle, 
-  Settings, Save, Zap, Wind, LayoutDashboard, History, LogOut, Lock, User, Key, Users
+  Settings, Save, Zap, Wind, LayoutDashboard, History, LogOut, Lock, User, Key, Users, Bell, Cpu
 } from 'lucide-react-native';
 
 // --- COMPONENTES DE TELA ---
@@ -139,6 +139,94 @@ const HistoryScreen = ({ serverUrl }) => {
   );
 };
 
+// 2.1 TELA DE ALERTAS
+const AlertsScreen = ({ serverUrl }) => {
+  const [alerts, setAlerts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchAlerts = async () => {
+      try {
+        const req = await fetch(`${serverUrl}/api/alerts`);
+        const json = await req.json();
+        setAlerts(json);
+      } catch (e) {
+        console.log(e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAlerts();
+    const timer = setInterval(fetchAlerts, 3000);
+    return () => clearInterval(timer);
+  }, [serverUrl]);
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.pageTitle}>Alertas do Sistema</Text>
+      {loading ? <ActivityIndicator size="large" color="#10b981" /> : (
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          {alerts.length === 0 && <Text style={{color:'#94a3b8', textAlign:'center'}}>Sem alertas ativos.</Text>}
+          {alerts.map((item, index) => (
+            <View key={`${item.id}-${index}`} style={[styles.alertCard, item.nivel === 'alto' ? styles.alertHigh : item.nivel === 'medio' ? styles.alertMedium : styles.alertLow]}>
+              <Text style={styles.alertType}>{item.tipo}</Text>
+              <Text style={styles.alertMessage}>{item.mensagem}</Text>
+              <Text style={styles.alertMeta}>{item.data} {item.hora}</Text>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+    </View>
+  );
+};
+
+// 2.2 TELA DE SISTEMA
+const SystemScreen = ({ serverUrl }) => {
+  const [summary, setSummary] = useState(null);
+  const [systemInfo, setSystemInfo] = useState(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [summaryReq, infoReq] = await Promise.all([
+          fetch(`${serverUrl}/api/summary`),
+          fetch(`${serverUrl}/api/system-info`)
+        ]);
+        if (summaryReq.ok) setSummary(await summaryReq.json());
+        if (infoReq.ok) setSystemInfo(await infoReq.json());
+      } catch (e) {
+        console.log(e);
+      }
+    };
+    load();
+    const timer = setInterval(load, 3000);
+    return () => clearInterval(timer);
+  }, [serverUrl]);
+
+  const uptime = systemInfo ? `${Math.floor(systemInfo.uptime_seconds / 3600)}h ${Math.floor((systemInfo.uptime_seconds % 3600) / 60)}m` : "--";
+
+  return (
+    <ScrollView contentContainerStyle={styles.scrollContent}>
+      <Text style={styles.pageTitle}>Sistema</Text>
+      <View style={styles.metricsGrid}>
+        <MetricCard label="Thread Câmera" value={systemInfo?.camera_thread_alive ? "ATIVA" : "INATIVA"} />
+        <MetricCard label="Modelo IA" value={systemInfo?.yolo_loaded ? "PRONTO" : "ERRO"} />
+        <MetricCard label="Uptime" value={uptime} />
+        <MetricCard label="Temp Média" value={summary ? `${summary.media_temperatura}°C` : "--"} />
+        <MetricCard label="Aves" value={summary?.contagem_aves ?? "--"} />
+        <MetricCard label="Alertas" value={summary?.total_alertas ?? "--"} />
+      </View>
+    </ScrollView>
+  );
+};
+
+const MetricCard = ({ label, value }) => (
+  <View style={styles.metricCard}>
+    <Text style={styles.metricLabel}>{label}</Text>
+    <Text style={styles.metricValue}>{value}</Text>
+  </View>
+);
+
 // 3. TELA DE CONFIGURAÇÃO
 const ConfigScreen = ({ serverUrl, setServerUrl, logout }) => {
   const [tempUrl, setTempUrl] = useState(serverUrl);
@@ -184,7 +272,7 @@ const ConfigScreen = ({ serverUrl, setServerUrl, logout }) => {
 export default function App() {
   const [token, setToken] = useState(null);
   const [serverUrl, setServerUrl] = useState('');
-  const [activeTab, setActiveTab] = useState('monitor'); // monitor, history, config
+  const [activeTab, setActiveTab] = useState('monitor'); // monitor, alerts, history, system, config
   const [dados, setDados] = useState(null);
   const [chickCount, setChickCount] = useState(0);
   const [dispositivos, setDispositivos] = useState({ ventilacao: false, aquecedor: false });
@@ -349,7 +437,9 @@ export default function App() {
             controlarDispositivo={controlarDispositivo}
             loadingAcao={loadingAcao}
           />}
+        {activeTab === 'alerts' && <AlertsScreen serverUrl={serverUrl} />}
         {activeTab === 'history' && <HistoryScreen serverUrl={serverUrl} />}
+        {activeTab === 'system' && <SystemScreen serverUrl={serverUrl} />}
         {activeTab === 'config' && <ConfigScreen serverUrl={serverUrl} setServerUrl={setServerUrl} logout={() => {setToken(null); AsyncStorage.removeItem('cg_token');}} />}
       </View>
 
@@ -363,6 +453,16 @@ export default function App() {
         <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('history')}>
           <History color={activeTab==='history'?'#10b981':'#64748b'} size={24}/>
           <Text style={[styles.tabLabel, {color: activeTab==='history'?'#10b981':'#64748b'}]}>Histórico</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('alerts')}>
+          <Bell color={activeTab==='alerts'?'#10b981':'#64748b'} size={24}/>
+          <Text style={[styles.tabLabel, {color: activeTab==='alerts'?'#10b981':'#64748b'}]}>Alertas</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('system')}>
+          <Cpu color={activeTab==='system'?'#10b981':'#64748b'} size={24}/>
+          <Text style={[styles.tabLabel, {color: activeTab==='system'?'#10b981':'#64748b'}]}>Sistema</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('config')}>
@@ -436,5 +536,20 @@ const styles = StyleSheet.create({
   actionButtonActiveOrange: { backgroundColor: '#f97316', borderColor: '#f97316' },
   actionLabel: { color:'#cbd5e1', marginTop:10, fontWeight:'bold', fontSize:12 },
   actionStatus: { color: '#94a3b8', marginTop: 5, fontSize: 10, fontWeight: 'bold' },
-  label: { color:'#94a3b8', marginBottom:10, fontSize:12, fontWeight:'bold' }
+  label: { color:'#94a3b8', marginBottom:10, fontSize:12, fontWeight:'bold' },
+
+  // Alerts
+  alertCard: { padding: 16, borderRadius: 12, marginBottom: 10, borderWidth: 1 },
+  alertHigh: { backgroundColor: 'rgba(239,68,68,0.15)', borderColor: 'rgba(239,68,68,0.4)' },
+  alertMedium: { backgroundColor: 'rgba(245,158,11,0.15)', borderColor: 'rgba(245,158,11,0.4)' },
+  alertLow: { backgroundColor: '#1e293b', borderColor: '#334155' },
+  alertType: { color: '#fff', fontWeight: 'bold', marginBottom: 6 },
+  alertMessage: { color: '#cbd5e1', marginBottom: 8 },
+  alertMeta: { color: '#94a3b8', fontSize: 12 },
+
+  // System
+  metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  metricCard: { width: '48%', backgroundColor: '#1e293b', borderColor: '#334155', borderWidth: 1, borderRadius: 12, padding: 14 },
+  metricLabel: { color: '#94a3b8', fontSize: 11, marginBottom: 6 },
+  metricValue: { color: 'white', fontSize: 20, fontWeight: 'bold' }
 });

@@ -3,9 +3,13 @@ import {
   Activity,
   AlertTriangle,
   ArrowRight,
+  Bell,
   CheckCircle,
   ChevronLeft,
+  Cpu,
+  Database,
   ExternalLink,
+  History,
   Key,
   LayoutDashboard,
   LogIn,
@@ -14,6 +18,7 @@ import {
   Save,
   Settings,
   Shield,
+  SlidersHorizontal,
   Thermometer,
   User,
   Users,
@@ -226,8 +231,14 @@ function Dashboard({ token, serverIP, prefs, onSavePrefs, onSaveServer, onLogout
   const [tab, setTab] = useState('overview');
   const tabs = useMemo(() => [
     { id: 'overview', label: 'Visao Geral', icon: LayoutDashboard },
+    { id: 'devices', label: 'Dispositivos', icon: SlidersHorizontal },
+    { id: 'alerts', label: 'Alertas', icon: Bell },
+    { id: 'history', label: 'Historico', icon: History },
+    { id: 'system', label: 'Sistema', icon: Cpu },
     { id: 'settings', label: 'Configuracoes', icon: Settings },
   ], []);
+
+  const settingsKey = `${serverIP}:${prefs.statusMs}:${prefs.historyMs}:${prefs.devicesMs}:${prefs.countMs}`;
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
@@ -242,7 +253,12 @@ function Dashboard({ token, serverIP, prefs, onSavePrefs, onSaveServer, onLogout
         </div>
       </header>
       <main className="flex-1 p-6 max-w-screen-2xl mx-auto w-full">
-        {tab === 'overview' ? <OverviewPanel token={token} serverIP={serverIP} prefs={prefs} /> : <SettingsPanel key={`${serverIP}:${prefs.statusMs}:${prefs.historyMs}:${prefs.devicesMs}:${prefs.countMs}`} serverIP={serverIP} prefs={prefs} onSavePrefs={onSavePrefs} onSaveServer={onSaveServer} />}
+        {tab === 'overview' && <OverviewPanel token={token} serverIP={serverIP} prefs={prefs} />}
+        {tab === 'devices' && <DevicesPanel token={token} serverIP={serverIP} />}
+        {tab === 'alerts' && <AlertsPanel serverIP={serverIP} prefs={prefs} />}
+        {tab === 'history' && <HistoryPanel serverIP={serverIP} prefs={prefs} />}
+        {tab === 'system' && <SystemPanel serverIP={serverIP} prefs={prefs} />}
+        {tab === 'settings' && <SettingsPanel key={settingsKey} serverIP={serverIP} prefs={prefs} onSavePrefs={onSavePrefs} onSaveServer={onSaveServer} />}
       </main>
     </div>
   );
@@ -374,6 +390,190 @@ function OverviewPanel({ token, serverIP, prefs }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function DevicesPanel({ token, serverIP }) {
+  const [dispositivos, setDispositivos] = useState({ ventilacao: false, aquecedor: false });
+  const [loading, setLoading] = useState(true);
+  const baseUrl = getBaseUrl(serverIP);
+
+  const loadDevices = useCallback(async () => {
+    try {
+      const r = await fetch(`${baseUrl}/api/estado-dispositivos`, { headers: { Authorization: `Bearer ${token}`, 'ngrok-skip-browser-warning': 'true' } });
+      if (!r.ok) throw new Error('Device state fetch failed');
+      setDispositivos(await r.json());
+    } finally {
+      setLoading(false);
+    }
+  }, [baseUrl, token]);
+
+  useEffect(() => {
+    loadDevices();
+  }, [loadDevices]);
+
+  const toggleDevice = async (tipo, ligar) => {
+    await fetch(`${baseUrl}/api/${tipo}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+      body: JSON.stringify({ ligar }),
+    });
+    loadDevices();
+  };
+
+  if (loading) {
+    return <div className="text-slate-400">Carregando dispositivos...</div>;
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <button onClick={() => toggleDevice('ventilacao', !dispositivos.ventilacao)} className={`rounded-2xl border p-6 text-left ${dispositivos.ventilacao ? 'bg-blue-600/20 border-blue-500/40' : 'bg-slate-900 border-slate-800'}`}>
+        <div className="flex items-center justify-between mb-3"><Wind className={dispositivos.ventilacao ? 'text-blue-300' : 'text-blue-400'} /><span className={`text-xs font-bold ${dispositivos.ventilacao ? 'text-blue-300' : 'text-slate-500'}`}>{dispositivos.ventilacao ? 'ATIVO' : 'INATIVO'}</span></div>
+        <h3 className="font-bold text-lg">Ventilacao</h3>
+        <p className="text-slate-400 text-sm mt-1">Controle de fluxo de ar no galpao.</p>
+      </button>
+      <button onClick={() => toggleDevice('aquecedor', !dispositivos.aquecedor)} className={`rounded-2xl border p-6 text-left ${dispositivos.aquecedor ? 'bg-orange-600/20 border-orange-500/40' : 'bg-slate-900 border-slate-800'}`}>
+        <div className="flex items-center justify-between mb-3"><Zap className={dispositivos.aquecedor ? 'text-orange-300' : 'text-orange-400'} /><span className={`text-xs font-bold ${dispositivos.aquecedor ? 'text-orange-300' : 'text-slate-500'}`}>{dispositivos.aquecedor ? 'ATIVO' : 'INATIVO'}</span></div>
+        <h3 className="font-bold text-lg">Aquecedor</h3>
+        <p className="text-slate-400 text-sm mt-1">Estabilizacao termica automatizada.</p>
+      </button>
+    </div>
+  );
+}
+
+function AlertsPanel({ serverIP, prefs }) {
+  const [alerts, setAlerts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const baseUrl = getBaseUrl(serverIP);
+
+  const loadAlerts = useCallback(async () => {
+    try {
+      const r = await fetch(`${baseUrl}/api/alerts`, { headers: { 'ngrok-skip-browser-warning': 'true' } });
+      if (!r.ok) throw new Error('Alerts fetch failed');
+      setAlerts(await r.json());
+    } finally {
+      setLoading(false);
+    }
+  }, [baseUrl]);
+
+  useEffect(() => {
+    loadAlerts();
+    const timer = setInterval(loadAlerts, prefs.statusMs);
+    return () => clearInterval(timer);
+  }, [loadAlerts, prefs.statusMs]);
+
+  if (loading) {
+    return <div className="text-slate-400">Carregando alertas...</div>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {alerts.length === 0 && <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 text-slate-400">Sem alertas ativos no momento.</div>}
+      {alerts.map((alert) => (
+        <div key={alert.id} className={`rounded-xl border p-4 ${alert.nivel === 'alto' ? 'bg-red-500/10 border-red-500/30' : alert.nivel === 'medio' ? 'bg-yellow-500/10 border-yellow-500/30' : 'bg-slate-900 border-slate-800'}`}>
+          <div className="flex items-center justify-between">
+            <div className="font-semibold">{alert.tipo}</div>
+            <div className="text-xs text-slate-400">{alert.data} {alert.hora}</div>
+          </div>
+          <p className="text-sm text-slate-300 mt-2">{alert.mensagem}</p>
+          {alert.temperatura !== null && <p className="text-xs text-slate-400 mt-2">Temperatura: {alert.temperatura} C</p>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function HistoryPanel({ serverIP, prefs }) {
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const baseUrl = getBaseUrl(serverIP);
+
+  const loadHistory = useCallback(async () => {
+    try {
+      const r = await fetch(`${baseUrl}/api/history`, { headers: { 'ngrok-skip-browser-warning': 'true' } });
+      if (!r.ok) throw new Error('History fetch failed');
+      setHistory(await r.json());
+    } finally {
+      setLoading(false);
+    }
+  }, [baseUrl]);
+
+  useEffect(() => {
+    loadHistory();
+    const timer = setInterval(loadHistory, prefs.historyMs);
+    return () => clearInterval(timer);
+  }, [loadHistory, prefs.historyMs]);
+
+  if (loading) {
+    return <div className="text-slate-400">Carregando historico...</div>;
+  }
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+      <div className="grid grid-cols-4 gap-2 px-4 py-3 text-xs uppercase tracking-wider text-slate-400 border-b border-slate-800">
+        <span>Data</span><span>Hora</span><span>Status</span><span>Temp</span>
+      </div>
+      <div className="max-h-[520px] overflow-auto">
+        {history.length === 0 && <div className="p-4 text-slate-500">Sem leituras registradas.</div>}
+        {history.map((item) => (
+          <div key={item.id} className="grid grid-cols-4 gap-2 px-4 py-3 border-b border-slate-800/70 text-sm">
+            <span>{item.data}</span>
+            <span className="text-slate-400">{item.hora}</span>
+            <span className={item.status === 'NORMAL' ? 'text-emerald-400' : 'text-red-400'}>{item.status}</span>
+            <span>{item.temp} C</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SystemPanel({ serverIP, prefs }) {
+  const [info, setInfo] = useState(null);
+  const [summary, setSummary] = useState(null);
+  const baseUrl = getBaseUrl(serverIP);
+
+  const loadSystem = useCallback(async () => {
+    const [infoRes, summaryRes] = await Promise.all([
+      fetch(`${baseUrl}/api/system-info`, { headers: { 'ngrok-skip-browser-warning': 'true' } }),
+      fetch(`${baseUrl}/api/summary`, { headers: { 'ngrok-skip-browser-warning': 'true' } }),
+    ]);
+    if (infoRes.ok) setInfo(await infoRes.json());
+    if (summaryRes.ok) setSummary(await summaryRes.json());
+  }, [baseUrl]);
+
+  useEffect(() => {
+    const bootstrap = setTimeout(loadSystem, 0);
+    const timer = setInterval(loadSystem, prefs.statusMs);
+    return () => {
+      clearTimeout(bootstrap);
+      clearInterval(timer);
+    };
+  }, [loadSystem, prefs.statusMs]);
+
+  const uptime = info ? `${Math.floor(info.uptime_seconds / 3600)}h ${Math.floor((info.uptime_seconds % 3600) / 60)}m` : '--';
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <SystemCard label="Thread da camera" value={info?.camera_thread_alive ? 'Ativa' : 'Inativa'} />
+      <SystemCard label="YOLO" value={info?.yolo_loaded ? 'Carregado' : 'Nao carregado'} />
+      <SystemCard label="Uptime" value={uptime} />
+      <SystemCard label="Temp media" value={summary ? `${summary.media_temperatura} C` : '--'} />
+      <SystemCard label="Aves detectadas" value={summary?.contagem_aves ?? '--'} />
+      <SystemCard label="Alertas ativos" value={summary?.total_alertas ?? '--'} />
+    </div>
+  );
+}
+
+function SystemCard({ label, value }) {
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs uppercase tracking-wider text-slate-400">{label}</span>
+        <Database size={16} className="text-slate-500" />
+      </div>
+      <div className="text-2xl font-bold">{value}</div>
     </div>
   );
 }

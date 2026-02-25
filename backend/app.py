@@ -81,6 +81,7 @@ fps_last_time = 0
 db_last_save_time = 0
 lock = threading.Lock()
 object_count = 0 # Variável para contagem de objetos
+APP_START_TIME = time.time()
 
 # --- CONFIGURAÇÃO DA REDE NEURAL (YOLO) ---
 # Instancia o detector de objetos
@@ -382,6 +383,74 @@ def health_check():
     return jsonify({
         "status": "ok",
         "camera_thread_alive": t.is_alive()
+    })
+
+@app.route('/api/summary', methods=['GET'])
+def get_summary():
+    """Resumo consolidado para dashboards web/mobile."""
+    ultima = Reading.query.order_by(Reading.id.desc()).first()
+    recentes = Reading.query.order_by(Reading.id.desc()).limit(30).all()
+
+    temperaturas = [item.temperatura for item in recentes]
+    alertas = [item for item in recentes if item.status != "NORMAL"]
+
+    with lock:
+        count = object_count
+
+    return jsonify({
+        "temperatura_atual": ultima.temperatura if ultima else 0,
+        "status_atual": ultima.status if ultima else "INICIANDO",
+        "media_temperatura": round(sum(temperaturas) / len(temperaturas), 1) if temperaturas else 0,
+        "contagem_aves": count,
+        "dispositivos": estado_dispositivos,
+        "total_alertas": len(alertas),
+        "modo_deteccao": MODO_DETECCAO
+    })
+
+@app.route('/api/alerts', methods=['GET'])
+def get_alerts():
+    """Lista alertas recentes baseada no histórico de leituras."""
+    recentes = Reading.query.order_by(Reading.id.desc()).limit(50).all()
+    itens = []
+
+    for item in recentes:
+        if item.status == "NORMAL":
+            continue
+        nivel = "alto" if item.status == "CALOR" else "medio"
+        itens.append({
+            "id": item.id,
+            "tipo": item.status,
+            "nivel": nivel,
+            "mensagem": f"Temperatura em estado {item.status}",
+            "temperatura": item.temperatura,
+            "hora": item.timestamp.strftime("%H:%M:%S"),
+            "data": item.timestamp.strftime("%d/%m/%Y")
+        })
+
+    if estado_dispositivos.get("aquecedor") and estado_dispositivos.get("ventilacao"):
+        itens.insert(0, {
+            "id": "devices-state",
+            "tipo": "DISPOSITIVOS",
+            "nivel": "baixo",
+            "mensagem": "Ventilação e aquecedor ligados ao mesmo tempo.",
+            "temperatura": None,
+            "hora": time.strftime("%H:%M:%S"),
+            "data": time.strftime("%d/%m/%Y")
+        })
+
+    return jsonify(itens)
+
+@app.route('/api/system-info', methods=['GET'])
+def get_system_info():
+    """Informações de runtime para aba de sistema."""
+    uptime_seconds = int(time.time() - APP_START_TIME)
+    return jsonify({
+        "uptime_seconds": uptime_seconds,
+        "camera_thread_alive": t.is_alive(),
+        "modo_deteccao": MODO_DETECCAO,
+        "yolo_loaded": detector.yolo_loaded,
+        "server_time": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "camera_index": CAMERA_INDEX
     })
 
 if __name__ == '__main__':
