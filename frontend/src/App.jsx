@@ -242,7 +242,7 @@ function Dashboard({ token, serverIP, prefs, onSavePrefs, onSaveServer, onLogout
         </div>
       </header>
       <main className="flex-1 p-6 max-w-screen-2xl mx-auto w-full">
-        {tab === 'overview' ? <OverviewPanel token={token} serverIP={serverIP} prefs={prefs} /> : <SettingsPanel serverIP={serverIP} prefs={prefs} onSavePrefs={onSavePrefs} onSaveServer={onSaveServer} />}
+        {tab === 'overview' ? <OverviewPanel token={token} serverIP={serverIP} prefs={prefs} /> : <SettingsPanel key={`${serverIP}:${prefs.statusMs}:${prefs.historyMs}:${prefs.devicesMs}:${prefs.countMs}`} serverIP={serverIP} prefs={prefs} onSavePrefs={onSavePrefs} onSaveServer={onSaveServer} />}
       </main>
     </div>
   );
@@ -382,9 +382,6 @@ function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServer }) {
   const [serverDraft, setServerDraft] = useState(serverIP);
   const [draft, setDraft] = useState(prefs);
   const [saved, setSaved] = useState(false);
-
-  useEffect(() => setServerDraft(serverIP), [serverIP]);
-  useEffect(() => setDraft(prefs), [prefs]);
 
   const saveAll = () => {
     onSaveServer(serverDraft);
