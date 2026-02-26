@@ -48,3 +48,24 @@ class BirdSnapshot(db.Model):
             "metodo_temperatura": self.metodo_temperatura,
             "timestamp": self.timestamp.strftime("%Y-%m-%d %H:%M:%S")
         }
+
+
+class BirdIdentity(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    bird_uid = db.Column(db.Integer, unique=True, nullable=False, index=True)
+    first_seen = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    last_seen = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    sightings = db.Column(db.Integer, default=0, nullable=False)
+    max_confidence = db.Column(db.Float, default=0.0, nullable=False)
+    last_temp_estimada = db.Column(db.Float, nullable=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "bird_uid": self.bird_uid,
+            "first_seen": self.first_seen.strftime("%Y-%m-%d %H:%M:%S"),
+            "last_seen": self.last_seen.strftime("%Y-%m-%d %H:%M:%S"),
+            "sightings": self.sightings,
+            "max_confidence": round(self.max_confidence, 4),
+            "last_temp_estimada": self.last_temp_estimada,
+        }

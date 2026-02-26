@@ -2,7 +2,7 @@ from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager, create_access_token
-from database import db, User, Reading, BirdSnapshot
+from database import db, User, Reading, BirdSnapshot, BirdIdentity
 import cv2
 import numpy as np
 import threading
@@ -10,6 +10,7 @@ import time
 import os
 import random
 from ultralytics import YOLO 
+from datetime import datetime
 
 # ======================================================================================
 # --- CONFIGURAÇÃO DE DETECÇÃO ---
@@ -190,8 +191,29 @@ def _save_bird_snapshots(frame, ambient_temp):
         )
 
     if rows:
+        now_dt = datetime.utcnow()
         with app.app_context():
             db.session.bulk_save_objects(rows)
+
+            for row in rows:
+                identity = BirdIdentity.query.filter_by(bird_uid=row.bird_uid).first()
+                if identity is None:
+                    identity = BirdIdentity(
+                        bird_uid=row.bird_uid,
+                        first_seen=now_dt,
+                        last_seen=now_dt,
+                        sightings=1,
+                        max_confidence=row.confidence,
+                        last_temp_estimada=row.temperatura_estimada,
+                    )
+                    db.session.add(identity)
+                else:
+                    identity.last_seen = now_dt
+                    identity.sightings = int(identity.sightings) + 1
+                    if row.confidence > float(identity.max_confidence):
+                        identity.max_confidence = row.confidence
+                    identity.last_temp_estimada = row.temperatura_estimada
+
             db.session.commit()
 
     last_bird_snapshot_save_time = now
@@ -487,6 +509,17 @@ def get_birds_history():
     rows = BirdSnapshot.query.order_by(BirdSnapshot.id.desc()).limit(limit).all()
     return jsonify([row.to_dict() for row in reversed(rows)])
 
+
+@app.route('/api/birds/registry', methods=['GET'])
+def get_birds_registry():
+    limit = request.args.get("limit", default=500, type=int)
+    limit = max(1, min(limit, 10000))
+    rows = BirdIdentity.query.order_by(BirdIdentity.last_seen.desc()).limit(limit).all()
+    return jsonify({
+        "count": len(rows),
+        "items": [row.to_dict() for row in rows],
+    })
+
 # --- ROTAS DE CONTROLE ---
 
 @app.route('/api/ventilacao', methods=['POST'])
@@ -545,6 +578,7 @@ def get_summary():
     with lock:
         count = object_count
         alive_count = sum(1 for info in live_birds.values() if (now - float(info["last_seen"])) <= BIRD_LIVE_TTL_SEC)
+    total_vistas = BirdIdentity.query.count()
 
     return jsonify({
         "temperatura_atual": ultima.temperatura if ultima else 0,
@@ -552,6 +586,7 @@ def get_summary():
         "media_temperatura": round(sum(temperaturas) / len(temperaturas), 1) if temperaturas else 0,
         "contagem_aves": count,
         "aves_vivas_individuais": alive_count,
+        "total_aves_vistas": total_vistas,
         "metodo_temperatura_ave": "estimada_rgb_proxy",
         "tracker": TRACKER_CONFIG,
         "classe_ave": BIRD_CLASS_NAME,
