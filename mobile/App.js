@@ -139,6 +139,108 @@ const HistoryScreen = ({ serverUrl }) => {
   );
 };
 
+// 2.05 TELA DE AVES (IDs, registro e trilha)
+const BirdsScreen = ({ serverUrl }) => {
+  const [live, setLive] = useState({ count: 0, items: [] });
+  const [registry, setRegistry] = useState({ count: 0, items: [] });
+  const [selectedBird, setSelectedBird] = useState(null);
+  const [path, setPath] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadBirds = useCallback(async () => {
+    try {
+      const [liveReq, regReq] = await Promise.all([
+        fetch(`${serverUrl}/api/birds/live`),
+        fetch(`${serverUrl}/api/birds/registry?limit=500`),
+      ]);
+      if (liveReq.ok) setLive(await liveReq.json());
+      if (regReq.ok) setRegistry(await regReq.json());
+    } catch (e) {
+      console.log(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [serverUrl]);
+
+  const loadPath = useCallback(async (birdUid) => {
+    try {
+      const req = await fetch(`${serverUrl}/api/birds/path/${birdUid}?limit=200`);
+      if (!req.ok) {
+        setPath([]);
+        return;
+      }
+      const json = await req.json();
+      setPath(json.items || []);
+    } catch (e) {
+      console.log(e);
+      setPath([]);
+    }
+  }, [serverUrl]);
+
+  useEffect(() => {
+    loadBirds();
+    const timer = setInterval(loadBirds, 2500);
+    return () => clearInterval(timer);
+  }, [loadBirds]);
+
+  useEffect(() => {
+    if (selectedBird !== null) {
+      loadPath(selectedBird);
+    }
+  }, [selectedBird, loadPath]);
+
+  if (loading) {
+    return <View style={styles.container}><ActivityIndicator size="large" color="#10b981" /></View>;
+  }
+
+  return (
+    <ScrollView contentContainerStyle={styles.scrollContent}>
+      <Text style={styles.pageTitle}>Aves Vistas</Text>
+
+      <View style={styles.metricsGrid}>
+        <MetricCard label="Visiveis agora" value={live.count ?? 0} />
+        <MetricCard label="Aves unicas" value={registry.count ?? 0} />
+        <MetricCard label="ID selecionado" value={selectedBird ?? "--"} />
+      </View>
+
+      <Text style={styles.sectionTitle}>Aves vivas no quadro</Text>
+      <View style={styles.listCard}>
+        {live.items?.length === 0 && <Text style={styles.emptyText}>Nenhuma ave visivel.</Text>}
+        {live.items?.map((item) => (
+          <TouchableOpacity key={`live-${item.bird_uid}`} style={styles.rowItem} onPress={() => setSelectedBird(item.bird_uid)}>
+            <Text style={styles.rowTitle}>ID {item.bird_uid}</Text>
+            <Text style={styles.rowMeta}>Conf {item.confidence} | track {item.track_id}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <Text style={styles.sectionTitle}>Registro persistente</Text>
+      <View style={styles.listCard}>
+        {registry.items?.length === 0 && <Text style={styles.emptyText}>Sem aves registradas.</Text>}
+        {registry.items?.map((item) => (
+          <TouchableOpacity key={`reg-${item.bird_uid}`} style={styles.rowItem} onPress={() => setSelectedBird(item.bird_uid)}>
+            <Text style={styles.rowTitle}>ID {item.bird_uid}</Text>
+            <Text style={styles.rowMeta}>Vezes {item.sightings} | Conf max {item.max_confidence}</Text>
+            <Text style={styles.rowDate}>Ultima vez: {item.last_seen}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <Text style={styles.sectionTitle}>Trilha da ave selecionada</Text>
+      <View style={styles.listCard}>
+        {selectedBird === null && <Text style={styles.emptyText}>Toque em uma ave para carregar a trilha.</Text>}
+        {selectedBird !== null && path.length === 0 && <Text style={styles.emptyText}>Sem trilha para o ID {selectedBird}.</Text>}
+        {path.slice(-20).map((point) => (
+          <View key={`path-${point.id}`} style={styles.rowItem}>
+            <Text style={styles.rowTitle}>({point.x}, {point.y})</Text>
+            <Text style={styles.rowDate}>{point.timestamp}</Text>
+          </View>
+        ))}
+      </View>
+    </ScrollView>
+  );
+};
+
 // 2.1 TELA DE ALERTAS
 const AlertsScreen = ({ serverUrl }) => {
   const [alerts, setAlerts] = useState([]);
@@ -214,6 +316,7 @@ const SystemScreen = ({ serverUrl }) => {
         <MetricCard label="Uptime" value={uptime} />
         <MetricCard label="Temp Média" value={summary ? `${summary.media_temperatura}°C` : "--"} />
         <MetricCard label="Aves" value={summary?.contagem_aves ?? "--"} />
+        <MetricCard label="Aves vistas" value={summary?.total_aves_vistas ?? "--"} />
         <MetricCard label="Alertas" value={summary?.total_alertas ?? "--"} />
       </View>
     </ScrollView>
@@ -272,7 +375,7 @@ const ConfigScreen = ({ serverUrl, setServerUrl, logout }) => {
 export default function App() {
   const [token, setToken] = useState(null);
   const [serverUrl, setServerUrl] = useState('');
-  const [activeTab, setActiveTab] = useState('monitor'); // monitor, alerts, history, system, config
+  const [activeTab, setActiveTab] = useState('monitor'); // monitor, birds, alerts, history, system, config
   const [dados, setDados] = useState(null);
   const [chickCount, setChickCount] = useState(0);
   const [dispositivos, setDispositivos] = useState({ ventilacao: false, aquecedor: false });
@@ -437,6 +540,7 @@ export default function App() {
             controlarDispositivo={controlarDispositivo}
             loadingAcao={loadingAcao}
           />}
+        {activeTab === 'birds' && <BirdsScreen serverUrl={serverUrl} />}
         {activeTab === 'alerts' && <AlertsScreen serverUrl={serverUrl} />}
         {activeTab === 'history' && <HistoryScreen serverUrl={serverUrl} />}
         {activeTab === 'system' && <SystemScreen serverUrl={serverUrl} />}
@@ -453,6 +557,11 @@ export default function App() {
         <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('history')}>
           <History color={activeTab==='history'?'#10b981':'#64748b'} size={24}/>
           <Text style={[styles.tabLabel, {color: activeTab==='history'?'#10b981':'#64748b'}]}>Histórico</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('birds')}>
+          <Users color={activeTab==='birds'?'#10b981':'#64748b'} size={24}/>
+          <Text style={[styles.tabLabel, {color: activeTab==='birds'?'#10b981':'#64748b'}]}>Aves</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('alerts')}>
@@ -551,5 +660,14 @@ const styles = StyleSheet.create({
   metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   metricCard: { width: '48%', backgroundColor: '#1e293b', borderColor: '#334155', borderWidth: 1, borderRadius: 12, padding: 14 },
   metricLabel: { color: '#94a3b8', fontSize: 11, marginBottom: 6 },
-  metricValue: { color: 'white', fontSize: 20, fontWeight: 'bold' }
+  metricValue: { color: 'white', fontSize: 20, fontWeight: 'bold' },
+
+  // Birds
+  listCard: { backgroundColor: '#1e293b', borderColor: '#334155', borderWidth: 1, borderRadius: 12, overflow: 'hidden', marginBottom: 16 },
+  rowItem: { padding: 12, borderBottomColor: '#334155', borderBottomWidth: 1 },
+  rowTitle: { color: 'white', fontWeight: 'bold' },
+  rowMeta: { color: '#94a3b8', fontSize: 12, marginTop: 2 },
+  rowDate: { color: '#64748b', fontSize: 11, marginTop: 2 },
+  emptyText: { color: '#94a3b8', textAlign: 'center', padding: 14 }
 });
+
