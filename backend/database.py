@@ -69,3 +69,20 @@ class BirdIdentity(db.Model):
             "max_confidence": round(self.max_confidence, 4),
             "last_temp_estimada": self.last_temp_estimada,
         }
+
+
+class BirdTrackPoint(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    bird_uid = db.Column(db.Integer, nullable=False, index=True)
+    x = db.Column(db.Integer, nullable=False)
+    y = db.Column(db.Integer, nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "bird_uid": self.bird_uid,
+            "x": self.x,
+            "y": self.y,
+            "timestamp": self.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+        }

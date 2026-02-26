@@ -2,7 +2,7 @@ from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager, create_access_token
-from database import db, User, Reading, BirdSnapshot, BirdIdentity
+from database import db, User, Reading, BirdSnapshot, BirdIdentity, BirdTrackPoint
 import cv2
 import numpy as np
 import threading
@@ -31,6 +31,13 @@ TRACKER_TYPE = os.getenv("TRACKER_TYPE", "bytetrack").strip().lower()
 TRACKER_CONFIG = "botsort.yaml" if TRACKER_TYPE == "botsort" else "bytetrack.yaml"
 BIRD_SNAPSHOT_SAVE_INTERVAL = int(os.getenv("BIRD_SNAPSHOT_SAVE_INTERVAL", "10"))
 BIRD_LIVE_TTL_SEC = int(os.getenv("BIRD_LIVE_TTL_SEC", "4"))
+REID_MAX_GAP_SEC = int(os.getenv("REID_MAX_GAP_SEC", "8"))
+REID_MAX_DISTANCE_RATIO = float(os.getenv("REID_MAX_DISTANCE_RATIO", "0.12"))
+TRACK_POINT_SAVE_INTERVAL = int(os.getenv("TRACK_POINT_SAVE_INTERVAL", "2"))
+REID_APPEARANCE_MIN_SIM = float(os.getenv("REID_APPEARANCE_MIN_SIM", "0.18"))
+REID_W_DIST = float(os.getenv("REID_W_DIST", "0.55"))
+REID_W_SIZE = float(os.getenv("REID_W_SIZE", "0.20"))
+REID_W_APPEAR = float(os.getenv("REID_W_APPEAR", "0.25"))
 
 class ObjectDetector:
     def __init__(self, model_path='yolov8n.pt'):
@@ -108,7 +115,11 @@ lock = threading.Lock()
 object_count = 0 # Variável para contagem de objetos
 APP_START_TIME = time.time()
 last_bird_snapshot_save_time = 0
+last_track_point_save_time = 0
 live_birds = {}
+track_to_bird_uid = {}
+bird_last_state = {}
+next_bird_uid = 1
 
 # --- CONFIGURAÇÃO DA REDE NEURAL (YOLO) ---
 # Instancia o detector de objetos
@@ -156,6 +167,115 @@ def _class_name_by_id(class_id):
     if isinstance(names, list) and 0 <= class_id < len(names):
         return str(names[class_id])
     return ""
+
+
+def _box_center_area(box):
+    x1, y1, x2, y2 = [int(v) for v in box]
+    cx = int((x1 + x2) / 2)
+    cy = int((y1 + y2) / 2)
+    area = max(1, (x2 - x1) * (y2 - y1))
+    return cx, cy, area
+
+
+def _extract_appearance_signature(frame, box):
+    x1, y1, x2, y2 = [int(v) for v in box]
+    h, w = frame.shape[:2]
+    x1 = max(0, min(x1, w - 1))
+    x2 = max(0, min(x2, w))
+    y1 = max(0, min(y1, h - 1))
+    y2 = max(0, min(y2, h))
+    if x2 <= x1 or y2 <= y1:
+        return None
+
+    roi = frame[y1:y2, x1:x2]
+    if roi.size == 0:
+        return None
+
+    hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+    hist = cv2.calcHist([hsv], [0, 1], None, [12, 12], [0, 180, 0, 256])
+    hist = cv2.normalize(hist, hist).flatten()
+    return hist.astype(np.float32)
+
+
+def _appearance_similarity(hist_a, hist_b):
+    if hist_a is None or hist_b is None:
+        return 0.0
+    score = float(cv2.compareHist(hist_a, hist_b, cv2.HISTCMP_CORREL))
+    if np.isnan(score):
+        return 0.0
+    return max(0.0, min(1.0, (score + 1.0) / 2.0))
+
+
+def _init_bird_uid_counter():
+    global next_bird_uid
+    with app.app_context():
+        max_identity = db.session.query(db.func.max(BirdIdentity.bird_uid)).scalar()
+        max_snapshot = db.session.query(db.func.max(BirdSnapshot.bird_uid)).scalar()
+    max_seen = max(filter(lambda v: v is not None, [max_identity, max_snapshot]), default=0)
+    next_bird_uid = int(max_seen) + 1
+
+
+_init_bird_uid_counter()
+
+
+def _allocate_new_bird_uid():
+    global next_bird_uid
+    uid = int(next_bird_uid)
+    next_bird_uid += 1
+    return uid
+
+
+def _resolve_stable_bird_uid(track_id, box, now_ts, frame, used_uids):
+    if track_id in track_to_bird_uid:
+        uid = int(track_to_bird_uid[track_id])
+        if uid not in used_uids:
+            return uid
+
+    frame_h, frame_w = frame.shape[:2]
+    max_dist = max(20, int(min(frame_w, frame_h) * REID_MAX_DISTANCE_RATIO))
+    cx, cy, area = _box_center_area(box)
+    current_hist = _extract_appearance_signature(frame, box)
+
+    best_uid = None
+    best_score = None
+    for uid, state in bird_last_state.items():
+        if uid in used_uids:
+            continue
+        gap = now_ts - float(state["last_seen"])
+        if gap > REID_MAX_GAP_SEC:
+            continue
+
+        lx, ly = state["center"]
+        vx = float(state.get("vx", 0.0))
+        vy = float(state.get("vy", 0.0))
+        px = lx + (vx * gap)
+        py = ly + (vy * gap)
+        larea = max(1, int(state["area"]))
+        dist = abs(cx - px) + abs(cy - py)
+        if dist > max_dist:
+            continue
+
+        area_ratio = float(area) / float(larea)
+        if area_ratio < 0.4 or area_ratio > 2.5:
+            continue
+
+        appear_sim = _appearance_similarity(current_hist, state.get("appearance"))
+        if appear_sim < REID_APPEARANCE_MIN_SIM:
+            continue
+
+        dist_norm = min(1.0, float(dist) / float(max_dist))
+        size_norm = min(1.0, abs(area_ratio - 1.0))
+        appear_norm = 1.0 - appear_sim
+        score = (REID_W_DIST * dist_norm) + (REID_W_SIZE * size_norm) + (REID_W_APPEAR * appear_norm)
+        if best_score is None or score < best_score:
+            best_score = score
+            best_uid = int(uid)
+
+    if best_uid is None:
+        best_uid = _allocate_new_bird_uid()
+
+    track_to_bird_uid[track_id] = best_uid
+    return best_uid
 
 
 def _save_bird_snapshots(frame, ambient_temp):
@@ -218,6 +338,35 @@ def _save_bird_snapshots(frame, ambient_temp):
 
     last_bird_snapshot_save_time = now
 
+
+def _save_bird_track_points():
+    global last_track_point_save_time
+
+    now = time.time()
+    if now - last_track_point_save_time < TRACK_POINT_SAVE_INTERVAL:
+        return
+
+    with lock:
+        birds_items = list(live_birds.items())
+
+    if not birds_items:
+        last_track_point_save_time = now
+        return
+
+    points = []
+    for bird_uid, data in birds_items:
+        x1, y1, x2, y2 = data["box"]
+        cx = int((int(x1) + int(x2)) / 2)
+        cy = int((int(y1) + int(y2)) / 2)
+        points.append(BirdTrackPoint(bird_uid=int(bird_uid), x=cx, y=cy))
+
+    if points:
+        with app.app_context():
+            db.session.bulk_save_objects(points)
+            db.session.commit()
+
+    last_track_point_save_time = now
+
 estado_dispositivos = {
     "ventilacao": False,
     "aquecedor": False
@@ -251,19 +400,56 @@ def detectar_objetos(frame):
     now = time.time()
     with lock:
         if MODO_DETECCAO == 'aves':
+            used_uids = set()
             for det in selected:
                 tid = int(det["track_id"])
                 if tid < 0:
                     continue
-                live_birds[tid] = {
+                stable_uid = _resolve_stable_bird_uid(tid, det["box"], now, frame, used_uids)
+                used_uids.add(stable_uid)
+                det["stable_bird_uid"] = stable_uid
+
+                cx, cy, area = _box_center_area(det["box"])
+                prev_state = bird_last_state.get(stable_uid)
+                vx = 0.0
+                vy = 0.0
+                if prev_state is not None:
+                    dt = max(1e-3, now - float(prev_state["last_seen"]))
+                    px, py = prev_state["center"]
+                    vx = (cx - float(px)) / dt
+                    vy = (cy - float(py)) / dt
+
+                bird_last_state[stable_uid] = {
+                    "center": (cx, cy),
+                    "area": area,
+                    "last_seen": now,
+                    "vx": vx,
+                    "vy": vy,
+                    "appearance": _extract_appearance_signature(frame, det["box"]),
+                }
+
+                live_birds[stable_uid] = {
                     "box": [int(v) for v in det["box"]],
                     "conf": float(det["confidence"]),
                     "last_seen": now,
+                    "track_id": tid,
                 }
 
-            stale = [tid for tid, info in live_birds.items() if (now - float(info["last_seen"])) > BIRD_LIVE_TTL_SEC]
-            for tid in stale:
-                live_birds.pop(tid, None)
+            stale_live = [uid for uid, info in live_birds.items() if (now - float(info["last_seen"])) > BIRD_LIVE_TTL_SEC]
+            for uid in stale_live:
+                live_birds.pop(uid, None)
+
+            stale_tracks = []
+            for tracker_id, uid in track_to_bird_uid.items():
+                last_state = bird_last_state.get(uid)
+                if last_state is None or (now - float(last_state["last_seen"])) > (REID_MAX_GAP_SEC * 2):
+                    stale_tracks.append(tracker_id)
+            for tracker_id in stale_tracks:
+                track_to_bird_uid.pop(tracker_id, None)
+
+            stale_states = [uid for uid, state in bird_last_state.items() if (now - float(state["last_seen"])) > (REID_MAX_GAP_SEC * 4)]
+            for uid in stale_states:
+                bird_last_state.pop(uid, None)
 
             object_count = sum(1 for info in live_birds.values() if (now - float(info["last_seen"])) <= BIRD_LIVE_TTL_SEC)
         else:
@@ -277,7 +463,7 @@ def detectar_objetos(frame):
         for det in selected:
             x1, y1, x2, y2 = det["box"]
             class_name = _class_name_by_id(det["class_id"]) or "obj"
-            tid = int(det["track_id"])
+            tid = int(det.get("stable_bird_uid", det["track_id"]))
             confidence = float(det["confidence"])
             color = (0, 255, 0)
             cv2.rectangle(draw_frame, (x1, y1), (x2, y2), color, 2)
@@ -383,6 +569,7 @@ def camera_loop():
 
             if MODO_DETECCAO == 'aves' and not use_basic_simulation:
                 _save_bird_snapshots(frame, temp_atual)
+                _save_bird_track_points()
 
             # --- GRAVAR NO BANCO A CADA 30 SEGUNDOS ---
             current_time = time.time()
@@ -488,6 +675,7 @@ def get_live_birds():
                 "bird_uid": int(bid),
                 "confidence": round(float(data["conf"]), 4),
                 "bbox": data["box"],
+                "track_id": int(data.get("track_id", -1)),
                 "last_seen_seconds": round(now - float(data["last_seen"]), 2),
             }
             for bid, data in live_birds.items()
@@ -518,6 +706,25 @@ def get_birds_registry():
     return jsonify({
         "count": len(rows),
         "items": [row.to_dict() for row in rows],
+    })
+
+
+@app.route('/api/birds/path/<int:bird_uid>', methods=['GET'])
+def get_bird_path(bird_uid):
+    limit = request.args.get("limit", default=500, type=int)
+    limit = max(1, min(limit, 5000))
+    rows = (
+        BirdTrackPoint.query
+        .filter_by(bird_uid=bird_uid)
+        .order_by(BirdTrackPoint.id.desc())
+        .limit(limit)
+        .all()
+    )
+    items = [row.to_dict() for row in reversed(rows)]
+    return jsonify({
+        "bird_uid": bird_uid,
+        "count": len(items),
+        "items": items,
     })
 
 # --- ROTAS DE CONTROLE ---
@@ -640,6 +847,9 @@ def get_system_info():
         "tracker": TRACKER_CONFIG,
         "modelo_ia": YOLO_MODEL_PATH,
         "classe_ave": BIRD_CLASS_NAME,
+        "reid_max_gap_sec": REID_MAX_GAP_SEC,
+        "reid_max_distance_ratio": REID_MAX_DISTANCE_RATIO,
+        "reid_appearance_min_sim": REID_APPEARANCE_MIN_SIM,
         "server_time": time.strftime("%Y-%m-%d %H:%M:%S"),
         "camera_index": CAMERA_INDEX
     })
