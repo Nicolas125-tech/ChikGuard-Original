@@ -2,14 +2,14 @@ from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager, create_access_token
-from database import db, User, Reading # Importar Reading
+from database import db, User, Reading, BirdSnapshot
 import cv2
 import numpy as np
 import threading
 import time
 import os
 import random
-from ultralytics import YOLO # Importação da IA Profissional
+from ultralytics import YOLO 
 
 # ======================================================================================
 # --- CONFIGURAÇÃO DE DETECÇÃO ---
@@ -17,42 +17,66 @@ from ultralytics import YOLO # Importação da IA Profissional
 MODO_DETECCAO = 'aves'
 # ======================================================================================
 
+# --- CONFIGURAÃ‡ÃƒO FINA DA IA ---
+# Aumentar `INFERENCE_IMGSZ` melhora objetos pequenos/distantes.
+INFERENCE_IMGSZ = int(os.getenv("INFERENCE_IMGSZ", "960"))
+# Limiar mais baixo ajuda aves distantes; a confirmaÃ§Ã£o temporal reduz falsos positivos.
+DETECTION_CONF = float(os.getenv("DETECTION_CONF", "0.22"))
+DETECTION_IOU = float(os.getenv("DETECTION_IOU", "0.45"))
+MIN_BIRD_AREA_RATIO = float(os.getenv("MIN_BIRD_AREA_RATIO", "0.00003"))
+YOLO_MODEL_PATH = os.getenv("YOLO_MODEL_PATH", "yolov8n.pt")
+BIRD_CLASS_NAME = os.getenv("BIRD_CLASS_NAME", "bird")
+TRACKER_TYPE = os.getenv("TRACKER_TYPE", "bytetrack").strip().lower()
+TRACKER_CONFIG = "botsort.yaml" if TRACKER_TYPE == "botsort" else "bytetrack.yaml"
+BIRD_SNAPSHOT_SAVE_INTERVAL = int(os.getenv("BIRD_SNAPSHOT_SAVE_INTERVAL", "10"))
+BIRD_LIVE_TTL_SEC = int(os.getenv("BIRD_LIVE_TTL_SEC", "4"))
+
 class ObjectDetector:
-    """
-    Encapsula a lógica de deteção de objetos usando a biblioteca Ultralytics.
-    Esta abordagem é mais moderna, eficiente e precisa que a implementação com OpenCV DNN.
-    """
-    def __init__(self, model_path='yolov8n.pt'): # YOLOv8 Nano é pequeno, rápido e eficiente.
+    def __init__(self, model_path='yolov8n.pt'):
         self.yolo_loaded = False
         self.model = None
         try:
-            # Carrega o modelo. A Ultralytics faz o download automático na primeira vez.
             self.model = YOLO(model_path)
             self.yolo_loaded = True
-            print(f"✅ Modelo Ultralytics '{model_path}' carregado com sucesso.")
-            # Aquece o modelo para a primeira inferência ser mais rápida
+            print(f"Modelo Ultralytics '{model_path}' carregado com sucesso.")
             self.model.predict(np.zeros((480, 640, 3)), verbose=False)
-            print("✅ Modelo aquecido e pronto para uso.")
+            print("Modelo aquecido e pronto para uso.")
         except Exception as e:
-            print(f"⚠️ Erro ao carregar o modelo Ultralytics: {e}")
-            print("   Verifique sua conexão com a internet para o download do modelo ou o caminho do arquivo.")
+            print(f"Erro ao carregar o modelo Ultralytics: {e}")
+            print("Verifique o caminho do modelo e dependencias.")
 
     def detect(self, frame):
         if not self.yolo_loaded:
-            return [], [], []
+            return []
 
-        # Realiza a predição. `verbose=False` para não poluir a consola.
-        # Otimização: Definimos um tamanho de imagem menor (imgsz=320) para acelerar a inferência.
-        results = self.model.predict(frame, verbose=False, conf=0.5, imgsz=320)
-        result = results[0] # Pega os resultados do primeiro frame
+        results = self.model.track(
+            frame,
+            verbose=False,
+            persist=True,
+            tracker=TRACKER_CONFIG,
+            conf=DETECTION_CONF,
+            iou=DETECTION_IOU,
+            imgsz=INFERENCE_IMGSZ
+        )
+        result = results[0]
+        boxes = result.boxes
+        if boxes is None or len(boxes) == 0:
+            return []
 
-        # Extrai as informações necessárias
-        # Bounding boxes no formato (x1, y1, x2, y2)
-        boxes = result.boxes.xyxy.cpu().numpy().astype(int) 
-        class_ids = result.boxes.cls.cpu().numpy().astype(int)
-        confidences = result.boxes.conf.cpu().numpy()
-        
-        return boxes, class_ids, confidences
+        xyxy = boxes.xyxy.cpu().numpy().astype(int)
+        class_ids = boxes.cls.cpu().numpy().astype(int)
+        confidences = boxes.conf.cpu().numpy()
+        track_ids = boxes.id.cpu().numpy().astype(int) if boxes.id is not None else np.full(len(xyxy), -1, dtype=int)
+
+        detections = []
+        for i in range(len(xyxy)):
+            detections.append({
+                "box": xyxy[i],
+                "class_id": int(class_ids[i]),
+                "confidence": float(confidences[i]),
+                "track_id": int(track_ids[i]),
+            })
+        return detections
 
 app = Flask(__name__)
 # Configuração do Banco SQLite
@@ -82,13 +106,16 @@ db_last_save_time = 0
 lock = threading.Lock()
 object_count = 0 # Variável para contagem de objetos
 APP_START_TIME = time.time()
+last_bird_snapshot_save_time = 0
+live_birds = {}
 
 # --- CONFIGURAÇÃO DA REDE NEURAL (YOLO) ---
 # Instancia o detector de objetos
-detector = ObjectDetector()
+detector = ObjectDetector(model_path=YOLO_MODEL_PATH)
 
 if detector.yolo_loaded:
     print("\n" + "="*60)
+    print(f"Modelo: {YOLO_MODEL_PATH} | Tracker: {TRACKER_CONFIG} | Classe alvo: {BIRD_CLASS_NAME}")
     if MODO_DETECCAO == 'objetos':
         print("ℹ️  MODO DE TESTE ATIVADO: O sistema irá detetar objetos gerais.")
         print("   Aponte a câmara para um dos seguintes itens para testar:")
@@ -99,6 +126,76 @@ if detector.yolo_loaded:
     print("="*60 + "\n")
 
 # Estado dos dispositivos (simulado)
+def _estimate_bird_temp_proxy(gray_frame, box, ambient_temp):
+    """
+    Estimativa de temperatura por ave usando brilho local (proxy).
+    Para temperatura individual real, use cÃ¢mera tÃ©rmica calibrada.
+    """
+    x1, y1, x2, y2 = box
+    x1 = max(0, x1)
+    y1 = max(0, y1)
+    x2 = min(gray_frame.shape[1], x2)
+    y2 = min(gray_frame.shape[0], y2)
+    if x2 <= x1 or y2 <= y1:
+        return round(float(ambient_temp), 2)
+
+    roi = gray_frame[y1:y2, x1:x2]
+    if roi.size == 0:
+        return round(float(ambient_temp), 2)
+
+    local_brightness = float(np.mean(roi))
+    adjustment = ((local_brightness / 255.0) - 0.5) * 2.5
+    return round(float(ambient_temp + adjustment), 2)
+
+
+def _class_name_by_id(class_id):
+    names = detector.model.names if detector and detector.model is not None else {}
+    if isinstance(names, dict):
+        return str(names.get(class_id, ""))
+    if isinstance(names, list) and 0 <= class_id < len(names):
+        return str(names[class_id])
+    return ""
+
+
+def _save_bird_snapshots(frame, ambient_temp):
+    global last_bird_snapshot_save_time
+
+    now = time.time()
+    if now - last_bird_snapshot_save_time < BIRD_SNAPSHOT_SAVE_INTERVAL:
+        return
+
+    with lock:
+        birds_items = list(live_birds.items())
+
+    if not birds_items:
+        last_bird_snapshot_save_time = now
+        return
+
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    rows = []
+    for bird_uid, data in birds_items:
+        box = data["box"]
+        est_temp = _estimate_bird_temp_proxy(gray, box, ambient_temp)
+        rows.append(
+            BirdSnapshot(
+                bird_uid=int(bird_uid),
+                confidence=float(data["conf"]),
+                x1=int(box[0]),
+                y1=int(box[1]),
+                x2=int(box[2]),
+                y2=int(box[3]),
+                temperatura_estimada=est_temp,
+                metodo_temperatura="estimada_rgb_proxy",
+            )
+        )
+
+    if rows:
+        with app.app_context():
+            db.session.bulk_save_objects(rows)
+            db.session.commit()
+
+    last_bird_snapshot_save_time = now
+
 estado_dispositivos = {
     "ventilacao": False,
     "aquecedor": False
@@ -106,63 +203,79 @@ estado_dispositivos = {
 
 # --- FUNÇÃO DE DETECÇÃO ---
 def detectar_objetos(frame):
-    global object_count
-    
-    # Copia o frame para não desenhar sobre o original que pode ser usado em outro lugar
+    global object_count, live_birds
+
     draw_frame = frame.copy()
+    detections = detector.detect(draw_frame)
 
-    # Usa o detector para encontrar objetos. O limiar de confiança foi reduzido para 0.4 para ser mais permissivo.
-    # A confiança já é filtrada dentro do método `detect` da Ultralytics.
-    boxes, class_ids, confidences = detector.detect(draw_frame)
-    
-    # --- FILTRAGEM BASEADA NO MODO ---
-    filtered_boxes = []
-    filtered_class_ids = []
-    filtered_confidences = []
+    frame_area = frame.shape[0] * frame.shape[1]
+    min_bird_area = frame_area * MIN_BIRD_AREA_RATIO
 
+    selected = []
     if MODO_DETECCAO == 'aves':
-        for i in range(len(class_ids)):
-            # A classe 'bird' no dataset COCO é o que procuramos.
-            if detector.model.names[class_ids[i]] == 'bird':
-                filtered_boxes.append(boxes[i])
-                filtered_class_ids.append(class_ids[i])
-                filtered_confidences.append(confidences[i])
-    else: # modo 'objetos'
-        filtered_boxes = boxes
-        filtered_class_ids = class_ids
-        filtered_confidences = confidences
+        target_name = BIRD_CLASS_NAME.strip().lower()
+        for det in detections:
+            class_name = _class_name_by_id(det["class_id"]).lower()
+            if class_name != target_name:
+                continue
+            x1, y1, x2, y2 = det["box"]
+            area = max(0, x2 - x1) * max(0, y2 - y1)
+            if area < min_bird_area:
+                continue
+            selected.append(det)
+    else:
+        selected = detections
+
+    now = time.time()
+    with lock:
+        if MODO_DETECCAO == 'aves':
+            for det in selected:
+                tid = int(det["track_id"])
+                if tid < 0:
+                    continue
+                live_birds[tid] = {
+                    "box": [int(v) for v in det["box"]],
+                    "conf": float(det["confidence"]),
+                    "last_seen": now,
+                }
+
+            stale = [tid for tid, info in live_birds.items() if (now - float(info["last_seen"])) > BIRD_LIVE_TTL_SEC]
+            for tid in stale:
+                live_birds.pop(tid, None)
+
+            object_count = sum(1 for info in live_birds.values() if (now - float(info["last_seen"])) <= BIRD_LIVE_TTL_SEC)
+        else:
+            object_count = len(selected)
 
     if detector.yolo_loaded:
-        print(f"[DETECTOR] Itens '{MODO_DETECCAO}' encontrados: {len(filtered_boxes)}")
+        print(f"[TRACKER] modo={MODO_DETECCAO} selecionadas={len(selected)} visiveis={object_count}")
 
-    with lock:
-        object_count = len(filtered_boxes)
-
-    # Desenha as caixas e os rótulos no frame
     if detector.yolo_loaded:
         font = cv2.FONT_HERSHEY_PLAIN
-        for i in range(len(filtered_boxes)):
-            x1, y1, x2, y2 = filtered_boxes[i]
-            label = str(detector.model.names[filtered_class_ids[i]])
-            confidence = filtered_confidences[i]
-            color = (0, 255, 0) # Verde
+        for det in selected:
+            x1, y1, x2, y2 = det["box"]
+            class_name = _class_name_by_id(det["class_id"]) or "obj"
+            tid = int(det["track_id"])
+            confidence = float(det["confidence"])
+            color = (0, 255, 0)
             cv2.rectangle(draw_frame, (x1, y1), (x2, y2), color, 2)
-            # Exibe o rótulo e a confiança para melhor diagnóstico
-            text = f"{label} ({confidence:.2f})"
-            cv2.putText(draw_frame, text, (x1, y1 - 5), font, 1.5, color, 2)
+            label = f"{class_name} ID:{tid} ({confidence:.2f})" if tid >= 0 else f"{class_name} ({confidence:.2f})"
+            cv2.putText(draw_frame, label, (x1, max(20, y1 - 5)), font, 1.3, color, 2)
 
-    # --- DIAGNOSTIC FEEDBACK ---
     if object_count == 0 and detector.yolo_loaded:
         height, _, _ = frame.shape
         feedback_text = "IA ATIVA (NENHUMA AVE DETECTADA)" if MODO_DETECCAO == 'aves' else "IA ATIVA (NENHUM OBJETO DETECTADO)"
-        # Adiciona texto no canto inferior para feedback constante
         cv2.putText(draw_frame, feedback_text, (10, height - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
 
-    # Desenhar a contagem no frame
     font = cv2.FONT_HERSHEY_PLAIN
-    label_text = "Aves" if MODO_DETECCAO == 'aves' else "Objetos"
-    cv2.putText(draw_frame, f"{label_text}: {object_count}", (10, 30), font, 2, (0, 255, 0), 2)
-    
+    if MODO_DETECCAO == 'aves':
+        cv2.putText(draw_frame, f"Aves visiveis (IDs): {object_count}", (10, 30), font, 2, (0, 255, 0), 2)
+    else:
+        cv2.putText(draw_frame, f"Objetos: {object_count}", (10, 30), font, 2, (0, 255, 0), 2)
+
+    cfg_text = f"tracker={TRACKER_CONFIG} imgsz={INFERENCE_IMGSZ} conf={DETECTION_CONF:.2f} classe={BIRD_CLASS_NAME}"
+    cv2.putText(draw_frame, cfg_text, (10, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+
     return draw_frame
 
 # --- THREAD DE CÂMERA (COM GRAVAÇÃO AUTOMÁTICA) ---
@@ -181,9 +294,9 @@ def camera_loop():
     if cap.isOpened():
         print("✅ Câmera real encontrada!")
         use_basic_simulation = False
-        # Otimização: Reduzimos a resolução da captura para aumentar o FPS.
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 480)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 360)
+        # Priorizamos qualidade para detectar aves mais distantes.
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
         width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
         height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
         print(f"   - Resolução da câmera definida para: {int(width)}x{int(height)}")
@@ -245,6 +358,9 @@ def camera_loop():
             # Atualiza frame global
             with lock:
                 global_frame = processed_frame
+
+            if MODO_DETECCAO == 'aves' and not use_basic_simulation:
+                _save_bird_snapshots(frame, temp_atual)
 
             # --- GRAVAR NO BANCO A CADA 30 SEGUNDOS ---
             current_time = time.time()
@@ -340,6 +456,37 @@ def get_chick_count():
         count = object_count
     return jsonify({"count": count})
 
+
+@app.route('/api/birds/live', methods=['GET'])
+def get_live_birds():
+    now = time.time()
+    with lock:
+        items = [
+            {
+                "bird_uid": int(bid),
+                "confidence": round(float(data["conf"]), 4),
+                "bbox": data["box"],
+                "last_seen_seconds": round(now - float(data["last_seen"]), 2),
+            }
+            for bid, data in live_birds.items()
+            if (now - float(data["last_seen"])) <= BIRD_LIVE_TTL_SEC
+        ]
+
+    items.sort(key=lambda item: item["bird_uid"])
+    return jsonify({
+        "count": len(items),
+        "ttl_seconds": BIRD_LIVE_TTL_SEC,
+        "items": items,
+    })
+
+
+@app.route('/api/birds/history', methods=['GET'])
+def get_birds_history():
+    limit = request.args.get("limit", default=300, type=int)
+    limit = max(1, min(limit, 5000))
+    rows = BirdSnapshot.query.order_by(BirdSnapshot.id.desc()).limit(limit).all()
+    return jsonify([row.to_dict() for row in reversed(rows)])
+
 # --- ROTAS DE CONTROLE ---
 
 @app.route('/api/ventilacao', methods=['POST'])
@@ -394,14 +541,20 @@ def get_summary():
     temperaturas = [item.temperatura for item in recentes]
     alertas = [item for item in recentes if item.status != "NORMAL"]
 
+    now = time.time()
     with lock:
         count = object_count
+        alive_count = sum(1 for info in live_birds.values() if (now - float(info["last_seen"])) <= BIRD_LIVE_TTL_SEC)
 
     return jsonify({
         "temperatura_atual": ultima.temperatura if ultima else 0,
         "status_atual": ultima.status if ultima else "INICIANDO",
         "media_temperatura": round(sum(temperaturas) / len(temperaturas), 1) if temperaturas else 0,
         "contagem_aves": count,
+        "aves_vivas_individuais": alive_count,
+        "metodo_temperatura_ave": "estimada_rgb_proxy",
+        "tracker": TRACKER_CONFIG,
+        "classe_ave": BIRD_CLASS_NAME,
         "dispositivos": estado_dispositivos,
         "total_alertas": len(alertas),
         "modo_deteccao": MODO_DETECCAO
@@ -449,6 +602,9 @@ def get_system_info():
         "camera_thread_alive": t.is_alive(),
         "modo_deteccao": MODO_DETECCAO,
         "yolo_loaded": detector.yolo_loaded,
+        "tracker": TRACKER_CONFIG,
+        "modelo_ia": YOLO_MODEL_PATH,
+        "classe_ave": BIRD_CLASS_NAME,
         "server_time": time.strftime("%Y-%m-%d %H:%M:%S"),
         "camera_index": CAMERA_INDEX
     })
@@ -456,3 +612,6 @@ def get_system_info():
 if __name__ == '__main__':
     # Roda em todas as interfaces
     app.run(host='0.0.0.0', port=5000, debug=False)
+
+
+
