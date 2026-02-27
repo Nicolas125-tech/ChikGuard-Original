@@ -1,5 +1,4 @@
 
-![Texto Alternativo]("C:\Users\cris_\Downloads\screencapture-localhost-5173-2026-02-26-22_16_46 (1).png")
 
 # ChikGuard
 
