@@ -10,6 +10,23 @@ Sistema de monitoramento para criação de frangos usando visão computacional. 
 - Contagem de aves em tempo real.
 - Detecção de anomalias (ex: aves paradas por muito tempo).
 
+### Web
+
+| Landing | Login |
+|---|---|
+| ![Web Landing](docs/screenshots/web-landing.jpeg) | ![Web Login](docs/screenshots/web-login.jpeg) |
+
+| Visao Geral | Aves Vistas |
+|---|---|
+| ![Web Visao Geral](docs/screenshots/web-overview.jpeg) | ![Web Aves](docs/screenshots/web-aves.jpeg) |
+
+| Dispositivos | Historico |
+|---|---|
+| ![Web Dispositivos](docs/screenshots/web-dispositivos.jpeg) | ![Web Historico](docs/screenshots/web-historico.jpeg) |
+
+| Sistema | Configuracoes |
+|---|---|
+| ![Web Sistema](docs/screenshots/web-sistema.jpeg) | ![Web Configuracoes](docs/screenshots/web-configuracoes.jpeg) |
 
 
 ## Pré-requisitos
@@ -138,20 +155,3 @@ ChikGuard/
 |---|
 | ![Mobile Ajustes](docs/screenshots/mobile-ajustes.jpeg) |
 
-### Web
-
-| Landing | Login |
-|---|---|
-| ![Web Landing](docs/screenshots/web-landing.jpeg) | ![Web Login](docs/screenshots/web-login.jpeg) |
-
-| Visao Geral | Aves Vistas |
-|---|---|
-| ![Web Visao Geral](docs/screenshots/web-overview.jpeg) | ![Web Aves](docs/screenshots/web-aves.jpeg) |
-
-| Dispositivos | Historico |
-|---|---|
-| ![Web Dispositivos](docs/screenshots/web-dispositivos.jpeg) | ![Web Historico](docs/screenshots/web-historico.jpeg) |
-
-| Sistema | Configuracoes |
-|---|---|
-| ![Web Sistema](docs/screenshots/web-sistema.jpeg) | ![Web Configuracoes](docs/screenshots/web-configuracoes.jpeg) |
