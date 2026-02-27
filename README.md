@@ -10,45 +10,7 @@ Sistema de monitoramento para criação de frangos usando visão computacional. 
 - Contagem de aves em tempo real.
 - Detecção de anomalias (ex: aves paradas por muito tempo).
 
-## Galeria
 
-> Coloque as capturas em `docs/screenshots/` com os nomes abaixo para o README renderizar as imagens.
-
-### Mobile
-
-| Login | Monitor |
-|---|---|
-| ![Mobile Login](docs/screenshots/mobile-login.jpeg) | ![Mobile Monitor](docs/screenshots/mobile-monitor.jpeg) |
-
-| Historico | Aves |
-|---|---|
-| ![Mobile Historico](docs/screenshots/mobile-historico.jpeg) | ![Mobile Aves](docs/screenshots/mobile-aves.jpeg) |
-
-| Alertas | Sistema |
-|---|---|
-| ![Mobile Alertas](docs/screenshots/mobile-alertas.jpeg) | ![Mobile Sistema](docs/screenshots/mobile-sistema.jpeg) |
-
-| Ajustes |
-|---|
-| ![Mobile Ajustes](docs/screenshots/mobile-ajustes.jpeg) |
-
-### Web
-
-| Landing | Login |
-|---|---|
-| ![Web Landing](docs/screenshots/web-landing.jpeg) | ![Web Login](docs/screenshots/web-login.jpeg) |
-
-| Visao Geral | Aves Vistas |
-|---|---|
-| ![Web Visao Geral](docs/screenshots/web-overview.jpeg) | ![Web Aves](docs/screenshots/web-aves.jpeg) |
-
-| Dispositivos | Historico |
-|---|---|
-| ![Web Dispositivos](docs/screenshots/web-dispositivos.jpeg) | ![Web Historico](docs/screenshots/web-historico.jpeg) |
-
-| Sistema | Configuracoes |
-|---|---|
-| ![Web Sistema](docs/screenshots/web-sistema.jpeg) | ![Web Configuracoes](docs/screenshots/web-configuracoes.jpeg) |
 
 ## Pré-requisitos
 
@@ -155,3 +117,41 @@ ChikGuard/
 └── mobile/           # Aplicação mobile React Native + Expo
 ```
 
+## Galeria
+
+
+### Mobile
+
+| Login | Monitor |
+|---|---|
+| ![Mobile Login](docs/screenshots/mobile-login.jpeg) | ![Mobile Monitor](docs/screenshots/mobile-monitor.jpeg) |
+
+| Historico | Aves |
+|---|---|
+| ![Mobile Historico](docs/screenshots/mobile-historico.jpeg) | ![Mobile Aves](docs/screenshots/mobile-aves.jpeg) |
+
+| Alertas | Sistema |
+|---|---|
+| ![Mobile Alertas](docs/screenshots/mobile-alertas.jpeg) | ![Mobile Sistema](docs/screenshots/mobile-sistema.jpeg) |
+
+| Ajustes |
+|---|
+| ![Mobile Ajustes](docs/screenshots/mobile-ajustes.jpeg) |
+
+### Web
+
+| Landing | Login |
+|---|---|
+| ![Web Landing](docs/screenshots/web-landing.jpeg) | ![Web Login](docs/screenshots/web-login.jpeg) |
+
+| Visao Geral | Aves Vistas |
+|---|---|
+| ![Web Visao Geral](docs/screenshots/web-overview.jpeg) | ![Web Aves](docs/screenshots/web-aves.jpeg) |
+
+| Dispositivos | Historico |
+|---|---|
+| ![Web Dispositivos](docs/screenshots/web-dispositivos.jpeg) | ![Web Historico](docs/screenshots/web-historico.jpeg) |
+
+| Sistema | Configuracoes |
+|---|---|
+| ![Web Sistema](docs/screenshots/web-sistema.jpeg) | ![Web Configuracoes](docs/screenshots/web-configuracoes.jpeg) |
