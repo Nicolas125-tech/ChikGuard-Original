@@ -19,37 +19,37 @@ Sistema de monitoramento para criação de frangos usando visão computacional. 
 
 | Login | Monitor |
 |---|---|
-| ![Mobile Login](docs/screenshots/mobile-login.png) | ![Mobile Monitor](docs/screenshots/mobile-monitor.png) |
+| ![Mobile Login](docs/screenshots/mobile-login.jpeg) | ![Mobile Monitor](docs/screenshots/mobile-monitor.jpeg) |
 
 | Historico | Aves |
 |---|---|
-| ![Mobile Historico](docs/screenshots/mobile-historico.png) | ![Mobile Aves](docs/screenshots/mobile-aves.png) |
+| ![Mobile Historico](docs/screenshots/mobile-historico.jpeg) | ![Mobile Aves](docs/screenshots/mobile-aves.jpeg) |
 
 | Alertas | Sistema |
 |---|---|
-| ![Mobile Alertas](docs/screenshots/mobile-alertas.png) | ![Mobile Sistema](docs/screenshots/mobile-sistema.png) |
+| ![Mobile Alertas](docs/screenshots/mobile-alertas.jpeg) | ![Mobile Sistema](docs/screenshots/mobile-sistema.jpeg) |
 
 | Ajustes |
 |---|
-| ![Mobile Ajustes](docs/screenshots/mobile-ajustes.png) |
+| ![Mobile Ajustes](docs/screenshots/mobile-ajustes.jpeg) |
 
 ### Web
 
 | Landing | Login |
 |---|---|
-| ![Web Landing](docs/screenshots/web-landing.png) | ![Web Login](docs/screenshots/web-login.png) |
+| ![Web Landing](docs/screenshots/web-landing.jpeg) | ![Web Login](docs/screenshots/web-login.jpeg) |
 
 | Visao Geral | Aves Vistas |
 |---|---|
-| ![Web Visao Geral](docs/screenshots/web-overview.png) | ![Web Aves](docs/screenshots/web-aves.png) |
+| ![Web Visao Geral](docs/screenshots/web-overview.jpeg) | ![Web Aves](docs/screenshots/web-aves.jpeg) |
 
 | Dispositivos | Historico |
 |---|---|
-| ![Web Dispositivos](docs/screenshots/web-dispositivos.png) | ![Web Historico](docs/screenshots/web-historico.png) |
+| ![Web Dispositivos](docs/screenshots/web-dispositivos.jpeg) | ![Web Historico](docs/screenshots/web-historico.jpeg) |
 
 | Sistema | Configuracoes |
 |---|---|
-| ![Web Sistema](docs/screenshots/web-sistema.png) | ![Web Configuracoes](docs/screenshots/web-configuracoes.png) |
+| ![Web Sistema](docs/screenshots/web-sistema.jpeg) | ![Web Configuracoes](docs/screenshots/web-configuracoes.jpeg) |
 
 ## Pré-requisitos
 
