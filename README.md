@@ -8,6 +8,46 @@ Sistema de monitoramento para criação de frangos usando visão computacional. 
 - Contagem de aves em tempo real.
 - Detecção de anomalias (ex: aves paradas por muito tempo).
 
+## Galeria
+
+> Coloque as capturas em `docs/screenshots/` com os nomes abaixo para o README renderizar as imagens.
+
+### Mobile
+
+| Login | Monitor |
+|---|---|
+| ![Mobile Login](docs/screenshots/mobile-login.png) | ![Mobile Monitor](docs/screenshots/mobile-monitor.png) |
+
+| Historico | Aves |
+|---|---|
+| ![Mobile Historico](docs/screenshots/mobile-historico.png) | ![Mobile Aves](docs/screenshots/mobile-aves.png) |
+
+| Alertas | Sistema |
+|---|---|
+| ![Mobile Alertas](docs/screenshots/mobile-alertas.png) | ![Mobile Sistema](docs/screenshots/mobile-sistema.png) |
+
+| Ajustes |
+|---|
+| ![Mobile Ajustes](docs/screenshots/mobile-ajustes.png) |
+
+### Web
+
+| Landing | Login |
+|---|---|
+| ![Web Landing](docs/screenshots/web-landing.png) | ![Web Login](docs/screenshots/web-login.png) |
+
+| Visao Geral | Aves Vistas |
+|---|---|
+| ![Web Visao Geral](docs/screenshots/web-overview.png) | ![Web Aves](docs/screenshots/web-aves.png) |
+
+| Dispositivos | Historico |
+|---|---|
+| ![Web Dispositivos](docs/screenshots/web-dispositivos.png) | ![Web Historico](docs/screenshots/web-historico.png) |
+
+| Sistema | Configuracoes |
+|---|---|
+| ![Web Sistema](docs/screenshots/web-sistema.png) | ![Web Configuracoes](docs/screenshots/web-configuracoes.png) |
+
 ## Pré-requisitos
 
 - Python 3.8+
@@ -112,3 +152,4 @@ ChikGuard/
 ├── frontend/         # Aplicação web React + Vite
 └── mobile/           # Aplicação mobile React Native + Expo
 ```
+
