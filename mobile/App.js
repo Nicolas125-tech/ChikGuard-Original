@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   StyleSheet, Text, View, TextInput, TouchableOpacity,
-  SafeAreaView, StatusBar, ScrollView, ActivityIndicator, Alert, Linking
+  SafeAreaView, StatusBar, ScrollView, ActivityIndicator, Alert, Linking, Image
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WebView } from 'react-native-webview';
 import { 
   Thermometer, Activity, AlertTriangle, CheckCircle, 
-  Settings, Save, Zap, Wind, LayoutDashboard, History, LogOut, Lock, User, Key, Users, Bell, Cpu
+  Settings, Save, Zap, Wind, LayoutDashboard, History, LogOut, User, Key, Users, Bell, Cpu
 } from 'lucide-react-native';
+
+const appLogo = require('./assets/logo.png');
 
 // --- COMPONENTES DE TELA ---
 
@@ -346,12 +348,12 @@ const ConfigScreen = ({ serverUrl, setServerUrl, logout }) => {
     <View style={[styles.container, {padding: 20}]}>
       <Text style={styles.pageTitle}>Ajustes do Sistema</Text>
       
-      <Text style={styles.label}>Endereço do Servidor (Ngrok ou IP)</Text>
+      <Text style={styles.label}>Endereço do Servidor (Cloudflare Tunnel ou IP)</Text>
       <TextInput 
         style={styles.input} 
         value={tempUrl} 
         onChangeText={setTempUrl} 
-        placeholder="https://exemplo.ngrok-free.app" 
+        placeholder="https://exemplo.trycloudflare.com" 
         placeholderTextColor="#666"
         autoCapitalize='none'
       />
@@ -487,8 +489,8 @@ export default function App() {
         <StatusBar barStyle="light-content" backgroundColor="#0f172a"/>
         <ScrollView contentContainerStyle={styles.centerContainer}>
           <View style={{alignItems:'center', marginBottom:30}}>
-            <View style={{backgroundColor:'rgba(16,185,129,0.1)', padding:20, borderRadius:99, marginBottom:15, borderWidth:1, borderColor: 'rgba(16,185,129,0.2)'}}>
-              <Lock size={48} color="#10b981" />
+            <View style={styles.loginLogoWrap}>
+              <Image source={appLogo} style={styles.loginLogoImage} resizeMode="contain" />
             </View>
             <Text style={{fontSize:28, fontWeight:'bold', color:'white'}}>ChickGuard</Text>
             <Text style={{color:'#64748b'}}>Acesso Profissional</Text>
@@ -497,7 +499,7 @@ export default function App() {
           {/* Config rápida de IP no login */}
           <View style={{marginBottom:20, width:'100%'}}>
              <Text style={styles.label}>ENDEREÇO DO SERVIDOR</Text>
-             <TextInput style={styles.input} value={serverUrl} onChangeText={setServerUrl} placeholder="https://exemplo.ngrok-free.app" placeholderTextColor="#64748b" autoCapitalize='none'/>
+             <TextInput style={styles.input} value={serverUrl} onChangeText={setServerUrl} placeholder="https://exemplo.trycloudflare.com" placeholderTextColor="#64748b" autoCapitalize='none'/>
           </View>
 
           <View style={styles.inputContainer}>
@@ -524,7 +526,10 @@ export default function App() {
       
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.appName}>ChickGuard AI</Text>
+        <View style={styles.headerBrand}>
+          <Image source={appLogo} style={styles.headerLogo} resizeMode="contain" />
+          <Text style={styles.appName}>ChickGuard AI</Text>
+        </View>
         <Text style={{color:'#10b981', fontSize:10, fontWeight:'bold'}}>ONLINE</Text>
       </View>
 
@@ -588,7 +593,11 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f172a' },
   centerContainer: { flex:1, justifyContent:'center', alignItems:'center', padding:30 },
   header: { padding: 20, borderBottomWidth:1, borderBottomColor:'#1e293b', flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginTop:30 },
+  headerBrand: { flexDirection:'row', alignItems:'center' },
+  headerLogo: { width: 30, height: 30, marginRight: 10, borderRadius: 6 },
   appName: { fontSize: 20, fontWeight: 'bold', color: 'white' },
+  loginLogoWrap: { backgroundColor:'rgba(16,185,129,0.1)', width: 104, height: 104, borderRadius: 99, marginBottom:15, borderWidth:1, borderColor: 'rgba(16,185,129,0.2)', alignItems:'center', justifyContent:'center' },
+  loginLogoImage: { width: 72, height: 72 },
   pageTitle: { fontSize: 22, fontWeight:'bold', color:'white', marginBottom:20, marginTop:10, marginLeft:20 },
   
   // Tabs
@@ -625,12 +634,12 @@ const styles = StyleSheet.create({
   liveBadge: { position:'absolute', top:10, left:10, backgroundColor:'red', paddingHorizontal:8, paddingVertical:4, borderRadius:4 },
   liveText: { color:'white', fontSize:10, fontWeight:'bold' },
 
-  // Ngrok Blocker
-  ngrokBlockerContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#1e293b', padding: 20 },
-  ngrokTitle: { color: 'white', fontSize: 18, fontWeight: 'bold', marginTop: 10, marginBottom: 5 },
-  ngrokText: { color: '#94a3b8', textAlign: 'center', marginBottom: 20 },
-  ngrokButton: { backgroundColor: '#2563eb', padding: 12, borderRadius: 8, width: '100%', alignItems: 'center', marginBottom: 10 },
-  ngrokButtonText: { color: 'white', fontWeight: 'bold' },
+  // Tunnel Blocker
+  tunnelBlockerContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#1e293b', padding: 20 },
+  tunnelTitle: { color: 'white', fontSize: 18, fontWeight: 'bold', marginTop: 10, marginBottom: 5 },
+  tunnelText: { color: '#94a3b8', textAlign: 'center', marginBottom: 20 },
+  tunnelButton: { backgroundColor: '#2563eb', padding: 12, borderRadius: 8, width: '100%', alignItems: 'center', marginBottom: 10 },
+  tunnelButtonText: { color: 'white', fontWeight: 'bold' },
 
   // History List
   historyItem: { flexDirection:'row', alignItems:'center', backgroundColor:'#1e293b', padding:15, borderRadius:12, marginBottom:10 },

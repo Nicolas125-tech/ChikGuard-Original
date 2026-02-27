@@ -17,7 +17,6 @@ import {
   Maximize,
   Save,
   Settings,
-  Shield,
   SlidersHorizontal,
   Thermometer,
   User,
@@ -27,6 +26,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import logoImg from './assets/logo.jpeg';
 
 const STORAGE = {
   token: 'cg_token',
@@ -41,8 +41,10 @@ const DEFAULT_PREFS = {
   countMs: 3000,
 };
 
+const isTunnelHost = (value = '') => /trycloudflare|cfargotunnel/i.test(value);
+
 const getBaseUrl = (ipOrUrl) => {
-  if (window.location.hostname.includes('ngrok')) return window.location.origin;
+  if (isTunnelHost(window.location.hostname)) return window.location.origin;
   if (!ipOrUrl) return 'http://127.0.0.1:5000';
   const clean = ipOrUrl.replace(/\/$/, '');
   if (clean.startsWith('http://') || clean.startsWith('https://')) return clean;
@@ -120,8 +122,8 @@ function OpeningScreen() {
   return (
     <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-8">
       <div className="w-full max-w-md text-center">
-        <div className="mx-auto mb-6 w-20 h-20 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
-          <Shield size={40} className="text-emerald-400" />
+        <div className="mx-auto mb-6 w-24 h-24 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center overflow-hidden">
+          <img src={logoImg} alt="ChikGuard Logo" className="w-20 h-20 object-contain" />
         </div>
         <h1 className="text-3xl font-bold tracking-tight">ChickGuard AI</h1>
         <p className="text-slate-400 mt-2">Inicializando sistema...</p>
@@ -142,7 +144,9 @@ function LandingPage({ onLoginClick }) {
       </div>
       <nav className="relative z-10 flex justify-between items-center p-6 max-w-7xl mx-auto w-full">
         <div className="flex items-center gap-2">
-          <div className="bg-emerald-500/20 p-2 rounded-lg border border-emerald-500/30"><Shield className="text-emerald-500" size={24} /></div>
+          <div className="bg-emerald-500/10 p-1 rounded-lg border border-emerald-500/30 w-11 h-11 flex items-center justify-center overflow-hidden">
+            <img src={logoImg} alt="ChikGuard Logo" className="w-8 h-8 object-contain" />
+          </div>
           <span className="text-xl font-bold tracking-tight">ChickGuard AI</span>
         </div>
         <button onClick={onLoginClick} className="bg-slate-800 hover:bg-slate-700 text-white px-5 py-2 rounded-full font-medium border border-slate-700 hover:border-emerald-500/50 flex items-center gap-2">
@@ -169,7 +173,7 @@ function LoginScreen({ serverIP, setServerIP, onBack, onLogin }) {
   const [tempIP, setTempIP] = useState(serverIP);
 
   useEffect(() => {
-    if (window.location.hostname.includes('ngrok')) {
+    if (isTunnelHost(window.location.hostname)) {
       setServerIP(window.location.origin);
       setTempIP(window.location.origin);
     }
@@ -182,7 +186,7 @@ function LoginScreen({ serverIP, setServerIP, onBack, onLogin }) {
     try {
       const response = await fetch(`${getBaseUrl(serverIP)}/api/login`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: user, password: pass }),
       });
       const data = await response.json();
@@ -244,7 +248,7 @@ function Dashboard({ token, serverIP, prefs, onSavePrefs, onSaveServer, onLogout
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
       <header className="bg-slate-900/80 border-b border-slate-800 px-6 h-20 flex justify-between items-center sticky top-0 z-30">
-        <div className="flex items-center gap-3"><div className="bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20"><Activity className="text-emerald-500" size={24} /></div><h1 className="text-xl font-bold">ChickGuard AI</h1></div>
+        <div className="flex items-center gap-3"><div className="bg-emerald-500/10 p-1 rounded-lg border border-emerald-500/20 w-11 h-11 flex items-center justify-center overflow-hidden"><img src={logoImg} alt="ChikGuard Logo" className="w-8 h-8 object-contain" /></div><h1 className="text-xl font-bold">ChickGuard AI</h1></div>
         <div className="flex items-center gap-2">
           {tabs.map((item) => {
             const Icon = item.icon;
@@ -279,7 +283,7 @@ function OverviewPanel({ token, serverIP, prefs }) {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const r = await fetch(`${baseUrl}/api/status`, { headers: { Authorization: `Bearer ${token}`, 'ngrok-skip-browser-warning': 'true' } });
+      const r = await fetch(`${baseUrl}/api/status`, { headers: { Authorization: `Bearer ${token}` } });
       if (!r.ok) throw new Error();
       setDados(await r.json());
       setErro(false);
@@ -290,7 +294,7 @@ function OverviewPanel({ token, serverIP, prefs }) {
 
   const fetchHistory = useCallback(async () => {
     try {
-      const r = await fetch(`${baseUrl}/api/history`, { headers: { Authorization: `Bearer ${token}`, 'ngrok-skip-browser-warning': 'true' } });
+      const r = await fetch(`${baseUrl}/api/history`, { headers: { Authorization: `Bearer ${token}` } });
       if (!r.ok) throw new Error('History fetch failed');
       setHistorico(await r.json());
     } catch {
@@ -300,7 +304,7 @@ function OverviewPanel({ token, serverIP, prefs }) {
 
   const fetchDevices = useCallback(async () => {
     try {
-      const r = await fetch(`${baseUrl}/api/estado-dispositivos`, { headers: { Authorization: `Bearer ${token}`, 'ngrok-skip-browser-warning': 'true' } });
+      const r = await fetch(`${baseUrl}/api/estado-dispositivos`, { headers: { Authorization: `Bearer ${token}` } });
       if (!r.ok) throw new Error('Device state fetch failed');
       setDispositivos(await r.json());
     } catch {
@@ -310,7 +314,7 @@ function OverviewPanel({ token, serverIP, prefs }) {
 
   const fetchCount = useCallback(async () => {
     try {
-      const r = await fetch(`${baseUrl}/api/chick_count`, { headers: { Authorization: `Bearer ${token}`, 'ngrok-skip-browser-warning': 'true' } });
+      const r = await fetch(`${baseUrl}/api/chick_count`, { headers: { Authorization: `Bearer ${token}` } });
       if (!r.ok) throw new Error('Count fetch failed');
       const data = await r.json();
       setContagem(data.count || 0);
@@ -331,7 +335,7 @@ function OverviewPanel({ token, serverIP, prefs }) {
   const toggleDevice = async (tipo, ligar) => {
     await fetch(`${baseUrl}/api/${tipo}`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ ligar }),
     });
     fetchDevices();
@@ -385,9 +389,9 @@ function OverviewPanel({ token, serverIP, prefs }) {
             {erro ? (
               <div className="text-center flex flex-col items-center justify-center h-full w-full bg-slate-900/50"><WifiOff size={32} className="text-slate-500 mb-3" /><p className="text-slate-400">Sem video</p></div>
             ) : videoBlocked ? (
-              <div className="text-center flex flex-col items-center justify-center h-full w-full bg-slate-900/90 p-8"><AlertTriangle size={48} className="text-yellow-500 mb-4" /><h2 className="text-xl font-bold text-white mb-2">Bloqueio do Ngrok</h2><a href={videoUrl} target="_blank" rel="noreferrer" className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-xl flex items-center gap-2"><ExternalLink size={18} /> Abrir stream</a></div>
+              <div className="text-center flex flex-col items-center justify-center h-full w-full bg-slate-900/90 p-8"><AlertTriangle size={48} className="text-yellow-500 mb-4" /><h2 className="text-xl font-bold text-white mb-2">Bloqueio do Tunnel</h2><a href={videoUrl} target="_blank" rel="noreferrer" className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-xl flex items-center gap-2"><ExternalLink size={18} /> Abrir stream</a></div>
             ) : (
-              <img src={videoUrl} alt="Visao da Camera" className="w-full h-full object-contain" onError={() => { if (window.location.hostname.includes('ngrok') || serverIP.includes('ngrok')) setVideoBlocked(true); }} />
+              <img src={videoUrl} alt="Visao da Camera" className="w-full h-full object-contain" onError={() => { if (isTunnelHost(window.location.hostname) || isTunnelHost(serverIP)) setVideoBlocked(true); }} />
             )}
           </div>
         </div>
@@ -403,7 +407,7 @@ function DevicesPanel({ token, serverIP }) {
 
   const loadDevices = useCallback(async () => {
     try {
-      const r = await fetch(`${baseUrl}/api/estado-dispositivos`, { headers: { Authorization: `Bearer ${token}`, 'ngrok-skip-browser-warning': 'true' } });
+      const r = await fetch(`${baseUrl}/api/estado-dispositivos`, { headers: { Authorization: `Bearer ${token}` } });
       if (!r.ok) throw new Error('Device state fetch failed');
       setDispositivos(await r.json());
     } finally {
@@ -418,7 +422,7 @@ function DevicesPanel({ token, serverIP }) {
   const toggleDevice = async (tipo, ligar) => {
     await fetch(`${baseUrl}/api/${tipo}`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ ligar }),
     });
     loadDevices();
@@ -451,7 +455,7 @@ function AlertsPanel({ serverIP, prefs }) {
 
   const loadAlerts = useCallback(async () => {
     try {
-      const r = await fetch(`${baseUrl}/api/alerts`, { headers: { 'ngrok-skip-browser-warning': 'true' } });
+      const r = await fetch(`${baseUrl}/api/alerts`);
       if (!r.ok) throw new Error('Alerts fetch failed');
       setAlerts(await r.json());
     } finally {
@@ -493,7 +497,7 @@ function HistoryPanel({ serverIP, prefs }) {
 
   const loadHistory = useCallback(async () => {
     try {
-      const r = await fetch(`${baseUrl}/api/history`, { headers: { 'ngrok-skip-browser-warning': 'true' } });
+      const r = await fetch(`${baseUrl}/api/history`);
       if (!r.ok) throw new Error('History fetch failed');
       setHistory(await r.json());
     } finally {
@@ -540,7 +544,7 @@ function BirdsPanel({ token, serverIP, prefs }) {
 
   const loadBirds = useCallback(async () => {
     try {
-      const headers = { Authorization: `Bearer ${token}`, 'ngrok-skip-browser-warning': 'true' };
+      const headers = { Authorization: `Bearer ${token}` };
       const [liveRes, regRes, historyRes] = await Promise.all([
         fetch(`${baseUrl}/api/birds/live`, { headers }),
         fetch(`${baseUrl}/api/birds/registry?limit=500`, { headers }),
@@ -613,8 +617,8 @@ function SystemPanel({ serverIP, prefs }) {
 
   const loadSystem = useCallback(async () => {
     const [infoRes, summaryRes] = await Promise.all([
-      fetch(`${baseUrl}/api/system-info`, { headers: { 'ngrok-skip-browser-warning': 'true' } }),
-      fetch(`${baseUrl}/api/summary`, { headers: { 'ngrok-skip-browser-warning': 'true' } }),
+      fetch(`${baseUrl}/api/system-info`),
+      fetch(`${baseUrl}/api/summary`),
     ]);
     if (infoRes.ok) setInfo(await infoRes.json());
     if (summaryRes.ok) setSummary(await summaryRes.json());

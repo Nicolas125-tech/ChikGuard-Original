@@ -15,7 +15,7 @@ Sistema de monitoramento para criação de frangos usando visão computacional. 
 - npm ou yarn
 - Expo CLI
 - OpenCV
-- Ngrok
+- Cloudflare Tunnel (`cloudflared`)
 
 ## Instalação
 
@@ -52,19 +52,19 @@ python app.py
 
 O backend estará disponível em `http://localhost:5000`
 
-### Ngrok
+### Cloudflare Tunnel
 
-1. Configure servidor Ngrok:
+1. Instale o `cloudflared` (Windows):
 
 ```bash
-ngrok config add-authtoken 1a2b3c4d5e6f7g8h9i0_token_falso_aqui
+winget install --id Cloudflare.cloudflared
 ```
 
-2.
+2. Execute o tunnel para a API local:
 ```bash
-ngrok http 5000
+cloudflared tunnel --url http://localhost:5000
 ```
-3. Colouque o link do Ngrok na chave ip de login.
+3. Coloque o link HTTPS gerado (ex: `https://<hash>.trycloudflare.com`) na chave IP/URL de login.
 
 ### Frontend
 
