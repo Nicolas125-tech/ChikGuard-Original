@@ -1,27 +1,50 @@
-from flask import Flask, jsonify, request, Response
+from flask import Flask, jsonify, request, Response, send_file
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager, create_access_token
-from database import db, User, Reading, BirdSnapshot, BirdIdentity, BirdTrackPoint
+from database import (
+    db,
+    User,
+    Reading,
+    BirdSnapshot,
+    BirdIdentity,
+    BirdTrackPoint,
+    EventLog,
+    SensorReading,
+    Batch,
+)
+
 import cv2
 import numpy as np
 import threading
 import time
 import os
 import random
-from ultralytics import YOLO 
-from datetime import datetime
+import json
+import math
+import traceback
+from datetime import datetime, timedelta
+from ultralytics import YOLO
+from io import BytesIO
+import smtplib
+from email.message import EmailMessage
 
-# ======================================================================================
-# --- CONFIGURAÇÃO DE DETECÇÃO ---
-# Mude para 'aves' para o modo de produção ou 'objetos' para teste geral.
-MODO_DETECCAO = 'aves'
-# ======================================================================================
+try:
+    import requests
+except Exception:
+    requests = None
 
-# --- CONFIGURAÃ‡ÃƒO FINA DA IA ---
-# Aumentar `INFERENCE_IMGSZ` melhora objetos pequenos/distantes.
+try:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+except Exception:
+    canvas = None
+    A4 = None
+
+MODO_DETECCAO = os.getenv("MODO_DETECCAO", "aves").strip().lower()
+ACTIVE_CAMERA_ID = os.getenv("ACTIVE_CAMERA_ID", "galpao-1")
+
 INFERENCE_IMGSZ = int(os.getenv("INFERENCE_IMGSZ", "960"))
-# Limiar mais baixo ajuda aves distantes; a confirmaÃ§Ã£o temporal reduz falsos positivos.
 DETECTION_CONF = float(os.getenv("DETECTION_CONF", "0.22"))
 DETECTION_IOU = float(os.getenv("DETECTION_IOU", "0.45"))
 MIN_BIRD_AREA_RATIO = float(os.getenv("MIN_BIRD_AREA_RATIO", "0.00003"))
@@ -29,6 +52,7 @@ YOLO_MODEL_PATH = os.getenv("YOLO_MODEL_PATH", "yolov8n.pt")
 BIRD_CLASS_NAME = os.getenv("BIRD_CLASS_NAME", "bird")
 TRACKER_TYPE = os.getenv("TRACKER_TYPE", "bytetrack").strip().lower()
 TRACKER_CONFIG = "botsort.yaml" if TRACKER_TYPE == "botsort" else "bytetrack.yaml"
+
 BIRD_SNAPSHOT_SAVE_INTERVAL = int(os.getenv("BIRD_SNAPSHOT_SAVE_INTERVAL", "10"))
 BIRD_LIVE_TTL_SEC = int(os.getenv("BIRD_LIVE_TTL_SEC", "4"))
 REID_MAX_GAP_SEC = int(os.getenv("REID_MAX_GAP_SEC", "8"))
@@ -39,19 +63,35 @@ REID_W_DIST = float(os.getenv("REID_W_DIST", "0.55"))
 REID_W_SIZE = float(os.getenv("REID_W_SIZE", "0.20"))
 REID_W_APPEAR = float(os.getenv("REID_W_APPEAR", "0.25"))
 
+BEHAVIOR_ALERT_COOLDOWN_SEC = int(os.getenv("BEHAVIOR_ALERT_COOLDOWN_SEC", "120"))
+IMMOBILITY_MIN_SEC = int(os.getenv("IMMOBILITY_MIN_SEC", "1800"))
+IMMOBILITY_MOVE_PX = int(os.getenv("IMMOBILITY_MOVE_PX", "12"))
+IMMOBILITY_ALERT_COOLDOWN_SEC = int(os.getenv("IMMOBILITY_ALERT_COOLDOWN_SEC", "300"))
+
+SENSOR_SAVE_INTERVAL = int(os.getenv("SENSOR_SAVE_INTERVAL", "30"))
+SENSOR_ALERT_COOLDOWN_SEC = int(os.getenv("SENSOR_ALERT_COOLDOWN_SEC", "300"))
+
+INTRUSION_START_HOUR = int(os.getenv("INTRUSION_START_HOUR", "0"))
+INTRUSION_END_HOUR = int(os.getenv("INTRUSION_END_HOUR", "5"))
+INTRUSION_COOLDOWN_SEC = int(os.getenv("INTRUSION_COOLDOWN_SEC", "180"))
+
+REPORTS_DIR = os.path.join(os.path.dirname(__file__), "reports")
+HEATMAP_DIR = os.path.join(REPORTS_DIR, "heatmaps")
+os.makedirs(HEATMAP_DIR, exist_ok=True)
+
+
 class ObjectDetector:
-    def __init__(self, model_path='yolov8n.pt'):
+    def __init__(self, model_path="yolov8n.pt"):
         self.yolo_loaded = False
         self.model = None
         try:
             self.model = YOLO(model_path)
             self.yolo_loaded = True
-            print(f"Modelo Ultralytics '{model_path}' carregado com sucesso.")
+            print(f"Model '{model_path}' loaded.")
             self.model.predict(np.zeros((480, 640, 3)), verbose=False)
-            print("Modelo aquecido e pronto para uso.")
-        except Exception as e:
-            print(f"Erro ao carregar o modelo Ultralytics: {e}")
-            print("Verifique o caminho do modelo e dependencias.")
+            print("Model warmed up.")
+        except Exception as exc:
+            print(f"Error loading Ultralytics model: {exc}")
 
     def detect(self, frame):
         if not self.yolo_loaded:
@@ -64,8 +104,9 @@ class ObjectDetector:
             tracker=TRACKER_CONFIG,
             conf=DETECTION_CONF,
             iou=DETECTION_IOU,
-            imgsz=INFERENCE_IMGSZ
+            imgsz=INFERENCE_IMGSZ,
         )
+
         result = results[0]
         boxes = result.boxes
         if boxes is None or len(boxes) == 0:
@@ -74,90 +115,57 @@ class ObjectDetector:
         xyxy = boxes.xyxy.cpu().numpy().astype(int)
         class_ids = boxes.cls.cpu().numpy().astype(int)
         confidences = boxes.conf.cpu().numpy()
-        track_ids = boxes.id.cpu().numpy().astype(int) if boxes.id is not None else np.full(len(xyxy), -1, dtype=int)
+        track_ids = (
+            boxes.id.cpu().numpy().astype(int)
+            if boxes.id is not None
+            else np.full(len(xyxy), -1, dtype=int)
+        )
 
         detections = []
         for i in range(len(xyxy)):
-            detections.append({
-                "box": xyxy[i],
-                "class_id": int(class_ids[i]),
-                "confidence": float(confidences[i]),
-                "track_id": int(track_ids[i]),
-            })
+            detections.append(
+                {
+                    "box": xyxy[i],
+                    "class_id": int(class_ids[i]),
+                    "confidence": float(confidences[i]),
+                    "track_id": int(track_ids[i]),
+                }
+            )
         return detections
 
+
 app = Flask(__name__)
-# Configuração do Banco SQLite
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///chickguard.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['JWT_SECRET_KEY'] = 'chave-secreta-granja-segura'
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///chickguard.db"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["JWT_SECRET_KEY"] = "chave-secreta-granja-segura"
 
 CORS(app)
 db.init_app(app)
 bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
 
-# Cria tabelas ao iniciar
-with app.app_context():
-    db.create_all()
-    # Cria admin se não existir
-    if not User.query.filter_by(username='admin').first():
-        hashed = bcrypt.generate_password_hash('admin123').decode('utf-8')
-        db.session.add(User(username='admin', password=hashed))
-        db.session.commit()
 
-# --- VARIÁVEIS GLOBAIS ---
-CAMERA_INDEX = 0 
-global_frame = None
-fps_last_time = 0
-db_last_save_time = 0
-lock = threading.Lock()
-object_count = 0 # Variável para contagem de objetos
-APP_START_TIME = time.time()
-last_bird_snapshot_save_time = 0
-last_track_point_save_time = 0
-live_birds = {}
-track_to_bird_uid = {}
-bird_last_state = {}
-next_bird_uid = 1
+def _safe_json(value):
+    try:
+        return json.dumps(value, ensure_ascii=False)
+    except Exception:
+        return json.dumps({"raw": str(value)})
 
-# --- CONFIGURAÇÃO DA REDE NEURAL (YOLO) ---
-# Instancia o detector de objetos
-detector = ObjectDetector(model_path=YOLO_MODEL_PATH)
 
-if detector.yolo_loaded:
-    print("\n" + "="*60)
-    print(f"Modelo: {YOLO_MODEL_PATH} | Tracker: {TRACKER_CONFIG} | Classe alvo: {BIRD_CLASS_NAME}")
-    if MODO_DETECCAO == 'objetos':
-        print("ℹ️  MODO DE TESTE ATIVADO: O sistema irá detetar objetos gerais.")
-        print("   Aponte a câmara para um dos seguintes itens para testar:")
-        test_objects = ['person', 'cell phone', 'bottle', 'cup', 'book', 'keyboard', 'mouse', 'tvmonitor', 'laptop']
-        print(f"   ➡️  {', '.join(test_objects)}")
-    else:
-        print("✅ MODO DE PRODUÇÃO ATIVADO: O sistema irá detetar apenas 'aves'.")
-    print("="*60 + "\n")
-
-# Estado dos dispositivos (simulado)
-def _estimate_bird_temp_proxy(gray_frame, box, ambient_temp):
-    """
-    Estimativa de temperatura por ave usando brilho local (proxy).
-    Para temperatura individual real, use cÃ¢mera tÃ©rmica calibrada.
-    """
-    x1, y1, x2, y2 = box
-    x1 = max(0, x1)
-    y1 = max(0, y1)
-    x2 = min(gray_frame.shape[1], x2)
-    y2 = min(gray_frame.shape[0], y2)
-    if x2 <= x1 or y2 <= y1:
-        return round(float(ambient_temp), 2)
-
-    roi = gray_frame[y1:y2, x1:x2]
-    if roi.size == 0:
-        return round(float(ambient_temp), 2)
-
-    local_brightness = float(np.mean(roi))
-    adjustment = ((local_brightness / 255.0) - 0.5) * 2.5
-    return round(float(ambient_temp + adjustment), 2)
+def _log_event(event_type, level, message, metadata=None, camera_id=ACTIVE_CAMERA_ID):
+    try:
+        with app.app_context():
+            row = EventLog(
+                camera_id=camera_id,
+                event_type=event_type,
+                level=level,
+                message=message,
+                metadata_json=_safe_json(metadata or {}),
+            )
+            db.session.add(row)
+            db.session.commit()
+    except Exception as exc:
+        print(f"[EVENT] failed to persist '{event_type}': {exc}")
 
 
 def _class_name_by_id(class_id):
@@ -186,11 +194,9 @@ def _extract_appearance_signature(frame, box):
     y2 = max(0, min(y2, h))
     if x2 <= x1 or y2 <= y1:
         return None
-
     roi = frame[y1:y2, x1:x2]
     if roi.size == 0:
         return None
-
     hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
     hist = cv2.calcHist([hsv], [0, 1], None, [12, 12], [0, 180, 0, 256])
     hist = cv2.normalize(hist, hist).flatten()
@@ -206,6 +212,111 @@ def _appearance_similarity(hist_a, hist_b):
     return max(0.0, min(1.0, (score + 1.0) / 2.0))
 
 
+def _estimate_bird_temp_proxy(gray_frame, box, ambient_temp):
+    x1, y1, x2, y2 = box
+    x1 = max(0, x1)
+    y1 = max(0, y1)
+    x2 = min(gray_frame.shape[1], x2)
+    y2 = min(gray_frame.shape[0], y2)
+    if x2 <= x1 or y2 <= y1:
+        return round(float(ambient_temp), 2)
+    roi = gray_frame[y1:y2, x1:x2]
+    if roi.size == 0:
+        return round(float(ambient_temp), 2)
+    local_brightness = float(np.mean(roi))
+    adjustment = ((local_brightness / 255.0) - 0.5) * 2.5
+    return round(float(ambient_temp + adjustment), 2)
+
+
+with app.app_context():
+    db.create_all()
+    if not User.query.filter_by(username="admin").first():
+        hashed = bcrypt.generate_password_hash("admin123").decode("utf-8")
+        db.session.add(User(username="admin", password=hashed))
+        db.session.commit()
+    if not Batch.query.filter_by(camera_id=ACTIVE_CAMERA_ID, active=True).first():
+        db.session.add(
+            Batch(
+                camera_id=ACTIVE_CAMERA_ID,
+                name="Lote inicial",
+                start_date=datetime.utcnow(),
+                active=True,
+                notes="Criado automaticamente",
+            )
+        )
+        db.session.commit()
+
+
+CAMERA_INDEX = 0
+global_frame = None
+fps_last_time = 0.0
+db_last_save_time = 0.0
+last_bird_snapshot_save_time = 0.0
+last_track_point_save_time = 0.0
+lock = threading.Lock()
+object_count = 0
+APP_START_TIME = time.time()
+
+detector = ObjectDetector(model_path=YOLO_MODEL_PATH)
+live_birds = {}
+track_to_bird_uid = {}
+bird_last_state = {}
+next_bird_uid = 1
+
+behavior_state = {
+    "status": "NORMAL",
+    "message": "Aguardando deteccao",
+    "dispersion_ratio": 0.0,
+    "edge_ratio": 0.0,
+    "count": 0,
+    "updated_at": time.time(),
+    "last_alert_ts": 0.0,
+}
+
+immobility_state = {}
+intrusion_state = {"last_alert_ts": 0.0}
+
+camera_registry = [
+    {"camera_id": ACTIVE_CAMERA_ID, "source": f"webcam:{CAMERA_INDEX}", "enabled": True}
+]
+
+estado_dispositivos = {
+    "ventilacao": False,
+    "aquecedor": False,
+    "modo_automatico": False,
+    "camera_id": ACTIVE_CAMERA_ID,
+}
+
+auto_config = {
+    "fan_on_temp": 32.0,
+    "fan_off_temp": 31.0,
+    "heater_on_temp": 24.0,
+    "heater_off_temp": 25.0,
+    "use_batch_curve": True,
+}
+
+sensor_state = {
+    "temperature_c": 28.0,
+    "humidity_pct": 60.0,
+    "ammonia_ppm": 8.0,
+    "feed_level_pct": 100.0,
+    "water_level_pct": 100.0,
+    "source": "simulated",
+    "updated_at": time.time(),
+}
+
+sensor_thresholds = {
+    "humidity_low": 45.0,
+    "humidity_high": 75.0,
+    "ammonia_high": 20.0,
+    "feed_low": 30.0,
+    "water_low": 30.0,
+}
+sensor_alert_state = {}
+
+last_weekly_report_key = None
+
+
 def _init_bird_uid_counter():
     global next_bird_uid
     with app.app_context():
@@ -213,9 +324,6 @@ def _init_bird_uid_counter():
         max_snapshot = db.session.query(db.func.max(BirdSnapshot.bird_uid)).scalar()
     max_seen = max(filter(lambda v: v is not None, [max_identity, max_snapshot]), default=0)
     next_bird_uid = int(max_seen) + 1
-
-
-_init_bird_uid_counter()
 
 
 def _allocate_new_bird_uid():
@@ -251,6 +359,7 @@ def _resolve_stable_bird_uid(track_id, box, now_ts, frame, used_uids):
         px = lx + (vx * gap)
         py = ly + (vy * gap)
         larea = max(1, int(state["area"]))
+
         dist = abs(cx - px) + abs(cy - py)
         if dist > max_dist:
             continue
@@ -277,17 +386,363 @@ def _resolve_stable_bird_uid(track_id, box, now_ts, frame, used_uids):
     track_to_bird_uid[track_id] = best_uid
     return best_uid
 
+def _active_batch(camera_id):
+    with app.app_context():
+        return (
+            Batch.query.filter_by(camera_id=camera_id, active=True)
+            .order_by(Batch.id.desc())
+            .first()
+        )
+
+
+def _ideal_temp_for_age_day(age_day):
+    if age_day <= 7:
+        return 32.0
+    if age_day <= 14:
+        return 30.0
+    if age_day <= 21:
+        return 27.0
+    if age_day <= 28:
+        return 24.0
+    return 22.0
+
+
+def _temperature_targets(camera_id):
+    fan_on = auto_config["fan_on_temp"]
+    fan_off = auto_config["fan_off_temp"]
+    heater_on = auto_config["heater_on_temp"]
+    heater_off = auto_config["heater_off_temp"]
+    target = None
+    age_day = None
+
+    if auto_config.get("use_batch_curve", True):
+        batch = _active_batch(camera_id)
+        if batch is not None:
+            age_day = max(1, (datetime.utcnow().date() - batch.start_date.date()).days + 1)
+            target = _ideal_temp_for_age_day(age_day)
+            heater_on = max(16.0, target - 0.5)
+            heater_off = max(16.0, target + 0.2)
+            fan_on = min(40.0, target + 2.0)
+            fan_off = min(40.0, target + 1.0)
+
+    return {
+        "fan_on_temp": fan_on,
+        "fan_off_temp": fan_off,
+        "heater_on_temp": heater_on,
+        "heater_off_temp": heater_off,
+        "target_temp": target,
+        "batch_age_day": age_day,
+    }
+
+
+def _persist_sensor_reading(source="simulated"):
+    with app.app_context():
+        row = SensorReading(
+            camera_id=ACTIVE_CAMERA_ID,
+            temperature_c=float(sensor_state["temperature_c"]),
+            humidity_pct=float(sensor_state["humidity_pct"]),
+            ammonia_ppm=float(sensor_state["ammonia_ppm"]),
+            feed_level_pct=float(sensor_state["feed_level_pct"]),
+            water_level_pct=float(sensor_state["water_level_pct"]),
+            source=source,
+        )
+        db.session.add(row)
+        db.session.commit()
+
+
+def _maybe_alert_sensor(kind, value, message):
+    now = time.time()
+    last_ts = float(sensor_alert_state.get(kind, 0.0))
+    if now - last_ts < SENSOR_ALERT_COOLDOWN_SEC:
+        return
+    sensor_alert_state[kind] = now
+    _log_event(
+        event_type="sensor_alert",
+        level="high" if kind in ("ammonia", "water_low", "feed_low") else "medium",
+        message=message,
+        metadata={"kind": kind, "value": value},
+    )
+
+
+def _evaluate_sensor_alerts():
+    h = float(sensor_state["humidity_pct"])
+    a = float(sensor_state["ammonia_ppm"])
+    f = float(sensor_state["feed_level_pct"])
+    w = float(sensor_state["water_level_pct"])
+
+    if h < sensor_thresholds["humidity_low"]:
+        _maybe_alert_sensor("humidity_low", h, f"Umidade baixa: {h:.1f}%")
+    if h > sensor_thresholds["humidity_high"]:
+        _maybe_alert_sensor("humidity_high", h, f"Umidade alta: {h:.1f}%")
+    if a > sensor_thresholds["ammonia_high"]:
+        _maybe_alert_sensor("ammonia", a, f"Amonia elevada: {a:.1f} ppm")
+    if f < sensor_thresholds["feed_low"]:
+        _maybe_alert_sensor("feed_low", f, f"Racao baixa: {f:.1f}%")
+    if w < sensor_thresholds["water_low"]:
+        _maybe_alert_sensor("water_low", w, f"Agua baixa: {w:.1f}%")
+
+
+def _simulate_sensor_updates(temp_atual):
+    now = time.time()
+    if now - float(sensor_state["updated_at"]) < SENSOR_SAVE_INTERVAL:
+        return
+
+    humidity = 68 - ((temp_atual - 24.0) * 1.3) + random.uniform(-2, 2)
+    humidity = max(25.0, min(95.0, humidity))
+
+    ammonia = float(sensor_state["ammonia_ppm"]) + random.uniform(-1.0, 1.1)
+    ammonia = max(2.0, min(45.0, ammonia))
+
+    feed = max(0.0, float(sensor_state["feed_level_pct"]) - random.uniform(0.1, 0.4))
+    water = max(0.0, float(sensor_state["water_level_pct"]) - random.uniform(0.1, 0.5))
+
+    sensor_state.update(
+        {
+            "temperature_c": round(float(temp_atual), 2),
+            "humidity_pct": round(float(humidity), 2),
+            "ammonia_ppm": round(float(ammonia), 2),
+            "feed_level_pct": round(float(feed), 2),
+            "water_level_pct": round(float(water), 2),
+            "source": "simulated",
+            "updated_at": now,
+        }
+    )
+
+    _persist_sensor_reading(source="simulated")
+    _evaluate_sensor_alerts()
+
+
+def _apply_automatic_control(temp_atual):
+    if not estado_dispositivos.get("modo_automatico"):
+        return
+
+    thresholds = _temperature_targets(ACTIVE_CAMERA_ID)
+    changes = []
+
+    if temp_atual >= thresholds["fan_on_temp"] and not estado_dispositivos["ventilacao"]:
+        estado_dispositivos["ventilacao"] = True
+        changes.append("ventilacao ligada")
+
+    if temp_atual <= thresholds["fan_off_temp"] and estado_dispositivos["ventilacao"] and temp_atual < thresholds["fan_on_temp"]:
+        estado_dispositivos["ventilacao"] = False
+        changes.append("ventilacao desligada")
+
+    if temp_atual <= thresholds["heater_on_temp"] and not estado_dispositivos["aquecedor"]:
+        estado_dispositivos["aquecedor"] = True
+        changes.append("aquecedor ligado")
+
+    if temp_atual >= thresholds["heater_off_temp"] and estado_dispositivos["aquecedor"]:
+        estado_dispositivos["aquecedor"] = False
+        changes.append("aquecedor desligado")
+
+    if changes:
+        _log_event(
+            event_type="automation_action",
+            level="info",
+            message=f"Acionamento automatico: {', '.join(changes)}",
+            metadata={
+                "temp_atual": round(float(temp_atual), 2),
+                "thresholds": thresholds,
+            },
+        )
+
+
+def _analyze_behavior(selected, frame_shape):
+    now = time.time()
+    count = len(selected)
+    h, w = frame_shape[:2]
+    frame_area = max(1, h * w)
+
+    if count < 4:
+        behavior_state.update(
+            {
+                "status": "NORMAL",
+                "message": "Poucas aves no quadro para inferencia",
+                "dispersion_ratio": 0.0,
+                "edge_ratio": 0.0,
+                "count": count,
+                "updated_at": now,
+            }
+        )
+        return
+
+    centers = []
+    for det in selected:
+        cx, cy, _ = _box_center_area(det["box"])
+        centers.append((cx, cy))
+
+    xs = [c[0] for c in centers]
+    ys = [c[1] for c in centers]
+    spread_w = max(1, max(xs) - min(xs))
+    spread_h = max(1, max(ys) - min(ys))
+    spread_area = spread_w * spread_h
+    dispersion_ratio = float(spread_area) / float(frame_area)
+
+    margin = int(min(w, h) * 0.12)
+    edge_count = 0
+    for cx, cy in centers:
+        if cx < margin or cx > (w - margin) or cy < margin or cy > (h - margin):
+            edge_count += 1
+    edge_ratio = float(edge_count) / float(max(1, count))
+
+    status = "NORMAL"
+    message = "Distribuicao comportamental normal"
+
+    if dispersion_ratio < 0.12 and count >= 8:
+        status = "FRIO_COMPORTAMENTAL"
+        message = "Aviso: aves amontoadas. Possivel falha no aquecedor."
+    elif edge_ratio > 0.45 and dispersion_ratio > 0.18 and count >= 8:
+        status = "CALOR_COMPORTAMENTAL"
+        message = "Aviso: aves nas bordas e dispersas. Possivel estresse termico por calor."
+
+    behavior_state.update(
+        {
+            "status": status,
+            "message": message,
+            "dispersion_ratio": round(dispersion_ratio, 4),
+            "edge_ratio": round(edge_ratio, 4),
+            "count": count,
+            "updated_at": now,
+        }
+    )
+
+    if status != "NORMAL" and (now - float(behavior_state["last_alert_ts"])) >= BEHAVIOR_ALERT_COOLDOWN_SEC:
+        behavior_state["last_alert_ts"] = now
+        _log_event(
+            event_type="behavior_alert",
+            level="high" if status == "CALOR_COMPORTAMENTAL" else "medium",
+            message=message,
+            metadata={
+                "status": status,
+                "dispersion_ratio": behavior_state["dispersion_ratio"],
+                "edge_ratio": behavior_state["edge_ratio"],
+                "count": count,
+            },
+        )
+
+
+def _update_immobility(selected):
+    now = time.time()
+    tracked_uids = set()
+
+    for det in selected:
+        uid = int(det.get("stable_bird_uid", -1))
+        if uid < 0:
+            continue
+        tracked_uids.add(uid)
+        cx, cy, _ = _box_center_area(det["box"])
+        state = immobility_state.get(uid)
+        if state is None:
+            immobility_state[uid] = {
+                "anchor": (cx, cy),
+                "since": now,
+                "last_seen": now,
+                "alerted": False,
+                "last_alert_ts": 0.0,
+            }
+            continue
+
+        ax, ay = state["anchor"]
+        dist = math.hypot(cx - ax, cy - ay)
+        if dist <= IMMOBILITY_MOVE_PX:
+            state["last_seen"] = now
+        else:
+            state["anchor"] = (cx, cy)
+            state["since"] = now
+            state["last_seen"] = now
+            state["alerted"] = False
+
+        stayed_sec = now - float(state["since"])
+        since_last = now - float(state.get("last_alert_ts", 0.0))
+        if stayed_sec >= IMMOBILITY_MIN_SEC and (not state["alerted"]) and since_last >= IMMOBILITY_ALERT_COOLDOWN_SEC:
+            state["alerted"] = True
+            state["last_alert_ts"] = now
+            _log_event(
+                event_type="immobility_alert",
+                level="high",
+                message=f"Possivel imobilidade detectada na ave UID {uid}",
+                metadata={
+                    "bird_uid": uid,
+                    "x": cx,
+                    "y": cy,
+                    "immobile_seconds": round(stayed_sec, 1),
+                },
+            )
+
+    stale_uids = []
+    for uid, state in immobility_state.items():
+        if uid in tracked_uids:
+            continue
+        if now - float(state.get("last_seen", now)) > (BIRD_LIVE_TTL_SEC + 5):
+            stale_uids.append(uid)
+    for uid in stale_uids:
+        immobility_state.pop(uid, None)
+
+def _telegram_send(frame_bgr, caption):
+    token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    if not token or not chat_id:
+        return False, "telegram_not_configured"
+    if requests is None:
+        return False, "requests_not_installed"
+
+    ok, jpg = cv2.imencode(".jpg", frame_bgr)
+    if not ok:
+        return False, "jpeg_encode_failed"
+
+    url = f"https://api.telegram.org/bot{token}/sendPhoto"
+    try:
+        response = requests.post(
+            url,
+            data={"chat_id": chat_id, "caption": caption},
+            files={"photo": ("intrusion.jpg", jpg.tobytes(), "image/jpeg")},
+            timeout=10,
+        )
+        if response.ok:
+            return True, "sent"
+        return False, f"http_{response.status_code}"
+    except Exception as exc:
+        return False, str(exc)
+
+
+def _detect_intrusion(all_detections, frame):
+    now = time.time()
+    hour = datetime.now().hour
+    is_night_window = INTRUSION_START_HOUR <= hour <= INTRUSION_END_HOUR
+    if not is_night_window:
+        return
+
+    person_dets = []
+    for det in all_detections:
+        cname = _class_name_by_id(det["class_id"]).lower()
+        if cname == "person" and float(det["confidence"]) >= 0.35:
+            person_dets.append(det)
+
+    if not person_dets:
+        return
+
+    if now - float(intrusion_state["last_alert_ts"]) < INTRUSION_COOLDOWN_SEC:
+        return
+
+    intrusion_state["last_alert_ts"] = now
+    caption = f"ALERTA CHIKGUARD: pessoa detectada de madrugada ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})"
+    sent, detail = _telegram_send(frame, caption)
+    _log_event(
+        event_type="intrusion_alert",
+        level="high",
+        message="Intrusao detectada na camera",
+        metadata={"detections": len(person_dets), "telegram": {"sent": sent, "detail": detail}},
+    )
+
 
 def _save_bird_snapshots(frame, ambient_temp):
     global last_bird_snapshot_save_time
-
     now = time.time()
     if now - last_bird_snapshot_save_time < BIRD_SNAPSHOT_SAVE_INTERVAL:
         return
 
     with lock:
         birds_items = list(live_birds.items())
-
     if not birds_items:
         last_bird_snapshot_save_time = now
         return
@@ -314,7 +769,6 @@ def _save_bird_snapshots(frame, ambient_temp):
         now_dt = datetime.utcnow()
         with app.app_context():
             db.session.bulk_save_objects(rows)
-
             for row in rows:
                 identity = BirdIdentity.query.filter_by(bird_uid=row.bird_uid).first()
                 if identity is None:
@@ -333,7 +787,6 @@ def _save_bird_snapshots(frame, ambient_temp):
                     if row.confidence > float(identity.max_confidence):
                         identity.max_confidence = row.confidence
                     identity.last_temp_estimada = row.temperatura_estimada
-
             db.session.commit()
 
     last_bird_snapshot_save_time = now
@@ -341,49 +794,40 @@ def _save_bird_snapshots(frame, ambient_temp):
 
 def _save_bird_track_points():
     global last_track_point_save_time
-
     now = time.time()
     if now - last_track_point_save_time < TRACK_POINT_SAVE_INTERVAL:
         return
 
     with lock:
         birds_items = list(live_birds.items())
-
     if not birds_items:
         last_track_point_save_time = now
         return
 
-    points = []
+    rows = []
     for bird_uid, data in birds_items:
         x1, y1, x2, y2 = data["box"]
         cx = int((int(x1) + int(x2)) / 2)
         cy = int((int(y1) + int(y2)) / 2)
-        points.append(BirdTrackPoint(bird_uid=int(bird_uid), x=cx, y=cy))
+        rows.append(BirdTrackPoint(bird_uid=int(bird_uid), x=cx, y=cy))
 
-    if points:
-        with app.app_context():
-            db.session.bulk_save_objects(points)
-            db.session.commit()
-
+    with app.app_context():
+        db.session.bulk_save_objects(rows)
+        db.session.commit()
     last_track_point_save_time = now
 
-estado_dispositivos = {
-    "ventilacao": False,
-    "aquecedor": False
-}
 
-# --- FUNÇÃO DE DETECÇÃO ---
 def detectar_objetos(frame):
-    global object_count, live_birds
-
+    global object_count
     draw_frame = frame.copy()
     detections = detector.detect(draw_frame)
+    _detect_intrusion(detections, frame)
 
     frame_area = frame.shape[0] * frame.shape[1]
     min_bird_area = frame_area * MIN_BIRD_AREA_RATIO
 
     selected = []
-    if MODO_DETECCAO == 'aves':
+    if MODO_DETECCAO == "aves":
         target_name = BIRD_CLASS_NAME.strip().lower()
         for det in detections:
             class_name = _class_name_by_id(det["class_id"]).lower()
@@ -399,7 +843,7 @@ def detectar_objetos(frame):
 
     now = time.time()
     with lock:
-        if MODO_DETECCAO == 'aves':
+        if MODO_DETECCAO == "aves":
             used_uids = set()
             for det in selected:
                 tid = int(det["track_id"])
@@ -455,8 +899,9 @@ def detectar_objetos(frame):
         else:
             object_count = len(selected)
 
-    if detector.yolo_loaded:
-        print(f"[TRACKER] modo={MODO_DETECCAO} selecionadas={len(selected)} visiveis={object_count}")
+    if MODO_DETECCAO == "aves":
+        _analyze_behavior(selected, frame.shape)
+        _update_immobility(selected)
 
     if detector.yolo_loaded:
         font = cv2.FONT_HERSHEY_PLAIN
@@ -468,163 +913,289 @@ def detectar_objetos(frame):
             color = (0, 255, 0)
             cv2.rectangle(draw_frame, (x1, y1), (x2, y2), color, 2)
             label = f"{class_name} ID:{tid} ({confidence:.2f})" if tid >= 0 else f"{class_name} ({confidence:.2f})"
-            cv2.putText(draw_frame, label, (x1, max(20, y1 - 5)), font, 1.3, color, 2)
+            cv2.putText(draw_frame, label, (x1, max(20, y1 - 5)), font, 1.2, color, 2)
 
-    if object_count == 0 and detector.yolo_loaded:
-        height, _, _ = frame.shape
-        feedback_text = "IA ATIVA (NENHUMA AVE DETECTADA)" if MODO_DETECCAO == 'aves' else "IA ATIVA (NENHUM OBJETO DETECTADO)"
-        cv2.putText(draw_frame, feedback_text, (10, height - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-
-    font = cv2.FONT_HERSHEY_PLAIN
-    if MODO_DETECCAO == 'aves':
-        cv2.putText(draw_frame, f"Aves visiveis (IDs): {object_count}", (10, 30), font, 2, (0, 255, 0), 2)
+    if MODO_DETECCAO == "aves":
+        cv2.putText(draw_frame, f"Aves visiveis: {object_count}", (10, 30), cv2.FONT_HERSHEY_PLAIN, 2, (0, 255, 0), 2)
+        btxt = f"Comportamento: {behavior_state['status']}"
+        cv2.putText(draw_frame, btxt, (10, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (30, 220, 255), 1)
     else:
-        cv2.putText(draw_frame, f"Objetos: {object_count}", (10, 30), font, 2, (0, 255, 0), 2)
+        cv2.putText(draw_frame, f"Objetos: {object_count}", (10, 30), cv2.FONT_HERSHEY_PLAIN, 2, (0, 255, 0), 2)
 
-    cfg_text = f"tracker={TRACKER_CONFIG} imgsz={INFERENCE_IMGSZ} conf={DETECTION_CONF:.2f} classe={BIRD_CLASS_NAME}"
-    cv2.putText(draw_frame, cfg_text, (10, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
-
+    cfg = f"tracker={TRACKER_CONFIG} conf={DETECTION_CONF:.2f} classe={BIRD_CLASS_NAME}"
+    cv2.putText(draw_frame, cfg, (10, 78), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 0), 1)
     return draw_frame
 
-# --- THREAD DE CÂMERA (COM GRAVAÇÃO AUTOMÁTICA) ---
-def camera_loop():
-    global global_frame, db_last_save_time, fps_last_time
 
-    cap = None
-    use_basic_simulation = False
-    last_error_print_time = 0
+def _heatmap_grid(date_ref=None, grid_size=32):
+    if date_ref is None:
+        date_ref = datetime.utcnow().date()
 
-    print("\n" + "="*70)
-    print("🚀 INICIANDO PIPELINE DE VÍDEO PROFISSIONAL COM ULTRALYTICS YOLOv8 🚀")
-    print("1. Procurando por câmera real...")
-    cap = cv2.VideoCapture(CAMERA_INDEX)
-    
-    if cap.isOpened():
-        print("✅ Câmera real encontrada!")
-        use_basic_simulation = False
-        # Priorizamos qualidade para detectar aves mais distantes.
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-        width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
-        height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
-        print(f"   - Resolução da câmera definida para: {int(width)}x{int(height)}")
+    start_dt = datetime.combine(date_ref, datetime.min.time())
+    end_dt = start_dt + timedelta(days=1)
+    with app.app_context():
+        rows = (
+            BirdTrackPoint.query.filter(BirdTrackPoint.timestamp >= start_dt, BirdTrackPoint.timestamp < end_dt)
+            .order_by(BirdTrackPoint.id.asc())
+            .all()
+        )
+    if not rows:
+        return np.zeros((grid_size, grid_size), dtype=np.float32)
+
+    max_x = max(1, max(r.x for r in rows))
+    max_y = max(1, max(r.y for r in rows))
+    heat = np.zeros((grid_size, grid_size), dtype=np.float32)
+    for row in rows:
+        gx = min(grid_size - 1, int((row.x / max_x) * (grid_size - 1)))
+        gy = min(grid_size - 1, int((row.y / max_y) * (grid_size - 1)))
+        heat[gy, gx] += 1.0
+    return heat
+
+
+def _heatmap_image_bytes(heat):
+    if np.max(heat) <= 0:
+        canvas_img = np.zeros((480, 640, 3), dtype=np.uint8)
+        cv2.putText(canvas_img, "Sem dados de movimentacao", (120, 240), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (200, 200, 200), 2)
     else:
-        print("❌ Câmera real não encontrada.")
-        print("2. Ativando MODO DE TESTE AUTOMÁTICO com 'TEST_OBJECT'.")
-        use_basic_simulation = True
-            
-    print("="*70 + "\n")
+        norm = cv2.normalize(heat, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+        resized = cv2.resize(norm, (640, 480), interpolation=cv2.INTER_CUBIC)
+        canvas_img = cv2.applyColorMap(resized, cv2.COLORMAP_JET)
+        cv2.putText(canvas_img, "Heatmap de movimentacao diario", (150, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
-    frame_counter = 0
+    ok, buf = cv2.imencode(".jpg", canvas_img)
+    if not ok:
+        return None
+    return buf.tobytes()
+
+def _generate_weekly_report(camera_id, week_end=None):
+    if canvas is None or A4 is None:
+        raise RuntimeError("reportlab nao instalado. Instale reportlab no backend.")
+
+    if week_end is None:
+        week_end = datetime.utcnow()
+    week_start = week_end - timedelta(days=7)
+
+    with app.app_context():
+        readings = Reading.query.filter(Reading.timestamp >= week_start, Reading.timestamp <= week_end).all()
+        sensors = SensorReading.query.filter(
+            SensorReading.camera_id == camera_id,
+            SensorReading.timestamp >= week_start,
+            SensorReading.timestamp <= week_end,
+        ).all()
+        events = EventLog.query.filter(
+            EventLog.camera_id == camera_id,
+            EventLog.timestamp >= week_start,
+            EventLog.timestamp <= week_end,
+        ).all()
+
+    temps = [r.temperatura for r in readings]
+    temp_min = min(temps) if temps else None
+    temp_max = max(temps) if temps else None
+    temp_avg = (sum(temps) / len(temps)) if temps else None
+
+    amms = [s.ammonia_ppm for s in sensors if s.ammonia_ppm is not None]
+    hums = [s.humidity_pct for s in sensors if s.humidity_pct is not None]
+    feed = [s.feed_level_pct for s in sensors if s.feed_level_pct is not None]
+    water = [s.water_level_pct for s in sensors if s.water_level_pct is not None]
+
+    fname = f"weekly_report_{camera_id}_{week_end.strftime('%Y%m%d_%H%M%S')}.pdf"
+    path = os.path.join(REPORTS_DIR, fname)
+    os.makedirs(REPORTS_DIR, exist_ok=True)
+
+    c = canvas.Canvas(path, pagesize=A4)
+    width, height = A4
+    y = height - 40
+
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(40, y, f"ChikGuard - Relatorio semanal ({camera_id})")
+    y -= 26
+    c.setFont("Helvetica", 10)
+    c.drawString(40, y, f"Periodo: {week_start.strftime('%Y-%m-%d')} ate {week_end.strftime('%Y-%m-%d')}")
+    y -= 20
+
+    lines = [
+        f"Temperatura minima: {temp_min:.1f} C" if temp_min is not None else "Temperatura minima: sem dados",
+        f"Temperatura maxima: {temp_max:.1f} C" if temp_max is not None else "Temperatura maxima: sem dados",
+        f"Temperatura media: {temp_avg:.1f} C" if temp_avg is not None else "Temperatura media: sem dados",
+        f"Alertas/eventos: {len(events)}",
+        f"Umidade media: {sum(hums)/len(hums):.1f}%" if hums else "Umidade media: sem dados",
+        f"Amonia media: {sum(amms)/len(amms):.1f} ppm" if amms else "Amonia media: sem dados",
+        f"Racao media restante: {sum(feed)/len(feed):.1f}%" if feed else "Racao media restante: sem dados",
+        f"Agua media restante: {sum(water)/len(water):.1f}%" if water else "Agua media restante: sem dados",
+    ]
+    for line in lines:
+        c.drawString(40, y, line)
+        y -= 16
+
+    y -= 8
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "Eventos recentes")
+    y -= 18
+    c.setFont("Helvetica", 9)
+    for ev in sorted(events, key=lambda e: e.timestamp, reverse=True)[:20]:
+        msg = f"{ev.timestamp.strftime('%Y-%m-%d %H:%M:%S')} [{ev.level}] {ev.event_type} - {ev.message}"
+        c.drawString(40, y, msg[:110])
+        y -= 13
+        if y < 50:
+            c.showPage()
+            y = height - 40
+            c.setFont("Helvetica", 9)
+
+    c.save()
+    return path
+
+
+def _send_report_email(file_path, recipient):
+    smtp_host = os.getenv("SMTP_HOST", "").strip()
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER", "").strip()
+    smtp_pass = os.getenv("SMTP_PASS", "").strip()
+    sender = os.getenv("SMTP_FROM", smtp_user).strip()
+
+    if not smtp_host or not sender or not recipient:
+        return False, "smtp_not_configured"
+
+    msg = EmailMessage()
+    msg["Subject"] = "ChikGuard - Relatorio semanal"
+    msg["From"] = sender
+    msg["To"] = recipient
+    msg.set_content("Segue o relatorio semanal do ChikGuard em anexo.")
+
+    with open(file_path, "rb") as f:
+        data = f.read()
+    msg.add_attachment(data, maintype="application", subtype="pdf", filename=os.path.basename(file_path))
+
+    try:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
+            server.starttls()
+            if smtp_user and smtp_pass:
+                server.login(smtp_user, smtp_pass)
+            server.send_message(msg)
+        return True, "sent"
+    except Exception as exc:
+        return False, str(exc)
+
+
+def _weekly_report_scheduler():
+    global last_weekly_report_key
     while True:
         try:
-            frame_counter += 1
+            now = datetime.now()
+            key = f"{now.isocalendar().year}-W{now.isocalendar().week}"
+            if now.weekday() == 6 and now.hour == 23 and key != last_weekly_report_key:
+                path = _generate_weekly_report(ACTIVE_CAMERA_ID, week_end=now)
+                last_weekly_report_key = key
+                _log_event(
+                    event_type="weekly_report",
+                    level="info",
+                    message="Relatorio semanal gerado automaticamente",
+                    metadata={"file": path},
+                )
+        except Exception as exc:
+            print(f"[weekly-report] scheduler error: {exc}")
+        time.sleep(60)
+
+
+def camera_loop():
+    global global_frame, db_last_save_time, fps_last_time
+    cap = None
+    use_basic_simulation = False
+    last_error_print_time = 0.0
+
+    print("Starting video pipeline...")
+    cap = cv2.VideoCapture(CAMERA_INDEX)
+    if cap.isOpened():
+        use_basic_simulation = False
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    else:
+        use_basic_simulation = True
+        _log_event("camera_fallback", "medium", "Camera real nao encontrada. Simulacao ativada.")
+
+    while True:
+        try:
             if use_basic_simulation:
-                # Simulação básica (se tudo falhar)
-                frame = np.zeros((480, 640, 3), dtype=np.uint8) # Usar a mesma resolução
-                
-                # Desenha um objeto falso para teste
-                fake_object_x, fake_object_y, fake_object_w, fake_object_h = 200, 150, 150, 150
-                label = "TEST_OBJECT"
-                color = (0, 255, 0) # Verde
-                font = cv2.FONT_HERSHEY_PLAIN
-                
-                cv2.rectangle(frame, (fake_object_x, fake_object_y), (fake_object_x + fake_object_w, fake_object_y + fake_object_h), color, 2)
-                cv2.putText(frame, label, (fake_object_x, fake_object_y - 5), font, 2, color, 3)
-                
-                # Força a contagem para 1 no modo de teste
-                with lock:
-                    object_count = 1
-                cv2.putText(frame, f"Objetos: {object_count}", (10, 30), font, 2, (0, 255, 0), 2)
-                
+                frame = np.zeros((480, 640, 3), dtype=np.uint8)
+                cv2.rectangle(frame, (200, 150), (350, 300), (0, 255, 0), 2)
+                cv2.putText(frame, "TEST_OBJECT", (200, 140), cv2.FONT_HERSHEY_PLAIN, 2, (0, 255, 0), 2)
                 processed_frame = frame
                 temp_atual = 28 + random.uniform(-5, 5)
             else:
                 ret, frame = cap.read()
                 if not ret:
-                    print("❌ Perda de sinal da câmera. Alternando para simulação de teste.")
                     use_basic_simulation = True
+                    _log_event("camera_signal_lost", "high", "Perda de sinal. Simulacao ativada.")
                     continue
-
-                # Deteção de Objetos
                 processed_frame = detectar_objetos(frame)
-
-                # Simula temperatura a partir do brilho (se não for um sensor térmico real)
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                brilho = np.mean(gray)
-                temp_atual = 20 + (brilho / 255) * 20
-            
+                temp_atual = 20 + (float(np.mean(gray)) / 255.0) * 20
+
+            _apply_automatic_control(temp_atual)
+            _simulate_sensor_updates(temp_atual)
+
             new_time = time.time()
-            # Calcula e exibe FPS
-            # Evita divisão por zero no primeiro frame
             fps = 1 / (new_time - fps_last_time) if (new_time - fps_last_time) > 0 else 0
             fps_last_time = new_time
+            cv2.putText(
+                processed_frame,
+                f"FPS: {int(fps)}",
+                (processed_frame.shape[1] - 120, 30),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (255, 0, 255),
+                2,
+            )
 
-            # Adiciona um contador de frames e FPS ao vídeo para feedback visual
-            cv2.putText(processed_frame, f"FPS: {int(fps)}", (processed_frame.shape[1] - 120, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 255), 2)
-
-            # Atualiza frame global
             with lock:
                 global_frame = processed_frame
 
-            if MODO_DETECCAO == 'aves' and not use_basic_simulation:
+            if MODO_DETECCAO == "aves" and not use_basic_simulation:
                 _save_bird_snapshots(frame, temp_atual)
                 _save_bird_track_points()
 
-            # --- GRAVAR NO BANCO A CADA 30 SEGUNDOS ---
             current_time = time.time()
-            if current_time - db_last_save_time > 30: # Intervalo de salvamento
+            if current_time - db_last_save_time > 30:
                 with app.app_context():
                     status = "NORMAL"
-                    if temp_atual < 26: status = "FRIO"
-                    elif temp_atual > 32: status = "CALOR"
-                    
-                    nova_leitura = Reading(temperatura=round(temp_atual, 1), status=status)
-                    db.session.add(nova_leitura)
+                    if temp_atual < 26:
+                        status = "FRIO"
+                    elif temp_atual > 32:
+                        status = "CALOR"
+                    db.session.add(Reading(temperatura=round(temp_atual, 1), status=status))
                     db.session.commit()
-                    print(f"💾 Dados salvos: {temp_atual:.1f}°C")
                 db_last_save_time = current_time
-            
-            # O sleep foi removido para permitir que o loop rode na velocidade máxima possível.
-            # time.sleep(0.01)
 
-        except Exception as e:
-            # "CAIXA PRETA": Captura QUALQUER erro que aconteça na thread
+        except Exception as exc:
             current_time = time.time()
-            # Imprime o erro na consola apenas a cada 5 segundos para não sobrecarregar
             if current_time - last_error_print_time > 5:
-                print("\n" + "!"*80)
-                print(f"CRITICAL ERROR IN CAMERA THREAD: {e}")
-                import traceback
+                print(f"CRITICAL ERROR IN CAMERA THREAD: {exc}")
                 traceback.print_exc()
-                print("A thread de vídeo encontrou um erro fatal. Verifique a mensagem acima.")
-                print("!"*80 + "\n")
                 last_error_print_time = current_time
-            
-            # Desenha um frame de erro para feedback visual imediato no vídeo
             error_frame = np.zeros((480, 640, 3), dtype=np.uint8)
             cv2.putText(error_frame, "THREAD ERROR", (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 3)
             with lock:
                 global_frame = error_frame
             time.sleep(1)
 
-# Inicia thread
-t = threading.Thread(target=camera_loop)
-t.daemon = True
+
+_init_bird_uid_counter()
+t = threading.Thread(target=camera_loop, daemon=True)
 t.start()
+weekly_thread = threading.Thread(target=_weekly_report_scheduler, daemon=True)
+weekly_thread.start()
 
-# --- ROTAS DA API ---
 
-@app.route('/api/login', methods=['POST'])
+@app.route("/api/login", methods=["POST"])
 def login():
-    username = request.json.get('username', None)
-    password = request.json.get('password', None)
+    username = request.json.get("username", None)
+    password = request.json.get("password", None)
     user = User.query.filter_by(username=username).first()
     if user and bcrypt.check_password_hash(user.password, password):
         return jsonify(access_token=create_access_token(identity=username)), 200
-    return jsonify({"msg": "Credenciais inválidas"}), 401
+    return jsonify({"msg": "Credenciais invalidas"}), 401
 
-@app.route('/api/video')
+
+@app.route("/api/video")
 def video_feed():
     def generate():
         while True:
@@ -632,41 +1203,47 @@ def video_feed():
                 if global_frame is None:
                     time.sleep(0.1)
                     continue
-                # O frame já vem processado da thread da câmera
-                ret, buffer = cv2.imencode('.jpg', global_frame)
-            yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
-            time.sleep(0.05) # Limita a taxa de envio para economizar recursos (~20 FPS)
-    return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
+                ret, buffer = cv2.imencode(".jpg", global_frame)
+            if not ret:
+                time.sleep(0.05)
+                continue
+            yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + buffer.tobytes() + b"\r\n"
+            time.sleep(0.05)
 
-@app.route('/api/status', methods=['GET'])
+    return Response(generate(), mimetype="multipart/x-mixed-replace; boundary=frame")
+
+
+@app.route("/api/status", methods=["GET"])
 def get_status():
-    # Pega a última leitura do banco para consistência
     ultima = Reading.query.order_by(Reading.id.desc()).first()
     if ultima:
-        return jsonify({
-            "temperatura": ultima.temperatura,
-            "status": ultima.status,
-            "cor": "red" if ultima.status == "CALOR" else "blue" if ultima.status == "FRIO" else "green",
-            "mensagem": "Atenção necessária" if ultima.status != "NORMAL" else "Ambiente estável"
-        })
+        return jsonify(
+            {
+                "temperatura": ultima.temperatura,
+                "status": ultima.status,
+                "cor": "red" if ultima.status == "CALOR" else "blue" if ultima.status == "FRIO" else "green",
+                "mensagem": "Atencao necessaria" if ultima.status != "NORMAL" else "Ambiente estavel",
+            }
+        )
     return jsonify({"temperatura": 0, "status": "INICIANDO", "cor": "gray", "mensagem": "..."})
 
-@app.route('/api/history', methods=['GET'])
-def get_history():
-    # Retorna as últimas 10 leituras para o gráfico
-    leituras = Reading.query.order_by(Reading.id.desc()).limit(10).all()
-    return jsonify([l.to_dict() for l in reversed(leituras)]) # Inverte para cronológico
 
-# --- NOVA ROTA PARA CONTAGEM ---
-@app.route('/api/chick_count', methods=['GET'])
+@app.route("/api/history", methods=["GET"])
+def get_history():
+    limit = request.args.get("limit", default=10, type=int)
+    limit = max(1, min(limit, 500))
+    leituras = Reading.query.order_by(Reading.id.desc()).limit(limit).all()
+    return jsonify([l.to_dict() for l in reversed(leituras)])
+
+
+@app.route("/api/chick_count", methods=["GET"])
 def get_chick_count():
-    global object_count
     with lock:
         count = object_count
     return jsonify({"count": count})
 
 
-@app.route('/api/birds/live', methods=['GET'])
+@app.route("/api/birds/live", methods=["GET"])
 def get_live_birds():
     now = time.time()
     with lock:
@@ -681,16 +1258,10 @@ def get_live_birds():
             for bid, data in live_birds.items()
             if (now - float(data["last_seen"])) <= BIRD_LIVE_TTL_SEC
         ]
-
     items.sort(key=lambda item: item["bird_uid"])
-    return jsonify({
-        "count": len(items),
-        "ttl_seconds": BIRD_LIVE_TTL_SEC,
-        "items": items,
-    })
+    return jsonify({"count": len(items), "ttl_seconds": BIRD_LIVE_TTL_SEC, "items": items})
 
-
-@app.route('/api/birds/history', methods=['GET'])
+@app.route("/api/birds/history", methods=["GET"])
 def get_birds_history():
     limit = request.args.get("limit", default=300, type=int)
     limit = max(1, min(limit, 5000))
@@ -698,165 +1269,455 @@ def get_birds_history():
     return jsonify([row.to_dict() for row in reversed(rows)])
 
 
-@app.route('/api/birds/registry', methods=['GET'])
+@app.route("/api/birds/registry", methods=["GET"])
 def get_birds_registry():
     limit = request.args.get("limit", default=500, type=int)
     limit = max(1, min(limit, 10000))
     rows = BirdIdentity.query.order_by(BirdIdentity.last_seen.desc()).limit(limit).all()
-    return jsonify({
-        "count": len(rows),
-        "items": [row.to_dict() for row in rows],
-    })
+    return jsonify({"count": len(rows), "items": [row.to_dict() for row in rows]})
 
 
-@app.route('/api/birds/path/<int:bird_uid>', methods=['GET'])
+@app.route("/api/birds/path/<int:bird_uid>", methods=["GET"])
 def get_bird_path(bird_uid):
     limit = request.args.get("limit", default=500, type=int)
     limit = max(1, min(limit, 5000))
     rows = (
-        BirdTrackPoint.query
-        .filter_by(bird_uid=bird_uid)
-        .order_by(BirdTrackPoint.id.desc())
+        BirdTrackPoint.query.filter_by(bird_uid=bird_uid).order_by(BirdTrackPoint.id.desc()).limit(limit).all()
+    )
+    items = [row.to_dict() for row in reversed(rows)]
+    return jsonify({"bird_uid": bird_uid, "count": len(items), "items": items})
+
+
+@app.route("/api/behavior/live", methods=["GET"])
+def get_behavior_live():
+    return jsonify(
+        {
+            "status": behavior_state["status"],
+            "message": behavior_state["message"],
+            "dispersion_ratio": behavior_state["dispersion_ratio"],
+            "edge_ratio": behavior_state["edge_ratio"],
+            "count": behavior_state["count"],
+            "updated_at_epoch": behavior_state["updated_at"],
+        }
+    )
+
+
+@app.route("/api/immobility/live", methods=["GET"])
+def get_immobility_live():
+    now = time.time()
+    items = []
+    for uid, state in immobility_state.items():
+        ax, ay = state["anchor"]
+        items.append(
+            {
+                "bird_uid": int(uid),
+                "x": int(ax),
+                "y": int(ay),
+                "immobile_seconds": round(max(0.0, now - float(state["since"])), 1),
+                "alerted": bool(state.get("alerted", False)),
+            }
+        )
+    items.sort(key=lambda x: x["immobile_seconds"], reverse=True)
+    return jsonify({"count": len(items), "items": items[:200]})
+
+
+@app.route("/api/heatmap/daily", methods=["GET"])
+def get_daily_heatmap():
+    date_str = request.args.get("date")
+    grid_size = request.args.get("grid", default=32, type=int)
+    grid_size = max(8, min(grid_size, 128))
+    try:
+        date_ref = datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else datetime.utcnow().date()
+    except Exception:
+        return jsonify({"msg": "Formato de data invalido. Use YYYY-MM-DD"}), 400
+
+    heat = _heatmap_grid(date_ref=date_ref, grid_size=grid_size)
+    total = float(np.sum(heat))
+    max_cell = float(np.max(heat))
+    norm = (heat / max_cell).tolist() if max_cell > 0 else heat.tolist()
+    return jsonify(
+        {
+            "date": date_ref.strftime("%Y-%m-%d"),
+            "grid_size": grid_size,
+            "total_points": int(total),
+            "max_cell": max_cell,
+            "matrix": norm,
+        }
+    )
+
+
+@app.route("/api/heatmap/daily/image", methods=["GET"])
+def get_daily_heatmap_image():
+    date_str = request.args.get("date")
+    try:
+        date_ref = datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else datetime.utcnow().date()
+    except Exception:
+        return jsonify({"msg": "Formato de data invalido. Use YYYY-MM-DD"}), 400
+
+    heat = _heatmap_grid(date_ref=date_ref, grid_size=40)
+    img_bytes = _heatmap_image_bytes(heat)
+    if img_bytes is None:
+        return jsonify({"msg": "Falha ao gerar imagem de heatmap"}), 500
+
+    file_name = f"heatmap_{ACTIVE_CAMERA_ID}_{date_ref.strftime('%Y%m%d')}.jpg"
+    save_path = os.path.join(HEATMAP_DIR, file_name)
+    with open(save_path, "wb") as f:
+        f.write(img_bytes)
+    return send_file(BytesIO(img_bytes), mimetype="image/jpeg", as_attachment=False, download_name=file_name)
+
+
+@app.route("/api/sensors/live", methods=["GET"])
+def get_sensors_live():
+    return jsonify(
+        {
+            "camera_id": ACTIVE_CAMERA_ID,
+            "temperature_c": sensor_state["temperature_c"],
+            "humidity_pct": sensor_state["humidity_pct"],
+            "ammonia_ppm": sensor_state["ammonia_ppm"],
+            "feed_level_pct": sensor_state["feed_level_pct"],
+            "water_level_pct": sensor_state["water_level_pct"],
+            "source": sensor_state["source"],
+            "updated_at_epoch": sensor_state["updated_at"],
+            "thresholds": sensor_thresholds,
+        }
+    )
+
+
+@app.route("/api/sensors/history", methods=["GET"])
+def get_sensors_history():
+    limit = request.args.get("limit", default=100, type=int)
+    limit = max(1, min(limit, 5000))
+    rows = (
+        SensorReading.query.filter_by(camera_id=ACTIVE_CAMERA_ID)
+        .order_by(SensorReading.id.desc())
         .limit(limit)
         .all()
     )
-    items = [row.to_dict() for row in reversed(rows)]
-    return jsonify({
-        "bird_uid": bird_uid,
-        "count": len(items),
-        "items": items,
-    })
+    return jsonify({"count": len(rows), "items": [r.to_dict() for r in reversed(rows)]})
 
-# --- ROTAS DE CONTROLE ---
 
-@app.route('/api/ventilacao', methods=['POST'])
+@app.route("/api/sensors/ingest", methods=["POST"])
+def ingest_sensor_data():
+    payload = request.get_json(silent=True) or {}
+    required = ["temperature_c", "humidity_pct", "ammonia_ppm", "feed_level_pct", "water_level_pct"]
+    missing = [k for k in required if k not in payload]
+    if missing:
+        return jsonify({"msg": f"Campos obrigatorios ausentes: {', '.join(missing)}"}), 400
+
+    sensor_state.update(
+        {
+            "temperature_c": float(payload["temperature_c"]),
+            "humidity_pct": float(payload["humidity_pct"]),
+            "ammonia_ppm": float(payload["ammonia_ppm"]),
+            "feed_level_pct": float(payload["feed_level_pct"]),
+            "water_level_pct": float(payload["water_level_pct"]),
+            "source": str(payload.get("source", "external")),
+            "updated_at": time.time(),
+        }
+    )
+    _persist_sensor_reading(source=sensor_state["source"])
+    _evaluate_sensor_alerts()
+    return jsonify({"msg": "Leitura de sensores recebida", "state": sensor_state}), 200
+
+
+@app.route("/api/auto-mode", methods=["GET", "POST"])
+def auto_mode():
+    if request.method == "GET":
+        targets = _temperature_targets(ACTIVE_CAMERA_ID)
+        return jsonify(
+            {
+                "enabled": bool(estado_dispositivos["modo_automatico"]),
+                "config": auto_config,
+                "effective_targets": targets,
+                "camera_id": ACTIVE_CAMERA_ID,
+            }
+        )
+
+    data = request.get_json(silent=True) or {}
+    if "enabled" in data:
+        estado_dispositivos["modo_automatico"] = bool(data["enabled"])
+    for key in ("fan_on_temp", "fan_off_temp", "heater_on_temp", "heater_off_temp"):
+        if key in data:
+            auto_config[key] = float(data[key])
+    if "use_batch_curve" in data:
+        auto_config["use_batch_curve"] = bool(data["use_batch_curve"])
+
+    _log_event(
+        event_type="auto_mode_config",
+        level="info",
+        message=f"Modo automatico {'ativado' if estado_dispositivos['modo_automatico'] else 'desativado'}",
+        metadata={"config": auto_config},
+    )
+    return jsonify({"enabled": estado_dispositivos["modo_automatico"], "config": auto_config})
+
+
+@app.route("/api/ventilacao", methods=["POST"])
 def controlar_ventilacao():
-    """Liga ou desliga a ventilação"""
-    data = request.get_json()
-    estado = data.get('ligar', None)
-    
-    if estado is None:
-        return jsonify({"msg": "Parâmetro 'ligar' é obrigatório"}), 400
-    
-    estado_dispositivos['ventilacao'] = bool(estado)
-    return jsonify({
-        "ventilacao": estado_dispositivos['ventilacao'],
-        "msg": "Ventilação ligada" if estado_dispositivos['ventilacao'] else "Ventilação desligada"
-    })
+    data = request.get_json(silent=True) or {}
+    if "ligar" not in data:
+        return jsonify({"msg": "Parametro 'ligar' e obrigatorio"}), 400
+    estado_dispositivos["ventilacao"] = bool(data["ligar"])
+    _log_event(
+        event_type="manual_device_action",
+        level="info",
+        message=f"Ventilacao {'ligada' if estado_dispositivos['ventilacao'] else 'desligada'} manualmente",
+    )
+    return jsonify(
+        {
+            "ventilacao": estado_dispositivos["ventilacao"],
+            "msg": "Ventilacao ligada" if estado_dispositivos["ventilacao"] else "Ventilacao desligada",
+        }
+    )
 
-@app.route('/api/aquecedor', methods=['POST'])
+
+@app.route("/api/aquecedor", methods=["POST"])
 def controlar_aquecedor():
-    """Liga ou desliga o aquecedor"""
-    data = request.get_json()
-    estado = data.get('ligar', None)
-    
-    if estado is None:
-        return jsonify({"msg": "Parâmetro 'ligar' é obrigatório"}), 400
-    
-    estado_dispositivos['aquecedor'] = bool(estado)
-    return jsonify({
-        "aquecedor": estado_dispositivos['aquecedor'],
-        "msg": "Aquecedor ligado" if estado_dispositivos['aquecedor'] else "Aquecedor desligado"
-    })
+    data = request.get_json(silent=True) or {}
+    if "ligar" not in data:
+        return jsonify({"msg": "Parametro 'ligar' e obrigatorio"}), 400
+    estado_dispositivos["aquecedor"] = bool(data["ligar"])
+    _log_event(
+        event_type="manual_device_action",
+        level="info",
+        message=f"Aquecedor {'ligado' if estado_dispositivos['aquecedor'] else 'desligado'} manualmente",
+    )
+    return jsonify(
+        {
+            "aquecedor": estado_dispositivos["aquecedor"],
+            "msg": "Aquecedor ligado" if estado_dispositivos["aquecedor"] else "Aquecedor desligado",
+        }
+    )
 
-@app.route('/api/estado-dispositivos', methods=['GET'])
+
+@app.route("/api/estado-dispositivos", methods=["GET"])
 def get_estado_dispositivos():
-    """Retorna o estado atual dos dispositivos"""
     return jsonify(estado_dispositivos)
 
-@app.route('/api/health')
-def health_check():
-    """Verifica a saúde do sistema, incluindo a thread da câmera."""
-    return jsonify({
-        "status": "ok",
-        "camera_thread_alive": t.is_alive()
-    })
 
-@app.route('/api/summary', methods=['GET'])
+@app.route("/api/events", methods=["GET"])
+def get_events():
+    limit = request.args.get("limit", default=100, type=int)
+    limit = max(1, min(limit, 2000))
+    rows = (
+        EventLog.query.filter_by(camera_id=ACTIVE_CAMERA_ID)
+        .order_by(EventLog.id.desc())
+        .limit(limit)
+        .all()
+    )
+    return jsonify({"count": len(rows), "items": [row.to_dict() for row in rows]})
+
+
+@app.route("/api/cameras", methods=["GET", "POST"])
+def cameras():
+    if request.method == "GET":
+        return jsonify({"active_camera_id": ACTIVE_CAMERA_ID, "items": camera_registry})
+
+    data = request.get_json(silent=True) or {}
+    camera_id = str(data.get("camera_id", "")).strip()
+    source = str(data.get("source", "")).strip()
+    if not camera_id or not source:
+        return jsonify({"msg": "camera_id e source sao obrigatorios"}), 400
+    if any(c["camera_id"] == camera_id for c in camera_registry):
+        return jsonify({"msg": "camera_id ja cadastrado"}), 400
+    camera_registry.append({"camera_id": camera_id, "source": source, "enabled": bool(data.get("enabled", True))})
+    _log_event("camera_registry", "info", f"Camera cadastrada: {camera_id}", {"source": source})
+    return jsonify({"msg": "Camera cadastrada", "items": camera_registry}), 201
+
+
+@app.route("/api/batches", methods=["GET", "POST"])
+def batches():
+    if request.method == "GET":
+        rows = Batch.query.filter_by(camera_id=ACTIVE_CAMERA_ID).order_by(Batch.id.desc()).all()
+        return jsonify({"count": len(rows), "items": [r.to_dict() for r in rows]})
+
+    data = request.get_json(silent=True) or {}
+    name = str(data.get("name", "")).strip()
+    start_date_raw = str(data.get("start_date", "")).strip()
+    notes = str(data.get("notes", "")).strip() or None
+    if not name or not start_date_raw:
+        return jsonify({"msg": "name e start_date (YYYY-MM-DD) sao obrigatorios"}), 400
+    try:
+        start_date = datetime.strptime(start_date_raw, "%Y-%m-%d")
+    except Exception:
+        return jsonify({"msg": "start_date invalido. Use YYYY-MM-DD"}), 400
+
+    with app.app_context():
+        if bool(data.get("active", True)):
+            Batch.query.filter_by(camera_id=ACTIVE_CAMERA_ID, active=True).update({"active": False})
+        row = Batch(
+            camera_id=ACTIVE_CAMERA_ID,
+            name=name,
+            start_date=start_date,
+            active=bool(data.get("active", True)),
+            notes=notes,
+        )
+        db.session.add(row)
+        db.session.commit()
+    _log_event("batch_created", "info", f"Lote criado: {name}", {"start_date": start_date_raw})
+    return jsonify({"msg": "Lote criado", "item": row.to_dict()}), 201
+
+
+@app.route("/api/batches/<int:batch_id>/activate", methods=["POST"])
+def activate_batch(batch_id):
+    with app.app_context():
+        row = Batch.query.get(batch_id)
+        if row is None:
+            return jsonify({"msg": "Lote nao encontrado"}), 404
+        Batch.query.filter_by(camera_id=row.camera_id, active=True).update({"active": False})
+        row.active = True
+        db.session.commit()
+    _log_event("batch_activated", "info", f"Lote ativado: {row.name}", {"batch_id": batch_id})
+    return jsonify({"msg": "Lote ativado", "item": row.to_dict()})
+
+
+@app.route("/api/reports/weekly", methods=["POST"])
+def generate_weekly_report():
+    data = request.get_json(silent=True) or {}
+    email = str(data.get("email", "")).strip() or None
+    try:
+        path = _generate_weekly_report(ACTIVE_CAMERA_ID)
+    except Exception as exc:
+        return jsonify({"msg": f"Falha ao gerar PDF: {exc}"}), 500
+
+    email_status = None
+    if email:
+        ok, detail = _send_report_email(path, email)
+        email_status = {"sent": ok, "detail": detail, "email": email}
+
+    _log_event(
+        event_type="weekly_report",
+        level="info",
+        message="Relatorio semanal gerado manualmente",
+        metadata={"file": path, "email_status": email_status},
+    )
+    return jsonify({"msg": "Relatorio gerado", "file": path, "email_status": email_status})
+
+
+@app.route("/api/alerts", methods=["GET"])
+def get_alerts():
+    itens = []
+
+    recentes = Reading.query.order_by(Reading.id.desc()).limit(50).all()
+    for item in recentes:
+        if item.status == "NORMAL":
+            continue
+        nivel = "alto" if item.status == "CALOR" else "medio"
+        itens.append(
+            {
+                "id": f"temp-{item.id}",
+                "tipo": item.status,
+                "nivel": nivel,
+                "mensagem": f"Temperatura em estado {item.status}",
+                "temperatura": item.temperatura,
+                "hora": item.timestamp.strftime("%H:%M:%S"),
+                "data": item.timestamp.strftime("%d/%m/%Y"),
+            }
+        )
+
+    event_rows = (
+        EventLog.query.filter_by(camera_id=ACTIVE_CAMERA_ID).order_by(EventLog.id.desc()).limit(50).all()
+    )
+    for ev in event_rows:
+        itens.append(
+            {
+                "id": f"event-{ev.id}",
+                "tipo": ev.event_type.upper(),
+                "nivel": "alto" if ev.level == "high" else "medio" if ev.level == "medium" else "baixo",
+                "mensagem": ev.message,
+                "temperatura": None,
+                "hora": ev.timestamp.strftime("%H:%M:%S"),
+                "data": ev.timestamp.strftime("%d/%m/%Y"),
+            }
+        )
+
+    itens.sort(key=lambda x: f"{x['data']} {x['hora']}", reverse=True)
+    return jsonify(itens[:100])
+
+
+@app.route("/api/summary", methods=["GET"])
 def get_summary():
-    """Resumo consolidado para dashboards web/mobile."""
     ultima = Reading.query.order_by(Reading.id.desc()).first()
     recentes = Reading.query.order_by(Reading.id.desc()).limit(30).all()
-
     temperaturas = [item.temperatura for item in recentes]
     alertas = [item for item in recentes if item.status != "NORMAL"]
+    total_vistas = BirdIdentity.query.count()
 
     now = time.time()
     with lock:
         count = object_count
         alive_count = sum(1 for info in live_birds.values() if (now - float(info["last_seen"])) <= BIRD_LIVE_TTL_SEC)
-    total_vistas = BirdIdentity.query.count()
 
-    return jsonify({
-        "temperatura_atual": ultima.temperatura if ultima else 0,
-        "status_atual": ultima.status if ultima else "INICIANDO",
-        "media_temperatura": round(sum(temperaturas) / len(temperaturas), 1) if temperaturas else 0,
-        "contagem_aves": count,
-        "aves_vivas_individuais": alive_count,
-        "total_aves_vistas": total_vistas,
-        "metodo_temperatura_ave": "estimada_rgb_proxy",
-        "tracker": TRACKER_CONFIG,
-        "classe_ave": BIRD_CLASS_NAME,
-        "dispositivos": estado_dispositivos,
-        "total_alertas": len(alertas),
-        "modo_deteccao": MODO_DETECCAO
-    })
+    targets = _temperature_targets(ACTIVE_CAMERA_ID)
+    batch = _active_batch(ACTIVE_CAMERA_ID)
+    return jsonify(
+        {
+            "temperatura_atual": ultima.temperatura if ultima else 0,
+            "status_atual": ultima.status if ultima else "INICIANDO",
+            "media_temperatura": round(sum(temperaturas) / len(temperaturas), 1) if temperaturas else 0,
+            "contagem_aves": count,
+            "aves_vivas_individuais": alive_count,
+            "total_aves_vistas": total_vistas,
+            "metodo_temperatura_ave": "estimada_rgb_proxy",
+            "tracker": TRACKER_CONFIG,
+            "classe_ave": BIRD_CLASS_NAME,
+            "dispositivos": estado_dispositivos,
+            "total_alertas": len(alertas),
+            "modo_deteccao": MODO_DETECCAO,
+            "camera_id": ACTIVE_CAMERA_ID,
+            "behavior": {
+                "status": behavior_state["status"],
+                "message": behavior_state["message"],
+                "dispersion_ratio": behavior_state["dispersion_ratio"],
+                "edge_ratio": behavior_state["edge_ratio"],
+            },
+            "sensors": {
+                "humidity_pct": sensor_state["humidity_pct"],
+                "ammonia_ppm": sensor_state["ammonia_ppm"],
+                "feed_level_pct": sensor_state["feed_level_pct"],
+                "water_level_pct": sensor_state["water_level_pct"],
+            },
+            "automation": {
+                "enabled": bool(estado_dispositivos["modo_automatico"]),
+                "targets": targets,
+            },
+            "batch": batch.to_dict() if batch else None,
+        }
+    )
 
-@app.route('/api/alerts', methods=['GET'])
-def get_alerts():
-    """Lista alertas recentes baseada no histórico de leituras."""
-    recentes = Reading.query.order_by(Reading.id.desc()).limit(50).all()
-    itens = []
 
-    for item in recentes:
-        if item.status == "NORMAL":
-            continue
-        nivel = "alto" if item.status == "CALOR" else "medio"
-        itens.append({
-            "id": item.id,
-            "tipo": item.status,
-            "nivel": nivel,
-            "mensagem": f"Temperatura em estado {item.status}",
-            "temperatura": item.temperatura,
-            "hora": item.timestamp.strftime("%H:%M:%S"),
-            "data": item.timestamp.strftime("%d/%m/%Y")
-        })
-
-    if estado_dispositivos.get("aquecedor") and estado_dispositivos.get("ventilacao"):
-        itens.insert(0, {
-            "id": "devices-state",
-            "tipo": "DISPOSITIVOS",
-            "nivel": "baixo",
-            "mensagem": "Ventilação e aquecedor ligados ao mesmo tempo.",
-            "temperatura": None,
-            "hora": time.strftime("%H:%M:%S"),
-            "data": time.strftime("%d/%m/%Y")
-        })
-
-    return jsonify(itens)
-
-@app.route('/api/system-info', methods=['GET'])
+@app.route("/api/system-info", methods=["GET"])
 def get_system_info():
-    """Informações de runtime para aba de sistema."""
     uptime_seconds = int(time.time() - APP_START_TIME)
-    return jsonify({
-        "uptime_seconds": uptime_seconds,
-        "camera_thread_alive": t.is_alive(),
-        "modo_deteccao": MODO_DETECCAO,
-        "yolo_loaded": detector.yolo_loaded,
-        "tracker": TRACKER_CONFIG,
-        "modelo_ia": YOLO_MODEL_PATH,
-        "classe_ave": BIRD_CLASS_NAME,
-        "reid_max_gap_sec": REID_MAX_GAP_SEC,
-        "reid_max_distance_ratio": REID_MAX_DISTANCE_RATIO,
-        "reid_appearance_min_sim": REID_APPEARANCE_MIN_SIM,
-        "server_time": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "camera_index": CAMERA_INDEX
-    })
+    return jsonify(
+        {
+            "uptime_seconds": uptime_seconds,
+            "camera_thread_alive": t.is_alive(),
+            "weekly_scheduler_alive": weekly_thread.is_alive(),
+            "modo_deteccao": MODO_DETECCAO,
+            "yolo_loaded": detector.yolo_loaded,
+            "tracker": TRACKER_CONFIG,
+            "modelo_ia": YOLO_MODEL_PATH,
+            "classe_ave": BIRD_CLASS_NAME,
+            "reid_max_gap_sec": REID_MAX_GAP_SEC,
+            "reid_max_distance_ratio": REID_MAX_DISTANCE_RATIO,
+            "reid_appearance_min_sim": REID_APPEARANCE_MIN_SIM,
+            "server_time": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "camera_index": CAMERA_INDEX,
+            "active_camera_id": ACTIVE_CAMERA_ID,
+        }
+    )
 
-if __name__ == '__main__':
-    # Roda em todas as interfaces
-    app.run(host='0.0.0.0', port=5000, debug=False)
+
+@app.route("/api/health")
+def health_check():
+    return jsonify(
+        {
+            "status": "ok",
+            "camera_thread_alive": t.is_alive(),
+            "weekly_scheduler_alive": weekly_thread.is_alive(),
+        }
+    )
 
 
-
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=False)

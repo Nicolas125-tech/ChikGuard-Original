@@ -237,6 +237,7 @@ function Dashboard({ token, serverIP, prefs, onSavePrefs, onSaveServer, onLogout
     { id: 'overview', label: 'Visao Geral', icon: LayoutDashboard },
     { id: 'birds', label: 'Aves Vistas', icon: Users },
     { id: 'devices', label: 'Dispositivos', icon: SlidersHorizontal },
+    { id: 'smart', label: 'IA + IoT', icon: Activity },
     { id: 'alerts', label: 'Alertas', icon: Bell },
     { id: 'history', label: 'Historico', icon: History },
     { id: 'system', label: 'Sistema', icon: Cpu },
@@ -261,6 +262,7 @@ function Dashboard({ token, serverIP, prefs, onSavePrefs, onSaveServer, onLogout
         {tab === 'overview' && <OverviewPanel token={token} serverIP={serverIP} prefs={prefs} />}
         {tab === 'birds' && <BirdsPanel token={token} serverIP={serverIP} prefs={prefs} />}
         {tab === 'devices' && <DevicesPanel token={token} serverIP={serverIP} />}
+        {tab === 'smart' && <SmartOpsPanel serverIP={serverIP} prefs={prefs} />}
         {tab === 'alerts' && <AlertsPanel serverIP={serverIP} prefs={prefs} />}
         {tab === 'history' && <HistoryPanel serverIP={serverIP} prefs={prefs} />}
         {tab === 'system' && <SystemPanel serverIP={serverIP} prefs={prefs} />}
@@ -402,6 +404,7 @@ function OverviewPanel({ token, serverIP, prefs }) {
 
 function DevicesPanel({ token, serverIP }) {
   const [dispositivos, setDispositivos] = useState({ ventilacao: false, aquecedor: false });
+  const [autoMode, setAutoMode] = useState({ enabled: false, effective_targets: null });
   const [loading, setLoading] = useState(true);
   const baseUrl = getBaseUrl(serverIP);
 
@@ -410,6 +413,8 @@ function DevicesPanel({ token, serverIP }) {
       const r = await fetch(`${baseUrl}/api/estado-dispositivos`, { headers: { Authorization: `Bearer ${token}` } });
       if (!r.ok) throw new Error('Device state fetch failed');
       setDispositivos(await r.json());
+      const auto = await fetch(`${baseUrl}/api/auto-mode`, { headers: { Authorization: `Bearer ${token}` } });
+      if (auto.ok) setAutoMode(await auto.json());
     } finally {
       setLoading(false);
     }
@@ -428,12 +433,27 @@ function DevicesPanel({ token, serverIP }) {
     loadDevices();
   };
 
+  const toggleAuto = async (enabled) => {
+    await fetch(`${baseUrl}/api/auto-mode`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    });
+    loadDevices();
+  };
+
   if (loading) {
     return <div className="text-slate-400">Carregando dispositivos...</div>;
   }
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <button onClick={() => toggleAuto(!autoMode.enabled)} className={`rounded-2xl border p-6 text-left ${autoMode.enabled ? 'bg-emerald-600/20 border-emerald-500/40' : 'bg-slate-900 border-slate-800'}`}>
+        <div className="flex items-center justify-between mb-3"><Cpu className={autoMode.enabled ? 'text-emerald-300' : 'text-emerald-400'} /><span className={`text-xs font-bold ${autoMode.enabled ? 'text-emerald-300' : 'text-slate-500'}`}>{autoMode.enabled ? 'PILOTO AUTOMATICO' : 'MANUAL'}</span></div>
+        <h3 className="font-bold text-lg">Termostato inteligente</h3>
+        <p className="text-slate-400 text-sm mt-1">Liga ventilacao/aquecedor com histerese.</p>
+        {autoMode.effective_targets && <p className="text-xs text-slate-400 mt-2">Fan on: {autoMode.effective_targets.fan_on_temp} C | Heater on: {autoMode.effective_targets.heater_on_temp} C</p>}
+      </button>
       <button onClick={() => toggleDevice('ventilacao', !dispositivos.ventilacao)} className={`rounded-2xl border p-6 text-left ${dispositivos.ventilacao ? 'bg-blue-600/20 border-blue-500/40' : 'bg-slate-900 border-slate-800'}`}>
         <div className="flex items-center justify-between mb-3"><Wind className={dispositivos.ventilacao ? 'text-blue-300' : 'text-blue-400'} /><span className={`text-xs font-bold ${dispositivos.ventilacao ? 'text-blue-300' : 'text-slate-500'}`}>{dispositivos.ventilacao ? 'ATIVO' : 'INATIVO'}</span></div>
         <h3 className="font-bold text-lg">Ventilacao</h3>
@@ -603,6 +623,126 @@ function BirdsPanel({ token, serverIP, prefs }) {
                 <span className="text-slate-400">{item.last_seen}</span>
               </div>
             ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SmartOpsPanel({ serverIP, prefs }) {
+  const baseUrl = getBaseUrl(serverIP);
+  const [behavior, setBehavior] = useState(null);
+  const [immobility, setImmobility] = useState({ count: 0, items: [] });
+  const [sensors, setSensors] = useState(null);
+  const [autoMode, setAutoMode] = useState(null);
+  const [batches, setBatches] = useState({ count: 0, items: [] });
+  const [cameras, setCameras] = useState({ active_camera_id: '', items: [] });
+  const [reportMsg, setReportMsg] = useState('');
+  const [batchForm, setBatchForm] = useState({ name: '', start_date: '' });
+
+  const heatmapUrl = `${baseUrl}/api/heatmap/daily/image`;
+
+  const loadData = useCallback(async () => {
+    const [b, i, s, a, bt, c] = await Promise.all([
+      fetch(`${baseUrl}/api/behavior/live`),
+      fetch(`${baseUrl}/api/immobility/live`),
+      fetch(`${baseUrl}/api/sensors/live`),
+      fetch(`${baseUrl}/api/auto-mode`),
+      fetch(`${baseUrl}/api/batches`),
+      fetch(`${baseUrl}/api/cameras`),
+    ]);
+    if (b.ok) setBehavior(await b.json());
+    if (i.ok) setImmobility(await i.json());
+    if (s.ok) setSensors(await s.json());
+    if (a.ok) setAutoMode(await a.json());
+    if (bt.ok) setBatches(await bt.json());
+    if (c.ok) setCameras(await c.json());
+  }, [baseUrl]);
+
+  useEffect(() => {
+    loadData();
+    const timer = setInterval(loadData, prefs.statusMs);
+    return () => clearInterval(timer);
+  }, [loadData, prefs.statusMs]);
+
+  const toggleAuto = async () => {
+    await fetch(`${baseUrl}/api/auto-mode`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: !autoMode?.enabled }),
+    });
+    loadData();
+  };
+
+  const createBatch = async () => {
+    if (!batchForm.name || !batchForm.start_date) return;
+    await fetch(`${baseUrl}/api/batches`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...batchForm, active: true }),
+    });
+    setBatchForm({ name: '', start_date: '' });
+    loadData();
+  };
+
+  const generateWeeklyReport = async () => {
+    const r = await fetch(`${baseUrl}/api/reports/weekly`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+    const data = await r.json();
+    setReportMsg(r.ok ? `Relatorio gerado: ${data.file}` : (data.msg || 'Falha ao gerar relatorio'));
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <SystemCard label="Comportamento" value={behavior?.status || '--'} />
+        <SystemCard label="Imobilidade monitorada" value={immobility?.count ?? '--'} />
+        <SystemCard label="Modo automatico" value={autoMode?.enabled ? 'Ativo' : 'Inativo'} />
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+          <h3 className="font-bold mb-3">Sensores IoT</h3>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="bg-slate-950 rounded-xl border border-slate-800 p-3">Temp: {sensors?.temperature_c ?? '--'} C</div>
+            <div className="bg-slate-950 rounded-xl border border-slate-800 p-3">Umidade: {sensors?.humidity_pct ?? '--'} %</div>
+            <div className="bg-slate-950 rounded-xl border border-slate-800 p-3">Amonia: {sensors?.ammonia_ppm ?? '--'} ppm</div>
+            <div className="bg-slate-950 rounded-xl border border-slate-800 p-3">Racao: {sensors?.feed_level_pct ?? '--'} %</div>
+            <div className="bg-slate-950 rounded-xl border border-slate-800 p-3">Agua: {sensors?.water_level_pct ?? '--'} %</div>
+            <button onClick={toggleAuto} className="bg-emerald-600 hover:bg-emerald-500 rounded-xl p-3 font-semibold">{autoMode?.enabled ? 'Desativar Auto' : 'Ativar Auto'}</button>
+          </div>
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+          <h3 className="font-bold mb-3">Heatmap diario</h3>
+          <img src={heatmapUrl} alt="Heatmap diario" className="w-full h-64 object-cover rounded-xl border border-slate-800" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+          <h3 className="font-bold mb-3">Gestao de lotes</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
+            <input value={batchForm.name} onChange={(e) => setBatchForm((p) => ({ ...p, name: e.target.value }))} placeholder="Nome do lote" className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2" />
+            <input type="date" value={batchForm.start_date} onChange={(e) => setBatchForm((p) => ({ ...p, start_date: e.target.value }))} className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2" />
+            <button onClick={createBatch} className="bg-blue-600 hover:bg-blue-500 rounded-lg px-3 py-2 font-semibold">Criar/Ativar</button>
+          </div>
+          <div className="max-h-48 overflow-auto space-y-2">
+            {batches.items?.map((item) => (
+              <div key={item.id} className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm">
+                {item.name} | inicio: {item.start_date} | {item.active ? 'ATIVO' : 'inativo'}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+          <h3 className="font-bold mb-3">Escalabilidade e relatorios</h3>
+          <div className="space-y-3 text-sm">
+            <div className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2">Camera ativa: {cameras.active_camera_id || '--'}</div>
+            <div className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2">Cameras cadastradas: {cameras.items?.length ?? 0}</div>
+            <button onClick={generateWeeklyReport} className="bg-orange-600 hover:bg-orange-500 rounded-lg px-3 py-2 font-semibold">Gerar PDF semanal</button>
+            {reportMsg && <div className="text-slate-300">{reportMsg}</div>}
           </div>
         </div>
       </div>

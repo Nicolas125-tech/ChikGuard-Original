@@ -7,3 +7,5 @@ Flask-Migrate
 opencv-python
 numpy
 ultralytics
+requests
+reportlab

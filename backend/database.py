@@ -86,3 +86,70 @@ class BirdTrackPoint(db.Model):
             "y": self.y,
             "timestamp": self.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
         }
+
+
+class EventLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    camera_id = db.Column(db.String(64), nullable=False, default="galpao-1", index=True)
+    event_type = db.Column(db.String(64), nullable=False, index=True)
+    level = db.Column(db.String(20), nullable=False, default="info")
+    message = db.Column(db.String(255), nullable=False)
+    metadata_json = db.Column(db.Text, nullable=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "camera_id": self.camera_id,
+            "event_type": self.event_type,
+            "level": self.level,
+            "message": self.message,
+            "metadata": self.metadata_json,
+            "timestamp": self.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+
+
+class SensorReading(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    camera_id = db.Column(db.String(64), nullable=False, default="galpao-1", index=True)
+    temperature_c = db.Column(db.Float, nullable=True)
+    humidity_pct = db.Column(db.Float, nullable=True)
+    ammonia_ppm = db.Column(db.Float, nullable=True)
+    feed_level_pct = db.Column(db.Float, nullable=True)
+    water_level_pct = db.Column(db.Float, nullable=True)
+    source = db.Column(db.String(50), nullable=False, default="simulated")
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "camera_id": self.camera_id,
+            "temperature_c": self.temperature_c,
+            "humidity_pct": self.humidity_pct,
+            "ammonia_ppm": self.ammonia_ppm,
+            "feed_level_pct": self.feed_level_pct,
+            "water_level_pct": self.water_level_pct,
+            "source": self.source,
+            "timestamp": self.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+
+
+class Batch(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    camera_id = db.Column(db.String(64), nullable=False, default="galpao-1", index=True)
+    name = db.Column(db.String(80), nullable=False)
+    start_date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+    notes = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "camera_id": self.camera_id,
+            "name": self.name,
+            "start_date": self.start_date.strftime("%Y-%m-%d"),
+            "active": self.active,
+            "notes": self.notes,
+            "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+        }

@@ -325,6 +325,181 @@ const SystemScreen = ({ serverUrl }) => {
   );
 };
 
+// 2.3 TELA IA + IOT
+const SmartOpsScreen = ({ serverUrl }) => {
+  const [behavior, setBehavior] = useState(null);
+  const [immobility, setImmobility] = useState({ count: 0, items: [] });
+  const [sensors, setSensors] = useState(null);
+  const [autoMode, setAutoMode] = useState({ enabled: false, effective_targets: null });
+  const [batches, setBatches] = useState({ count: 0, items: [] });
+  const [cameras, setCameras] = useState({ active_camera_id: '-', items: [] });
+  const [batchName, setBatchName] = useState('');
+  const [batchStartDate, setBatchStartDate] = useState('');
+  const [reportMsg, setReportMsg] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  const loadSmartData = useCallback(async () => {
+    try {
+      const [bReq, iReq, sReq, aReq, btReq, cReq] = await Promise.all([
+        fetch(`${serverUrl}/api/behavior/live`),
+        fetch(`${serverUrl}/api/immobility/live`),
+        fetch(`${serverUrl}/api/sensors/live`),
+        fetch(`${serverUrl}/api/auto-mode`),
+        fetch(`${serverUrl}/api/batches`),
+        fetch(`${serverUrl}/api/cameras`)
+      ]);
+
+      if (bReq.ok) setBehavior(await bReq.json());
+      if (iReq.ok) setImmobility(await iReq.json());
+      if (sReq.ok) setSensors(await sReq.json());
+      if (aReq.ok) setAutoMode(await aReq.json());
+      if (btReq.ok) setBatches(await btReq.json());
+      if (cReq.ok) setCameras(await cReq.json());
+    } catch (e) {
+      console.log(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [serverUrl]);
+
+  useEffect(() => {
+    loadSmartData();
+    const timer = setInterval(loadSmartData, 3000);
+    return () => clearInterval(timer);
+  }, [loadSmartData]);
+
+  const toggleAutoMode = async () => {
+    try {
+      await fetch(`${serverUrl}/api/auto-mode`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !autoMode.enabled })
+      });
+      loadSmartData();
+    } catch (e) {
+      Alert.alert('Erro', 'Falha ao atualizar modo automático.');
+    }
+  };
+
+  const createBatch = async () => {
+    if (!batchName || !batchStartDate) {
+      Alert.alert('Atenção', 'Informe nome e data do lote (YYYY-MM-DD).');
+      return;
+    }
+    try {
+      const req = await fetch(`${serverUrl}/api/batches`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: batchName, start_date: batchStartDate, active: true })
+      });
+      if (!req.ok) {
+        const err = await req.json();
+        throw new Error(err.msg || 'Falha ao criar lote');
+      }
+      setBatchName('');
+      setBatchStartDate('');
+      loadSmartData();
+    } catch (e) {
+      Alert.alert('Erro', e.message || 'Falha ao criar lote.');
+    }
+  };
+
+  const generateReport = async () => {
+    try {
+      const req = await fetch(`${serverUrl}/api/reports/weekly`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      const json = await req.json();
+      if (!req.ok) throw new Error(json.msg || 'Falha ao gerar relatório');
+      setReportMsg(json.file || 'Relatório gerado.');
+    } catch (e) {
+      setReportMsg(e.message || 'Erro ao gerar relatório.');
+    }
+  };
+
+  if (loading) {
+    return <View style={styles.container}><ActivityIndicator size="large" color="#10b981" /></View>;
+  }
+
+  const heatmapUrl = `${serverUrl}/api/heatmap/daily/image?t=${Date.now()}`;
+
+  return (
+    <ScrollView contentContainerStyle={styles.scrollContent}>
+      <Text style={styles.pageTitle}>IA + IoT</Text>
+
+      <View style={styles.metricsGrid}>
+        <MetricCard label="Comportamento" value={behavior?.status || '--'} />
+        <MetricCard label="Imobilidade" value={immobility?.count ?? 0} />
+        <MetricCard label="Modo Auto" value={autoMode?.enabled ? 'ATIVO' : 'INATIVO'} />
+        <MetricCard label="Câmera ativa" value={cameras?.active_camera_id || '--'} />
+      </View>
+
+      <Text style={styles.sectionTitle}>Sensores</Text>
+      <View style={styles.listCard}>
+        <View style={styles.rowItem}><Text style={styles.rowTitle}>Temperatura</Text><Text style={styles.rowMeta}>{sensors?.temperature_c ?? '--'} °C</Text></View>
+        <View style={styles.rowItem}><Text style={styles.rowTitle}>Umidade</Text><Text style={styles.rowMeta}>{sensors?.humidity_pct ?? '--'} %</Text></View>
+        <View style={styles.rowItem}><Text style={styles.rowTitle}>Amônia</Text><Text style={styles.rowMeta}>{sensors?.ammonia_ppm ?? '--'} ppm</Text></View>
+        <View style={styles.rowItem}><Text style={styles.rowTitle}>Ração</Text><Text style={styles.rowMeta}>{sensors?.feed_level_pct ?? '--'} %</Text></View>
+        <View style={styles.rowItem}><Text style={styles.rowTitle}>Água</Text><Text style={styles.rowMeta}>{sensors?.water_level_pct ?? '--'} %</Text></View>
+      </View>
+
+      <TouchableOpacity style={styles.btnPrimary} onPress={toggleAutoMode}>
+        <Cpu color="#fff" size={20} />
+        <Text style={styles.btnText}>{autoMode?.enabled ? 'Desativar Piloto Automático' : 'Ativar Piloto Automático'}</Text>
+      </TouchableOpacity>
+
+      <Text style={styles.sectionTitle}>Heatmap Diário</Text>
+      <View style={styles.heatmapCard}>
+        <Image source={{ uri: heatmapUrl }} style={styles.heatmapImage} resizeMode="cover" />
+      </View>
+
+      <Text style={styles.sectionTitle}>Gestão de Lotes</Text>
+      <View style={styles.listCard}>
+        <TextInput
+          style={styles.input}
+          value={batchName}
+          onChangeText={setBatchName}
+          placeholder="Nome do lote (ex: Lote 45)"
+          placeholderTextColor="#64748b"
+        />
+        <TextInput
+          style={styles.input}
+          value={batchStartDate}
+          onChangeText={setBatchStartDate}
+          placeholder="Data início (YYYY-MM-DD)"
+          placeholderTextColor="#64748b"
+          autoCapitalize="none"
+        />
+        <TouchableOpacity style={styles.btnPrimary} onPress={createBatch}>
+          <Save color="#fff" size={20} />
+          <Text style={styles.btnText}>Criar e Ativar Lote</Text>
+        </TouchableOpacity>
+        {batches.items?.slice(0, 5).map((item) => (
+          <View key={`batch-${item.id}`} style={styles.rowItem}>
+            <Text style={styles.rowTitle}>{item.name}</Text>
+            <Text style={styles.rowMeta}>{item.start_date} | {item.active ? 'ATIVO' : 'inativo'}</Text>
+          </View>
+        ))}
+      </View>
+
+      <Text style={styles.sectionTitle}>Escalabilidade e Relatórios</Text>
+      <View style={styles.listCard}>
+        <View style={styles.rowItem}>
+          <Text style={styles.rowTitle}>Câmeras cadastradas</Text>
+          <Text style={styles.rowMeta}>{cameras.items?.length ?? 0}</Text>
+        </View>
+        <TouchableOpacity style={styles.btnPrimary} onPress={generateReport}>
+          <History color="#fff" size={20} />
+          <Text style={styles.btnText}>Gerar Relatório Semanal (PDF)</Text>
+        </TouchableOpacity>
+        {!!reportMsg && <Text style={styles.rowMeta}>{reportMsg}</Text>}
+      </View>
+    </ScrollView>
+  );
+};
+
 const MetricCard = ({ label, value }) => (
   <View style={styles.metricCard}>
     <Text style={styles.metricLabel}>{label}</Text>
@@ -377,7 +552,7 @@ const ConfigScreen = ({ serverUrl, setServerUrl, logout }) => {
 export default function App() {
   const [token, setToken] = useState(null);
   const [serverUrl, setServerUrl] = useState('');
-  const [activeTab, setActiveTab] = useState('monitor'); // monitor, birds, alerts, history, system, config
+  const [activeTab, setActiveTab] = useState('monitor'); // monitor, birds, smart, alerts, history, system, config
   const [dados, setDados] = useState(null);
   const [chickCount, setChickCount] = useState(0);
   const [dispositivos, setDispositivos] = useState({ ventilacao: false, aquecedor: false });
@@ -546,6 +721,7 @@ export default function App() {
             loadingAcao={loadingAcao}
           />}
         {activeTab === 'birds' && <BirdsScreen serverUrl={serverUrl} />}
+        {activeTab === 'smart' && <SmartOpsScreen serverUrl={serverUrl} />}
         {activeTab === 'alerts' && <AlertsScreen serverUrl={serverUrl} />}
         {activeTab === 'history' && <HistoryScreen serverUrl={serverUrl} />}
         {activeTab === 'system' && <SystemScreen serverUrl={serverUrl} />}
@@ -567,6 +743,11 @@ export default function App() {
         <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('birds')}>
           <Users color={activeTab==='birds'?'#10b981':'#64748b'} size={24}/>
           <Text style={[styles.tabLabel, {color: activeTab==='birds'?'#10b981':'#64748b'}]}>Aves</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('smart')}>
+          <Activity color={activeTab==='smart'?'#10b981':'#64748b'} size={24}/>
+          <Text style={[styles.tabLabel, {color: activeTab==='smart'?'#10b981':'#64748b'}]}>IA+IoT</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('alerts')}>
@@ -631,6 +812,8 @@ const styles = StyleSheet.create({
   // Video
   sectionTitle: { color: '#94a3b8', fontSize: 12, fontWeight: 'bold', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
   videoContainer: { height: 220, backgroundColor: 'black', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#334155', marginBottom: 20, position:'relative' },
+  heatmapCard: { height: 220, backgroundColor: '#111827', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#334155', marginBottom: 20 },
+  heatmapImage: { width: '100%', height: '100%' },
   liveBadge: { position:'absolute', top:10, left:10, backgroundColor:'red', paddingHorizontal:8, paddingVertical:4, borderRadius:4 },
   liveText: { color:'white', fontSize:10, fontWeight:'bold' },
 
