@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WebView } from 'react-native-webview';
 import { 
   Thermometer, Activity, AlertTriangle, CheckCircle, 
-  Settings, Save, Zap, Wind, LayoutDashboard, History, LogOut, User, Key, Users, Bell, Cpu
+  Settings, Save, Zap, Wind, LayoutDashboard, History, LogOut, User, Key, Users, Bell, Cpu, Database
 } from 'lucide-react-native';
 
 const appLogo = require('./assets/logo.png');
@@ -15,7 +15,7 @@ const appLogo = require('./assets/logo.png');
 // --- COMPONENTES DE TELA ---
 
 // 1. TELA DE MONITORAMENTO (HOME)
-const MonitorScreen = ({ serverUrl, dados, loading, chickCount, dispositivos, controlarDispositivo, loadingAcao }) => {
+const MonitorScreen = ({ serverUrl, dados, loading, chickCount, dispositivos, controlarDispositivo, loadingAcao, enviarComandoVoz }) => {
   const getStatusColor = () => {
     if (!dados) return "#334155";
     if (dados.status === 'CALOR') return "#dc2626";
@@ -239,6 +239,12 @@ const BirdsScreen = ({ serverUrl }) => {
           </View>
         ))}
       </View>
+
+      <Text style={styles.sectionTitle}>Comandos de Voz</Text>
+      <TouchableOpacity style={styles.btnPrimary} onPress={enviarComandoVoz}>
+        <Activity color="#fff" size={20} />
+        <Text style={styles.btnText}>Microfone: comandos rápidos</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 };
@@ -337,16 +343,19 @@ const SmartOpsScreen = ({ serverUrl }) => {
   const [batchStartDate, setBatchStartDate] = useState('');
   const [reportMsg, setReportMsg] = useState('');
   const [loading, setLoading] = useState(true);
+  const [logbook, setLogbook] = useState({ count: 0, items: [] });
+  const [logNote, setLogNote] = useState('');
 
   const loadSmartData = useCallback(async () => {
     try {
-      const [bReq, iReq, sReq, aReq, btReq, cReq] = await Promise.all([
+      const [bReq, iReq, sReq, aReq, btReq, cReq, lReq] = await Promise.all([
         fetch(`${serverUrl}/api/behavior/live`),
         fetch(`${serverUrl}/api/immobility/live`),
         fetch(`${serverUrl}/api/sensors/live`),
         fetch(`${serverUrl}/api/auto-mode`),
         fetch(`${serverUrl}/api/batches`),
-        fetch(`${serverUrl}/api/cameras`)
+        fetch(`${serverUrl}/api/cameras`),
+        fetch(`${serverUrl}/api/logbook?limit=20`)
       ]);
 
       if (bReq.ok) setBehavior(await bReq.json());
@@ -355,6 +364,7 @@ const SmartOpsScreen = ({ serverUrl }) => {
       if (aReq.ok) setAutoMode(await aReq.json());
       if (btReq.ok) setBatches(await btReq.json());
       if (cReq.ok) setCameras(await cReq.json());
+      if (lReq.ok) setLogbook(await lReq.json());
     } catch (e) {
       console.log(e);
     } finally {
@@ -419,6 +429,21 @@ const SmartOpsScreen = ({ serverUrl }) => {
     }
   };
 
+  const saveLogbook = async () => {
+    if (!logNote.trim()) return;
+    try {
+      await fetch(`${serverUrl}/api/logbook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: logNote, author: 'tratador-mobile' })
+      });
+      setLogNote('');
+      loadSmartData();
+    } catch (e) {
+      Alert.alert('Erro', 'Falha ao salvar nota do lote.');
+    }
+  };
+
   if (loading) {
     return <View style={styles.container}><ActivityIndicator size="large" color="#10b981" /></View>;
   }
@@ -441,7 +466,7 @@ const SmartOpsScreen = ({ serverUrl }) => {
         <View style={styles.rowItem}><Text style={styles.rowTitle}>Temperatura</Text><Text style={styles.rowMeta}>{sensors?.temperature_c ?? '--'} °C</Text></View>
         <View style={styles.rowItem}><Text style={styles.rowTitle}>Umidade</Text><Text style={styles.rowMeta}>{sensors?.humidity_pct ?? '--'} %</Text></View>
         <View style={styles.rowItem}><Text style={styles.rowTitle}>Amônia</Text><Text style={styles.rowMeta}>{sensors?.ammonia_ppm ?? '--'} ppm</Text></View>
-        <View style={styles.rowItem}><Text style={styles.rowTitle}>Ração</Text><Text style={styles.rowMeta}>{sensors?.feed_level_pct ?? '--'} %</Text></View>
+        <View style={styles.rowItem}><Text style={styles.rowTitle}>Ração</Text><Text style={[styles.rowMeta, (Number(sensors?.feed_level_pct ?? 100) < 20) && {color:'#ef4444', fontWeight:'bold'}]}>{sensors?.feed_level_pct ?? '--'} %</Text></View>
         <View style={styles.rowItem}><Text style={styles.rowTitle}>Água</Text><Text style={styles.rowMeta}>{sensors?.water_level_pct ?? '--'} %</Text></View>
       </View>
 
@@ -495,6 +520,115 @@ const SmartOpsScreen = ({ serverUrl }) => {
           <Text style={styles.btnText}>Gerar Relatório Semanal (PDF)</Text>
         </TouchableOpacity>
         {!!reportMsg && <Text style={styles.rowMeta}>{reportMsg}</Text>}
+      </View>
+
+      <Text style={styles.sectionTitle}>Diário do Lote</Text>
+      <View style={styles.listCard}>
+        <TextInput
+          style={styles.input}
+          value={logNote}
+          onChangeText={setLogNote}
+          placeholder="Dia 12: vacinação realizada..."
+          placeholderTextColor="#64748b"
+        />
+        <TouchableOpacity style={styles.btnPrimary} onPress={saveLogbook}>
+          <Save color="#fff" size={20} />
+          <Text style={styles.btnText}>Salvar Nota</Text>
+        </TouchableOpacity>
+        {(logbook.items || []).map((item) => (
+          <View key={`log-${item.id}`} style={styles.rowItem}>
+            <Text style={styles.rowTitle}>{item.author}</Text>
+            <Text style={styles.rowMeta}>{item.note}</Text>
+            <Text style={styles.rowDate}>{item.timestamp}</Text>
+          </View>
+        ))}
+      </View>
+    </ScrollView>
+  );
+};
+
+const ManagementScreen = ({ serverUrl }) => {
+  const [weightLive, setWeightLive] = useState(null);
+  const [acoustic, setAcoustic] = useState(null);
+  const [acousticModel, setAcousticModel] = useState(null);
+  const [thermal, setThermal] = useState({ count: 0, sectors: [], items: [] });
+  const [energy, setEnergy] = useState(null);
+  const [audit, setAudit] = useState({ count: 0, items: [] });
+  const [sync, setSync] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    try {
+      const [w, a, m, t, e, au, s] = await Promise.all([
+        fetch(`${serverUrl}/api/weight/live`),
+        fetch(`${serverUrl}/api/acoustic/live`),
+        fetch(`${serverUrl}/api/acoustic/model-info`),
+        fetch(`${serverUrl}/api/thermal-anomalies/live?minutes=60`),
+        fetch(`${serverUrl}/api/energy/summary`),
+        fetch(`${serverUrl}/api/audit/logs?limit=40`),
+        fetch(`${serverUrl}/api/sync/status`)
+      ]);
+      if (w.ok) setWeightLive(await w.json());
+      if (a.ok) setAcoustic(await a.json());
+      if (m.ok) setAcousticModel(await m.json());
+      if (t.ok) setThermal(await t.json());
+      if (e.ok) setEnergy(await e.json());
+      if (au.ok) setAudit(await au.json());
+      if (s.ok) setSync(await s.json());
+    } catch (e) {
+      console.log(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [serverUrl]);
+
+  useEffect(() => {
+    load();
+    const timer = setInterval(load, 5000);
+    return () => clearInterval(timer);
+  }, [load]);
+
+  if (loading) {
+    return <View style={styles.container}><ActivityIndicator size="large" color="#10b981" /></View>;
+  }
+
+  return (
+    <ScrollView contentContainerStyle={styles.scrollContent}>
+      <Text style={styles.pageTitle}>Gestão</Text>
+      <View style={styles.metricsGrid}>
+        <MetricCard label="Peso médio" value={weightLive ? `${weightLive.avg_weight_g}g` : '--'} />
+        <MetricCard label="Respiratório" value={acoustic ? acoustic.respiratory_health_index : '--'} />
+        <MetricCard label="Custo mês" value={energy ? `R$ ${energy.estimated_cost}` : '--'} />
+        <MetricCard label="Sync pendente" value={sync?.pending ?? '--'} />
+      </View>
+
+      <View style={styles.listCard}>
+        <View style={styles.rowItem}>
+          <Text style={styles.rowTitle}>Modelo de tosse treinado</Text>
+          <Text style={styles.rowMeta}>{acousticModel?.loaded ? 'CARREGADO' : 'NAO CARREGADO'}</Text>
+          {!!acousticModel?.last_error && <Text style={styles.rowDate}>{acousticModel.last_error}</Text>}
+        </View>
+      </View>
+
+      <Text style={styles.sectionTitle}>Anomalias térmicas</Text>
+      <View style={styles.listCard}>
+        <Text style={styles.rowMeta}>Detectadas: {thermal.count || 0} | Setores: {(thermal.sectors || []).join(', ') || '--'}</Text>
+        {(thermal.items || []).slice(0, 10).map((item) => (
+          <View key={`th-${item.id}`} style={styles.rowItem}>
+            <Text style={styles.rowTitle}>UID {item.bird_uid} - {item.kind}</Text>
+            <Text style={styles.rowMeta}>{item.estimated_temp_c} °C em {item.sector}</Text>
+          </View>
+        ))}
+      </View>
+
+      <Text style={styles.sectionTitle}>Audit Trail</Text>
+      <View style={styles.listCard}>
+        {(audit.items || []).slice(0, 20).map((item) => (
+          <View key={`au-${item.id}`} style={styles.rowItem}>
+            <Text style={styles.rowTitle}>{item.actor} - {item.action}</Text>
+            <Text style={styles.rowDate}>{item.timestamp}</Text>
+          </View>
+        ))}
       </View>
     </ScrollView>
   );
@@ -552,7 +686,7 @@ const ConfigScreen = ({ serverUrl, setServerUrl, logout }) => {
 export default function App() {
   const [token, setToken] = useState(null);
   const [serverUrl, setServerUrl] = useState('');
-  const [activeTab, setActiveTab] = useState('monitor'); // monitor, birds, smart, alerts, history, system, config
+  const [activeTab, setActiveTab] = useState('monitor'); // monitor, birds, smart, management, alerts, history, system, config
   const [dados, setDados] = useState(null);
   const [chickCount, setChickCount] = useState(0);
   const [dispositivos, setDispositivos] = useState({ ventilacao: false, aquecedor: false });
@@ -657,6 +791,35 @@ export default function App() {
     }
   };
 
+  const enviarComandoVoz = () => {
+    Alert.alert(
+      "Comando de voz",
+      "Selecione o comando reconhecido:",
+      [
+        { text: "Ligar ventilação", onPress: () => executarComandoVoz("ligar ventilacao") },
+        { text: "Desligar ventilação", onPress: () => executarComandoVoz("desligar ventilacao") },
+        { text: "Ligar aquecedor", onPress: () => executarComandoVoz("ligar aquecedor") },
+        { text: "Cancelar", style: "cancel" }
+      ]
+    );
+  };
+
+  const executarComandoVoz = async (text) => {
+    try {
+      const req = await fetch(`${serverUrl}/api/voice/command`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      const json = await req.json();
+      if (!req.ok) throw new Error(json.msg || 'Falha');
+      setDispositivos(json.devices || dispositivos);
+      Alert.alert("Sucesso", `Comando executado: ${json.action}`);
+    } catch (e) {
+      Alert.alert("Erro", e.message || "Falha ao enviar comando de voz.");
+    }
+  };
+
   // TELA DE LOGIN
   if (!token) {
     return (
@@ -719,9 +882,11 @@ export default function App() {
             dispositivos={dispositivos}
             controlarDispositivo={controlarDispositivo}
             loadingAcao={loadingAcao}
+            enviarComandoVoz={enviarComandoVoz}
           />}
         {activeTab === 'birds' && <BirdsScreen serverUrl={serverUrl} />}
         {activeTab === 'smart' && <SmartOpsScreen serverUrl={serverUrl} />}
+        {activeTab === 'management' && <ManagementScreen serverUrl={serverUrl} />}
         {activeTab === 'alerts' && <AlertsScreen serverUrl={serverUrl} />}
         {activeTab === 'history' && <HistoryScreen serverUrl={serverUrl} />}
         {activeTab === 'system' && <SystemScreen serverUrl={serverUrl} />}
@@ -748,6 +913,11 @@ export default function App() {
         <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('smart')}>
           <Activity color={activeTab==='smart'?'#10b981':'#64748b'} size={24}/>
           <Text style={[styles.tabLabel, {color: activeTab==='smart'?'#10b981':'#64748b'}]}>IA+IoT</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('management')}>
+          <Database color={activeTab==='management'?'#10b981':'#64748b'} size={24}/>
+          <Text style={[styles.tabLabel, {color: activeTab==='management'?'#10b981':'#64748b'}]}>Gestão</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('alerts')}>

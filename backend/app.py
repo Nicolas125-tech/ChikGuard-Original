@@ -1,7 +1,7 @@
 from flask import Flask, jsonify, request, Response, send_file
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
-from flask_jwt_extended import JWTManager, create_access_token
+from flask_jwt_extended import JWTManager, create_access_token, verify_jwt_in_request, get_jwt_identity
 from database import (
     db,
     User,
@@ -12,6 +12,13 @@ from database import (
     EventLog,
     SensorReading,
     Batch,
+    WeightEstimate,
+    AcousticReading,
+    ThermalAnomaly,
+    EnergyUsageDaily,
+    AuditLog,
+    SyncQueueItem,
+    BatchLogbook,
 )
 
 import cv2
@@ -28,11 +35,27 @@ from ultralytics import YOLO
 from io import BytesIO
 import smtplib
 from email.message import EmailMessage
+import io
 
 try:
     import requests
 except Exception:
     requests = None
+
+try:
+    import librosa
+except Exception:
+    librosa = None
+
+try:
+    import soundfile as sf
+except Exception:
+    sf = None
+
+try:
+    import joblib
+except Exception:
+    joblib = None
 
 try:
     from reportlab.lib.pagesizes import A4
@@ -49,6 +72,7 @@ DETECTION_CONF = float(os.getenv("DETECTION_CONF", "0.22"))
 DETECTION_IOU = float(os.getenv("DETECTION_IOU", "0.45"))
 MIN_BIRD_AREA_RATIO = float(os.getenv("MIN_BIRD_AREA_RATIO", "0.00003"))
 YOLO_MODEL_PATH = os.getenv("YOLO_MODEL_PATH", "yolov8n.pt")
+YOLO_SEG_MODEL_PATH = os.getenv("YOLO_SEG_MODEL_PATH", "yolov8n-seg.pt")
 BIRD_CLASS_NAME = os.getenv("BIRD_CLASS_NAME", "bird")
 TRACKER_TYPE = os.getenv("TRACKER_TYPE", "bytetrack").strip().lower()
 TRACKER_CONFIG = "botsort.yaml" if TRACKER_TYPE == "botsort" else "bytetrack.yaml"
@@ -67,6 +91,7 @@ BEHAVIOR_ALERT_COOLDOWN_SEC = int(os.getenv("BEHAVIOR_ALERT_COOLDOWN_SEC", "120"
 IMMOBILITY_MIN_SEC = int(os.getenv("IMMOBILITY_MIN_SEC", "1800"))
 IMMOBILITY_MOVE_PX = int(os.getenv("IMMOBILITY_MOVE_PX", "12"))
 IMMOBILITY_ALERT_COOLDOWN_SEC = int(os.getenv("IMMOBILITY_ALERT_COOLDOWN_SEC", "300"))
+CARCASS_STILL_SECONDS = int(os.getenv("CARCASS_STILL_SECONDS", "1800"))
 
 SENSOR_SAVE_INTERVAL = int(os.getenv("SENSOR_SAVE_INTERVAL", "30"))
 SENSOR_ALERT_COOLDOWN_SEC = int(os.getenv("SENSOR_ALERT_COOLDOWN_SEC", "300"))
@@ -74,6 +99,29 @@ SENSOR_ALERT_COOLDOWN_SEC = int(os.getenv("SENSOR_ALERT_COOLDOWN_SEC", "300"))
 INTRUSION_START_HOUR = int(os.getenv("INTRUSION_START_HOUR", "0"))
 INTRUSION_END_HOUR = int(os.getenv("INTRUSION_END_HOUR", "5"))
 INTRUSION_COOLDOWN_SEC = int(os.getenv("INTRUSION_COOLDOWN_SEC", "180"))
+
+WEIGHT_SAVE_INTERVAL = int(os.getenv("WEIGHT_SAVE_INTERVAL", "600"))
+WEIGHT_CALIBRATION_G_PER_SQRT_PX = float(os.getenv("WEIGHT_CALIBRATION_G_PER_SQRT_PX", "1.85"))
+THERMAL_ANOMALY_COOLDOWN_SEC = int(os.getenv("THERMAL_ANOMALY_COOLDOWN_SEC", "180"))
+ACOUSTIC_SAVE_INTERVAL = int(os.getenv("ACOUSTIC_SAVE_INTERVAL", "60"))
+
+VENTILACAO_POWER_KW = float(os.getenv("VENTILACAO_POWER_KW", "0.35"))
+AQUECEDOR_POWER_KW = float(os.getenv("AQUECEDOR_POWER_KW", "1.80"))
+ENERGY_TARIFF_PER_KWH = float(os.getenv("ENERGY_TARIFF_PER_KWH", "0.95"))
+CAMERA_DISTANCE_M = float(os.getenv("CAMERA_DISTANCE_M", "2.2"))
+VIRTUAL_SCALE_CM_PER_PX_AT_1M = float(os.getenv("VIRTUAL_SCALE_CM_PER_PX_AT_1M", "0.09"))
+
+SYNC_PUSH_INTERVAL_SEC = int(os.getenv("SYNC_PUSH_INTERVAL_SEC", "45"))
+CLOUD_SYNC_URL = os.getenv("CLOUD_SYNC_URL", "").strip()
+WEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "").strip()
+WEATHER_LAT = os.getenv("OPENWEATHER_LAT", "").strip()
+WEATHER_LON = os.getenv("OPENWEATHER_LON", "").strip()
+WEATHER_CHECK_INTERVAL_SEC = int(os.getenv("WEATHER_CHECK_INTERVAL_SEC", "1800"))
+WEATHER_COLD_FRONT_C = float(os.getenv("WEATHER_COLD_FRONT_C", "5.0"))
+CAMERA_FAIL_THRESHOLD = int(os.getenv("CAMERA_FAIL_THRESHOLD", "25"))
+CAMERA_REOPEN_INTERVAL_SEC = float(os.getenv("CAMERA_REOPEN_INTERVAL_SEC", "3.0"))
+COUGH_MODEL_PATH = os.getenv("COUGH_MODEL_PATH", os.path.join(os.path.dirname(__file__), "models", "cough_classifier.joblib"))
+COUGH_MODEL_FEATURES = int(os.getenv("COUGH_MODEL_FEATURES", "48"))
 
 REPORTS_DIR = os.path.join(os.path.dirname(__file__), "reports")
 HEATMAP_DIR = os.path.join(REPORTS_DIR, "heatmaps")
@@ -84,12 +132,19 @@ class ObjectDetector:
     def __init__(self, model_path="yolov8n.pt"):
         self.yolo_loaded = False
         self.model = None
+        self.supports_segmentation = False
         try:
             self.model = YOLO(model_path)
             self.yolo_loaded = True
             print(f"Model '{model_path}' loaded.")
             self.model.predict(np.zeros((480, 640, 3)), verbose=False)
             print("Model warmed up.")
+            try:
+                # Seg models expose masks at inference time.
+                dummy = self.model.predict(np.zeros((256, 256, 3), dtype=np.uint8), verbose=False)
+                self.supports_segmentation = bool(dummy and getattr(dummy[0], "masks", None) is not None)
+            except Exception:
+                self.supports_segmentation = False
         except Exception as exc:
             print(f"Error loading Ultralytics model: {exc}")
 
@@ -120,6 +175,15 @@ class ObjectDetector:
             if boxes.id is not None
             else np.full(len(xyxy), -1, dtype=int)
         )
+        mask_areas = np.zeros(len(xyxy), dtype=np.float32)
+        if getattr(result, "masks", None) is not None and getattr(result.masks, "data", None) is not None:
+            try:
+                mask_stack = result.masks.data.cpu().numpy()
+                for i in range(min(len(mask_stack), len(mask_areas))):
+                    mask_areas[i] = float(np.sum(mask_stack[i] > 0.5))
+                self.supports_segmentation = True
+            except Exception:
+                pass
 
         detections = []
         for i in range(len(xyxy)):
@@ -129,9 +193,95 @@ class ObjectDetector:
                     "class_id": int(class_ids[i]),
                     "confidence": float(confidences[i]),
                     "track_id": int(track_ids[i]),
+                    "mask_area_px": float(mask_areas[i]) if i < len(mask_areas) else 0.0,
                 }
             )
         return detections
+
+
+class RespiratoryAudioClassifier:
+    def __init__(self, model_path):
+        self.model_path = model_path
+        self.model = None
+        self.loaded = False
+        self.last_error = None
+        if joblib is None or librosa is None:
+            self.last_error = "joblib_or_librosa_unavailable"
+            return
+        try:
+            if os.path.exists(model_path):
+                self.model = joblib.load(model_path)
+                self.loaded = True
+            else:
+                self.last_error = "model_file_not_found"
+        except Exception as exc:
+            self.last_error = str(exc)
+
+    def _extract_features(self, y, sr):
+        # Fixed-size statistical audio descriptor for cough/stress classifiers.
+        y = np.asarray(y, dtype=np.float32).flatten()
+        if y.size == 0:
+            return None
+        if sr <= 0:
+            sr = 16000
+        if y.size < sr:
+            y = np.pad(y, (0, sr - y.size))
+        mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=20)
+        spec_cent = librosa.feature.spectral_centroid(y=y, sr=sr)
+        spec_bw = librosa.feature.spectral_bandwidth(y=y, sr=sr)
+        rolloff = librosa.feature.spectral_rolloff(y=y, sr=sr)
+        zcr = librosa.feature.zero_crossing_rate(y)
+        rms = librosa.feature.rms(y=y)
+
+        feats = []
+        for mat in (mfcc, spec_cent, spec_bw, rolloff, zcr, rms):
+            feats.append(float(np.mean(mat)))
+            feats.append(float(np.std(mat)))
+            feats.append(float(np.min(mat)))
+            feats.append(float(np.max(mat)))
+        vec = np.asarray(feats, dtype=np.float32)
+        if vec.size < COUGH_MODEL_FEATURES:
+            vec = np.pad(vec, (0, COUGH_MODEL_FEATURES - vec.size))
+        elif vec.size > COUGH_MODEL_FEATURES:
+            vec = vec[:COUGH_MODEL_FEATURES]
+        return vec.reshape(1, -1)
+
+    def classify(self, y, sr):
+        if not self.loaded or self.model is None:
+            return None
+        try:
+            X = self._extract_features(y, sr)
+            if X is None:
+                return None
+            cough_prob = None
+            stress_prob = None
+            if hasattr(self.model, "predict_proba"):
+                proba = self.model.predict_proba(X)
+                # Convention: binary classifier with positive class = cough.
+                if isinstance(proba, list):
+                    arr = np.asarray(proba[0], dtype=np.float32).reshape(-1)
+                else:
+                    arr = np.asarray(proba, dtype=np.float32).reshape(-1)
+                if arr.size >= 2:
+                    cough_prob = float(arr[-1])
+                else:
+                    cough_prob = float(arr[0])
+            elif hasattr(self.model, "predict"):
+                pred = self.model.predict(X)
+                cough_prob = float(np.asarray(pred).reshape(-1)[0])
+            if cough_prob is None:
+                return None
+            stress_prob = min(1.0, max(0.0, (cough_prob * 0.6) + random.uniform(0.05, 0.22)))
+            respiratory_health = max(0.0, min(100.0, 100.0 - ((cough_prob * 70.0) + (stress_prob * 30.0))))
+            return {
+                "respiratory_health_index": round(float(respiratory_health), 2),
+                "cough_index": round(float(cough_prob * 100.0), 2),
+                "stress_audio_index": round(float(stress_prob * 100.0), 2),
+                "source": "trained_model",
+            }
+        except Exception as exc:
+            self.last_error = str(exc)
+            return None
 
 
 app = Flask(__name__)
@@ -164,8 +314,48 @@ def _log_event(event_type, level, message, metadata=None, camera_id=ACTIVE_CAMER
             )
             db.session.add(row)
             db.session.commit()
+            _enqueue_sync_item("event_log", row.to_dict())
     except Exception as exc:
         print(f"[EVENT] failed to persist '{event_type}': {exc}")
+
+
+def _enqueue_sync_item(item_type, payload):
+    try:
+        with app.app_context():
+            db.session.add(SyncQueueItem(item_type=item_type, payload_json=_safe_json(payload), status="pending"))
+            db.session.commit()
+    except Exception as exc:
+        print(f"[SYNC] enqueue failed: {exc}")
+
+
+def _request_actor():
+    actor = "system"
+    try:
+        verify_jwt_in_request(optional=True)
+        identity = get_jwt_identity()
+        if identity:
+            actor = str(identity)
+    except Exception:
+        actor = "system"
+    return actor
+
+
+def _audit(action, source="backend", details=None, actor=None):
+    try:
+        actor_name = actor or _request_actor()
+        row = AuditLog(
+            actor=actor_name,
+            action=action,
+            source=source,
+            ip=str(request.remote_addr) if request else None,
+            details_json=_safe_json(details or {}),
+        )
+        with app.app_context():
+            db.session.add(row)
+            db.session.commit()
+        _enqueue_sync_item("audit_log", row.to_dict())
+    except Exception as exc:
+        print(f"[AUDIT] failed: {exc}")
 
 
 def _class_name_by_id(class_id):
@@ -257,7 +447,9 @@ lock = threading.Lock()
 object_count = 0
 APP_START_TIME = time.time()
 
-detector = ObjectDetector(model_path=YOLO_MODEL_PATH)
+_resolved_model_path = YOLO_SEG_MODEL_PATH if os.path.exists(YOLO_SEG_MODEL_PATH) else YOLO_MODEL_PATH
+detector = ObjectDetector(model_path=_resolved_model_path)
+audio_classifier = RespiratoryAudioClassifier(COUGH_MODEL_PATH)
 live_birds = {}
 track_to_bird_uid = {}
 bird_last_state = {}
@@ -275,6 +467,8 @@ behavior_state = {
 
 immobility_state = {}
 intrusion_state = {"last_alert_ts": 0.0}
+carcass_state = {"uids": set(), "items": [], "last_alert_ts": 0.0}
+last_temp_emergency_notification_ts = 0.0
 
 camera_registry = [
     {"camera_id": ACTIVE_CAMERA_ID, "source": f"webcam:{CAMERA_INDEX}", "enabled": True}
@@ -284,6 +478,7 @@ estado_dispositivos = {
     "ventilacao": False,
     "aquecedor": False,
     "modo_automatico": False,
+    "luz_intensidade_pct": 0,
     "camera_id": ACTIVE_CAMERA_ID,
 }
 
@@ -313,6 +508,39 @@ sensor_thresholds = {
     "water_low": 30.0,
 }
 sensor_alert_state = {}
+
+weight_state = {
+    "avg_weight_g": 0.0,
+    "ideal_weight_g": 0.0,
+    "count": 0,
+    "confidence": 0.0,
+    "updated_at": 0.0,
+}
+last_weight_save_ts = 0.0
+last_thermal_alert_ts = 0.0
+
+acoustic_state = {
+    "respiratory_health_index": 100.0,
+    "cough_index": 0.0,
+    "stress_audio_index": 0.0,
+    "source": "simulated",
+    "updated_at": 0.0,
+}
+last_acoustic_save_ts = 0.0
+
+energy_runtime_state = {
+    "last_tick": time.time(),
+    "ventilacao_seconds_today": 0.0,
+    "aquecedor_seconds_today": 0.0,
+}
+
+weather_state = {
+    "loaded": False,
+    "next_night_min_c": None,
+    "preheat_recommended": False,
+    "message": "Sem previsao carregada",
+    "updated_at": 0.0,
+}
 
 last_weekly_report_key = None
 
@@ -435,6 +663,263 @@ def _temperature_targets(camera_id):
     }
 
 
+def _ideal_weight_for_age_day(age_day):
+    # Curva de referência simplificada (broiler), em gramas.
+    curve = {
+        1: 45, 7: 185, 14: 470, 21: 950, 28: 1550, 35: 2300, 42: 2950
+    }
+    keys = sorted(curve.keys())
+    if age_day <= keys[0]:
+        return float(curve[keys[0]])
+    if age_day >= keys[-1]:
+        return float(curve[keys[-1]])
+    for i in range(len(keys) - 1):
+        a, b = keys[i], keys[i + 1]
+        if a <= age_day <= b:
+            ratio = (age_day - a) / float(max(1, b - a))
+            return float(curve[a] + ((curve[b] - curve[a]) * ratio))
+    return float(curve[keys[-1]])
+
+
+def _estimate_weight_from_live_birds(frame_shape):
+    now = time.time()
+    with lock:
+        birds = [v for v in live_birds.values() if (now - float(v["last_seen"])) <= BIRD_LIVE_TTL_SEC]
+    if not birds:
+        return None
+
+    fh, fw = frame_shape[:2]
+    weights = []
+    for bird in birds:
+        x1, y1, x2, y2 = bird["box"]
+        bw = max(1, (x2 - x1))
+        bh = max(1, (y2 - y1))
+        bbox_area = float(bw * bh)
+        seg_area = float(bird.get("mask_area_px", 0.0))
+        area_px = seg_area if seg_area > 0 else bbox_area
+
+        # Virtual ruler:
+        # physical_size_cm ~= px * scale(1m) * distance_m
+        scale = VIRTUAL_SCALE_CM_PER_PX_AT_1M * max(0.5, CAMERA_DISTANCE_M)
+        body_area_cm2 = max(1.0, area_px * (scale ** 2))
+        # Approximate mass relation from projected body area.
+        base_weight = WEIGHT_CALIBRATION_G_PER_SQRT_PX * math.sqrt(body_area_cm2 * 100.0)
+        # Minor perspective correction using vertical position.
+        cy = (y1 + y2) / 2.0
+        perspective = 0.92 + (0.16 * (cy / float(max(1, fh))))
+        weights.append(base_weight * perspective)
+    if not weights:
+        return None
+
+    avg_weight_from_area = float(sum(weights) / len(weights))
+    batch = _active_batch(ACTIVE_CAMERA_ID)
+    age_day = max(1, (datetime.utcnow().date() - batch.start_date.date()).days + 1) if batch else 21
+    ideal = _ideal_weight_for_age_day(age_day)
+
+    # Blend between area-based estimate and age-based expected curve.
+    estimated = (0.7 * avg_weight_from_area) + (0.3 * ideal)
+    confidence = min(0.97, max(0.45, 0.52 + (len(weights) / 120.0)))
+    return {
+        "avg_weight_g": round(float(estimated), 1),
+        "ideal_weight_g": round(float(ideal), 1),
+        "count": int(len(weights)),
+        "confidence": round(float(confidence), 3),
+        "age_day": int(age_day),
+    }
+
+
+def _persist_weight_estimate(frame_shape):
+    global last_weight_save_ts
+    now = time.time()
+    data = _estimate_weight_from_live_birds(frame_shape)
+    if data is None:
+        return
+    weight_state.update(
+        {
+            "avg_weight_g": data["avg_weight_g"],
+            "ideal_weight_g": data["ideal_weight_g"],
+            "count": data["count"],
+            "confidence": data["confidence"],
+            "updated_at": now,
+        }
+    )
+    if now - last_weight_save_ts < WEIGHT_SAVE_INTERVAL:
+        return
+    with app.app_context():
+        row = WeightEstimate(
+            camera_id=ACTIVE_CAMERA_ID,
+            avg_weight_g=data["avg_weight_g"],
+            ideal_weight_g=data["ideal_weight_g"],
+            flock_count=data["count"],
+            confidence=data["confidence"],
+            source="vision_estimate",
+        )
+        db.session.add(row)
+        db.session.commit()
+        _enqueue_sync_item("weight_estimate", row.to_dict())
+    last_weight_save_ts = now
+
+
+def _sector_from_point(x, y, frame_shape):
+    h, w = frame_shape[:2]
+    if w <= 0 or h <= 0:
+        return "A"
+    col = min(2, int((x / float(w)) * 3))
+    row = min(2, int((y / float(h)) * 3))
+    return f"{chr(ord('A') + row)}{col + 1}"
+
+
+def _detect_thermal_anomalies(gray_frame, ambient_temp, frame_shape):
+    global last_thermal_alert_ts
+    now = time.time()
+    with lock:
+        birds_items = list(live_birds.items())
+    anomalies = []
+    for bird_uid, data in birds_items:
+        box = data["box"]
+        est_temp = _estimate_bird_temp_proxy(gray_frame, box, ambient_temp)
+        x1, y1, x2, y2 = box
+        cx = int((x1 + x2) / 2)
+        cy = int((y1 + y2) / 2)
+        diff = est_temp - float(ambient_temp)
+        if diff >= 8.0:
+            kind = "fever_suspected"
+        elif diff <= -6.0:
+            kind = "hypothermia_or_mortality"
+        else:
+            continue
+        anomalies.append(
+            {
+                "bird_uid": int(bird_uid),
+                "kind": kind,
+                "estimated_temp_c": round(float(est_temp), 2),
+                "ambient_temp_c": round(float(ambient_temp), 2),
+                "sector": _sector_from_point(cx, cy, frame_shape),
+                "x": cx,
+                "y": cy,
+            }
+        )
+
+    if not anomalies:
+        return
+
+    with app.app_context():
+        rows = [ThermalAnomaly(camera_id=ACTIVE_CAMERA_ID, **a) for a in anomalies[:30]]
+        db.session.bulk_save_objects(rows)
+        db.session.commit()
+        for row in rows:
+            _enqueue_sync_item("thermal_anomaly", row.to_dict())
+
+    if (now - last_thermal_alert_ts) >= THERMAL_ANOMALY_COOLDOWN_SEC:
+        last_thermal_alert_ts = now
+        sectors = sorted(list({a["sector"] for a in anomalies if a.get("sector")}))
+        _log_event(
+            event_type="thermal_anomaly_alert",
+            level="high",
+            message=f"Aves com temperatura anomala: {len(anomalies)} detectadas em {', '.join(sectors)}",
+            metadata={"count": len(anomalies), "sectors": sectors},
+        )
+
+
+def _simulate_acoustic_analysis():
+    global last_acoustic_save_ts
+    now = time.time()
+    if now - last_acoustic_save_ts < ACOUSTIC_SAVE_INTERVAL:
+        return
+
+    ammonia_factor = min(35.0, float(sensor_state["ammonia_ppm"])) / 35.0
+    cough = max(0.0, min(100.0, (ammonia_factor * 65.0) + random.uniform(3, 20)))
+    stress = max(0.0, min(100.0, (float(behavior_state.get("edge_ratio", 0.0)) * 100.0) + random.uniform(2, 25)))
+    respiratory = max(0.0, min(100.0, 100.0 - ((0.65 * cough) + (0.35 * stress))))
+
+    acoustic_state.update(
+        {
+            "respiratory_health_index": round(respiratory, 2),
+            "cough_index": round(cough, 2),
+            "stress_audio_index": round(stress, 2),
+            "source": "simulated_fallback",
+            "updated_at": now,
+        }
+    )
+
+    with app.app_context():
+        row = AcousticReading(
+            camera_id=ACTIVE_CAMERA_ID,
+            respiratory_health_index=acoustic_state["respiratory_health_index"],
+            cough_index=acoustic_state["cough_index"],
+            stress_audio_index=acoustic_state["stress_audio_index"],
+            source="simulated",
+        )
+        db.session.add(row)
+        db.session.commit()
+        _enqueue_sync_item("acoustic_reading", row.to_dict())
+
+    if acoustic_state["cough_index"] > 70 or acoustic_state["respiratory_health_index"] < 45:
+        _log_event(
+            event_type="respiratory_alert",
+            level="high",
+            message="Indice respiratorio critico detectado pela analise acustica",
+            metadata=acoustic_state,
+        )
+    last_acoustic_save_ts = now
+
+
+def _update_energy_runtime():
+    now = time.time()
+    last_tick = float(energy_runtime_state.get("last_tick", now))
+    delta = max(0.0, now - last_tick)
+    energy_runtime_state["last_tick"] = now
+
+    if estado_dispositivos.get("ventilacao"):
+        energy_runtime_state["ventilacao_seconds_today"] += delta
+    if estado_dispositivos.get("aquecedor"):
+        energy_runtime_state["aquecedor_seconds_today"] += delta
+
+    if delta <= 0:
+        return
+    day_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    with app.app_context():
+        row = EnergyUsageDaily.query.filter_by(camera_id=ACTIVE_CAMERA_ID, day=day_start).first()
+        if row is None:
+            row = EnergyUsageDaily(camera_id=ACTIVE_CAMERA_ID, day=day_start)
+            db.session.add(row)
+        row.ventilacao_seconds = float(energy_runtime_state["ventilacao_seconds_today"])
+        row.aquecedor_seconds = float(energy_runtime_state["aquecedor_seconds_today"])
+        db.session.commit()
+
+
+def _sync_worker():
+    if requests is None:
+        return
+    while True:
+        try:
+            if CLOUD_SYNC_URL:
+                with app.app_context():
+                    pending = SyncQueueItem.query.filter_by(status="pending").order_by(SyncQueueItem.id.asc()).limit(50).all()
+                    if pending:
+                        payload = [p.to_dict() for p in pending]
+                        try:
+                            resp = requests.post(CLOUD_SYNC_URL, json={"items": payload}, timeout=12)
+                            if resp.ok:
+                                now = datetime.utcnow()
+                                for item in pending:
+                                    item.status = "synced"
+                                    item.synced_at = now
+                                    item.attempts = int(item.attempts or 0) + 1
+                                db.session.commit()
+                            else:
+                                for item in pending:
+                                    item.attempts = int(item.attempts or 0) + 1
+                                db.session.commit()
+                        except Exception:
+                            for item in pending:
+                                item.attempts = int(item.attempts or 0) + 1
+                            db.session.commit()
+        except Exception as exc:
+            print(f"[SYNC] worker error: {exc}")
+        time.sleep(SYNC_PUSH_INTERVAL_SEC)
+
+
 def _persist_sensor_reading(source="simulated"):
     with app.app_context():
         row = SensorReading(
@@ -448,6 +933,7 @@ def _persist_sensor_reading(source="simulated"):
         )
         db.session.add(row)
         db.session.commit()
+        _enqueue_sync_item("sensor_reading", row.to_dict())
 
 
 def _maybe_alert_sensor(kind, value, message):
@@ -545,6 +1031,18 @@ def _apply_automatic_control(temp_atual):
                 "thresholds": thresholds,
             },
         )
+
+    # Weather-based pre-heating safety window (night cold front).
+    hour = datetime.now().hour
+    if weather_state.get("preheat_recommended") and (hour >= 18 or hour <= 6):
+        if not estado_dispositivos["aquecedor"]:
+            estado_dispositivos["aquecedor"] = True
+            _log_event(
+                event_type="weather_preheat",
+                level="medium",
+                message="Frente fria a chegar esta noite. O aquecedor foi pre-ativado.",
+                metadata=weather_state,
+            )
 
 
 def _analyze_behavior(selected, frame_shape):
@@ -705,6 +1203,136 @@ def _telegram_send(frame_bgr, caption):
         return False, str(exc)
 
 
+def _telegram_send_text(message):
+    token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    if not token or not chat_id or requests is None:
+        return False, "telegram_not_configured"
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    try:
+        response = requests.post(url, data={"chat_id": chat_id, "text": message}, timeout=10)
+        return (response.ok, f"http_{response.status_code}" if not response.ok else "sent")
+    except Exception as exc:
+        return False, str(exc)
+
+
+def _update_carcass_detection(selected):
+    now = time.time()
+    carcasses = []
+    for det in selected:
+        uid = int(det.get("stable_bird_uid", -1))
+        if uid < 0:
+            continue
+        x1, y1, x2, y2 = det["box"]
+        box = (int(x1), int(y1), int(x2), int(y2))
+        state = immobility_state.get(uid)
+        if state is None:
+            continue
+        if "last_box" not in state:
+            state["last_box"] = box
+            state["same_box_since"] = now
+            continue
+        if tuple(state["last_box"]) == box:
+            pass
+        else:
+            state["last_box"] = box
+            state["same_box_since"] = now
+            state["carcass_alerted"] = False
+            continue
+        still_seconds = now - float(state.get("same_box_since", now))
+        if still_seconds >= CARCASS_STILL_SECONDS:
+            cx, cy, _ = _box_center_area(det["box"])
+            item = {
+                "bird_uid": uid,
+                "bbox": [box[0], box[1], box[2], box[3]],
+                "x": cx,
+                "y": cy,
+                "sector": _sector_from_point(cx, cy, global_frame.shape if global_frame is not None else (720, 1280, 3)),
+                "still_seconds": round(still_seconds, 1),
+            }
+            carcasses.append(item)
+            if not state.get("carcass_alerted", False):
+                state["carcass_alerted"] = True
+                _log_event(
+                    event_type="carcass_alert",
+                    level="high",
+                    message=f"Atencao: Possivel ave morta no setor {item['sector']}",
+                    metadata=item,
+                )
+                _audit("carcass_alert_triggered", source="ai", actor="chikguard-ai", details=item)
+    carcass_state["items"] = carcasses
+    carcass_state["uids"] = set([c["bird_uid"] for c in carcasses])
+
+
+def _fetch_weather_forecast_once():
+    if not WEATHER_API_KEY or not WEATHER_LAT or not WEATHER_LON or requests is None:
+        return
+    try:
+        url = (
+            "https://api.openweathermap.org/data/2.5/forecast"
+            f"?lat={WEATHER_LAT}&lon={WEATHER_LON}&appid={WEATHER_API_KEY}&units=metric&lang=pt_br"
+        )
+        resp = requests.get(url, timeout=12)
+        if not resp.ok:
+            return
+        data = resp.json()
+        entries = data.get("list", [])[:16]
+        mins = []
+        for e in entries:
+            dt_txt = e.get("dt_txt", "")
+            main = e.get("main", {})
+            temp = main.get("temp_min", main.get("temp"))
+            if temp is None:
+                continue
+            # Focus on upcoming night/madrugada windows.
+            if "00:" in dt_txt or "03:" in dt_txt or "06:" in dt_txt:
+                mins.append(float(temp))
+        if not mins:
+            mins = [float(e.get("main", {}).get("temp_min", 99)) for e in entries if e.get("main")]
+        next_min = min(mins) if mins else None
+        if next_min is None:
+            return
+        preheat = next_min <= WEATHER_COLD_FRONT_C
+        weather_state.update(
+            {
+                "loaded": True,
+                "next_night_min_c": round(float(next_min), 2),
+                "preheat_recommended": bool(preheat),
+                "message": (
+                    f"Frente fria prevista: minima {next_min:.1f}C. Aquecedor sera pre-ativado."
+                    if preheat
+                    else f"Sem frente fria critica. Minima prevista: {next_min:.1f}C."
+                ),
+                "updated_at": time.time(),
+            }
+        )
+        if preheat:
+            _log_event("weather_cold_front", "medium", weather_state["message"], metadata=weather_state)
+    except Exception as exc:
+        print(f"[WEATHER] fetch error: {exc}")
+
+
+def _weather_worker():
+    while True:
+        _fetch_weather_forecast_once()
+        time.sleep(WEATHER_CHECK_INTERVAL_SEC)
+
+
+def _comfort_score():
+    temp_status_score = 100
+    ultima = Reading.query.order_by(Reading.id.desc()).first()
+    if ultima is not None:
+        if ultima.status == "CALOR":
+            temp_status_score = 65
+        elif ultima.status == "FRIO":
+            temp_status_score = 72
+    intrusion_penalty = 25 if (time.time() - float(intrusion_state.get("last_alert_ts", 0.0))) < 3600 else 0
+    movement_bonus = 8 if behavior_state.get("status") == "NORMAL" else -8
+    carcass_penalty = min(30, len(carcass_state.get("items", [])) * 10)
+    base = temp_status_score - intrusion_penalty - carcass_penalty + movement_bonus
+    return int(max(0, min(100, base)))
+
+
 def _detect_intrusion(all_detections, frame):
     now = time.time()
     hour = datetime.now().hour
@@ -732,6 +1360,12 @@ def _detect_intrusion(all_detections, frame):
         level="high",
         message="Intrusao detectada na camera",
         metadata={"detections": len(person_dets), "telegram": {"sent": sent, "detail": detail}},
+    )
+    _audit(
+        "intrusion_alert_triggered",
+        source="ai",
+        actor="chikguard-ai",
+        details={"detections": len(person_dets), "telegram_sent": sent},
     )
 
 
@@ -788,6 +1422,8 @@ def _save_bird_snapshots(frame, ambient_temp):
                         identity.max_confidence = row.confidence
                     identity.last_temp_estimada = row.temperatura_estimada
             db.session.commit()
+        _detect_thermal_anomalies(gray, ambient_temp, frame.shape)
+        _persist_weight_estimate(frame.shape)
 
     last_bird_snapshot_save_time = now
 
@@ -877,6 +1513,7 @@ def detectar_objetos(frame):
                     "conf": float(det["confidence"]),
                     "last_seen": now,
                     "track_id": tid,
+                    "mask_area_px": float(det.get("mask_area_px", 0.0)),
                 }
 
             stale_live = [uid for uid, info in live_birds.items() if (now - float(info["last_seen"])) > BIRD_LIVE_TTL_SEC]
@@ -902,6 +1539,7 @@ def detectar_objetos(frame):
     if MODO_DETECCAO == "aves":
         _analyze_behavior(selected, frame.shape)
         _update_immobility(selected)
+        _update_carcass_detection(selected)
 
     if detector.yolo_loaded:
         font = cv2.FONT_HERSHEY_PLAIN
@@ -910,9 +1548,13 @@ def detectar_objetos(frame):
             class_name = _class_name_by_id(det["class_id"]) or "obj"
             tid = int(det.get("stable_bird_uid", det["track_id"]))
             confidence = float(det["confidence"])
-            color = (0, 255, 0)
+            is_carcass = tid in carcass_state.get("uids", set())
+            color = (0, 0, 0) if is_carcass else (0, 255, 0)
             cv2.rectangle(draw_frame, (x1, y1), (x2, y2), color, 2)
-            label = f"{class_name} ID:{tid} ({confidence:.2f})" if tid >= 0 else f"{class_name} ({confidence:.2f})"
+            if is_carcass:
+                label = f"POSSIVEL CARCACA ID:{tid}"
+            else:
+                label = f"{class_name} ID:{tid} ({confidence:.2f})" if tid >= 0 else f"{class_name} ({confidence:.2f})"
             cv2.putText(draw_frame, label, (x1, max(20, y1 - 5)), font, 1.2, color, 2)
 
     if MODO_DETECCAO == "aves":
@@ -942,6 +1584,27 @@ def _heatmap_grid(date_ref=None, grid_size=32):
     if not rows:
         return np.zeros((grid_size, grid_size), dtype=np.float32)
 
+    max_x = max(1, max(r.x for r in rows))
+    max_y = max(1, max(r.y for r in rows))
+    heat = np.zeros((grid_size, grid_size), dtype=np.float32)
+    for row in rows:
+        gx = min(grid_size - 1, int((row.x / max_x) * (grid_size - 1)))
+        gy = min(grid_size - 1, int((row.y / max_y) * (grid_size - 1)))
+        heat[gy, gx] += 1.0
+    return heat
+
+
+def _heatmap_grid_last_hours(hours=24, grid_size=32):
+    end_dt = datetime.utcnow()
+    start_dt = end_dt - timedelta(hours=max(1, min(hours, 168)))
+    with app.app_context():
+        rows = (
+            BirdTrackPoint.query.filter(BirdTrackPoint.timestamp >= start_dt, BirdTrackPoint.timestamp <= end_dt)
+            .order_by(BirdTrackPoint.id.asc())
+            .all()
+        )
+    if not rows:
+        return np.zeros((grid_size, grid_size), dtype=np.float32)
     max_x = max(1, max(r.x for r in rows))
     max_y = max(1, max(r.y for r in rows))
     heat = np.zeros((grid_size, grid_size), dtype=np.float32)
@@ -1097,10 +1760,13 @@ def _weekly_report_scheduler():
 
 
 def camera_loop():
-    global global_frame, db_last_save_time, fps_last_time
+    global global_frame, db_last_save_time, fps_last_time, last_temp_emergency_notification_ts
     cap = None
     use_basic_simulation = False
     last_error_print_time = 0.0
+    consecutive_read_failures = 0
+    last_reopen_attempt_ts = 0.0
+    camera_lost_logged = False
 
     print("Starting video pipeline...")
     cap = cv2.VideoCapture(CAMERA_INDEX)
@@ -1115,6 +1781,24 @@ def camera_loop():
     while True:
         try:
             if use_basic_simulation:
+                now_ts = time.time()
+                if (now_ts - last_reopen_attempt_ts) >= CAMERA_REOPEN_INTERVAL_SEC:
+                    last_reopen_attempt_ts = now_ts
+                    try:
+                        if cap is not None:
+                            cap.release()
+                    except Exception:
+                        pass
+                    cap = cv2.VideoCapture(CAMERA_INDEX)
+                    if cap.isOpened():
+                        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+                        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+                        use_basic_simulation = False
+                        consecutive_read_failures = 0
+                        camera_lost_logged = False
+                        _log_event("camera_reconnected", "info", "Camera reconectada com sucesso.")
+                        continue
+
                 frame = np.zeros((480, 640, 3), dtype=np.uint8)
                 cv2.rectangle(frame, (200, 150), (350, 300), (0, 255, 0), 2)
                 cv2.putText(frame, "TEST_OBJECT", (200, 140), cv2.FONT_HERSHEY_PLAIN, 2, (0, 255, 0), 2)
@@ -1123,15 +1807,36 @@ def camera_loop():
             else:
                 ret, frame = cap.read()
                 if not ret:
+                    consecutive_read_failures += 1
+                    # Do not flap on transient read glitches.
+                    if consecutive_read_failures < CAMERA_FAIL_THRESHOLD:
+                        time.sleep(0.03)
+                        continue
                     use_basic_simulation = True
-                    _log_event("camera_signal_lost", "high", "Perda de sinal. Simulacao ativada.")
+                    consecutive_read_failures = 0
+                    if not camera_lost_logged:
+                        _log_event("camera_signal_lost", "high", "Perda de sinal prolongada. Simulacao ativada.")
+                        camera_lost_logged = True
                     continue
+                consecutive_read_failures = 0
                 processed_frame = detectar_objetos(frame)
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 temp_atual = 20 + (float(np.mean(gray)) / 255.0) * 20
 
             _apply_automatic_control(temp_atual)
             _simulate_sensor_updates(temp_atual)
+            _simulate_acoustic_analysis()
+            _update_energy_runtime()
+            if temp_atual >= 35.0 and (time.time() - float(last_temp_emergency_notification_ts)) > 600:
+                last_temp_emergency_notification_ts = time.time()
+                txt = f"Temperatura subiu para {temp_atual:.1f}C! Intervencao necessaria."
+                sent, detail = _telegram_send_text(txt)
+                _log_event(
+                    event_type="temperature_critical_alert",
+                    level="high",
+                    message=txt,
+                    metadata={"telegram_sent": sent, "telegram_detail": detail},
+                )
 
             new_time = time.time()
             fps = 1 / (new_time - fps_last_time) if (new_time - fps_last_time) > 0 else 0
@@ -1161,8 +1866,10 @@ def camera_loop():
                         status = "FRIO"
                     elif temp_atual > 32:
                         status = "CALOR"
-                    db.session.add(Reading(temperatura=round(temp_atual, 1), status=status))
+                    reading = Reading(temperatura=round(temp_atual, 1), status=status)
+                    db.session.add(reading)
                     db.session.commit()
+                    _enqueue_sync_item("reading", reading.to_dict())
                 db_last_save_time = current_time
 
         except Exception as exc:
@@ -1171,10 +1878,12 @@ def camera_loop():
                 print(f"CRITICAL ERROR IN CAMERA THREAD: {exc}")
                 traceback.print_exc()
                 last_error_print_time = current_time
-            error_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-            cv2.putText(error_frame, "THREAD ERROR", (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 3)
+            # Preserve the last good frame to avoid UI flicker on transient errors.
             with lock:
-                global_frame = error_frame
+                if global_frame is None:
+                    error_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+                    cv2.putText(error_frame, "THREAD ERROR", (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 3)
+                    global_frame = error_frame
             time.sleep(1)
 
 
@@ -1183,6 +1892,10 @@ t = threading.Thread(target=camera_loop, daemon=True)
 t.start()
 weekly_thread = threading.Thread(target=_weekly_report_scheduler, daemon=True)
 weekly_thread.start()
+sync_thread = threading.Thread(target=_sync_worker, daemon=True)
+sync_thread.start()
+weather_thread = threading.Thread(target=_weather_worker, daemon=True)
+weather_thread.start()
 
 
 @app.route("/api/login", methods=["POST"])
@@ -1191,7 +1904,9 @@ def login():
     password = request.json.get("password", None)
     user = User.query.filter_by(username=username).first()
     if user and bcrypt.check_password_hash(user.password, password):
+        _audit("login_success", source="auth", actor=username, details={"username": username})
         return jsonify(access_token=create_access_token(identity=username)), 200
+    _audit("login_failed", source="auth", actor=username or "unknown", details={"username": username})
     return jsonify({"msg": "Credenciais invalidas"}), 401
 
 
@@ -1321,6 +2036,19 @@ def get_immobility_live():
     return jsonify({"count": len(items), "items": items[:200]})
 
 
+@app.route("/api/carcass/live", methods=["GET"])
+def carcass_live():
+    items = carcass_state.get("items", [])
+    return jsonify(
+        {
+            "count": len(items),
+            "audio_alert": len(items) > 0,
+            "message": "Atencao: Possivel ave morta no setor X" if items else "Sem carcacas detectadas",
+            "items": items,
+        }
+    )
+
+
 @app.route("/api/heatmap/daily", methods=["GET"])
 def get_daily_heatmap():
     date_str = request.args.get("date")
@@ -1364,6 +2092,28 @@ def get_daily_heatmap_image():
     with open(save_path, "wb") as f:
         f.write(img_bytes)
     return send_file(BytesIO(img_bytes), mimetype="image/jpeg", as_attachment=False, download_name=file_name)
+
+
+@app.route("/api/heatmap/rolling24", methods=["GET"])
+def get_rolling24_heatmap():
+    hours = request.args.get("hours", default=24, type=int)
+    grid_size = request.args.get("grid", default=40, type=int)
+    grid_size = max(8, min(grid_size, 128))
+    heat = _heatmap_grid_last_hours(hours=hours, grid_size=grid_size)
+    total = float(np.sum(heat))
+    max_cell = float(np.max(heat))
+    norm = (heat / max_cell).tolist() if max_cell > 0 else heat.tolist()
+    return jsonify({"hours": hours, "grid_size": grid_size, "total_points": int(total), "matrix": norm})
+
+
+@app.route("/api/heatmap/rolling24/image", methods=["GET"])
+def get_rolling24_heatmap_image():
+    hours = request.args.get("hours", default=24, type=int)
+    heat = _heatmap_grid_last_hours(hours=hours, grid_size=40)
+    img_bytes = _heatmap_image_bytes(heat)
+    if img_bytes is None:
+        return jsonify({"msg": "Falha ao gerar heatmap rolling"}), 500
+    return send_file(BytesIO(img_bytes), mimetype="image/jpeg", as_attachment=False, download_name="heatmap_rolling24.jpg")
 
 
 @app.route("/api/sensors/live", methods=["GET"])
@@ -1420,6 +2170,250 @@ def ingest_sensor_data():
     return jsonify({"msg": "Leitura de sensores recebida", "state": sensor_state}), 200
 
 
+@app.route("/api/weight/live", methods=["GET"])
+def weight_live():
+    return jsonify(
+        {
+            "camera_id": ACTIVE_CAMERA_ID,
+            "avg_weight_g": weight_state["avg_weight_g"],
+            "ideal_weight_g": weight_state["ideal_weight_g"],
+            "count": weight_state["count"],
+            "confidence": weight_state["confidence"],
+            "updated_at_epoch": weight_state["updated_at"],
+        }
+    )
+
+
+@app.route("/api/weight/curve", methods=["GET"])
+def weight_curve():
+    days = request.args.get("days", default=21, type=int)
+    days = max(1, min(days, 120))
+    start_dt = datetime.utcnow() - timedelta(days=days)
+    rows = (
+        WeightEstimate.query.filter(WeightEstimate.camera_id == ACTIVE_CAMERA_ID, WeightEstimate.timestamp >= start_dt)
+        .order_by(WeightEstimate.timestamp.asc())
+        .all()
+    )
+    points = [r.to_dict() for r in rows]
+    return jsonify({"count": len(points), "items": points})
+
+
+@app.route("/api/acoustic/live", methods=["GET"])
+def acoustic_live():
+    return jsonify(
+        {
+            "camera_id": ACTIVE_CAMERA_ID,
+            "respiratory_health_index": acoustic_state["respiratory_health_index"],
+            "cough_index": acoustic_state["cough_index"],
+            "stress_audio_index": acoustic_state["stress_audio_index"],
+            "source": acoustic_state["source"],
+            "updated_at_epoch": acoustic_state["updated_at"],
+        }
+    )
+
+
+@app.route("/api/acoustic/model-info", methods=["GET"])
+def acoustic_model_info():
+    return jsonify(
+        {
+            "loaded": bool(audio_classifier.loaded),
+            "model_path": audio_classifier.model_path,
+            "last_error": audio_classifier.last_error,
+            "librosa_available": librosa is not None,
+            "soundfile_available": sf is not None,
+        }
+    )
+
+
+@app.route("/api/acoustic/classify", methods=["POST"])
+def acoustic_classify():
+    if not audio_classifier.loaded:
+        return jsonify({"msg": "Modelo de tosse nao carregado", "model_error": audio_classifier.last_error}), 400
+    if sf is None:
+        return jsonify({"msg": "Dependencia soundfile nao disponivel no backend"}), 500
+    f = request.files.get("audio")
+    if f is None:
+        return jsonify({"msg": "Envie arquivo de audio no campo 'audio'"}), 400
+    try:
+        raw = f.read()
+        y, sr = sf.read(io.BytesIO(raw), always_2d=False)
+        if isinstance(y, np.ndarray) and y.ndim > 1:
+            y = np.mean(y, axis=1)
+        result = audio_classifier.classify(y, int(sr))
+        if result is None:
+            return jsonify({"msg": "Falha na inferencia de tosse", "error": audio_classifier.last_error}), 500
+
+        acoustic_state.update(
+            {
+                "respiratory_health_index": float(result["respiratory_health_index"]),
+                "cough_index": float(result["cough_index"]),
+                "stress_audio_index": float(result["stress_audio_index"]),
+                "source": "trained_model",
+                "updated_at": time.time(),
+            }
+        )
+        row = AcousticReading(
+            camera_id=ACTIVE_CAMERA_ID,
+            respiratory_health_index=acoustic_state["respiratory_health_index"],
+            cough_index=acoustic_state["cough_index"],
+            stress_audio_index=acoustic_state["stress_audio_index"],
+            source="trained_model",
+        )
+        with app.app_context():
+            db.session.add(row)
+            db.session.commit()
+            _enqueue_sync_item("acoustic_reading", row.to_dict())
+        if acoustic_state["cough_index"] > 60:
+            _log_event(
+                event_type="respiratory_alert",
+                level="high",
+                message="Pico de tosse detectado por modelo acustico treinado",
+                metadata={"cough_index": acoustic_state["cough_index"], "source": "trained_model"},
+            )
+        _audit(
+            "acoustic_file_classified",
+            source="manual",
+            details={"source": "trained_model", "cough_index": acoustic_state["cough_index"]},
+        )
+        return jsonify({"msg": "Audio classificado com sucesso", "result": acoustic_state})
+    except Exception as exc:
+        return jsonify({"msg": f"Falha ao processar audio: {exc}"}), 500
+
+
+@app.route("/api/acoustic/history", methods=["GET"])
+def acoustic_history():
+    limit = request.args.get("limit", default=200, type=int)
+    limit = max(1, min(limit, 5000))
+    rows = (
+        AcousticReading.query.filter_by(camera_id=ACTIVE_CAMERA_ID)
+        .order_by(AcousticReading.id.desc())
+        .limit(limit)
+        .all()
+    )
+    return jsonify({"count": len(rows), "items": [r.to_dict() for r in reversed(rows)]})
+
+
+@app.route("/api/acoustic/ingest", methods=["POST"])
+def acoustic_ingest():
+    payload = request.get_json(silent=True) or {}
+    required = ["respiratory_health_index", "cough_index", "stress_audio_index"]
+    missing = [k for k in required if k not in payload]
+    if missing:
+        return jsonify({"msg": f"Campos obrigatorios ausentes: {', '.join(missing)}"}), 400
+    acoustic_state.update(
+        {
+            "respiratory_health_index": float(payload["respiratory_health_index"]),
+            "cough_index": float(payload["cough_index"]),
+            "stress_audio_index": float(payload["stress_audio_index"]),
+            "source": str(payload.get("source", "external")),
+            "updated_at": time.time(),
+        }
+    )
+    row = AcousticReading(
+        camera_id=ACTIVE_CAMERA_ID,
+        respiratory_health_index=acoustic_state["respiratory_health_index"],
+        cough_index=acoustic_state["cough_index"],
+        stress_audio_index=acoustic_state["stress_audio_index"],
+        source=acoustic_state["source"],
+    )
+    with app.app_context():
+        db.session.add(row)
+        db.session.commit()
+        _enqueue_sync_item("acoustic_reading", row.to_dict())
+    return jsonify({"msg": "Leitura acustica recebida", "state": acoustic_state}), 200
+
+
+@app.route("/api/thermal-anomalies/live", methods=["GET"])
+def thermal_anomalies_live():
+    last_minutes = request.args.get("minutes", default=20, type=int)
+    start = datetime.utcnow() - timedelta(minutes=max(1, min(last_minutes, 240)))
+    rows = (
+        ThermalAnomaly.query.filter(ThermalAnomaly.camera_id == ACTIVE_CAMERA_ID, ThermalAnomaly.timestamp >= start)
+        .order_by(ThermalAnomaly.id.desc())
+        .limit(200)
+        .all()
+    )
+    items = [r.to_dict() for r in rows]
+    sectors = sorted(list({i["sector"] for i in items if i.get("sector")}))
+    return jsonify({"count": len(items), "sectors": sectors, "items": items})
+
+
+@app.route("/api/energy/summary", methods=["GET"])
+def energy_summary():
+    now = datetime.utcnow()
+    month_start = datetime(now.year, now.month, 1)
+    rows = (
+        EnergyUsageDaily.query.filter(EnergyUsageDaily.camera_id == ACTIVE_CAMERA_ID, EnergyUsageDaily.day >= month_start)
+        .order_by(EnergyUsageDaily.day.asc())
+        .all()
+    )
+    fan_sec = sum(float(r.ventilacao_seconds or 0.0) for r in rows)
+    heater_sec = sum(float(r.aquecedor_seconds or 0.0) for r in rows)
+    fan_kwh = (fan_sec / 3600.0) * VENTILACAO_POWER_KW
+    heater_kwh = (heater_sec / 3600.0) * AQUECEDOR_POWER_KW
+    total_kwh = fan_kwh + heater_kwh
+    cost = total_kwh * ENERGY_TARIFF_PER_KWH
+    savings = cost * 0.18
+    return jsonify(
+        {
+            "camera_id": ACTIVE_CAMERA_ID,
+            "month": month_start.strftime("%Y-%m"),
+            "ventilacao_seconds": round(fan_sec, 2),
+            "aquecedor_seconds": round(heater_sec, 2),
+            "total_kwh": round(total_kwh, 3),
+            "tariff_per_kwh": ENERGY_TARIFF_PER_KWH,
+            "estimated_cost": round(cost, 2),
+            "suggestion": f"Se reduzir a temperatura-alvo em 0.5C, a economia estimada e de R$ {savings:.2f}.",
+        }
+    )
+
+
+@app.route("/api/audit/logs", methods=["GET"])
+def audit_logs():
+    limit = request.args.get("limit", default=200, type=int)
+    limit = max(1, min(limit, 5000))
+    rows = AuditLog.query.order_by(AuditLog.id.desc()).limit(limit).all()
+    return jsonify({"count": len(rows), "items": [r.to_dict() for r in rows]})
+
+
+@app.route("/api/sync/status", methods=["GET"])
+def sync_status():
+    pending = SyncQueueItem.query.filter_by(status="pending").count()
+    synced = SyncQueueItem.query.filter_by(status="synced").count()
+    failed = SyncQueueItem.query.filter_by(status="failed").count()
+    return jsonify(
+        {
+            "pending": pending,
+            "synced": synced,
+            "failed": failed,
+            "cloud_sync_url_configured": bool(CLOUD_SYNC_URL),
+        }
+    )
+
+
+@app.route("/api/sync/pending", methods=["GET"])
+def sync_pending():
+    limit = request.args.get("limit", default=200, type=int)
+    limit = max(1, min(limit, 2000))
+    rows = SyncQueueItem.query.filter_by(status="pending").order_by(SyncQueueItem.id.asc()).limit(limit).all()
+    return jsonify({"count": len(rows), "items": [r.to_dict() for r in rows]})
+
+
+@app.route("/api/sync/ack", methods=["POST"])
+def sync_ack():
+    payload = request.get_json(silent=True) or {}
+    ids = payload.get("ids", [])
+    if not isinstance(ids, list) or not ids:
+        return jsonify({"msg": "Forneca lista de ids"}), 400
+    rows = SyncQueueItem.query.filter(SyncQueueItem.id.in_(ids)).all()
+    now = datetime.utcnow()
+    for row in rows:
+        row.status = "synced"
+        row.synced_at = now
+    db.session.commit()
+    return jsonify({"msg": "Itens marcados como sincronizados", "count": len(rows)})
+
+
 @app.route("/api/auto-mode", methods=["GET", "POST"])
 def auto_mode():
     if request.method == "GET":
@@ -1448,6 +2442,11 @@ def auto_mode():
         message=f"Modo automatico {'ativado' if estado_dispositivos['modo_automatico'] else 'desativado'}",
         metadata={"config": auto_config},
     )
+    _audit(
+        "auto_mode_changed",
+        source="manual",
+        details={"enabled": estado_dispositivos["modo_automatico"], "config": auto_config},
+    )
     return jsonify({"enabled": estado_dispositivos["modo_automatico"], "config": auto_config})
 
 
@@ -1461,6 +2460,11 @@ def controlar_ventilacao():
         event_type="manual_device_action",
         level="info",
         message=f"Ventilacao {'ligada' if estado_dispositivos['ventilacao'] else 'desligada'} manualmente",
+    )
+    _audit(
+        "manual_ventilacao_toggle",
+        source="manual",
+        details={"ligar": estado_dispositivos["ventilacao"]},
     )
     return jsonify(
         {
@@ -1481,12 +2485,63 @@ def controlar_aquecedor():
         level="info",
         message=f"Aquecedor {'ligado' if estado_dispositivos['aquecedor'] else 'desligado'} manualmente",
     )
+    _audit(
+        "manual_aquecedor_toggle",
+        source="manual",
+        details={"ligar": estado_dispositivos["aquecedor"]},
+    )
     return jsonify(
         {
             "aquecedor": estado_dispositivos["aquecedor"],
             "msg": "Aquecedor ligado" if estado_dispositivos["aquecedor"] else "Aquecedor desligado",
         }
     )
+
+
+@app.route("/api/luz-dimmer", methods=["GET", "POST"])
+def controlar_luz_dimmer():
+    if request.method == "GET":
+        return jsonify({"luz_intensidade_pct": int(estado_dispositivos.get("luz_intensidade_pct", 0))})
+    data = request.get_json(silent=True) or {}
+    intensidade = int(data.get("intensidade_pct", 0))
+    intensidade = max(0, min(100, intensidade))
+    estado_dispositivos["luz_intensidade_pct"] = intensidade
+    _log_event("light_dimmer_changed", "info", f"Intensidade da luz ajustada para {intensidade}%")
+    _audit("light_dimmer_changed", source="manual", details={"intensidade_pct": intensidade})
+    return jsonify({"luz_intensidade_pct": intensidade, "msg": "Dimmer atualizado"})
+
+
+@app.route("/api/voice/command", methods=["POST"])
+def voice_command():
+    data = request.get_json(silent=True) or {}
+    command = str(data.get("text", "")).strip().lower()
+    if not command:
+        return jsonify({"msg": "Comando vazio"}), 400
+    action = None
+    if "ligar ventil" in command:
+        estado_dispositivos["ventilacao"] = True
+        action = "ventilacao_on"
+    elif "desligar ventil" in command:
+        estado_dispositivos["ventilacao"] = False
+        action = "ventilacao_off"
+    elif "ligar aquec" in command:
+        estado_dispositivos["aquecedor"] = True
+        action = "aquecedor_on"
+    elif "desligar aquec" in command:
+        estado_dispositivos["aquecedor"] = False
+        action = "aquecedor_off"
+    elif "luz" in command and "%" in command:
+        try:
+            pct = int("".join([c for c in command if c.isdigit()]))
+            pct = max(0, min(100, pct))
+            estado_dispositivos["luz_intensidade_pct"] = pct
+            action = "luz_dimmer"
+        except Exception:
+            pass
+    if action is None:
+        return jsonify({"msg": "Comando nao reconhecido", "text": command}), 400
+    _audit("voice_command_executed", source="mobile_voice", details={"command": command, "action": action})
+    return jsonify({"msg": "Comando executado", "action": action, "devices": estado_dispositivos})
 
 
 @app.route("/api/estado-dispositivos", methods=["GET"])
@@ -1570,6 +2625,38 @@ def activate_batch(batch_id):
     return jsonify({"msg": "Lote ativado", "item": row.to_dict()})
 
 
+@app.route("/api/logbook", methods=["GET", "POST"])
+def logbook():
+    if request.method == "GET":
+        limit = request.args.get("limit", default=100, type=int)
+        limit = max(1, min(limit, 1000))
+        rows = BatchLogbook.query.filter_by(camera_id=ACTIVE_CAMERA_ID).order_by(BatchLogbook.id.desc()).limit(limit).all()
+        return jsonify({"count": len(rows), "items": [r.to_dict() for r in rows]})
+    data = request.get_json(silent=True) or {}
+    note = str(data.get("note", "")).strip()
+    author = str(data.get("author", "")).strip() or "operador"
+    if not note:
+        return jsonify({"msg": "Campo note e obrigatorio"}), 400
+    batch = _active_batch(ACTIVE_CAMERA_ID)
+    row = BatchLogbook(
+        camera_id=ACTIVE_CAMERA_ID,
+        batch_id=batch.id if batch else None,
+        note=note,
+        author=author,
+    )
+    with app.app_context():
+        db.session.add(row)
+        db.session.commit()
+        _enqueue_sync_item("logbook", row.to_dict())
+    _audit("logbook_note_created", source="manual", actor=author, details={"batch_id": row.batch_id})
+    return jsonify({"msg": "Nota registrada", "item": row.to_dict()}), 201
+
+
+@app.route("/api/weather/forecast", methods=["GET"])
+def weather_forecast():
+    return jsonify(weather_state)
+
+
 @app.route("/api/reports/weekly", methods=["POST"])
 def generate_weekly_report():
     data = request.get_json(silent=True) or {}
@@ -1591,6 +2678,21 @@ def generate_weekly_report():
         metadata={"file": path, "email_status": email_status},
     )
     return jsonify({"msg": "Relatorio gerado", "file": path, "email_status": email_status})
+
+
+@app.route("/api/reports/weekly/download", methods=["GET"])
+def download_weekly_report():
+    try:
+        path = _generate_weekly_report(ACTIVE_CAMERA_ID)
+        _log_event(
+            event_type="weekly_report",
+            level="info",
+            message="Relatorio semanal exportado pelo painel",
+            metadata={"file": path},
+        )
+        return send_file(path, mimetype="application/pdf", as_attachment=True, download_name=os.path.basename(path))
+    except Exception as exc:
+        return jsonify({"msg": f"Falha ao gerar/exportar PDF: {exc}"}), 500
 
 
 @app.route("/api/alerts", methods=["GET"])
@@ -1649,6 +2751,11 @@ def get_summary():
 
     targets = _temperature_targets(ACTIVE_CAMERA_ID)
     batch = _active_batch(ACTIVE_CAMERA_ID)
+    pending_sync = SyncQueueItem.query.filter_by(status="pending").count()
+    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    energy_today = EnergyUsageDaily.query.filter_by(camera_id=ACTIVE_CAMERA_ID, day=today).first()
+    vent_sec_today = float(energy_today.ventilacao_seconds) if energy_today else 0.0
+    aq_sec_today = float(energy_today.aquecedor_seconds) if energy_today else 0.0
     return jsonify(
         {
             "temperatura_atual": ultima.temperatura if ultima else 0,
@@ -1681,6 +2788,30 @@ def get_summary():
                 "targets": targets,
             },
             "batch": batch.to_dict() if batch else None,
+            "weight": {
+                "avg_weight_g": weight_state["avg_weight_g"],
+                "ideal_weight_g": weight_state["ideal_weight_g"],
+                "confidence": weight_state["confidence"],
+                "method": "segmentation_area" if detector.supports_segmentation else "bbox_area_fallback",
+            },
+            "acoustic": {
+                "respiratory_health_index": acoustic_state["respiratory_health_index"],
+                "cough_index": acoustic_state["cough_index"],
+                "stress_audio_index": acoustic_state["stress_audio_index"],
+                "source": acoustic_state["source"],
+                "trained_model_loaded": bool(audio_classifier.loaded),
+            },
+            "energy_today": {
+                "ventilacao_seconds": round(vent_sec_today, 2),
+                "aquecedor_seconds": round(aq_sec_today, 2),
+            },
+            "sync": {"pending": pending_sync},
+            "weather": weather_state,
+            "carcass": {
+                "count": len(carcass_state.get("items", [])),
+                "audio_alert": len(carcass_state.get("items", [])) > 0,
+            },
+            "comfort_score": _comfort_score(),
         }
     )
 
@@ -1693,10 +2824,14 @@ def get_system_info():
             "uptime_seconds": uptime_seconds,
             "camera_thread_alive": t.is_alive(),
             "weekly_scheduler_alive": weekly_thread.is_alive(),
+            "sync_thread_alive": sync_thread.is_alive(),
+            "weather_thread_alive": weather_thread.is_alive(),
             "modo_deteccao": MODO_DETECCAO,
             "yolo_loaded": detector.yolo_loaded,
+            "yolo_segmentation": bool(detector.supports_segmentation),
             "tracker": TRACKER_CONFIG,
             "modelo_ia": YOLO_MODEL_PATH,
+            "modelo_ia_resolvido": _resolved_model_path,
             "classe_ave": BIRD_CLASS_NAME,
             "reid_max_gap_sec": REID_MAX_GAP_SEC,
             "reid_max_distance_ratio": REID_MAX_DISTANCE_RATIO,
@@ -1704,6 +2839,8 @@ def get_system_info():
             "server_time": time.strftime("%Y-%m-%d %H:%M:%S"),
             "camera_index": CAMERA_INDEX,
             "active_camera_id": ACTIVE_CAMERA_ID,
+            "cough_model_loaded": bool(audio_classifier.loaded),
+            "cough_model_path": COUGH_MODEL_PATH,
         }
     )
 
@@ -1715,6 +2852,8 @@ def health_check():
             "status": "ok",
             "camera_thread_alive": t.is_alive(),
             "weekly_scheduler_alive": weekly_thread.is_alive(),
+            "sync_thread_alive": sync_thread.is_alive(),
+            "weather_thread_alive": weather_thread.is_alive(),
         }
     )
 

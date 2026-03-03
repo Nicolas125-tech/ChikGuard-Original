@@ -83,7 +83,13 @@ export default function App() {
     localStorage.setItem(STORAGE.prefs, JSON.stringify(next));
   }, []);
 
+  const tvMode = window.location.pathname === '/tv';
+
   if (booting) return <OpeningScreen />;
+
+  if (tvMode) {
+    return <TVScreen serverIP={serverIP} />;
+  }
 
   if (token) {
     return (
@@ -116,6 +122,63 @@ export default function App() {
   }
 
   return <LandingPage onLoginClick={() => setShowLogin(true)} />;
+}
+
+function TVScreen({ serverIP }) {
+  const [summary, setSummary] = useState(null);
+  const [alerts, setAlerts] = useState([]);
+  const [weather, setWeather] = useState(null);
+  const baseUrl = getBaseUrl(serverIP);
+  const videoUrl = `${baseUrl}/api/video`;
+
+  const load = useCallback(async () => {
+    const [s, a, w] = await Promise.all([
+      fetch(`${baseUrl}/api/summary`),
+      fetch(`${baseUrl}/api/alerts`),
+      fetch(`${baseUrl}/api/weather/forecast`),
+    ]);
+    if (s.ok) setSummary(await s.json());
+    if (a.ok) setAlerts(await a.json());
+    if (w.ok) setWeather(await w.json());
+  }, [baseUrl]);
+
+  useEffect(() => {
+    load();
+    const timer = setInterval(load, 4000);
+    return () => clearInterval(timer);
+  }, [load]);
+
+  return (
+    <div className="min-h-screen bg-black text-white p-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-2 bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden">
+          <div className="p-4 border-b border-slate-800 text-2xl font-bold">ChikGuard TV</div>
+          <img src={videoUrl} alt="Camera TV" className="w-full h-[70vh] object-contain bg-black" />
+        </div>
+        <div className="space-y-4">
+          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4">
+            <div className="text-xs uppercase text-slate-400">Temperatura</div>
+            <div className="text-6xl font-black">{summary?.temperatura_atual ?? '--'}C</div>
+            <div className="text-2xl mt-1">{summary?.status_atual || '--'}</div>
+            <div className="text-sm text-slate-400 mt-2">Conforto: {summary?.comfort_score ?? '--'}/100</div>
+          </div>
+          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4">
+            <div className="text-xs uppercase text-slate-400">Previsao</div>
+            <div className="text-lg">{weather?.message || 'Sem previsao'}</div>
+          </div>
+          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 max-h-72 overflow-auto">
+            <div className="text-xs uppercase text-slate-400 mb-2">Alertas</div>
+            {(alerts || []).slice(0, 8).map((al) => (
+              <div key={al.id} className="py-2 border-b border-slate-800">
+                <div className="font-semibold text-lg">{al.tipo}</div>
+                <div className="text-sm text-slate-300">{al.mensagem}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function OpeningScreen() {
@@ -238,6 +301,7 @@ function Dashboard({ token, serverIP, prefs, onSavePrefs, onSaveServer, onLogout
     { id: 'birds', label: 'Aves Vistas', icon: Users },
     { id: 'devices', label: 'Dispositivos', icon: SlidersHorizontal },
     { id: 'smart', label: 'IA + IoT', icon: Activity },
+    { id: 'management', label: 'Gestao', icon: Database },
     { id: 'alerts', label: 'Alertas', icon: Bell },
     { id: 'history', label: 'Historico', icon: History },
     { id: 'system', label: 'Sistema', icon: Cpu },
@@ -263,6 +327,7 @@ function Dashboard({ token, serverIP, prefs, onSavePrefs, onSaveServer, onLogout
         {tab === 'birds' && <BirdsPanel token={token} serverIP={serverIP} prefs={prefs} />}
         {tab === 'devices' && <DevicesPanel token={token} serverIP={serverIP} />}
         {tab === 'smart' && <SmartOpsPanel serverIP={serverIP} prefs={prefs} />}
+        {tab === 'management' && <ManagementPanel serverIP={serverIP} prefs={prefs} />}
         {tab === 'alerts' && <AlertsPanel serverIP={serverIP} prefs={prefs} />}
         {tab === 'history' && <HistoryPanel serverIP={serverIP} prefs={prefs} />}
         {tab === 'system' && <SystemPanel serverIP={serverIP} prefs={prefs} />}
@@ -279,9 +344,13 @@ function OverviewPanel({ token, serverIP, prefs }) {
   const [historico, setHistorico] = useState([]);
   const [dispositivos, setDispositivos] = useState({ ventilacao: false, aquecedor: false });
   const [contagem, setContagem] = useState(0);
+  const [showHeatmap24, setShowHeatmap24] = useState(false);
+  const [carcass, setCarcass] = useState({ count: 0, audio_alert: false, items: [] });
+  const [summary, setSummary] = useState(null);
 
   const baseUrl = getBaseUrl(serverIP);
   const videoUrl = `${baseUrl}/api/video`;
+  const heatmap24Url = `${baseUrl}/api/heatmap/rolling24/image?hours=24&t=${Date.now()}`;
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -325,14 +394,50 @@ function OverviewPanel({ token, serverIP, prefs }) {
     }
   }, [baseUrl, token]);
 
+  const fetchCarcassAndSummary = useCallback(async () => {
+    try {
+      const [c, s] = await Promise.all([
+        fetch(`${baseUrl}/api/carcass/live`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${baseUrl}/api/summary`, { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      if (c.ok) setCarcass(await c.json());
+      if (s.ok) setSummary(await s.json());
+    } catch {
+      setErro(true);
+    }
+  }, [baseUrl, token]);
+
   useEffect(() => {
-    fetchStatus(); fetchHistory(); fetchDevices(); fetchCount();
+    fetchStatus(); fetchHistory(); fetchDevices(); fetchCount(); fetchCarcassAndSummary();
     const a = setInterval(fetchStatus, prefs.statusMs);
     const b = setInterval(fetchHistory, prefs.historyMs);
     const c = setInterval(fetchDevices, prefs.devicesMs);
     const d = setInterval(fetchCount, prefs.countMs);
-    return () => { clearInterval(a); clearInterval(b); clearInterval(c); clearInterval(d); };
-  }, [fetchStatus, fetchHistory, fetchDevices, fetchCount, prefs]);
+    const e = setInterval(fetchCarcassAndSummary, prefs.statusMs);
+    return () => { clearInterval(a); clearInterval(b); clearInterval(c); clearInterval(d); clearInterval(e); };
+  }, [fetchStatus, fetchHistory, fetchDevices, fetchCount, fetchCarcassAndSummary, prefs]);
+
+  useEffect(() => {
+    if (!carcass?.audio_alert) return;
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      oscillator.type = 'square';
+      oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+      gainNode.gain.setValueAtTime(0.001, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + 0.02);
+      oscillator.start();
+      setTimeout(() => {
+        oscillator.stop();
+        ctx.close();
+      }, 280);
+    } catch {}
+  }, [carcass?.audio_alert, carcass?.count]);
 
   const toggleDevice = async (tipo, ligar) => {
     await fetch(`${baseUrl}/api/${tipo}`, {
@@ -380,18 +485,33 @@ function OverviewPanel({ token, serverIP, prefs }) {
             <button onClick={() => toggleDevice('aquecedor', !dispositivos.aquecedor)} className="bg-slate-950 border border-slate-800 p-4 rounded-xl flex flex-col items-center gap-3"><Zap size={22} className="text-orange-400" /><span className="text-sm">Aquecedor</span></button>
           </div>
         </div>
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+          <div className="text-xs uppercase tracking-wider text-slate-400 mb-1">Score de Conforto</div>
+          <div className="text-5xl font-black">{summary?.comfort_score ?? '--'}</div>
+          <div className="w-full h-3 bg-slate-800 rounded-full mt-3 overflow-hidden">
+            <div
+              className={`h-full ${Number(summary?.comfort_score || 0) >= 80 ? 'bg-emerald-500' : Number(summary?.comfort_score || 0) >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`}
+              style={{ width: `${Math.max(0, Math.min(100, Number(summary?.comfort_score || 0)))}%` }}
+            />
+          </div>
+        </div>
       </div>
 
       <div className="lg:col-span-2">
         <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden min-h-[400px] relative">
           <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950/50 absolute top-0 left-0 right-0 z-20">
             <h3 className="font-bold text-slate-200 flex items-center gap-2 text-sm"><Maximize size={16} className="text-slate-500" /> Transmissao da camera</h3>
+            <button onClick={() => setShowHeatmap24((v) => !v)} className="text-xs bg-slate-800 border border-slate-700 rounded px-2 py-1">
+              {showHeatmap24 ? 'Mostrar Video' : 'Heatmap 24h'}
+            </button>
           </div>
           <div className="relative flex-1 bg-black flex items-center justify-center h-[500px]">
             {erro ? (
               <div className="text-center flex flex-col items-center justify-center h-full w-full bg-slate-900/50"><WifiOff size={32} className="text-slate-500 mb-3" /><p className="text-slate-400">Sem video</p></div>
             ) : videoBlocked ? (
               <div className="text-center flex flex-col items-center justify-center h-full w-full bg-slate-900/90 p-8"><AlertTriangle size={48} className="text-yellow-500 mb-4" /><h2 className="text-xl font-bold text-white mb-2">Bloqueio do Tunnel</h2><a href={videoUrl} target="_blank" rel="noreferrer" className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-xl flex items-center gap-2"><ExternalLink size={18} /> Abrir stream</a></div>
+            ) : showHeatmap24 ? (
+              <img src={heatmap24Url} alt="Heatmap 24h" className="w-full h-full object-contain" />
             ) : (
               <img src={videoUrl} alt="Visao da Camera" className="w-full h-full object-contain" onError={() => { if (isTunnelHost(window.location.hostname) || isTunnelHost(serverIP)) setVideoBlocked(true); }} />
             )}
@@ -405,6 +525,7 @@ function OverviewPanel({ token, serverIP, prefs }) {
 function DevicesPanel({ token, serverIP }) {
   const [dispositivos, setDispositivos] = useState({ ventilacao: false, aquecedor: false });
   const [autoMode, setAutoMode] = useState({ enabled: false, effective_targets: null });
+  const [lightPct, setLightPct] = useState(0);
   const [loading, setLoading] = useState(true);
   const baseUrl = getBaseUrl(serverIP);
 
@@ -415,6 +536,11 @@ function DevicesPanel({ token, serverIP }) {
       setDispositivos(await r.json());
       const auto = await fetch(`${baseUrl}/api/auto-mode`, { headers: { Authorization: `Bearer ${token}` } });
       if (auto.ok) setAutoMode(await auto.json());
+      const l = await fetch(`${baseUrl}/api/luz-dimmer`, { headers: { Authorization: `Bearer ${token}` } });
+      if (l.ok) {
+        const j = await l.json();
+        setLightPct(Number(j.luz_intensidade_pct || 0));
+      }
     } finally {
       setLoading(false);
     }
@@ -442,6 +568,15 @@ function DevicesPanel({ token, serverIP }) {
     loadDevices();
   };
 
+  const setDimmer = async (value) => {
+    setLightPct(value);
+    await fetch(`${baseUrl}/api/luz-dimmer`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ intensidade_pct: Number(value) }),
+    });
+  };
+
   if (loading) {
     return <div className="text-slate-400">Carregando dispositivos...</div>;
   }
@@ -464,6 +599,11 @@ function DevicesPanel({ token, serverIP }) {
         <h3 className="font-bold text-lg">Aquecedor</h3>
         <p className="text-slate-400 text-sm mt-1">Estabilizacao termica automatizada.</p>
       </button>
+      <div className="rounded-2xl border p-6 text-left bg-slate-900 border-slate-800 md:col-span-2">
+        <div className="flex items-center justify-between mb-3"><span className="text-lg font-bold">Dimmer de Luz</span><span className="text-sm text-slate-400">{lightPct}%</span></div>
+        <input type="range" min="0" max="100" value={lightPct} onChange={(e) => setLightPct(Number(e.target.value))} onMouseUp={(e) => setDimmer(Number(e.currentTarget.value))} onTouchEnd={(e) => setDimmer(Number(e.currentTarget.value))} className="w-full" />
+        <p className="text-slate-400 text-sm mt-2">Simulador de amanhecer/anoitecer por intensidade gradual.</p>
+      </div>
     </div>
   );
 }
@@ -537,6 +677,9 @@ function HistoryPanel({ serverIP, prefs }) {
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+      <div className="p-3 border-b border-slate-800 flex justify-end">
+        <a href={`${baseUrl}/api/reports/weekly/download`} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-2 rounded-lg">Exportar PDF semanal</a>
+      </div>
       <div className="grid grid-cols-4 gap-2 px-4 py-3 text-xs uppercase tracking-wider text-slate-400 border-b border-slate-800">
         <span>Data</span><span>Hora</span><span>Status</span><span>Temp</span>
       </div>
@@ -640,17 +783,20 @@ function SmartOpsPanel({ serverIP, prefs }) {
   const [cameras, setCameras] = useState({ active_camera_id: '', items: [] });
   const [reportMsg, setReportMsg] = useState('');
   const [batchForm, setBatchForm] = useState({ name: '', start_date: '' });
+  const [logbook, setLogbook] = useState({ count: 0, items: [] });
+  const [logNote, setLogNote] = useState('');
 
   const heatmapUrl = `${baseUrl}/api/heatmap/daily/image`;
 
   const loadData = useCallback(async () => {
-    const [b, i, s, a, bt, c] = await Promise.all([
+    const [b, i, s, a, bt, c, lb] = await Promise.all([
       fetch(`${baseUrl}/api/behavior/live`),
       fetch(`${baseUrl}/api/immobility/live`),
       fetch(`${baseUrl}/api/sensors/live`),
       fetch(`${baseUrl}/api/auto-mode`),
       fetch(`${baseUrl}/api/batches`),
       fetch(`${baseUrl}/api/cameras`),
+      fetch(`${baseUrl}/api/logbook?limit=30`),
     ]);
     if (b.ok) setBehavior(await b.json());
     if (i.ok) setImmobility(await i.json());
@@ -658,6 +804,7 @@ function SmartOpsPanel({ serverIP, prefs }) {
     if (a.ok) setAutoMode(await a.json());
     if (bt.ok) setBatches(await bt.json());
     if (c.ok) setCameras(await c.json());
+    if (lb.ok) setLogbook(await lb.json());
   }, [baseUrl]);
 
   useEffect(() => {
@@ -690,6 +837,17 @@ function SmartOpsPanel({ serverIP, prefs }) {
     const r = await fetch(`${baseUrl}/api/reports/weekly`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
     const data = await r.json();
     setReportMsg(r.ok ? `Relatorio gerado: ${data.file}` : (data.msg || 'Falha ao gerar relatorio'));
+  };
+
+  const saveLogNote = async () => {
+    if (!logNote.trim()) return;
+    await fetch(`${baseUrl}/api/logbook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ note: logNote, author: 'tratador' }),
+    });
+    setLogNote('');
+    loadData();
   };
 
   return (
@@ -744,6 +902,188 @@ function SmartOpsPanel({ serverIP, prefs }) {
             <button onClick={generateWeeklyReport} className="bg-orange-600 hover:bg-orange-500 rounded-lg px-3 py-2 font-semibold">Gerar PDF semanal</button>
             {reportMsg && <div className="text-slate-300">{reportMsg}</div>}
           </div>
+        </div>
+      </div>
+
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+        <h3 className="font-bold mb-3">Diario do Lote (Logbook)</h3>
+        <div className="flex gap-2 mb-3">
+          <input value={logNote} onChange={(e) => setLogNote(e.target.value)} placeholder="Dia 12: Vacinacao realizada..." className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm" />
+          <button onClick={saveLogNote} className="bg-emerald-600 hover:bg-emerald-500 rounded-lg px-3 py-2 text-sm font-semibold">Salvar nota</button>
+        </div>
+        <div className="max-h-48 overflow-auto space-y-2">
+          {(logbook.items || []).map((item) => (
+            <div key={item.id} className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm">
+              {item.timestamp} | {item.author} | {item.note}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ManagementPanel({ serverIP, prefs }) {
+  const baseUrl = getBaseUrl(serverIP);
+  const [weightLive, setWeightLive] = useState(null);
+  const [weightCurve, setWeightCurve] = useState([]);
+  const [acoustic, setAcoustic] = useState(null);
+  const [acousticModel, setAcousticModel] = useState(null);
+  const [thermal, setThermal] = useState({ count: 0, sectors: [], items: [] });
+  const [energy, setEnergy] = useState(null);
+  const [audit, setAudit] = useState({ count: 0, items: [] });
+  const [sync, setSync] = useState(null);
+  const [audioFile, setAudioFile] = useState(null);
+  const [audioMsg, setAudioMsg] = useState('');
+  const [sensorHistory, setSensorHistory] = useState([]);
+  const [weather, setWeather] = useState(null);
+
+  const loadManagement = useCallback(async () => {
+    const [wLive, wCurve, ac, model, th, en, au, sy, sh, wf] = await Promise.all([
+      fetch(`${baseUrl}/api/weight/live`),
+      fetch(`${baseUrl}/api/weight/curve?days=30`),
+      fetch(`${baseUrl}/api/acoustic/live`),
+      fetch(`${baseUrl}/api/acoustic/model-info`),
+      fetch(`${baseUrl}/api/thermal-anomalies/live?minutes=60`),
+      fetch(`${baseUrl}/api/energy/summary`),
+      fetch(`${baseUrl}/api/audit/logs?limit=80`),
+      fetch(`${baseUrl}/api/sync/status`),
+      fetch(`${baseUrl}/api/sensors/history?limit=120`),
+      fetch(`${baseUrl}/api/weather/forecast`),
+    ]);
+    if (wLive.ok) setWeightLive(await wLive.json());
+    if (wCurve.ok) setWeightCurve((await wCurve.json()).items || []);
+    if (ac.ok) setAcoustic(await ac.json());
+    if (model.ok) setAcousticModel(await model.json());
+    if (th.ok) setThermal(await th.json());
+    if (en.ok) setEnergy(await en.json());
+    if (au.ok) setAudit(await au.json());
+    if (sy.ok) setSync(await sy.json());
+    if (sh.ok) setSensorHistory((await sh.json()).items || []);
+    if (wf.ok) setWeather(await wf.json());
+  }, [baseUrl]);
+
+  const classifyAudio = async () => {
+    if (!audioFile) {
+      setAudioMsg('Selecione um arquivo .wav');
+      return;
+    }
+    const form = new FormData();
+    form.append('audio', audioFile);
+    try {
+      const r = await fetch(`${baseUrl}/api/acoustic/classify`, { method: 'POST', body: form });
+      const data = await r.json();
+      if (!r.ok) {
+        setAudioMsg(data.msg || 'Falha na classificação');
+      } else {
+        setAudioMsg(`Classificado. Cough index: ${data.result.cough_index}`);
+        setAcoustic(data.result);
+      }
+    } catch {
+      setAudioMsg('Erro de rede ao classificar áudio');
+    }
+  };
+
+  useEffect(() => {
+    loadManagement();
+    const timer = setInterval(loadManagement, prefs.historyMs);
+    return () => clearInterval(timer);
+  }, [loadManagement, prefs.historyMs]);
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <SystemCard label="Peso medio estimado" value={weightLive ? `${weightLive.avg_weight_g} g` : '--'} />
+        <SystemCard label="Indice respiratorio" value={acoustic ? acoustic.respiratory_health_index : '--'} />
+        <SystemCard label="Custo energia (mes)" value={energy ? `R$ ${energy.estimated_cost}` : '--'} />
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+          <h3 className="font-bold mb-3">Curva de crescimento</h3>
+          <div className="h-64">
+            {weightCurve.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={weightCurve}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                  <XAxis dataKey="timestamp" hide />
+                  <YAxis stroke="#64748b" fontSize={10} />
+                  <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155' }} />
+                  <Line type="monotone" dataKey="avg_weight_g" name="Peso estimado (g)" stroke="#10b981" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="ideal_weight_g" name="Peso ideal (g)" stroke="#f59e0b" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : <div className="h-full flex items-center justify-center text-slate-500">Sem pontos suficientes ainda.</div>}
+          </div>
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+          <h3 className="font-bold mb-3">Saude respiratoria</h3>
+          <div className="space-y-2 text-sm">
+            <div className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2">Indice geral: {acoustic?.respiratory_health_index ?? '--'}</div>
+            <div className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2">Indice de tosse: {acoustic?.cough_index ?? '--'}</div>
+            <div className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2">Indice de estresse sonoro: {acoustic?.stress_audio_index ?? '--'}</div>
+            <div className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2">Modelo treinado: {acousticModel?.loaded ? 'carregado' : 'nao carregado'}</div>
+            <div className="bg-slate-950 border border-slate-800 rounded-lg p-3">
+              <input type="file" accept=".wav,audio/wav" onChange={(e) => setAudioFile(e.target.files?.[0] || null)} className="text-xs text-slate-300" />
+              <button onClick={classifyAudio} className="mt-2 bg-emerald-600 hover:bg-emerald-500 px-3 py-1 rounded text-xs font-semibold">Classificar tosse (modelo)</button>
+              {audioMsg && <p className="text-xs text-slate-300 mt-2">{audioMsg}</p>}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+          <h3 className="font-bold mb-3">Anomalias termicas</h3>
+          <p className="text-sm text-slate-400 mb-3">Detectadas: {thermal.count || 0} | Setores: {(thermal.sectors || []).join(', ') || '--'}</p>
+          <div className="max-h-56 overflow-auto space-y-2">
+            {(thermal.items || []).slice(0, 20).map((item) => (
+              <div key={item.id} className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm">
+                UID {item.bird_uid} | {item.kind} | {item.estimated_temp_c}C ({item.sector})
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+          <h3 className="font-bold mb-3">Financeiro e Sync</h3>
+          <div className="space-y-2 text-sm">
+            <div className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2">KWh estimado: {energy?.total_kwh ?? '--'}</div>
+            <div className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2">Custo estimado: {energy ? `R$ ${energy.estimated_cost}` : '--'}</div>
+            <div className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2">Sugestao: {energy?.suggestion || '--'}</div>
+            <div className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2">Sync pendente: {sync?.pending ?? '--'}</div>
+            <div className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2">Sync URL configurada: {sync?.cloud_sync_url_configured ? 'sim' : 'nao'}</div>
+            <div className={`border rounded-lg px-3 py-2 ${weather?.preheat_recommended ? 'bg-blue-500/20 border-blue-400/40' : 'bg-slate-950 border-slate-800'}`}>Previsao: {weather?.message || '--'}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+        <h3 className="font-bold mb-3">Nivel de Racao (historico)</h3>
+        <div className="h-52">
+          {sensorHistory.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={sensorHistory}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                <XAxis dataKey="timestamp" hide />
+                <YAxis stroke="#64748b" fontSize={10} domain={[0, 100]} />
+                <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155' }} />
+                <Line type="monotone" dataKey="feed_level_pct" stroke="#38bdf8" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : <div className="h-full flex items-center justify-center text-slate-500">Sem dados de racao.</div>}
+        </div>
+      </div>
+
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+        <h3 className="font-bold mb-3">Audit Trail</h3>
+        <div className="max-h-72 overflow-auto space-y-2">
+          {(audit.items || []).slice(0, 100).map((item) => (
+            <div key={item.id} className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm">
+              {item.timestamp} | {item.actor} | {item.action}
+            </div>
+          ))}
         </div>
       </div>
     </div>

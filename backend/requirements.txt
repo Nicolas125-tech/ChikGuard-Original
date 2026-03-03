@@ -9,3 +9,6 @@ numpy
 ultralytics
 requests
 reportlab
+librosa
+soundfile
+joblib
