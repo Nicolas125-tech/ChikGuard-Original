@@ -326,7 +326,7 @@ function Dashboard({ token, serverIP, prefs, onSavePrefs, onSaveServer, onLogout
         {tab === 'overview' && <OverviewPanel token={token} serverIP={serverIP} prefs={prefs} />}
         {tab === 'birds' && <BirdsPanel token={token} serverIP={serverIP} prefs={prefs} />}
         {tab === 'devices' && <DevicesPanel token={token} serverIP={serverIP} />}
-        {tab === 'smart' && <SmartOpsPanel serverIP={serverIP} prefs={prefs} />}
+        {tab === 'smart' && <SmartOpsPanel serverIP={serverIP} prefs={prefs} token={token} />}
         {tab === 'management' && <ManagementPanel serverIP={serverIP} prefs={prefs} />}
         {tab === 'alerts' && <AlertsPanel serverIP={serverIP} prefs={prefs} />}
         {tab === 'history' && <HistoryPanel serverIP={serverIP} prefs={prefs} />}
@@ -773,7 +773,7 @@ function BirdsPanel({ token, serverIP, prefs }) {
   );
 }
 
-function SmartOpsPanel({ serverIP, prefs }) {
+function SmartOpsPanel({ serverIP, prefs, token }) {
   const baseUrl = getBaseUrl(serverIP);
   const [behavior, setBehavior] = useState(null);
   const [immobility, setImmobility] = useState({ count: 0, items: [] });
@@ -816,7 +816,7 @@ function SmartOpsPanel({ serverIP, prefs }) {
   const toggleAuto = async () => {
     await fetch(`${baseUrl}/api/auto-mode`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ enabled: !autoMode?.enabled }),
     });
     loadData();

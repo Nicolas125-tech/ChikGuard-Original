@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WebView } from 'react-native-webview';
+import * as LocalAuthentication from 'expo-local-authentication';
 import { 
   Thermometer, Activity, AlertTriangle, CheckCircle, 
   Settings, Save, Zap, Wind, LayoutDashboard, History, LogOut, User, Key, Users, Bell, Cpu, Database
@@ -12,10 +13,35 @@ import {
 
 const appLogo = require('./assets/logo.png');
 
+const normalizeServerUrl = (value) => {
+  const raw = String(value || '').trim().replace(/\/$/, '');
+  if (!raw) return '';
+  const isCloudflareQuick = /trycloudflare\.com/i.test(raw);
+  const withScheme = /^https?:\/\//i.test(raw) ? raw : `${isCloudflareQuick ? 'https' : 'http'}://${raw}`;
+  try {
+    const u = new URL(withScheme);
+    const protocol = isCloudflareQuick ? 'https:' : u.protocol;
+    return `${protocol}//${u.host}`;
+  } catch {
+    return '';
+  }
+};
+
+const fetchWithTimeout = async (url, options = {}, timeoutMs = 9000) => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
 // --- COMPONENTES DE TELA ---
 
 // 1. TELA DE MONITORAMENTO (HOME)
 const MonitorScreen = ({ serverUrl, dados, loading, chickCount, dispositivos, controlarDispositivo, loadingAcao, enviarComandoVoz }) => {
+  const [videoError, setVideoError] = useState('');
   const getStatusColor = () => {
     if (!dados) return "#334155";
     if (dados.status === 'CALOR') return "#dc2626";
@@ -24,6 +50,7 @@ const MonitorScreen = ({ serverUrl, dados, loading, chickCount, dispositivos, co
   };
 
   const videoUrl = `${serverUrl}/api/video`;
+  const hasValidServer = !!serverUrl;
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -61,14 +88,31 @@ const MonitorScreen = ({ serverUrl, dados, loading, chickCount, dispositivos, co
       {/* Vídeo */}
       <Text style={styles.sectionTitle}>Transmissão da Câmera</Text>
       <View style={styles.videoContainer}>
-        <WebView 
-          source={{ uri: videoUrl }} 
-          style={{ flex: 1, backgroundColor: 'black' }}
-          scrollEnabled={true}
-          nestedScrollEnabled={true}
-        />
+        {!hasValidServer ? (
+          <View style={styles.tunnelBlockerContainer}>
+            <AlertTriangle size={32} color="#f59e0b" />
+            <Text style={styles.tunnelTitle}>Servidor nao configurado</Text>
+            <Text style={styles.tunnelText}>Defina um URL valido em Ajustes.</Text>
+          </View>
+        ) : (
+          <WebView 
+            source={{ uri: videoUrl }} 
+            style={{ flex: 1, backgroundColor: 'black' }}
+            scrollEnabled={true}
+            nestedScrollEnabled={true}
+            onError={(e) => {
+              const desc = e?.nativeEvent?.description || 'Falha ao carregar video';
+              setVideoError(desc);
+            }}
+          />
+        )}
         <View style={styles.liveBadge}><Text style={styles.liveText}>AO VIVO</Text></View>
       </View>
+      {!!videoError && (
+        <Text style={{ color: '#fca5a5', fontSize: 12, marginBottom: 12 }}>
+          Video indisponivel: {videoError}. Verifique se o tunnel ainda esta ativo.
+        </Text>
+      )}
 
       {/* Ações */}
       <Text style={styles.sectionTitle}>Controlo Ambiental</Text>
@@ -332,7 +376,7 @@ const SystemScreen = ({ serverUrl }) => {
 };
 
 // 2.3 TELA IA + IOT
-const SmartOpsScreen = ({ serverUrl }) => {
+const SmartOpsScreen = ({ serverUrl, token }) => {
   const [behavior, setBehavior] = useState(null);
   const [immobility, setImmobility] = useState({ count: 0, items: [] });
   const [sensors, setSensors] = useState(null);
@@ -382,7 +426,10 @@ const SmartOpsScreen = ({ serverUrl }) => {
     try {
       await fetch(`${serverUrl}/api/auto-mode`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ enabled: !autoMode.enabled })
       });
       loadSmartData();
@@ -696,21 +743,22 @@ export default function App() {
   const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
   const [loadingLogin, setLoadingLogin] = useState(false);
+  const normalizedServerUrl = normalizeServerUrl(serverUrl);
 
   useEffect(() => {
     // Carregar dados salvos
     AsyncStorage.multiGet(['cg_token', 'cg_server_url']).then(values => {
       if(values[0][1]) setToken(values[0][1]);
-      if(values[1][1]) setServerUrl(values[1][1]);
+      if(values[1][1]) setServerUrl(normalizeServerUrl(values[1][1]) || values[1][1]);
     });
   }, []);
 
   // Polling de dados (Só roda se estiver logado e na aba monitor)
   useEffect(() => {
-    if (token && serverUrl && activeTab === 'monitor') {
+    if (token && normalizedServerUrl && activeTab === 'monitor') {
       const fetchStatus = async () => {
         try {
-          const res = await fetch(`${serverUrl}/api/status`);
+          const res = await fetch(`${normalizedServerUrl}/api/status`);
           const json = await res.json();
           setDados(json);
         } catch (e) { console.log("Erro conexão polling"); }
@@ -718,7 +766,7 @@ export default function App() {
 
       const fetchChickCount = async () => {
         try {
-          const res = await fetch(`${serverUrl}/api/chick_count`);
+          const res = await fetch(`${normalizedServerUrl}/api/chick_count`);
           const json = await res.json();
           if (res.ok) setChickCount(json.count);
         } catch (e) { console.log("Erro conexão contagem"); }
@@ -726,7 +774,7 @@ export default function App() {
 
       const fetchDeviceStatus = async () => {
         try {
-          const res = await fetch(`${serverUrl}/api/estado-dispositivos`);
+          const res = await fetch(`${normalizedServerUrl}/api/estado-dispositivos`);
           const json = await res.json();
           if (res.ok) setDispositivos(json);
         } catch (e) { console.log("Erro conexão dispositivos"); }
@@ -745,32 +793,83 @@ export default function App() {
         clearInterval(intervalDevices);
       };
     }
-  }, [token, serverUrl, activeTab]);
+  }, [token, normalizedServerUrl, activeTab]);
 
   const handleLogin = async () => {
-    if(!serverUrl) return Alert.alert("Erro", "Configure o servidor (ícone engrenagem)");
+    if(!normalizedServerUrl) return Alert.alert("Erro", "Configure um URL valido do servidor (http/https).");
     setLoadingLogin(true);
     try {
-      const req = await fetch(`${serverUrl}/api/login`, {
+      const health = await fetchWithTimeout(`${normalizedServerUrl}/api/health`, { method: 'GET' }, 7000);
+      if (!health.ok) {
+        throw new Error("Servidor nao respondeu /api/health");
+      }
+      const req = await fetchWithTimeout(`${normalizedServerUrl}/api/login`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ username: user, password: pass })
-      });
+      }, 10000);
       const data = await req.json();
       if(req.ok) {
         await AsyncStorage.setItem('cg_token', data.access_token);
+        await AsyncStorage.setItem('cg_server_url', normalizedServerUrl);
+        setServerUrl(normalizedServerUrl);
         setToken(data.access_token);
       } else {
-        Alert.alert("Erro", "Login falhou");
+        Alert.alert("Erro", data?.msg || "Login falhou");
       }
-    } catch (e) { Alert.alert("Erro", "Falha de conexão com " + serverUrl); }
+    } catch (e) {
+      const msg = String(e?.message || '');
+      const hint = /abort|network|name_not_resolved|failed to fetch/i.test(msg)
+        ? "Verifique se o link Cloudflare ainda esta ativo e acessivel no navegador do celular."
+        : "Confirme o URL e tente novamente.";
+      Alert.alert("Erro de conexão", `${normalizedServerUrl}\n\n${hint}`);
+    }
     finally { setLoadingLogin(false); }
   };
 
+  const solicitarBiometria = async (reason) => {
+    try {
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      if (!hasHardware || !isEnrolled) {
+        Alert.alert("Segurança", "Biometria não disponível neste dispositivo.");
+        return false;
+      }
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: reason || 'Autentique para continuar',
+        fallbackLabel: 'Usar código do dispositivo',
+        disableDeviceFallback: false,
+        cancelLabel: 'Cancelar'
+      });
+      if (!result.success) {
+        Alert.alert("Acesso negado", "Falha na autenticação biométrica.");
+        return false;
+      }
+      return true;
+    } catch (e) {
+      Alert.alert("Erro", "Não foi possível validar a biometria.");
+      return false;
+    }
+  };
+
   const controlarDispositivo = async (tipo, ligar) => {
+    if (!normalizedServerUrl) {
+      Alert.alert("Erro", "Servidor inválido. Ajuste o URL em Configurações.");
+      return;
+    }
     setLoadingAcao(true);
     try {
-      const req = await fetch(`${serverUrl}/api/${tipo}`, {
+      const acaoCritica =
+        (tipo === 'ventilacao' && ligar === false) ||
+        (tipo === 'aquecedor' && ligar === false);
+      if (acaoCritica) {
+        const okBio = await solicitarBiometria(`Confirme para ${ligar ? 'ligar' : 'desligar'} ${tipo}`);
+        if (!okBio) {
+          setLoadingAcao(false);
+          return;
+        }
+      }
+      const req = await fetch(`${normalizedServerUrl}/api/${tipo}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -805,10 +904,19 @@ export default function App() {
   };
 
   const executarComandoVoz = async (text) => {
+    if (!normalizedServerUrl) {
+      Alert.alert("Erro", "Servidor inválido. Ajuste o URL em Configurações.");
+      return;
+    }
     try {
-      const req = await fetch(`${serverUrl}/api/voice/command`, {
+      const okBio = await solicitarBiometria("Confirme comando de voz crítico");
+      if (!okBio) return;
+      const req = await fetch(`${normalizedServerUrl}/api/voice/command`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ text })
       });
       const json = await req.json();
@@ -875,7 +983,7 @@ export default function App() {
       <View style={{flex:1}}>
         {activeTab === 'monitor' && 
           <MonitorScreen 
-            serverUrl={serverUrl} 
+            serverUrl={normalizedServerUrl}
             dados={dados} 
             loading={!dados}
             chickCount={chickCount}
@@ -884,13 +992,13 @@ export default function App() {
             loadingAcao={loadingAcao}
             enviarComandoVoz={enviarComandoVoz}
           />}
-        {activeTab === 'birds' && <BirdsScreen serverUrl={serverUrl} />}
-        {activeTab === 'smart' && <SmartOpsScreen serverUrl={serverUrl} />}
-        {activeTab === 'management' && <ManagementScreen serverUrl={serverUrl} />}
-        {activeTab === 'alerts' && <AlertsScreen serverUrl={serverUrl} />}
-        {activeTab === 'history' && <HistoryScreen serverUrl={serverUrl} />}
-        {activeTab === 'system' && <SystemScreen serverUrl={serverUrl} />}
-        {activeTab === 'config' && <ConfigScreen serverUrl={serverUrl} setServerUrl={setServerUrl} logout={() => {setToken(null); AsyncStorage.removeItem('cg_token');}} />}
+        {activeTab === 'birds' && <BirdsScreen serverUrl={normalizedServerUrl} />}
+        {activeTab === 'smart' && <SmartOpsScreen serverUrl={normalizedServerUrl} token={token} />}
+        {activeTab === 'management' && <ManagementScreen serverUrl={normalizedServerUrl} />}
+        {activeTab === 'alerts' && <AlertsScreen serverUrl={normalizedServerUrl} />}
+        {activeTab === 'history' && <HistoryScreen serverUrl={normalizedServerUrl} />}
+        {activeTab === 'system' && <SystemScreen serverUrl={normalizedServerUrl} />}
+        {activeTab === 'config' && <ConfigScreen serverUrl={serverUrl} setServerUrl={(v) => setServerUrl(normalizeServerUrl(v) || v)} logout={() => {setToken(null); AsyncStorage.removeItem('cg_token');}} />}
       </View>
 
       {/* Tab Bar (Menu Inferior) */}
@@ -1032,4 +1140,7 @@ const styles = StyleSheet.create({
   rowDate: { color: '#64748b', fontSize: 11, marginTop: 2 },
   emptyText: { color: '#94a3b8', textAlign: 'center', padding: 14 }
 });
+
+
+
 

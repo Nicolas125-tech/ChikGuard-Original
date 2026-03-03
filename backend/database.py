@@ -9,6 +9,45 @@ class User(db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(200), nullable=False)
 
+
+class Account(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    password_hash = db.Column(db.String(200), nullable=False)
+    role = db.Column(db.String(30), nullable=False, default="operator", index=True)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    last_login_at = db.Column(db.DateTime, nullable=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "username": self.username,
+            "role": self.role,
+            "active": self.active,
+            "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "last_login_at": self.last_login_at.strftime("%Y-%m-%d %H:%M:%S") if self.last_login_at else None,
+        }
+
+
+class RolePermission(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    role = db.Column(db.String(30), nullable=False, index=True)
+    permission = db.Column(db.String(80), nullable=False, index=True)
+    allowed = db.Column(db.Boolean, nullable=False, default=True)
+
+    __table_args__ = (
+        db.UniqueConstraint("role", "permission", name="uq_role_permission"),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "role": self.role,
+            "permission": self.permission,
+            "allowed": self.allowed,
+        }
+
 # NOVA TABELA: Histórico de Leituras
 class Reading(db.Model):
     id = db.Column(db.Integer, primary_key=True)

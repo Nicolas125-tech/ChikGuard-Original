@@ -19,6 +19,8 @@ from database import (
     AuditLog,
     SyncQueueItem,
     BatchLogbook,
+    Account,
+    RolePermission,
 )
 
 import cv2
@@ -30,6 +32,7 @@ import random
 import json
 import math
 import traceback
+import ipaddress
 from datetime import datetime, timedelta
 from ultralytics import YOLO
 from io import BytesIO
@@ -120,6 +123,9 @@ WEATHER_CHECK_INTERVAL_SEC = int(os.getenv("WEATHER_CHECK_INTERVAL_SEC", "1800")
 WEATHER_COLD_FRONT_C = float(os.getenv("WEATHER_COLD_FRONT_C", "5.0"))
 CAMERA_FAIL_THRESHOLD = int(os.getenv("CAMERA_FAIL_THRESHOLD", "25"))
 CAMERA_REOPEN_INTERVAL_SEC = float(os.getenv("CAMERA_REOPEN_INTERVAL_SEC", "3.0"))
+CRITICAL_ALLOWED_CIDRS = [x.strip() for x in os.getenv("CRITICAL_ALLOWED_CIDRS", "").split(",") if x.strip()]
+LOGIN_RATE_WINDOW_SEC = int(os.getenv("LOGIN_RATE_WINDOW_SEC", "300"))
+LOGIN_RATE_MAX_ATTEMPTS = int(os.getenv("LOGIN_RATE_MAX_ATTEMPTS", "10"))
 COUGH_MODEL_PATH = os.getenv("COUGH_MODEL_PATH", os.path.join(os.path.dirname(__file__), "models", "cough_classifier.joblib"))
 COUGH_MODEL_FEATURES = int(os.getenv("COUGH_MODEL_FEATURES", "48"))
 
@@ -340,6 +346,76 @@ def _request_actor():
     return actor
 
 
+def _request_ip():
+    try:
+        return str(request.headers.get("X-Forwarded-For", request.remote_addr) or "").split(",")[0].strip()
+    except Exception:
+        return ""
+
+
+def _ip_allowed_for_critical(ip_str):
+    if not CRITICAL_ALLOWED_CIDRS:
+        return True
+    try:
+        ip_obj = ipaddress.ip_address(ip_str)
+    except Exception:
+        return False
+    for cidr in CRITICAL_ALLOWED_CIDRS:
+        try:
+            if ip_obj in ipaddress.ip_network(cidr, strict=False):
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _guard_critical_action(action_name, permission=None):
+    try:
+        verify_jwt_in_request(optional=False)
+    except Exception:
+        _audit("critical_action_denied_no_jwt", source="security", details={"action": action_name})
+        return False, (jsonify({"msg": "JWT obrigatorio para comando critico"}), 401)
+    ip = _request_ip()
+    if not _ip_allowed_for_critical(ip):
+        _audit("critical_action_denied_geofence", source="security", details={"action": action_name, "ip": ip})
+        return False, (jsonify({"msg": "Acesso bloqueado por geofencing"}), 403)
+    if permission:
+        ok_perm, resp_perm = _require_permission(permission)
+        if not ok_perm:
+            _audit("critical_action_denied_permission", source="security", details={"action": action_name, "permission": permission})
+            return False, resp_perm
+    return True, None
+
+
+def _get_current_account():
+    try:
+        verify_jwt_in_request(optional=True)
+        username = get_jwt_identity()
+    except Exception:
+        username = None
+    if not username:
+        return None
+    return Account.query.filter_by(username=str(username)).first()
+
+
+def _account_has_permission(account, permission):
+    if account is None or not account.active:
+        return False
+    rows = RolePermission.query.filter_by(role=account.role, allowed=True).all()
+    perms = {r.permission for r in rows}
+    if "*" in perms:
+        return True
+    return permission in perms
+
+
+def _require_permission(permission):
+    account = _get_current_account()
+    if not _account_has_permission(account, permission):
+        _audit("permission_denied", source="security", details={"permission": permission, "actor": account.username if account else None})
+        return False, (jsonify({"msg": f"Permissao negada: {permission}"}), 403)
+    return True, None
+
+
 def _audit(action, source="backend", details=None, actor=None):
     try:
         actor_name = actor or _request_actor()
@@ -424,6 +500,36 @@ with app.app_context():
         hashed = bcrypt.generate_password_hash("admin123").decode("utf-8")
         db.session.add(User(username="admin", password=hashed))
         db.session.commit()
+    if not Account.query.filter_by(username="admin").first():
+        legacy_admin = User.query.filter_by(username="admin").first()
+        admin_hash = legacy_admin.password if legacy_admin is not None else bcrypt.generate_password_hash("admin123").decode("utf-8")
+        db.session.add(Account(username="admin", password_hash=admin_hash, role="admin", active=True))
+        db.session.commit()
+
+    default_perms = {
+        "admin": [
+            "*"
+        ],
+        "operator": [
+            "monitor.read",
+            "alerts.read",
+            "device.power_on",
+            "lighting.manage",
+            "voice.command",
+            "logbook.write",
+        ],
+        "viewer": [
+            "monitor.read",
+            "alerts.read",
+        ],
+    }
+    for role, perms in default_perms.items():
+        for perm in perms:
+            exists = RolePermission.query.filter_by(role=role, permission=perm).first()
+            if exists is None:
+                db.session.add(RolePermission(role=role, permission=perm, allowed=True))
+    db.session.commit()
+
     if not Batch.query.filter_by(camera_id=ACTIVE_CAMERA_ID, active=True).first():
         db.session.add(
             Batch(
@@ -541,6 +647,7 @@ weather_state = {
     "message": "Sem previsao carregada",
     "updated_at": 0.0,
 }
+login_attempt_state = {}
 
 last_weekly_report_key = None
 
@@ -1902,10 +2009,30 @@ weather_thread.start()
 def login():
     username = request.json.get("username", None)
     password = request.json.get("password", None)
+    ip = _request_ip()
+    key = f"{ip}:{username or 'unknown'}"
+    now = time.time()
+    attempts = [ts for ts in login_attempt_state.get(key, []) if (now - float(ts)) <= LOGIN_RATE_WINDOW_SEC]
+    login_attempt_state[key] = attempts
+    if len(attempts) >= LOGIN_RATE_MAX_ATTEMPTS:
+        _audit("login_rate_limited", source="security", actor=username or "unknown", details={"ip": ip})
+        return jsonify({"msg": "Muitas tentativas. Tente novamente mais tarde."}), 429
+    account = Account.query.filter_by(username=username).first()
+    if account and account.active and bcrypt.check_password_hash(account.password_hash, password):
+        login_attempt_state[key] = []
+        account.last_login_at = datetime.utcnow()
+        db.session.commit()
+        _audit("login_success", source="auth", actor=username, details={"username": username, "role": account.role})
+        token = create_access_token(identity=username, additional_claims={"role": account.role})
+        return jsonify(access_token=token, role=account.role, username=account.username), 200
+    # Legacy fallback for old User table, role defaults to admin for backward compatibility.
     user = User.query.filter_by(username=username).first()
     if user and bcrypt.check_password_hash(user.password, password):
-        _audit("login_success", source="auth", actor=username, details={"username": username})
-        return jsonify(access_token=create_access_token(identity=username)), 200
+        login_attempt_state[key] = []
+        _audit("login_success_legacy_user", source="auth", actor=username, details={"username": username})
+        token = create_access_token(identity=username, additional_claims={"role": "admin"})
+        return jsonify(access_token=token, role="admin", username=username), 200
+    login_attempt_state[key] = attempts + [now]
     _audit("login_failed", source="auth", actor=username or "unknown", details={"username": username})
     return jsonify({"msg": "Credenciais invalidas"}), 401
 
@@ -2414,6 +2541,101 @@ def sync_ack():
     return jsonify({"msg": "Itens marcados como sincronizados", "count": len(rows)})
 
 
+@app.route("/api/accounts/me", methods=["GET"])
+def accounts_me():
+    ok, resp = _guard_critical_action("accounts_me_view", permission="monitor.read")
+    if not ok:
+        return resp
+    account = _get_current_account()
+    if account is None:
+        return jsonify({"msg": "Conta nao encontrada"}), 404
+    return jsonify(account.to_dict())
+
+
+@app.route("/api/accounts/users", methods=["GET", "POST"])
+def accounts_users():
+    ok, resp = _guard_critical_action("accounts_manage", permission="accounts.manage")
+    if not ok:
+        return resp
+    if request.method == "GET":
+        rows = Account.query.order_by(Account.id.asc()).all()
+        return jsonify({"count": len(rows), "items": [r.to_dict() for r in rows]})
+
+    data = request.get_json(silent=True) or {}
+    username = str(data.get("username", "")).strip()
+    password = str(data.get("password", "")).strip()
+    role = str(data.get("role", "operator")).strip().lower()
+    active = bool(data.get("active", True))
+    if not username or not password:
+        return jsonify({"msg": "username e password sao obrigatorios"}), 400
+    if role not in ("admin", "operator", "viewer"):
+        return jsonify({"msg": "role invalido"}), 400
+    if Account.query.filter_by(username=username).first() is not None:
+        return jsonify({"msg": "usuario ja existe"}), 409
+    row = Account(
+        username=username,
+        password_hash=bcrypt.generate_password_hash(password).decode("utf-8"),
+        role=role,
+        active=active,
+    )
+    db.session.add(row)
+    db.session.commit()
+    _audit("account_created", source="security", details={"username": username, "role": role, "active": active})
+    return jsonify({"msg": "Conta criada", "item": row.to_dict()}), 201
+
+
+@app.route("/api/accounts/users/<int:account_id>", methods=["PATCH"])
+def accounts_user_update(account_id):
+    ok, resp = _guard_critical_action("accounts_manage", permission="accounts.manage")
+    if not ok:
+        return resp
+    row = Account.query.get(account_id)
+    if row is None:
+        return jsonify({"msg": "Conta nao encontrada"}), 404
+    data = request.get_json(silent=True) or {}
+    if "role" in data:
+        role = str(data.get("role", "")).strip().lower()
+        if role not in ("admin", "operator", "viewer"):
+            return jsonify({"msg": "role invalido"}), 400
+        row.role = role
+    if "active" in data:
+        row.active = bool(data.get("active"))
+    if "password" in data:
+        pwd = str(data.get("password", "")).strip()
+        if len(pwd) < 6:
+            return jsonify({"msg": "password muito curto (min 6)"}), 400
+        row.password_hash = bcrypt.generate_password_hash(pwd).decode("utf-8")
+    db.session.commit()
+    _audit("account_updated", source="security", details={"account_id": account_id, "payload_keys": list(data.keys())})
+    return jsonify({"msg": "Conta atualizada", "item": row.to_dict()})
+
+
+@app.route("/api/accounts/permissions", methods=["GET", "POST"])
+def accounts_permissions():
+    ok, resp = _guard_critical_action("permissions_manage", permission="accounts.manage")
+    if not ok:
+        return resp
+    if request.method == "GET":
+        rows = RolePermission.query.order_by(RolePermission.role.asc(), RolePermission.permission.asc()).all()
+        return jsonify({"count": len(rows), "items": [r.to_dict() for r in rows]})
+
+    data = request.get_json(silent=True) or {}
+    role = str(data.get("role", "")).strip().lower()
+    permission = str(data.get("permission", "")).strip()
+    allowed = bool(data.get("allowed", True))
+    if role not in ("admin", "operator", "viewer") or not permission:
+        return jsonify({"msg": "role e permission sao obrigatorios"}), 400
+    row = RolePermission.query.filter_by(role=role, permission=permission).first()
+    if row is None:
+        row = RolePermission(role=role, permission=permission, allowed=allowed)
+        db.session.add(row)
+    else:
+        row.allowed = allowed
+    db.session.commit()
+    _audit("permission_updated", source="security", details={"role": role, "permission": permission, "allowed": allowed})
+    return jsonify({"msg": "Permissao atualizada", "item": row.to_dict()})
+
+
 @app.route("/api/auto-mode", methods=["GET", "POST"])
 def auto_mode():
     if request.method == "GET":
@@ -2426,6 +2648,9 @@ def auto_mode():
                 "camera_id": ACTIVE_CAMERA_ID,
             }
         )
+    ok, resp = _guard_critical_action("auto_mode_change", permission="automation.manage")
+    if not ok:
+        return resp
 
     data = request.get_json(silent=True) or {}
     if "enabled" in data:
@@ -2455,7 +2680,12 @@ def controlar_ventilacao():
     data = request.get_json(silent=True) or {}
     if "ligar" not in data:
         return jsonify({"msg": "Parametro 'ligar' e obrigatorio"}), 400
-    estado_dispositivos["ventilacao"] = bool(data["ligar"])
+    ligar = bool(data["ligar"])
+    perm = "device.power_on" if ligar else "device.power_off"
+    ok, resp = _guard_critical_action("ventilacao_toggle", permission=perm)
+    if not ok:
+        return resp
+    estado_dispositivos["ventilacao"] = ligar
     _log_event(
         event_type="manual_device_action",
         level="info",
@@ -2479,7 +2709,12 @@ def controlar_aquecedor():
     data = request.get_json(silent=True) or {}
     if "ligar" not in data:
         return jsonify({"msg": "Parametro 'ligar' e obrigatorio"}), 400
-    estado_dispositivos["aquecedor"] = bool(data["ligar"])
+    ligar = bool(data["ligar"])
+    perm = "device.power_on" if ligar else "device.power_off"
+    ok, resp = _guard_critical_action("aquecedor_toggle", permission=perm)
+    if not ok:
+        return resp
+    estado_dispositivos["aquecedor"] = ligar
     _log_event(
         event_type="manual_device_action",
         level="info",
@@ -2502,6 +2737,9 @@ def controlar_aquecedor():
 def controlar_luz_dimmer():
     if request.method == "GET":
         return jsonify({"luz_intensidade_pct": int(estado_dispositivos.get("luz_intensidade_pct", 0))})
+    ok, resp = _guard_critical_action("light_dimmer_change", permission="lighting.manage")
+    if not ok:
+        return resp
     data = request.get_json(silent=True) or {}
     intensidade = int(data.get("intensidade_pct", 0))
     intensidade = max(0, min(100, intensidade))
@@ -2540,6 +2778,16 @@ def voice_command():
             pass
     if action is None:
         return jsonify({"msg": "Comando nao reconhecido", "text": command}), 400
+    action_perm = "voice.command"
+    if action in ("ventilacao_off", "aquecedor_off"):
+        action_perm = "device.power_off"
+    elif action in ("ventilacao_on", "aquecedor_on"):
+        action_perm = "device.power_on"
+    elif action == "luz_dimmer":
+        action_perm = "lighting.manage"
+    ok, resp = _guard_critical_action("voice_command_control", permission=action_perm)
+    if not ok:
+        return resp
     _audit("voice_command_executed", source="mobile_voice", details={"command": command, "action": action})
     return jsonify({"msg": "Comando executado", "action": action, "devices": estado_dispositivos})
 
