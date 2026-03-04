@@ -123,6 +123,9 @@ WEATHER_CHECK_INTERVAL_SEC = int(os.getenv("WEATHER_CHECK_INTERVAL_SEC", "1800")
 WEATHER_COLD_FRONT_C = float(os.getenv("WEATHER_COLD_FRONT_C", "5.0"))
 CAMERA_FAIL_THRESHOLD = int(os.getenv("CAMERA_FAIL_THRESHOLD", "25"))
 CAMERA_REOPEN_INTERVAL_SEC = float(os.getenv("CAMERA_REOPEN_INTERVAL_SEC", "3.0"))
+CAMERA_TARGET_FPS = float(os.getenv("CAMERA_TARGET_FPS", "30"))
+STREAM_TARGET_FPS = float(os.getenv("STREAM_TARGET_FPS", "30"))
+STREAM_JPEG_QUALITY = int(os.getenv("STREAM_JPEG_QUALITY", "82"))
 CRITICAL_ALLOWED_CIDRS = [x.strip() for x in os.getenv("CRITICAL_ALLOWED_CIDRS", "").split(",") if x.strip()]
 LOGIN_RATE_WINDOW_SEC = int(os.getenv("LOGIN_RATE_WINDOW_SEC", "300"))
 LOGIN_RATE_MAX_ATTEMPTS = int(os.getenv("LOGIN_RATE_MAX_ATTEMPTS", "10"))
@@ -132,6 +135,22 @@ COUGH_MODEL_FEATURES = int(os.getenv("COUGH_MODEL_FEATURES", "48"))
 REPORTS_DIR = os.path.join(os.path.dirname(__file__), "reports")
 HEATMAP_DIR = os.path.join(REPORTS_DIR, "heatmaps")
 os.makedirs(HEATMAP_DIR, exist_ok=True)
+STREAM_JPEG_QUALITY = max(40, min(STREAM_JPEG_QUALITY, 95))
+STREAM_FRAME_INTERVAL_SEC = 1.0 / STREAM_TARGET_FPS if STREAM_TARGET_FPS > 0 else 0.0
+
+
+def _configure_camera_capture(cap):
+    if cap is None:
+        return
+    try:
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        if CAMERA_TARGET_FPS > 0:
+            cap.set(cv2.CAP_PROP_FPS, CAMERA_TARGET_FPS)
+        # Keep capture latency low for real-time detection/tracking.
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    except Exception:
+        pass
 
 
 class ObjectDetector:
@@ -1879,8 +1898,7 @@ def camera_loop():
     cap = cv2.VideoCapture(CAMERA_INDEX)
     if cap.isOpened():
         use_basic_simulation = False
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        _configure_camera_capture(cap)
     else:
         use_basic_simulation = True
         _log_event("camera_fallback", "medium", "Camera real nao encontrada. Simulacao ativada.")
@@ -1898,8 +1916,7 @@ def camera_loop():
                         pass
                     cap = cv2.VideoCapture(CAMERA_INDEX)
                     if cap.isOpened():
-                        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-                        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+                        _configure_camera_capture(cap)
                         use_basic_simulation = False
                         consecutive_read_failures = 0
                         camera_lost_logged = False
@@ -2040,17 +2057,19 @@ def login():
 @app.route("/api/video")
 def video_feed():
     def generate():
+        encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), int(STREAM_JPEG_QUALITY)]
         while True:
             with lock:
                 if global_frame is None:
-                    time.sleep(0.1)
+                    time.sleep(0.02)
                     continue
-                ret, buffer = cv2.imencode(".jpg", global_frame)
+                ret, buffer = cv2.imencode(".jpg", global_frame, encode_params)
             if not ret:
-                time.sleep(0.05)
+                time.sleep(0.01)
                 continue
             yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + buffer.tobytes() + b"\r\n"
-            time.sleep(0.05)
+            if STREAM_FRAME_INTERVAL_SEC > 0:
+                time.sleep(STREAM_FRAME_INTERVAL_SEC)
 
     return Response(generate(), mimetype="multipart/x-mixed-replace; boundary=frame")
 

@@ -14,16 +14,33 @@ import {
 const appLogo = require('./assets/logo.png');
 
 const normalizeServerUrl = (value) => {
-  const raw = String(value || '').trim().replace(/\/$/, '');
+  const raw = String(value || '').trim();
   if (!raw) return '';
-  const isCloudflareQuick = /trycloudflare\.com/i.test(raw);
-  const withScheme = /^https?:\/\//i.test(raw) ? raw : `${isCloudflareQuick ? 'https' : 'http'}://${raw}`;
+
+  // Accept full tunnel output lines and extract the first usable URL/host.
+  const extracted =
+    raw.match(/https?:\/\/[^\s"'<>]+/i)?.[0] ||
+    raw.match(/[a-z0-9.-]+\.trycloudflare\.com(?::\d+)?(?:\/[^\s"'<>]*)?/i)?.[0] ||
+    raw;
+
+  const clean = extracted.replace(/[),.;]+$/, '').trim();
+  if (!clean) return '';
+
+  const isCloudflareQuick = /trycloudflare\.com/i.test(clean);
+  const withScheme = /^https?:\/\//i.test(clean) ? clean : `${isCloudflareQuick ? 'https' : 'http'}://${clean}`;
   try {
+    if (typeof URL === 'undefined') {
+      throw new Error('URL parser unavailable');
+    }
     const u = new URL(withScheme);
     const protocol = isCloudflareQuick ? 'https:' : u.protocol;
     return `${protocol}//${u.host}`;
   } catch {
-    return '';
+    // Fallback parser for environments where URL constructor is missing/limited.
+    const m = withScheme.match(/^(https?):\/\/([^\/?#]+)(?:[\/?#].*)?$/i);
+    if (!m) return '';
+    const protocol = isCloudflareQuick ? 'https' : m[1].toLowerCase();
+    return `${protocol}://${m[2]}`;
   }
 };
 
@@ -186,7 +203,7 @@ const HistoryScreen = ({ serverUrl }) => {
 };
 
 // 2.05 TELA DE AVES (IDs, registro e trilha)
-const BirdsScreen = ({ serverUrl }) => {
+const BirdsScreen = ({ serverUrl, enviarComandoVoz }) => {
   const [live, setLive] = useState({ count: 0, items: [] });
   const [registry, setRegistry] = useState({ count: 0, items: [] });
   const [selectedBird, setSelectedBird] = useState(null);
@@ -285,7 +302,7 @@ const BirdsScreen = ({ serverUrl }) => {
       </View>
 
       <Text style={styles.sectionTitle}>Comandos de Voz</Text>
-      <TouchableOpacity style={styles.btnPrimary} onPress={enviarComandoVoz}>
+      <TouchableOpacity style={styles.btnPrimary} onPress={enviarComandoVoz} disabled={!enviarComandoVoz}>
         <Activity color="#fff" size={20} />
         <Text style={styles.btnText}>Microfone: comandos rápidos</Text>
       </TouchableOpacity>
@@ -691,13 +708,23 @@ const MetricCard = ({ label, value }) => (
 // 3. TELA DE CONFIGURAÇÃO
 const ConfigScreen = ({ serverUrl, setServerUrl, logout }) => {
   const [tempUrl, setTempUrl] = useState(serverUrl);
+  const [saving, setSaving] = useState(false);
 
   const save = async () => {
-    // Remove barra no final se tiver
-    const cleanUrl = tempUrl.replace(/\/$/, "");
-    await AsyncStorage.setItem('cg_server_url', cleanUrl);
-    setServerUrl(cleanUrl);
-    Alert.alert("Sucesso", "Endereço atualizado!");
+    const normalized = normalizeServerUrl(tempUrl);
+    if (!normalized) {
+      Alert.alert("URL inválido", "Use um endereço válido, exemplo: https://abc.trycloudflare.com");
+      return;
+    }
+    setSaving(true);
+    try {
+      await AsyncStorage.setItem('cg_server_url', normalized);
+      setServerUrl(normalized);
+      setTempUrl(normalized);
+      Alert.alert("Sucesso", "Endereço atualizado!");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -714,9 +741,9 @@ const ConfigScreen = ({ serverUrl, setServerUrl, logout }) => {
         autoCapitalize='none'
       />
       
-      <TouchableOpacity style={styles.btnPrimary} onPress={save}>
+      <TouchableOpacity style={styles.btnPrimary} onPress={save} disabled={saving}>
         <Save color="#fff" size={20} />
-        <Text style={styles.btnText}>Salvar Endereço</Text>
+        <Text style={styles.btnText}>{saving ? "Salvando..." : "Salvar Endereço"}</Text>
       </TouchableOpacity>
 
       <View style={{marginTop: 40, borderTopWidth:1, borderTopColor:'#334155', paddingTop:20}}>
@@ -992,7 +1019,7 @@ export default function App() {
             loadingAcao={loadingAcao}
             enviarComandoVoz={enviarComandoVoz}
           />}
-        {activeTab === 'birds' && <BirdsScreen serverUrl={normalizedServerUrl} />}
+        {activeTab === 'birds' && <BirdsScreen serverUrl={normalizedServerUrl} enviarComandoVoz={enviarComandoVoz} />}
         {activeTab === 'smart' && <SmartOpsScreen serverUrl={normalizedServerUrl} token={token} />}
         {activeTab === 'management' && <ManagementScreen serverUrl={normalizedServerUrl} />}
         {activeTab === 'alerts' && <AlertsScreen serverUrl={normalizedServerUrl} />}
