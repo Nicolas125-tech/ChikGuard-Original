@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, Response, send_file
+from flask import Flask, jsonify, request, Response, send_file, has_request_context
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager, create_access_token, verify_jwt_in_request, get_jwt_identity
@@ -33,7 +33,7 @@ import json
 import math
 import traceback
 import ipaddress
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from ultralytics import YOLO
 from io import BytesIO
 import smtplib
@@ -59,6 +59,11 @@ try:
     import joblib
 except Exception:
     joblib = None
+
+try:
+    import winsound
+except Exception:
+    winsound = None
 
 try:
     from reportlab.lib.pagesizes import A4
@@ -126,6 +131,12 @@ CAMERA_REOPEN_INTERVAL_SEC = float(os.getenv("CAMERA_REOPEN_INTERVAL_SEC", "3.0"
 CAMERA_TARGET_FPS = float(os.getenv("CAMERA_TARGET_FPS", "30"))
 STREAM_TARGET_FPS = float(os.getenv("STREAM_TARGET_FPS", "30"))
 STREAM_JPEG_QUALITY = int(os.getenv("STREAM_JPEG_QUALITY", "82"))
+TAMPER_ALERT_COOLDOWN_SEC = int(os.getenv("TAMPER_ALERT_COOLDOWN_SEC", "180"))
+TAMPER_SENSOR_STALE_SEC = int(os.getenv("TAMPER_SENSOR_STALE_SEC", "180"))
+TAMPER_DARK_MEAN_THRESHOLD = float(os.getenv("TAMPER_DARK_MEAN_THRESHOLD", "24.0"))
+TAMPER_LOW_TEXTURE_STD_THRESHOLD = float(os.getenv("TAMPER_LOW_TEXTURE_STD_THRESHOLD", "8.0"))
+TAMPER_FREEZE_DIFF_THRESHOLD = float(os.getenv("TAMPER_FREEZE_DIFF_THRESHOLD", "1.2"))
+TAMPER_FREEZE_MIN_FRAMES = int(os.getenv("TAMPER_FREEZE_MIN_FRAMES", "45"))
 CRITICAL_ALLOWED_CIDRS = [x.strip() for x in os.getenv("CRITICAL_ALLOWED_CIDRS", "").split(",") if x.strip()]
 LOGIN_RATE_WINDOW_SEC = int(os.getenv("LOGIN_RATE_WINDOW_SEC", "300"))
 LOGIN_RATE_MAX_ATTEMPTS = int(os.getenv("LOGIN_RATE_MAX_ATTEMPTS", "10"))
@@ -327,6 +338,11 @@ def _safe_json(value):
         return json.dumps({"raw": str(value)})
 
 
+def _utcnow():
+    # Python is deprecating naive utcnow(); keep UTC source but store naive UTC in DB.
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 def _log_event(event_type, level, message, metadata=None, camera_id=ACTIVE_CAMERA_ID):
     try:
         with app.app_context():
@@ -438,17 +454,19 @@ def _require_permission(permission):
 def _audit(action, source="backend", details=None, actor=None):
     try:
         actor_name = actor or _request_actor()
+        ip_value = str(request.remote_addr) if has_request_context() else None
         row = AuditLog(
             actor=actor_name,
             action=action,
             source=source,
-            ip=str(request.remote_addr) if request else None,
+            ip=ip_value,
             details_json=_safe_json(details or {}),
         )
         with app.app_context():
             db.session.add(row)
             db.session.commit()
-        _enqueue_sync_item("audit_log", row.to_dict())
+            payload = row.to_dict()
+        _enqueue_sync_item("audit_log", payload)
     except Exception as exc:
         print(f"[AUDIT] failed: {exc}")
 
@@ -554,7 +572,7 @@ with app.app_context():
             Batch(
                 camera_id=ACTIVE_CAMERA_ID,
                 name="Lote inicial",
-                start_date=datetime.utcnow(),
+                start_date=_utcnow(),
                 active=True,
                 notes="Criado automaticamente",
             )
@@ -666,6 +684,16 @@ weather_state = {
     "message": "Sem previsao carregada",
     "updated_at": 0.0,
 }
+tamper_state = {
+    "last_alert_ts": 0.0,
+    "dark_frames": 0,
+    "freeze_frames": 0,
+    "last_causes": [],
+    "alerts_count": 0,
+    "sensor_stale": False,
+}
+last_visible_frame = None
+_tamper_prev_gray = None
 login_attempt_state = {}
 
 last_weekly_report_key = None
@@ -772,7 +800,7 @@ def _temperature_targets(camera_id):
     if auto_config.get("use_batch_curve", True):
         batch = _active_batch(camera_id)
         if batch is not None:
-            age_day = max(1, (datetime.utcnow().date() - batch.start_date.date()).days + 1)
+            age_day = max(1, (_utcnow().date() - batch.start_date.date()).days + 1)
             target = _ideal_temp_for_age_day(age_day)
             heater_on = max(16.0, target - 0.5)
             heater_off = max(16.0, target + 0.2)
@@ -839,7 +867,7 @@ def _estimate_weight_from_live_birds(frame_shape):
 
     avg_weight_from_area = float(sum(weights) / len(weights))
     batch = _active_batch(ACTIVE_CAMERA_ID)
-    age_day = max(1, (datetime.utcnow().date() - batch.start_date.date()).days + 1) if batch else 21
+    age_day = max(1, (_utcnow().date() - batch.start_date.date()).days + 1) if batch else 21
     ideal = _ideal_weight_for_age_day(age_day)
 
     # Blend between area-based estimate and age-based expected curve.
@@ -1003,7 +1031,7 @@ def _update_energy_runtime():
 
     if delta <= 0:
         return
-    day_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    day_start = _utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     with app.app_context():
         row = EnergyUsageDaily.query.filter_by(camera_id=ACTIVE_CAMERA_ID, day=day_start).first()
         if row is None:
@@ -1027,7 +1055,7 @@ def _sync_worker():
                         try:
                             resp = requests.post(CLOUD_SYNC_URL, json={"items": payload}, timeout=12)
                             if resp.ok:
-                                now = datetime.utcnow()
+                                now = _utcnow()
                                 for item in pending:
                                     item.status = "synced"
                                     item.synced_at = now
@@ -1342,6 +1370,89 @@ def _telegram_send_text(message):
         return False, str(exc)
 
 
+def _trigger_local_alarm():
+    try:
+        for _ in range(3):
+            if winsound is not None:
+                winsound.Beep(1850, 280)
+            else:
+                print("\a", end="", flush=True)
+            time.sleep(0.08)
+    except Exception:
+        pass
+
+
+def _check_tampering(frame):
+    global last_visible_frame, _tamper_prev_gray
+    now = time.time()
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    mean_luma = float(np.mean(gray))
+    std_luma = float(np.std(gray))
+    visible_ok = mean_luma >= TAMPER_DARK_MEAN_THRESHOLD and std_luma >= TAMPER_LOW_TEXTURE_STD_THRESHOLD
+
+    if visible_ok:
+        tamper_state["dark_frames"] = 0
+        last_visible_frame = frame.copy()
+    else:
+        tamper_state["dark_frames"] = int(tamper_state.get("dark_frames", 0)) + 1
+
+    if _tamper_prev_gray is None:
+        _tamper_prev_gray = gray
+    else:
+        diff = float(np.mean(cv2.absdiff(gray, _tamper_prev_gray)))
+        if diff < TAMPER_FREEZE_DIFF_THRESHOLD:
+            tamper_state["freeze_frames"] = int(tamper_state.get("freeze_frames", 0)) + 1
+        else:
+            tamper_state["freeze_frames"] = 0
+        _tamper_prev_gray = gray
+
+    sensor_stale = (now - float(sensor_state.get("updated_at", 0.0))) > float(TAMPER_SENSOR_STALE_SEC)
+    tamper_state["sensor_stale"] = bool(sensor_stale)
+
+    causes = []
+    if int(tamper_state["dark_frames"]) >= 8:
+        causes.append("camera_obstruida")
+    if int(tamper_state["freeze_frames"]) >= TAMPER_FREEZE_MIN_FRAMES:
+        causes.append("camera_congelada")
+    if sensor_stale:
+        causes.append("sensor_sem_update")
+    if not causes:
+        return
+
+    if now - float(tamper_state.get("last_alert_ts", 0.0)) < TAMPER_ALERT_COOLDOWN_SEC:
+        return
+
+    tamper_state["last_alert_ts"] = now
+    tamper_state["last_causes"] = list(causes)
+    tamper_state["alerts_count"] = int(tamper_state.get("alerts_count", 0)) + 1
+    _trigger_local_alarm()
+    proof = last_visible_frame if last_visible_frame is not None else frame
+    caption = (
+        f"ALERTA CHIKGUARD: possivel sabotagem detectada "
+        f"({datetime.now().strftime('%Y-%m-%d %H:%M:%S')}) - causas: {', '.join(causes)}"
+    )
+    sent, detail = _telegram_send(proof, caption)
+    _log_event(
+        event_type="tamper_alert",
+        level="high",
+        message="Possivel sabotagem detectada (anti-tampering)",
+        metadata={
+            "causes": causes,
+            "telegram_sent": sent,
+            "telegram_detail": detail,
+            "dark_frames": int(tamper_state["dark_frames"]),
+            "freeze_frames": int(tamper_state["freeze_frames"]),
+            "sensor_stale": bool(sensor_stale),
+        },
+    )
+    _audit(
+        "tamper_alert_triggered",
+        source="security",
+        actor="chikguard-ai",
+        details={"causes": causes, "telegram_sent": sent},
+    )
+
+
 def _update_carcass_detection(selected):
     now = time.time()
     carcasses = []
@@ -1526,7 +1637,7 @@ def _save_bird_snapshots(frame, ambient_temp):
         )
 
     if rows:
-        now_dt = datetime.utcnow()
+        now_dt = _utcnow()
         with app.app_context():
             db.session.bulk_save_objects(rows)
             for row in rows:
@@ -1697,7 +1808,7 @@ def detectar_objetos(frame):
 
 def _heatmap_grid(date_ref=None, grid_size=32):
     if date_ref is None:
-        date_ref = datetime.utcnow().date()
+        date_ref = _utcnow().date()
 
     start_dt = datetime.combine(date_ref, datetime.min.time())
     end_dt = start_dt + timedelta(days=1)
@@ -1721,7 +1832,7 @@ def _heatmap_grid(date_ref=None, grid_size=32):
 
 
 def _heatmap_grid_last_hours(hours=24, grid_size=32):
-    end_dt = datetime.utcnow()
+    end_dt = _utcnow()
     start_dt = end_dt - timedelta(hours=max(1, min(hours, 168)))
     with app.app_context():
         rows = (
@@ -1756,12 +1867,134 @@ def _heatmap_image_bytes(heat):
         return None
     return buf.tobytes()
 
+
+def _heatmap_points_3d(hours=24, grid_size=24):
+    heat = _heatmap_grid_last_hours(hours=hours, grid_size=grid_size)
+    if np.max(heat) <= 0:
+        return []
+    norm = cv2.normalize(heat, None, 0.0, 1.0, cv2.NORM_MINMAX)
+    points = []
+    h, w = norm.shape
+    for gy in range(h):
+        for gx in range(w):
+            intensity = float(norm[gy, gx])
+            if intensity < 0.05:
+                continue
+            ammonia_local = float(sensor_state.get("ammonia_ppm", 0.0)) * (0.7 + 0.6 * intensity)
+            points.append(
+                {
+                    "x": round(gx / max(1, w - 1), 4),
+                    "y": round(gy / max(1, h - 1), 4),
+                    "z": round(intensity * 4.0, 4),
+                    "heat_intensity": round(intensity, 4),
+                    "ammonia_ppm": round(ammonia_local, 2),
+                }
+            )
+    return points
+
+
+def _simulate_airflow_field(fans=None, grid_size=24):
+    fans = fans or [{"x": 0.5, "y": 0.2, "power": 1.0, "angle_deg": 90}]
+    vectors = []
+    for gy in range(grid_size):
+        for gx in range(grid_size):
+            x = gx / max(1, grid_size - 1)
+            y = gy / max(1, grid_size - 1)
+            vx = 0.0
+            vy = 0.0
+            for fan in fans:
+                fx = float(fan.get("x", 0.5))
+                fy = float(fan.get("y", 0.5))
+                pw = max(0.0, float(fan.get("power", 1.0)))
+                dx = x - fx
+                dy = y - fy
+                dist = math.sqrt((dx * dx) + (dy * dy)) + 1e-4
+                influence = pw / (1.0 + (dist * 9.0))
+                angle = math.atan2(dy, dx)
+                vx += math.cos(angle) * influence
+                vy += math.sin(angle) * influence
+            mag = math.sqrt((vx * vx) + (vy * vy))
+            vectors.append(
+                {
+                    "x": round(x, 4),
+                    "y": round(y, 4),
+                    "vx": round(vx, 4),
+                    "vy": round(vy, 4),
+                    "speed": round(mag, 4),
+                }
+            )
+    avg_speed = sum(v["speed"] for v in vectors) / max(1, len(vectors))
+    return {
+        "grid_size": grid_size,
+        "fans": fans,
+        "avg_speed": round(avg_speed, 4),
+        "vectors": vectors,
+    }
+
+
+def _energy_forecast(hours=12):
+    hours = max(1, min(int(hours), 48))
+    now = _utcnow()
+    today_start = datetime(now.year, now.month, now.day)
+    elapsed = max(60.0, (now - today_start).total_seconds())
+    today_row = EnergyUsageDaily.query.filter_by(camera_id=ACTIVE_CAMERA_ID, day=today_start).first()
+    fan_today = float(today_row.ventilacao_seconds) if today_row else 0.0
+    heater_today = float(today_row.aquecedor_seconds) if today_row else 0.0
+
+    fan_today = max(fan_today, float(energy_runtime_state.get("ventilacao_seconds_today", 0.0)))
+    heater_today = max(heater_today, float(energy_runtime_state.get("aquecedor_seconds_today", 0.0)))
+    fan_per_hour = fan_today / elapsed * 3600.0
+    heater_per_hour = heater_today / elapsed * 3600.0
+
+    cold_boost = 1.0
+    next_min = weather_state.get("next_night_min_c")
+    if next_min is not None:
+        try:
+            tmin = float(next_min)
+            if tmin <= 0:
+                cold_boost = 1.50
+            elif tmin <= WEATHER_COLD_FRONT_C:
+                cold_boost = 1.30
+            elif tmin <= 8:
+                cold_boost = 1.15
+        except Exception:
+            cold_boost = 1.0
+    if bool(weather_state.get("preheat_recommended")):
+        cold_boost = max(cold_boost, 1.25)
+
+    projected_fan_sec = fan_per_hour * hours
+    projected_heater_sec = heater_per_hour * hours * cold_boost
+    fan_kwh = (projected_fan_sec / 3600.0) * VENTILACAO_POWER_KW
+    heater_kwh = (projected_heater_sec / 3600.0) * AQUECEDOR_POWER_KW
+    total_kwh = fan_kwh + heater_kwh
+    heating_cost = heater_kwh * ENERGY_TARIFF_PER_KWH
+    total_cost = total_kwh * ENERGY_TARIFF_PER_KWH
+    estimated_saving = (heating_cost * 0.20) + ((fan_kwh * ENERGY_TARIFF_PER_KWH) * 0.08)
+
+    message = (
+        f"Previsao de gasto de R$ {heating_cost:.2f} em aquecimento nas proximas {hours}h. "
+        f"Deseja otimizar o fluxo de ar?"
+    )
+    return {
+        "hours": hours,
+        "camera_id": ACTIVE_CAMERA_ID,
+        "weather_factor": round(cold_boost, 3),
+        "next_night_min_c": weather_state.get("next_night_min_c"),
+        "projected_heater_cost": round(heating_cost, 2),
+        "projected_total_cost": round(total_cost, 2),
+        "projected_total_kwh": round(total_kwh, 3),
+        "estimated_optimization_savings": round(estimated_saving, 2),
+        "suggest_optimize_airflow": bool(heating_cost >= 40.0 or cold_boost > 1.15),
+        "message": message,
+    }
+
+
 def _generate_weekly_report(camera_id, week_end=None):
     if canvas is None or A4 is None:
         raise RuntimeError("reportlab nao instalado. Instale reportlab no backend.")
 
     if week_end is None:
-        week_end = datetime.utcnow()
+        week_end = _utcnow()
     week_start = week_end - timedelta(days=7)
 
     with app.app_context():
@@ -1829,6 +2062,96 @@ def _generate_weekly_report(camera_id, week_end=None):
             c.showPage()
             y = height - 40
             c.setFont("Helvetica", 9)
+
+    c.save()
+    return path
+
+
+def _generate_esg_report(camera_id, days=30):
+    if canvas is None or A4 is None:
+        raise RuntimeError("reportlab nao instalado. Instale reportlab no backend.")
+
+    days = max(7, min(int(days), 120))
+    end_dt = _utcnow()
+    start_dt = end_dt - timedelta(days=days)
+
+    with app.app_context():
+        readings = Reading.query.filter(Reading.timestamp >= start_dt, Reading.timestamp <= end_dt).all()
+        acoustic_rows = AcousticReading.query.filter(
+            AcousticReading.camera_id == camera_id,
+            AcousticReading.timestamp >= start_dt,
+            AcousticReading.timestamp <= end_dt,
+        ).all()
+        events = EventLog.query.filter(
+            EventLog.camera_id == camera_id,
+            EventLog.timestamp >= start_dt,
+            EventLog.timestamp <= end_dt,
+        ).all()
+
+    total = len(readings)
+    normal = len([r for r in readings if r.status == "NORMAL"])
+    calor = len([r for r in readings if r.status == "CALOR"])
+    frio = len([r for r in readings if r.status == "FRIO"])
+    low_stress_pct = (normal / total * 100.0) if total else 0.0
+    thermal_stress_pct = (100.0 - low_stress_pct) if total else 0.0
+    avg_resp = (
+        sum(float(a.respiratory_health_index) for a in acoustic_rows) / len(acoustic_rows)
+        if acoustic_rows
+        else 100.0
+    )
+    critical_events = len([e for e in events if str(e.level).lower() == "high"])
+    esg_score = max(0.0, min(100.0, (low_stress_pct * 0.55) + (avg_resp * 0.35) - (critical_events * 0.8)))
+    market_flag = "APTO para mercados exigentes (Europa/Japao)" if esg_score >= 80 else "Necessita melhorias para mercados premium"
+
+    fname = f"esg_report_{camera_id}_{end_dt.strftime('%Y%m%d_%H%M%S')}.pdf"
+    path = os.path.join(REPORTS_DIR, fname)
+    os.makedirs(REPORTS_DIR, exist_ok=True)
+
+    c = canvas.Canvas(path, pagesize=A4)
+    width, height = A4
+    y = height - 40
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(40, y, f"ChikGuard - Relatorio ESG ({camera_id})")
+    y -= 24
+    c.setFont("Helvetica", 10)
+    c.drawString(40, y, f"Periodo analisado: {start_dt.strftime('%Y-%m-%d')} ate {end_dt.strftime('%Y-%m-%d')}")
+    y -= 22
+
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "Indicadores de Sustentabilidade e Bem-Estar")
+    y -= 18
+    c.setFont("Helvetica", 10)
+    lines = [
+        f"Leituras termicas totais: {total}",
+        f"Baixo stress termico (status NORMAL): {low_stress_pct:.1f}%",
+        f"Stress termico (CALOR+FRIO): {thermal_stress_pct:.1f}%",
+        f"Ocorrencias CALOR: {calor} | FRIO: {frio}",
+        f"Saude respiratoria media (acustica): {avg_resp:.1f}/100",
+        f"Eventos criticos de operacao: {critical_events}",
+        f"ESG Score consolidado: {esg_score:.1f}/100",
+        f"Status exportacao: {market_flag}",
+    ]
+    for line in lines:
+        c.drawString(40, y, line)
+        y -= 16
+
+    y -= 10
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(40, y, "Conclusao automatica")
+    y -= 16
+    c.setFont("Helvetica", 10)
+    conclusion = (
+        "As aves apresentaram baixo stress termico e estabilidade ambiental, "
+        "favorecendo conformidade ESG e valor agregado para exportacao."
+        if esg_score >= 80
+        else
+        "Foram detectadas variacoes relevantes de conforto termico. Recomenda-se "
+        "otimizar ventilacao, setpoint termico e rotina de monitoramento."
+    )
+    c.drawString(40, y, conclusion[:120])
+    y -= 14
+    if len(conclusion) > 120:
+        c.drawString(40, y, conclusion[120:240])
 
     c.save()
     return path
@@ -1943,6 +2266,7 @@ def camera_loop():
                         camera_lost_logged = True
                     continue
                 consecutive_read_failures = 0
+                _check_tampering(frame)
                 processed_frame = detectar_objetos(frame)
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 temp_atual = 20 + (float(np.mean(gray)) / 255.0) * 20
@@ -2037,7 +2361,7 @@ def login():
     account = Account.query.filter_by(username=username).first()
     if account and account.active and bcrypt.check_password_hash(account.password_hash, password):
         login_attempt_state[key] = []
-        account.last_login_at = datetime.utcnow()
+        account.last_login_at = _utcnow()
         db.session.commit()
         _audit("login_success", source="auth", actor=username, details={"username": username, "role": account.role})
         token = create_access_token(identity=username, additional_claims={"role": account.role})
@@ -2201,7 +2525,7 @@ def get_daily_heatmap():
     grid_size = request.args.get("grid", default=32, type=int)
     grid_size = max(8, min(grid_size, 128))
     try:
-        date_ref = datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else datetime.utcnow().date()
+        date_ref = datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else _utcnow().date()
     except Exception:
         return jsonify({"msg": "Formato de data invalido. Use YYYY-MM-DD"}), 400
 
@@ -2224,7 +2548,7 @@ def get_daily_heatmap():
 def get_daily_heatmap_image():
     date_str = request.args.get("date")
     try:
-        date_ref = datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else datetime.utcnow().date()
+        date_ref = datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else _utcnow().date()
     except Exception:
         return jsonify({"msg": "Formato de data invalido. Use YYYY-MM-DD"}), 400
 
@@ -2262,6 +2586,35 @@ def get_rolling24_heatmap_image():
     return send_file(BytesIO(img_bytes), mimetype="image/jpeg", as_attachment=False, download_name="heatmap_rolling24.jpg")
 
 
+@app.route("/api/heatmap/3d", methods=["GET"])
+def get_heatmap_3d():
+    hours = request.args.get("hours", default=24, type=int)
+    grid_size = request.args.get("grid", default=24, type=int)
+    grid_size = max(8, min(grid_size, 64))
+    points = _heatmap_points_3d(hours=hours, grid_size=grid_size)
+    return jsonify(
+        {
+            "camera_id": ACTIVE_CAMERA_ID,
+            "hours": max(1, min(hours, 168)),
+            "grid_size": grid_size,
+            "points_count": len(points),
+            "points": points,
+        }
+    )
+
+
+@app.route("/api/airflow/simulate", methods=["POST"])
+def airflow_simulate():
+    payload = request.get_json(silent=True) or {}
+    fans = payload.get("fans")
+    grid_size = int(payload.get("grid_size", 24))
+    grid_size = max(8, min(grid_size, 40))
+    if fans is not None and not isinstance(fans, list):
+        return jsonify({"msg": "Campo fans deve ser lista"}), 400
+    result = _simulate_airflow_field(fans=fans, grid_size=grid_size)
+    return jsonify(result)
+
+
 @app.route("/api/sensors/live", methods=["GET"])
 def get_sensors_live():
     return jsonify(
@@ -2275,6 +2628,23 @@ def get_sensors_live():
             "source": sensor_state["source"],
             "updated_at_epoch": sensor_state["updated_at"],
             "thresholds": sensor_thresholds,
+        }
+    )
+
+
+@app.route("/api/security/tamper", methods=["GET"])
+def tamper_status():
+    age = time.time() - float(sensor_state.get("updated_at", 0.0))
+    return jsonify(
+        {
+            "camera_id": ACTIVE_CAMERA_ID,
+            "last_alert_ts": float(tamper_state.get("last_alert_ts", 0.0)),
+            "last_causes": tamper_state.get("last_causes", []),
+            "alerts_count": int(tamper_state.get("alerts_count", 0)),
+            "dark_frames": int(tamper_state.get("dark_frames", 0)),
+            "freeze_frames": int(tamper_state.get("freeze_frames", 0)),
+            "sensor_stale": bool(age > TAMPER_SENSOR_STALE_SEC),
+            "sensor_age_sec": round(float(age), 2),
         }
     )
 
@@ -2334,7 +2704,7 @@ def weight_live():
 def weight_curve():
     days = request.args.get("days", default=21, type=int)
     days = max(1, min(days, 120))
-    start_dt = datetime.utcnow() - timedelta(days=days)
+    start_dt = _utcnow() - timedelta(days=days)
     rows = (
         WeightEstimate.query.filter(WeightEstimate.camera_id == ACTIVE_CAMERA_ID, WeightEstimate.timestamp >= start_dt)
         .order_by(WeightEstimate.timestamp.asc())
@@ -2472,7 +2842,7 @@ def acoustic_ingest():
 @app.route("/api/thermal-anomalies/live", methods=["GET"])
 def thermal_anomalies_live():
     last_minutes = request.args.get("minutes", default=20, type=int)
-    start = datetime.utcnow() - timedelta(minutes=max(1, min(last_minutes, 240)))
+    start = _utcnow() - timedelta(minutes=max(1, min(last_minutes, 240)))
     rows = (
         ThermalAnomaly.query.filter(ThermalAnomaly.camera_id == ACTIVE_CAMERA_ID, ThermalAnomaly.timestamp >= start)
         .order_by(ThermalAnomaly.id.desc())
@@ -2486,7 +2856,7 @@ def thermal_anomalies_live():
 
 @app.route("/api/energy/summary", methods=["GET"])
 def energy_summary():
-    now = datetime.utcnow()
+    now = _utcnow()
     month_start = datetime(now.year, now.month, 1)
     rows = (
         EnergyUsageDaily.query.filter(EnergyUsageDaily.camera_id == ACTIVE_CAMERA_ID, EnergyUsageDaily.day >= month_start)
@@ -2512,6 +2882,14 @@ def energy_summary():
             "suggestion": f"Se reduzir a temperatura-alvo em 0.5C, a economia estimada e de R$ {savings:.2f}.",
         }
     )
+
+
+@app.route("/api/energy/forecast", methods=["GET"])
+def energy_forecast():
+    hours = request.args.get("hours", default=12, type=int)
+    with app.app_context():
+        forecast = _energy_forecast(hours=hours)
+    return jsonify(forecast)
 
 
 @app.route("/api/audit/logs", methods=["GET"])
@@ -2552,7 +2930,7 @@ def sync_ack():
     if not isinstance(ids, list) or not ids:
         return jsonify({"msg": "Forneca lista de ids"}), 400
     rows = SyncQueueItem.query.filter(SyncQueueItem.id.in_(ids)).all()
-    now = datetime.utcnow()
+    now = _utcnow()
     for row in rows:
         row.status = "synced"
         row.synced_at = now
@@ -2924,6 +3302,40 @@ def weather_forecast():
     return jsonify(weather_state)
 
 
+@app.route("/api/reports/esg", methods=["POST"])
+def generate_esg_report():
+    data = request.get_json(silent=True) or {}
+    days = int(data.get("days", 30))
+    email = str(data.get("email", "")).strip() or None
+    try:
+        path = _generate_esg_report(ACTIVE_CAMERA_ID, days=days)
+    except Exception as exc:
+        return jsonify({"msg": f"Falha ao gerar PDF ESG: {exc}"}), 500
+
+    email_status = None
+    if email:
+        ok, detail = _send_report_email(path, email)
+        email_status = {"sent": ok, "detail": detail, "email": email}
+
+    _log_event(
+        event_type="esg_report",
+        level="info",
+        message="Relatorio ESG gerado",
+        metadata={"file": path, "days": days, "email_status": email_status},
+    )
+    return jsonify({"msg": "Relatorio ESG gerado", "file": path, "email_status": email_status})
+
+
+@app.route("/api/reports/esg/download", methods=["GET"])
+def download_esg_report():
+    days = request.args.get("days", default=30, type=int)
+    try:
+        path = _generate_esg_report(ACTIVE_CAMERA_ID, days=days)
+        return send_file(path, mimetype="application/pdf", as_attachment=True, download_name=os.path.basename(path))
+    except Exception as exc:
+        return jsonify({"msg": f"Falha ao gerar/exportar PDF ESG: {exc}"}), 500
+
+
 @app.route("/api/reports/weekly", methods=["POST"])
 def generate_weekly_report():
     data = request.get_json(silent=True) or {}
@@ -3019,7 +3431,7 @@ def get_summary():
     targets = _temperature_targets(ACTIVE_CAMERA_ID)
     batch = _active_batch(ACTIVE_CAMERA_ID)
     pending_sync = SyncQueueItem.query.filter_by(status="pending").count()
-    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = _utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     energy_today = EnergyUsageDaily.query.filter_by(camera_id=ACTIVE_CAMERA_ID, day=today).first()
     vent_sec_today = float(energy_today.ventilacao_seconds) if energy_today else 0.0
     aq_sec_today = float(energy_today.aquecedor_seconds) if energy_today else 0.0
@@ -3072,8 +3484,14 @@ def get_summary():
                 "ventilacao_seconds": round(vent_sec_today, 2),
                 "aquecedor_seconds": round(aq_sec_today, 2),
             },
+            "smart_grid_forecast_12h": _energy_forecast(hours=12),
             "sync": {"pending": pending_sync},
             "weather": weather_state,
+            "tamper": {
+                "last_alert_ts": float(tamper_state.get("last_alert_ts", 0.0)),
+                "last_causes": tamper_state.get("last_causes", []),
+                "alerts_count": int(tamper_state.get("alerts_count", 0)),
+            },
             "carcass": {
                 "count": len(carcass_state.get("items", [])),
                 "audio_alert": len(carcass_state.get("items", [])) > 0,
@@ -3127,3 +3545,4 @@ def health_check():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
+
