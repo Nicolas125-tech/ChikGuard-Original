@@ -26,7 +26,6 @@ import {
   Zap,
 } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import logoImg from './assets/logo.jpeg';
 
 const STORAGE = {
   token: 'cg_token',
@@ -186,7 +185,7 @@ function OpeningScreen() {
     <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-8">
       <div className="w-full max-w-md text-center">
         <div className="mx-auto mb-6 w-24 h-24 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center overflow-hidden">
-          <img src={logoImg} alt="ChikGuard Logo" className="w-20 h-20 object-contain" />
+          <img src="/logo.jpeg" alt="ChikGuard Logo" className="w-20 h-20 object-contain" />
         </div>
         <h1 className="text-3xl font-bold tracking-tight">ChickGuard AI</h1>
         <p className="text-slate-400 mt-2">Inicializando sistema...</p>
@@ -208,7 +207,7 @@ function LandingPage({ onLoginClick }) {
       <nav className="relative z-10 flex justify-between items-center p-6 max-w-7xl mx-auto w-full">
         <div className="flex items-center gap-2">
           <div className="bg-emerald-500/10 p-1 rounded-lg border border-emerald-500/30 w-11 h-11 flex items-center justify-center overflow-hidden">
-            <img src={logoImg} alt="ChikGuard Logo" className="w-8 h-8 object-contain" />
+            <img src="/logo.jpeg" alt="ChikGuard Logo" className="w-8 h-8 object-contain" />
           </div>
           <span className="text-xl font-bold tracking-tight">ChickGuard AI</span>
         </div>
@@ -313,7 +312,7 @@ function Dashboard({ token, serverIP, prefs, onSavePrefs, onSaveServer, onLogout
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
       <header className="bg-slate-900/80 border-b border-slate-800 px-6 h-20 flex justify-between items-center sticky top-0 z-30">
-        <div className="flex items-center gap-3"><div className="bg-emerald-500/10 p-1 rounded-lg border border-emerald-500/20 w-11 h-11 flex items-center justify-center overflow-hidden"><img src={logoImg} alt="ChikGuard Logo" className="w-8 h-8 object-contain" /></div><h1 className="text-xl font-bold">ChickGuard AI</h1></div>
+        <div className="flex items-center gap-3"><div className="bg-emerald-500/10 p-1 rounded-lg border border-emerald-500/20 w-11 h-11 flex items-center justify-center overflow-hidden"><img src="/logo.jpeg" alt="ChikGuard Logo" className="w-8 h-8 object-contain" /></div><h1 className="text-xl font-bold">ChickGuard AI</h1></div>
         <div className="flex items-center gap-2">
           {tabs.map((item) => {
             const Icon = item.icon;
