@@ -3,7 +3,11 @@
     "name": "ChickGuard Mobile",
     "slug": "mobile",
     "version": "1.0.0",
-    "platforms": ["ios", "android", "web"],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
     "sdkVersion": "48.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -12,6 +16,14 @@
       "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#0f172a"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "88d7f081-ad08-425e-ba52-e1a199cb661e"
+      }
+    },
+    "android": {
+      "package": "com.nicolastech125.mobile"
     }
   }
 }
