@@ -1,157 +1,118 @@
-
-
 # ChikGuard
 
-Sistema de monitoramento para criação de frangos usando visão computacional. Este documento fornece as instruções necessárias para configurar e executar os ambientes de backend, frontend e mobile.
+Sistema de monitoramento para criacao de frangos com visao computacional.
 
-## Funcionalidades (Exemplo)
+## Funcionalidades
 
 - Monitoramento de comportamento das aves.
 - Contagem de aves em tempo real.
-- Detecção de anomalias (ex: aves paradas por muito tempo).
+- Deteccao de anomalias.
+- API para frontend web e app mobile.
 
-### Web
+## Arquitetura Atual
 
-| Landing | Login |
-|---|---|
-| ![Web Landing](docs/screenshots/web-landing.jpeg) | ![Web Login](docs/screenshots/web-login.jpeg) |
+```text
+ChikGuard/
+|- backend/
+|  |- app.py
+|  |- src/
+|  |  |- api/
+|  |  |  |- routes.py
+|  |  |- core/
+|  |  |  |- config.py
+|  |  |  |- logger.py
+|  |  |- alerts/
+|  |     |- providers.py
+|  |- tests/
+|     |- test_config.py
+|     |- test_alerts.py
+|- frontend/
+|- mobile/
+```
 
-| Visao Geral | Aves Vistas |
-|---|---|
-| ![Web Visao Geral](docs/screenshots/web-overview.jpeg) | ![Web Aves](docs/screenshots/web-aves.jpeg) |
+## Pre-requisitos
 
-| Dispositivos | Historico |
-|---|---|
-| ![Web Dispositivos](docs/screenshots/web-dispositivos.jpeg) | ![Web Historico](docs/screenshots/web-historico.jpeg) |
-
-| Sistema | Configuracoes |
-|---|---|
-| ![Web Sistema](docs/screenshots/web-sistema.jpeg) | ![Web Configuracoes](docs/screenshots/web-configuracoes.jpeg) |
-
-
-## Pré-requisitos
-
-- Python 3.8+
+- Python 3.11+
 - Node.js 18+
 - npm ou yarn
-- Expo CLI
-- OpenCV
-- Cloudflare Tunnel (`cloudflared`)
+- Docker e Docker Compose (opcional, recomendado)
 
-## Instalação
+## Backend (execucao local)
 
-### Backend
+1. Entre na pasta:
 
-1. Navegue até o diretório do backend:
 ```bash
 cd backend
 ```
 
-2. Crie um ambiente virtual (opcional mas recomendado):
+2. Crie e ative um ambiente virtual:
+
 ```bash
 python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# ou
-venv\Scripts\activate  # Windows
+venv\Scripts\activate
 ```
 
-3. Instale as dependências:
+3. Instale dependencias:
+
 ```bash
 pip install -r requirements.txt
 ```
-4. Instale as dependências:
+
+4. Configure ambiente:
 
 ```bash
-pip install flask-bcrypt flask-sqlalchemy flask-jwt-extended flask-cors ultralytics opencv-python numpy
+copy .env.example .env
 ```
 
+5. Rode a API:
 
-5. Execute o servidor:
 ```bash
 python app.py
 ```
 
-O backend estará disponível em `http://localhost:5000`
+API padrao: `http://localhost:5000`
 
-### Cloudflare Tunnel
+## Docker (padronizado)
 
-1. Instale o `cloudflared` (Windows):
+Na raiz do projeto:
 
 ```bash
-winget install --id Cloudflare.cloudflared
+docker-compose up --build
 ```
 
-2. Execute o tunnel para a API local:
+Servico backend exposto em `http://localhost:5000`.
+
+## Testes
+
+Na raiz do projeto:
+
 ```bash
-cloudflared tunnel --url http://localhost:5000
+python -m pytest backend/tests -q
 ```
-3. Coloque o link HTTPS gerado (ex: `https://<hash>.trycloudflare.com`) na chave IP/URL de login.
+
+## Endpoints importantes
+
+- `GET /api/health`
+- `GET /api/runtime-status`
+- `POST /api/login`
+- `GET /api/status`
+- `GET /api/history`
+- `GET /api/video`
+
+## Frontend e Mobile
 
 ### Frontend
 
-1. Navegue até o diretório do frontend:
 ```bash
 cd frontend
-```
-
-2. Instale as dependências:
-```bash
 npm install
-```
-
-3. Inicie o servidor de desenvolvimento:
-```bash
 npm run dev
 ```
 
-O frontend estará disponível em `http://localhost:5173`
-
 ### Mobile
 
-1. Navegue até o diretório mobile:
 ```bash
 cd mobile
-```
-
-2. Instale as dependências:
-```bash
 npm install
-```
-
-3. Inicie o Expo:
-```bash
 npm start
 ```
-
-4. Escaneie o QR code com o app Expo Go no seu dispositivo móvel.
-
-## Estrutura do Projeto
-
-```
-ChikGuard/
-├── backend/          # API Flask para processamento de vídeo
-├── frontend/         # Aplicação web React + Vite
-└── mobile/           # Aplicação mobile React Native + Expo
-```
-
-## Galeria
-
-
-### Mobile
-
-| Login | Monitor |
-|---|---|
-| ![Mobile Login](docs/screenshots/mobile-login.jpeg) | ![Mobile Monitor](docs/screenshots/mobile-monitor.jpeg) |
-
-| Historico | Aves |
-|---|---|
-| ![Mobile Historico](docs/screenshots/mobile-historico.jpeg) | ![Mobile Aves](docs/screenshots/mobile-aves.jpeg) |
-
-| Alertas | Sistema |
-|---|---|
-| ![Mobile Alertas](docs/screenshots/mobile-alertas.jpeg) | ![Mobile Sistema](docs/screenshots/mobile-sistema.jpeg) |
-
-| Ajustes |
-|---|
-| ![Mobile Ajustes](docs/screenshots/mobile-ajustes.jpeg) |
-

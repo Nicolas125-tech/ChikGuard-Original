@@ -31,7 +31,6 @@ import os
 import random
 import json
 import math
-import traceback
 import ipaddress
 from datetime import datetime, timedelta, timezone
 from ultralytics import YOLO
@@ -39,6 +38,11 @@ from io import BytesIO
 import smtplib
 from email.message import EmailMessage
 import io
+
+from src.alerts.providers import build_alert_provider
+from src.api.routes import create_api_blueprint
+from src.core.config import load_settings
+from src.core.logger import configure_logging
 
 try:
     import requests
@@ -71,6 +75,9 @@ try:
 except Exception:
     canvas = None
     A4 = None
+
+SETTINGS = load_settings()
+LOGGER = configure_logging(SETTINGS.log_level)
 
 MODO_DETECCAO = os.getenv("MODO_DETECCAO", "aves").strip().lower()
 ACTIVE_CAMERA_ID = os.getenv("ACTIVE_CAMERA_ID", "galpao-1")
@@ -172,9 +179,9 @@ class ObjectDetector:
         try:
             self.model = YOLO(model_path)
             self.yolo_loaded = True
-            print(f"Model '{model_path}' loaded.")
+            LOGGER.info("Model '%s' loaded.", model_path)
             self.model.predict(np.zeros((480, 640, 3)), verbose=False)
-            print("Model warmed up.")
+            LOGGER.info("Model warmed up.")
             try:
                 # Seg models expose masks at inference time.
                 dummy = self.model.predict(np.zeros((256, 256, 3), dtype=np.uint8), verbose=False)
@@ -182,7 +189,7 @@ class ObjectDetector:
             except Exception:
                 self.supports_segmentation = False
         except Exception as exc:
-            print(f"Error loading Ultralytics model: {exc}")
+            LOGGER.exception("Error loading Ultralytics model: %s", exc)
 
     def detect(self, frame):
         if not self.yolo_loaded:
@@ -321,14 +328,15 @@ class RespiratoryAudioClassifier:
 
 
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///chickguard.db"
+app.config["SQLALCHEMY_DATABASE_URI"] = SETTINGS.database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["JWT_SECRET_KEY"] = "chave-secreta-granja-segura"
+app.config["JWT_SECRET_KEY"] = SETTINGS.jwt_secret_key
 
 CORS(app)
 db.init_app(app)
 bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
+ALERT_PROVIDER = build_alert_provider(SETTINGS)
 
 
 def _safe_json(value):
@@ -356,8 +364,12 @@ def _log_event(event_type, level, message, metadata=None, camera_id=ACTIVE_CAMER
             db.session.add(row)
             db.session.commit()
             _enqueue_sync_item("event_log", row.to_dict())
+        if str(level).lower() in {"high", "critical"}:
+            sent = ALERT_PROVIDER.send(f"[{event_type}] {message}")
+            if not sent:
+                LOGGER.warning("Alert provider failed for event_type=%s", event_type)
     except Exception as exc:
-        print(f"[EVENT] failed to persist '{event_type}': {exc}")
+        LOGGER.exception("[EVENT] failed to persist '%s': %s", event_type, exc)
 
 
 def _enqueue_sync_item(item_type, payload):
@@ -366,7 +378,7 @@ def _enqueue_sync_item(item_type, payload):
             db.session.add(SyncQueueItem(item_type=item_type, payload_json=_safe_json(payload), status="pending"))
             db.session.commit()
     except Exception as exc:
-        print(f"[SYNC] enqueue failed: {exc}")
+        LOGGER.exception("[SYNC] enqueue failed: %s", exc)
 
 
 def _request_actor():
@@ -468,7 +480,7 @@ def _audit(action, source="backend", details=None, actor=None):
             payload = row.to_dict()
         _enqueue_sync_item("audit_log", payload)
     except Exception as exc:
-        print(f"[AUDIT] failed: {exc}")
+        LOGGER.exception("[AUDIT] failed: %s", exc)
 
 
 def _class_name_by_id(class_id):
@@ -580,7 +592,7 @@ with app.app_context():
         db.session.commit()
 
 
-CAMERA_INDEX = 0
+CAMERA_INDEX = SETTINGS.camera_index
 global_frame = None
 fps_last_time = 0.0
 db_last_save_time = 0.0
@@ -1070,7 +1082,7 @@ def _sync_worker():
                                 item.attempts = int(item.attempts or 0) + 1
                             db.session.commit()
         except Exception as exc:
-            print(f"[SYNC] worker error: {exc}")
+            LOGGER.exception("[SYNC] worker error: %s", exc)
         time.sleep(SYNC_PUSH_INTERVAL_SEC)
 
 
@@ -1331,8 +1343,8 @@ def _update_immobility(selected):
         immobility_state.pop(uid, None)
 
 def _telegram_send(frame_bgr, caption):
-    token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-    chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    token = SETTINGS.telegram_bot_token
+    chat_id = SETTINGS.telegram_chat_id
     if not token or not chat_id:
         return False, "telegram_not_configured"
     if requests is None:
@@ -1358,8 +1370,8 @@ def _telegram_send(frame_bgr, caption):
 
 
 def _telegram_send_text(message):
-    token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-    chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    token = SETTINGS.telegram_bot_token
+    chat_id = SETTINGS.telegram_chat_id
     if not token or not chat_id or requests is None:
         return False, "telegram_not_configured"
     url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -1546,7 +1558,7 @@ def _fetch_weather_forecast_once():
         if preheat:
             _log_event("weather_cold_front", "medium", weather_state["message"], metadata=weather_state)
     except Exception as exc:
-        print(f"[WEATHER] fetch error: {exc}")
+        LOGGER.exception("[WEATHER] fetch error: %s", exc)
 
 
 def _weather_worker():
@@ -2204,7 +2216,7 @@ def _weekly_report_scheduler():
                     metadata={"file": path},
                 )
         except Exception as exc:
-            print(f"[weekly-report] scheduler error: {exc}")
+            LOGGER.exception("[weekly-report] scheduler error: %s", exc)
         time.sleep(60)
 
 
@@ -2217,7 +2229,7 @@ def camera_loop():
     last_reopen_attempt_ts = 0.0
     camera_lost_logged = False
 
-    print("Starting video pipeline...")
+    LOGGER.info("Starting video pipeline...")
     cap = cv2.VideoCapture(CAMERA_INDEX)
     if cap.isOpened():
         use_basic_simulation = False
@@ -2323,8 +2335,7 @@ def camera_loop():
         except Exception as exc:
             current_time = time.time()
             if current_time - last_error_print_time > 5:
-                print(f"CRITICAL ERROR IN CAMERA THREAD: {exc}")
-                traceback.print_exc()
+                LOGGER.exception("CRITICAL ERROR IN CAMERA THREAD: %s", exc)
                 last_error_print_time = current_time
             # Preserve the last good frame to avoid UI flicker on transient errors.
             with lock:
@@ -2345,87 +2356,37 @@ sync_thread.start()
 weather_thread = threading.Thread(target=_weather_worker, daemon=True)
 weather_thread.start()
 
-
-@app.route("/api/login", methods=["POST"])
-def login():
-    username = request.json.get("username", None)
-    password = request.json.get("password", None)
-    ip = _request_ip()
-    key = f"{ip}:{username or 'unknown'}"
-    now = time.time()
-    attempts = [ts for ts in login_attempt_state.get(key, []) if (now - float(ts)) <= LOGIN_RATE_WINDOW_SEC]
-    login_attempt_state[key] = attempts
-    if len(attempts) >= LOGIN_RATE_MAX_ATTEMPTS:
-        _audit("login_rate_limited", source="security", actor=username or "unknown", details={"ip": ip})
-        return jsonify({"msg": "Muitas tentativas. Tente novamente mais tarde."}), 429
-    account = Account.query.filter_by(username=username).first()
-    if account and account.active and bcrypt.check_password_hash(account.password_hash, password):
-        login_attempt_state[key] = []
-        account.last_login_at = _utcnow()
-        db.session.commit()
-        _audit("login_success", source="auth", actor=username, details={"username": username, "role": account.role})
-        token = create_access_token(identity=username, additional_claims={"role": account.role})
-        return jsonify(access_token=token, role=account.role, username=account.username), 200
-    # Legacy fallback for old User table, role defaults to admin for backward compatibility.
-    user = User.query.filter_by(username=username).first()
-    if user and bcrypt.check_password_hash(user.password, password):
-        login_attempt_state[key] = []
-        _audit("login_success_legacy_user", source="auth", actor=username, details={"username": username})
-        token = create_access_token(identity=username, additional_claims={"role": "admin"})
-        return jsonify(access_token=token, role="admin", username=username), 200
-    login_attempt_state[key] = attempts + [now]
-    _audit("login_failed", source="auth", actor=username or "unknown", details={"username": username})
-    return jsonify({"msg": "Credenciais invalidas"}), 401
-
-
-@app.route("/api/video")
-def video_feed():
-    def generate():
-        encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), int(STREAM_JPEG_QUALITY)]
-        while True:
-            with lock:
-                if global_frame is None:
-                    time.sleep(0.02)
-                    continue
-                ret, buffer = cv2.imencode(".jpg", global_frame, encode_params)
-            if not ret:
-                time.sleep(0.01)
-                continue
-            yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + buffer.tobytes() + b"\r\n"
-            if STREAM_FRAME_INTERVAL_SEC > 0:
-                time.sleep(STREAM_FRAME_INTERVAL_SEC)
-
-    return Response(generate(), mimetype="multipart/x-mixed-replace; boundary=frame")
-
-
-@app.route("/api/status", methods=["GET"])
-def get_status():
-    ultima = Reading.query.order_by(Reading.id.desc()).first()
-    if ultima:
-        return jsonify(
-            {
-                "temperatura": ultima.temperatura,
-                "status": ultima.status,
-                "cor": "red" if ultima.status == "CALOR" else "blue" if ultima.status == "FRIO" else "green",
-                "mensagem": "Atencao necessaria" if ultima.status != "NORMAL" else "Ambiente estavel",
-            }
-        )
-    return jsonify({"temperatura": 0, "status": "INICIANDO", "cor": "gray", "mensagem": "..."})
-
-
-@app.route("/api/history", methods=["GET"])
-def get_history():
-    limit = request.args.get("limit", default=10, type=int)
-    limit = max(1, min(limit, 500))
-    leituras = Reading.query.order_by(Reading.id.desc()).limit(limit).all()
-    return jsonify([l.to_dict() for l in reversed(leituras)])
-
-
-@app.route("/api/chick_count", methods=["GET"])
-def get_chick_count():
-    with lock:
-        count = object_count
-    return jsonify({"count": count})
+api_blueprint = create_api_blueprint(
+    {
+        "time": time,
+        "cv2": cv2,
+        "db": db,
+        "bcrypt": bcrypt,
+        "create_access_token": create_access_token,
+        "request_ip": _request_ip,
+        "audit": _audit,
+        "utcnow": _utcnow,
+        "login_attempt_state": login_attempt_state,
+        "login_rate_window_sec": LOGIN_RATE_WINDOW_SEC,
+        "login_rate_max_attempts": LOGIN_RATE_MAX_ATTEMPTS,
+        "Account": Account,
+        "User": User,
+        "Reading": Reading,
+        "lock": lock,
+        "get_global_frame": lambda: global_frame,
+        "get_object_count": lambda: object_count,
+        "stream_jpeg_quality": STREAM_JPEG_QUALITY,
+        "stream_frame_interval_sec": STREAM_FRAME_INTERVAL_SEC,
+        "camera_thread": t,
+        "weekly_thread": weekly_thread,
+        "sync_thread": sync_thread,
+        "weather_thread": weather_thread,
+        "settings": SETTINGS,
+        "active_camera_id": ACTIVE_CAMERA_ID,
+        "camera_index": CAMERA_INDEX,
+    }
+)
+app.register_blueprint(api_blueprint)
 
 
 @app.route("/api/birds/live", methods=["GET"])
@@ -3530,19 +3491,12 @@ def get_system_info():
     )
 
 
-@app.route("/api/health")
-def health_check():
-    return jsonify(
-        {
-            "status": "ok",
-            "camera_thread_alive": t.is_alive(),
-            "weekly_scheduler_alive": weekly_thread.is_alive(),
-            "sync_thread_alive": sync_thread.is_alive(),
-            "weather_thread_alive": weather_thread.is_alive(),
-        }
-    )
-
-
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    LOGGER.info(
+        "Starting API host=%s port=%s env=%s",
+        SETTINGS.flask_host,
+        SETTINGS.flask_port,
+        SETTINGS.app_env,
+    )
+    app.run(host=SETTINGS.flask_host, port=SETTINGS.flask_port, debug=False)
 
