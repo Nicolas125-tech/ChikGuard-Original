@@ -15,9 +15,16 @@ Sistema de monitoramento para criacao de frangos com visao computacional.
 ChikGuard/
 |- backend/
 |  |- app.py
+|  |- plugins/
+|  |  |- face_recognition/
+|  |  |- weapon_detection/
+|  |  |- fire_detection/
 |  |- src/
 |  |  |- api/
 |  |  |  |- routes.py
+|  |  |- plugins/
+|  |     |- manager.py
+|  |     |- base.py
 |  |  |- core/
 |  |  |  |- config.py
 |  |  |  |- logger.py
@@ -94,10 +101,28 @@ python -m pytest backend/tests -q
 
 - `GET /api/health`
 - `GET /api/runtime-status`
+- `GET /api/plugins`
+- `POST /api/plugins/reload`
 - `POST /api/login`
 - `GET /api/status`
 - `GET /api/history`
 - `GET /api/video`
+
+## Sistema de plugins
+
+Cada plugin fica em `backend/plugins/<nome>/plugin.py` e expoe uma funcao `register()`.
+
+Exemplo minimo:
+
+```python
+from src.plugins.base import PluginBase, PluginInfo
+
+class MyPlugin(PluginBase):
+    info = PluginInfo(name="my_plugin", version="0.1.0", description="example")
+
+def register():
+    return MyPlugin()
+```
 
 ## Frontend e Mobile
 

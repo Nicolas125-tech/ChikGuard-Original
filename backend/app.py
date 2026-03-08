@@ -43,6 +43,7 @@ from src.alerts.providers import build_alert_provider
 from src.api.routes import create_api_blueprint
 from src.core.config import load_settings
 from src.core.logger import configure_logging
+from src.plugins.manager import PluginManager
 
 try:
     import requests
@@ -337,6 +338,9 @@ db.init_app(app)
 bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
 ALERT_PROVIDER = build_alert_provider(SETTINGS)
+PLUGINS_ROOT = os.getenv("PLUGINS_DIR", os.path.join(os.path.dirname(__file__), "plugins"))
+PLUGIN_MANAGER = PluginManager(plugins_root=PLUGINS_ROOT, logger=LOGGER)
+PLUGIN_MANAGER.load_all({"logger": LOGGER, "settings": SETTINGS})
 
 
 def _safe_json(value):
@@ -368,6 +372,16 @@ def _log_event(event_type, level, message, metadata=None, camera_id=ACTIVE_CAMER
             sent = ALERT_PROVIDER.send(f"[{event_type}] {message}")
             if not sent:
                 LOGGER.warning("Alert provider failed for event_type=%s", event_type)
+        PLUGIN_MANAGER.emit_event(
+            "event_log",
+            {
+                "camera_id": camera_id,
+                "event_type": event_type,
+                "level": level,
+                "message": message,
+                "metadata": metadata or {},
+            },
+        )
     except Exception as exc:
         LOGGER.exception("[EVENT] failed to persist '%s': %s", event_type, exc)
 
@@ -3489,6 +3503,23 @@ def get_system_info():
             "cough_model_path": COUGH_MODEL_PATH,
         }
     )
+
+
+@app.route("/api/plugins", methods=["GET"])
+def get_plugins():
+    items = PLUGIN_MANAGER.list_plugins()
+    return jsonify({"count": len(items), "plugins": items, "plugins_root": PLUGINS_ROOT})
+
+
+@app.route("/api/plugins/reload", methods=["POST"])
+def reload_plugins():
+    ok, resp = _guard_critical_action("plugins_reload")
+    if not ok:
+        return resp
+    PLUGIN_MANAGER.load_all({"logger": LOGGER, "settings": SETTINGS})
+    items = PLUGIN_MANAGER.list_plugins()
+    _audit("plugins_reloaded", source="backend", details={"count": len(items)})
+    return jsonify({"msg": "Plugins recarregados", "count": len(items), "plugins": items})
 
 
 if __name__ == "__main__":
