@@ -395,12 +395,20 @@ def _log_event(event_type, level, message, metadata=None, camera_id=ACTIVE_CAMER
 
 
 def _enqueue_sync_item(item_type, payload):
+    _enqueue_sync_items_bulk(item_type, [payload])
+
+
+def _enqueue_sync_items_bulk(item_type, payloads):
     try:
         with app.app_context():
-            db.session.add(SyncQueueItem(item_type=item_type, payload_json=_safe_json(payload), status="pending"))
+            rows = [
+                SyncQueueItem(item_type=item_type, payload_json=_safe_json(p), status="pending")
+                for p in payloads
+            ]
+            db.session.bulk_save_objects(rows)
             db.session.commit()
     except Exception as exc:
-        LOGGER.exception("[SYNC] enqueue failed: %s", exc)
+        LOGGER.exception("[SYNC] bulk enqueue failed: %s", exc)
 
 
 def _request_actor():
@@ -1008,8 +1016,7 @@ def _detect_thermal_anomalies(gray_frame, ambient_temp, frame_shape):
         rows = [ThermalAnomaly(camera_id=ACTIVE_CAMERA_ID, **a) for a in anomalies[:30]]
         db.session.bulk_save_objects(rows)
         db.session.commit()
-        for row in rows:
-            _enqueue_sync_item("thermal_anomaly", row.to_dict())
+        _enqueue_sync_items_bulk("thermal_anomaly", [r.to_dict() for r in rows])
 
     if (now - last_thermal_alert_ts) >= THERMAL_ANOMALY_COOLDOWN_SEC:
         last_thermal_alert_ts = now
@@ -3439,6 +3446,9 @@ def get_alerts():
 
 @app.route("/api/summary", methods=["GET"])
 def get_summary():
+    ok, resp = _guard_critical_action("summary_view", permission="monitor.read")
+    if not ok:
+        return resp
     ultima = Reading.query.order_by(Reading.id.desc()).first()
     recentes = Reading.query.order_by(Reading.id.desc()).limit(30).all()
     temperaturas = [item.temperatura for item in recentes]
