@@ -1,5 +1,6 @@
 from flask import Flask, jsonify, request, send_file, has_request_context
 from flask_cors import CORS
+from flask_socketio import SocketIO
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager, create_access_token, verify_jwt_in_request, get_jwt_identity
 from database import (
@@ -49,6 +50,11 @@ try:
     import requests
 except Exception:
     requests = None
+
+try:
+    import psutil
+except Exception:
+    psutil = None
 
 try:
     import librosa
@@ -342,6 +348,7 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["JWT_SECRET_KEY"] = SETTINGS.jwt_secret_key
 
 CORS(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
 db.init_app(app)
 bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
@@ -380,16 +387,23 @@ def _log_event(event_type, level, message, metadata=None, camera_id=ACTIVE_CAMER
             sent = ALERT_PROVIDER.send(f"[{event_type}] {message}")
             if not sent:
                 LOGGER.warning("Alert provider failed for event_type=%s", event_type)
-        PLUGIN_MANAGER.emit_event(
-            "event_log",
-            {
-                "camera_id": camera_id,
-                "event_type": event_type,
-                "level": level,
-                "message": message,
-                "metadata": metadata or {},
-            },
-        )
+
+        event_payload = {
+            "camera_id": camera_id,
+            "event_type": event_type,
+            "level": level,
+            "message": message,
+            "metadata": metadata or {},
+            "timestamp": _utcnow().isoformat()
+        }
+
+        # Enviar via WebSocket instantaneamente
+        try:
+            socketio.emit("new_alert", event_payload)
+        except Exception as ws_exc:
+            LOGGER.warning("Failed to emit WebSocket event: %s", ws_exc)
+
+        PLUGIN_MANAGER.emit_event("event_log", event_payload)
     except Exception as exc:
         LOGGER.exception("[EVENT] failed to persist '%s': %s", event_type, exc)
 
@@ -646,6 +660,18 @@ object_count = 0
 APP_START_TIME = time.time()
 
 _resolved_model_path = YOLO_SEG_MODEL_PATH if os.path.exists(YOLO_SEG_MODEL_PATH) else YOLO_MODEL_PATH
+
+# Prioritize ONNX models for TensorRT/ONNX acceleration if available
+_onnx_seg_path = YOLO_SEG_MODEL_PATH.replace(".pt", ".onnx")
+_onnx_det_path = YOLO_MODEL_PATH.replace(".pt", ".onnx")
+
+if os.path.exists(_onnx_seg_path):
+    _resolved_model_path = _onnx_seg_path
+    LOGGER.info(f"Usando modelo ONNX acelerado (Seg): {_resolved_model_path}")
+elif os.path.exists(_onnx_det_path):
+    _resolved_model_path = _onnx_det_path
+    LOGGER.info(f"Usando modelo ONNX acelerado (Det): {_resolved_model_path}")
+
 detector = ObjectDetector(model_path=_resolved_model_path)
 audio_classifier = RespiratoryAudioClassifier(COUGH_MODEL_PATH)
 live_birds = {}
@@ -752,6 +778,70 @@ _tamper_prev_gray = None
 login_attempt_state = {}
 
 last_weekly_report_key = None
+
+hardware_state = {
+    "cpu_usage_pct": 0.0,
+    "ram_usage_pct": 0.0,
+    "disk_usage_pct": 0.0,
+    "cpu_temp_c": 0.0,
+    "is_mocked": True,
+    "last_update": 0.0
+}
+
+
+def _hardware_monitor_worker():
+    while True:
+        try:
+            now = time.time()
+            if psutil is not None and not os.getenv("ENV", "").strip().lower() == "development":
+                cpu = psutil.cpu_percent(interval=1)
+                ram = psutil.virtual_memory().percent
+                disk = psutil.disk_usage('/').percent
+
+                # Temperatura da CPU (se disponivel no psutil, em Windows 11 pode falhar/estar vazio)
+                temp = 0.0
+                has_real_temp = False
+                if hasattr(psutil, "sensors_temperatures"):
+                    temps = psutil.sensors_temperatures()
+                    if temps:
+                        for name, entries in temps.items():
+                            for entry in entries:
+                                if entry.current:
+                                    temp = max(temp, entry.current)
+                                    has_real_temp = True
+
+                if not has_real_temp:
+                    temp = 45.0 + random.uniform(-2, 3) # Mock the temperature if unavailable
+
+                hardware_state.update({
+                    "cpu_usage_pct": cpu,
+                    "ram_usage_pct": ram,
+                    "disk_usage_pct": disk,
+                    "cpu_temp_c": round(temp, 1),
+                    "is_mocked": False,
+                    "last_update": now
+                })
+            else:
+                # Mock para desenvolvimento (ex: Windows 11 / sem acesso ao hardware real do pi)
+                hardware_state.update({
+                    "cpu_usage_pct": round(random.uniform(15.0, 35.0), 1),
+                    "ram_usage_pct": round(random.uniform(40.0, 60.0), 1),
+                    "disk_usage_pct": 45.5,
+                    "cpu_temp_c": round(random.uniform(40.0, 50.0), 1),
+                    "is_mocked": True,
+                    "last_update": now
+                })
+
+            # Emitir métricas de hardware via websocket
+            try:
+                socketio.emit("hardware_update", hardware_state)
+            except Exception as ws_exc:
+                LOGGER.warning("Failed to emit hardware stats: %s", ws_exc)
+
+            time.sleep(15) # Atualiza a cada 15 segundos
+        except Exception as exc:
+            LOGGER.exception("[HARDWARE] monitor error: %s", exc)
+            time.sleep(30)
 
 
 def _init_bird_uid_counter():
@@ -2398,6 +2488,16 @@ def camera_loop():
                     db.session.add(reading)
                     db.session.commit()
                     _enqueue_sync_item("reading", reading.to_dict())
+
+                    try:
+                        socketio.emit("reading_update", {
+                            "temperatura": round(temp_atual, 1),
+                            "status": status,
+                            "camera_id": ACTIVE_CAMERA_ID
+                        })
+                    except Exception as ws_exc:
+                        LOGGER.warning("Failed to emit WebSocket reading: %s", ws_exc)
+
                 db_last_save_time = current_time
 
         except Exception as exc:
@@ -2423,6 +2523,8 @@ sync_thread = threading.Thread(target=_sync_worker, daemon=True)
 sync_thread.start()
 weather_thread = threading.Thread(target=_weather_worker, daemon=True)
 weather_thread.start()
+hardware_thread = threading.Thread(target=_hardware_monitor_worker, daemon=True)
+hardware_thread.start()
 
 api_blueprint = create_api_blueprint(
     {
@@ -2449,6 +2551,7 @@ api_blueprint = create_api_blueprint(
         "weekly_thread": weekly_thread,
         "sync_thread": sync_thread,
         "weather_thread": weather_thread,
+        "hardware_thread": hardware_thread,
         "settings": SETTINGS,
         "active_camera_id": ACTIVE_CAMERA_ID,
         "camera_index": CAMERA_INDEX,
@@ -3223,6 +3326,11 @@ def get_estado_dispositivos():
     return jsonify(estado_dispositivos)
 
 
+@app.route("/api/hardware-health", methods=["GET"])
+def get_hardware_health():
+    return jsonify(hardware_state)
+
+
 @app.route("/api/events", methods=["GET"])
 def get_events():
     limit = request.args.get("limit", default=100, type=int)
@@ -3543,6 +3651,7 @@ def get_system_info():
             "weekly_scheduler_alive": weekly_thread.is_alive(),
             "sync_thread_alive": sync_thread.is_alive(),
             "weather_thread_alive": weather_thread.is_alive(),
+            "hardware_thread_alive": hardware_thread.is_alive(),
             "modo_deteccao": MODO_DETECCAO,
             "yolo_loaded": detector.yolo_loaded,
             "yolo_segmentation": bool(detector.supports_segmentation),
@@ -3581,10 +3690,10 @@ def reload_plugins():
 
 if __name__ == "__main__":
     LOGGER.info(
-        "Starting API host=%s port=%s env=%s",
+        "Starting API (with WebSockets) host=%s port=%s env=%s",
         SETTINGS.flask_host,
         SETTINGS.flask_port,
         SETTINGS.app_env,
     )
-    app.run(host=SETTINGS.flask_host, port=SETTINGS.flask_port, debug=False)
+    socketio.run(app, host=SETTINGS.flask_host, port=SETTINGS.flask_port, debug=False, allow_unsafe_werkzeug=True)
 

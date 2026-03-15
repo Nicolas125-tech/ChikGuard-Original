@@ -13,3 +13,5 @@ librosa
 soundfile
 joblib
 pytest
+Flask-SocketIO
+psutil
