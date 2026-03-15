@@ -395,20 +395,12 @@ def _log_event(event_type, level, message, metadata=None, camera_id=ACTIVE_CAMER
 
 
 def _enqueue_sync_item(item_type, payload):
-    _enqueue_sync_items_bulk(item_type, [payload])
-
-
-def _enqueue_sync_items_bulk(item_type, payloads):
     try:
         with app.app_context():
-            rows = [
-                SyncQueueItem(item_type=item_type, payload_json=_safe_json(p), status="pending")
-                for p in payloads
-            ]
-            db.session.bulk_save_objects(rows)
+            db.session.add(SyncQueueItem(item_type=item_type, payload_json=_safe_json(payload), status="pending"))
             db.session.commit()
     except Exception as exc:
-        LOGGER.exception("[SYNC] bulk enqueue failed: %s", exc)
+        LOGGER.exception("[SYNC] enqueue failed: %s", exc)
 
 
 def _request_actor():
@@ -1016,7 +1008,8 @@ def _detect_thermal_anomalies(gray_frame, ambient_temp, frame_shape):
         rows = [ThermalAnomaly(camera_id=ACTIVE_CAMERA_ID, **a) for a in anomalies[:30]]
         db.session.bulk_save_objects(rows)
         db.session.commit()
-        _enqueue_sync_items_bulk("thermal_anomaly", [r.to_dict() for r in rows])
+        for row in rows:
+            _enqueue_sync_item("thermal_anomaly", row.to_dict())
 
     if (now - last_thermal_alert_ts) >= THERMAL_ANOMALY_COOLDOWN_SEC:
         last_thermal_alert_ts = now
