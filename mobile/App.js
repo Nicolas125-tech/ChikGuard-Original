@@ -57,7 +57,7 @@ const fetchWithTimeout = async (url, options = {}, timeoutMs = 9000) => {
 // --- COMPONENTES DE TELA ---
 
 // 1. TELA DE MONITORAMENTO (HOME)
-const MonitorScreen = ({ serverUrl, dados, loading, chickCount, dispositivos, controlarDispositivo, loadingAcao, enviarComandoVoz }) => {
+const MonitorScreen = ({ serverUrl, dados, loading, chickCount, dispositivos, controlarDispositivo, loadingAcao, enviarComandoVoz, canControlDevices }) => {
   const [videoError, setVideoError] = useState('');
   const getStatusColor = () => {
     if (!dados) return "#334155";
@@ -135,9 +135,9 @@ const MonitorScreen = ({ serverUrl, dados, loading, chickCount, dispositivos, co
       <Text style={styles.sectionTitle}>Controlo Ambiental</Text>
       <View style={styles.actionGrid}>
         <TouchableOpacity 
-          style={[styles.actionButton, dispositivos.ventilacao && styles.actionButtonActiveBlue]} 
+          style={[styles.actionButton, dispositivos.ventilacao && styles.actionButtonActiveBlue, !canControlDevices && styles.actionButtonDisabled]} 
           onPress={() => controlarDispositivo('ventilacao', !dispositivos.ventilacao)}
-          disabled={loadingAcao}
+          disabled={loadingAcao || !canControlDevices}
         >
           <Wind size={24} color={dispositivos.ventilacao ? "#fff" : "#3b82f6"} />
           <Text style={[styles.actionLabel, dispositivos.ventilacao && {color: '#fff'}]}>Ventilação</Text>
@@ -146,9 +146,9 @@ const MonitorScreen = ({ serverUrl, dados, loading, chickCount, dispositivos, co
           </Text>
         </TouchableOpacity>
         <TouchableOpacity 
-          style={[styles.actionButton, dispositivos.aquecedor && styles.actionButtonActiveOrange]} 
+          style={[styles.actionButton, dispositivos.aquecedor && styles.actionButtonActiveOrange, !canControlDevices && styles.actionButtonDisabled]} 
           onPress={() => controlarDispositivo('aquecedor', !dispositivos.aquecedor)}
-          disabled={loadingAcao}
+          disabled={loadingAcao || !canControlDevices}
         >
           <Zap size={24} color={dispositivos.aquecedor ? "#fff" : "#f97316"} />
           <Text style={[styles.actionLabel, dispositivos.aquecedor && {color: '#fff'}]}>Aquecedor</Text>
@@ -265,6 +265,11 @@ const BirdsScreen = ({ serverUrl, enviarComandoVoz }) => {
         <MetricCard label="Aves unicas" value={registry.count ?? 0} />
         <MetricCard label="ID selecionado" value={selectedBird ?? "--"} />
       </View>
+      {!canControlDevices && (
+        <Text style={{ color: '#94a3b8', fontSize: 12, marginTop: 8 }}>
+          Perfil visitante: controles desativados.
+        </Text>
+      )}
 
       <Text style={styles.sectionTitle}>Aves vivas no quadro</Text>
       <View style={styles.listCard}>
@@ -759,6 +764,8 @@ const ConfigScreen = ({ serverUrl, setServerUrl, logout }) => {
 // --- COMPONENTE PRINCIPAL (APP) ---
 export default function App() {
   const [token, setToken] = useState(null);
+  const [role, setRole] = useState('admin');
+  const [username, setUsername] = useState('');
   const [serverUrl, setServerUrl] = useState('');
   const [activeTab, setActiveTab] = useState('monitor'); // monitor, birds, smart, management, alerts, history, system, config
   const [dados, setDados] = useState(null);
@@ -767,18 +774,38 @@ export default function App() {
   const [loadingAcao, setLoadingAcao] = useState(false);
 
   // Login States
+  const [accessMode, setAccessMode] = useState('admin');
   const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
   const [loadingLogin, setLoadingLogin] = useState(false);
   const normalizedServerUrl = normalizeServerUrl(serverUrl);
+  const isViewer = role === 'viewer';
+  const canControlDevices = role === 'admin' || role === 'operator';
+  const allowedTabs = isViewer
+    ? new Set(['monitor', 'alerts', 'history', 'system', 'config'])
+    : new Set(['monitor', 'history', 'birds', 'smart', 'management', 'alerts', 'system', 'config']);
 
   useEffect(() => {
     // Carregar dados salvos
-    AsyncStorage.multiGet(['cg_token', 'cg_server_url']).then(values => {
+    AsyncStorage.multiGet(['cg_token', 'cg_server_url', 'cg_role', 'cg_username']).then(values => {
       if(values[0][1]) setToken(values[0][1]);
       if(values[1][1]) setServerUrl(normalizeServerUrl(values[1][1]) || values[1][1]);
+      if(values[2][1]) setRole(values[2][1] || 'admin');
+      if(values[3][1]) setUsername(values[3][1] || '');
     });
   }, []);
+
+  useEffect(() => {
+    if (isViewer && !allowedTabs.has(activeTab)) {
+      setActiveTab('monitor');
+    }
+  }, [isViewer, allowedTabs, activeTab]);
+
+  useEffect(() => {
+    if (accessMode === 'viewer' && !user) {
+      setUser('visitante');
+    }
+  }, [accessMode, user]);
 
   // Polling de dados (Só roda se estiver logado e na aba monitor)
   useEffect(() => {
@@ -839,8 +866,12 @@ export default function App() {
       if(req.ok) {
         await AsyncStorage.setItem('cg_token', data.access_token);
         await AsyncStorage.setItem('cg_server_url', normalizedServerUrl);
+        await AsyncStorage.setItem('cg_role', data.role || 'admin');
+        await AsyncStorage.setItem('cg_username', data.username || user);
         setServerUrl(normalizedServerUrl);
         setToken(data.access_token);
+        setRole(data.role || 'admin');
+        setUsername(data.username || user);
       } else {
         Alert.alert("Erro", data?.msg || "Login falhou");
       }
@@ -880,6 +911,10 @@ export default function App() {
   };
 
   const controlarDispositivo = async (tipo, ligar) => {
+    if (!canControlDevices) {
+      Alert.alert("Acesso restrito", "Perfil visitante nao pode controlar dispositivos.");
+      return;
+    }
     if (!normalizedServerUrl) {
       Alert.alert("Erro", "Servidor inválido. Ajuste o URL em Configurações.");
       return;
@@ -918,6 +953,10 @@ export default function App() {
   };
 
   const enviarComandoVoz = () => {
+    if (!canControlDevices) {
+      Alert.alert("Acesso restrito", "Perfil visitante nao pode enviar comandos.");
+      return;
+    }
     Alert.alert(
       "Comando de voz",
       "Selecione o comando reconhecido:",
@@ -966,13 +1005,22 @@ export default function App() {
               <Image source={appLogo} style={styles.loginLogoImage} resizeMode="contain" />
             </View>
             <Text style={{fontSize:28, fontWeight:'bold', color:'white'}}>ChickGuard</Text>
-            <Text style={{color:'#64748b'}}>Acesso Profissional</Text>
+            <Text style={{color:'#64748b'}}>{accessMode === 'viewer' ? 'Acesso Visitante' : 'Acesso Profissional'}</Text>
           </View>
 
           {/* Config rápida de IP no login */}
           <View style={{marginBottom:20, width:'100%'}}>
              <Text style={styles.label}>ENDEREÇO DO SERVIDOR</Text>
              <TextInput style={styles.input} value={serverUrl} onChangeText={setServerUrl} placeholder="https://exemplo.trycloudflare.com" placeholderTextColor="#64748b" autoCapitalize='none'/>
+          </View>
+
+          <View style={styles.loginModeRow}>
+            <TouchableOpacity onPress={() => setAccessMode('admin')} style={[styles.loginModeBtn, accessMode === 'admin' && styles.loginModeBtnActive]}>
+              <Text style={[styles.loginModeText, accessMode === 'admin' && styles.loginModeTextActive]}>Administrador</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setAccessMode('viewer')} style={[styles.loginModeBtn, accessMode === 'viewer' && styles.loginModeBtnActiveBlue]}>
+              <Text style={[styles.loginModeText, accessMode === 'viewer' && styles.loginModeTextActiveBlue]}>Visitante</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.inputContainer}>
@@ -1018,22 +1066,25 @@ export default function App() {
             controlarDispositivo={controlarDispositivo}
             loadingAcao={loadingAcao}
             enviarComandoVoz={enviarComandoVoz}
+            canControlDevices={canControlDevices}
           />}
-        {activeTab === 'birds' && <BirdsScreen serverUrl={normalizedServerUrl} enviarComandoVoz={enviarComandoVoz} />}
-        {activeTab === 'smart' && <SmartOpsScreen serverUrl={normalizedServerUrl} token={token} />}
-        {activeTab === 'management' && <ManagementScreen serverUrl={normalizedServerUrl} />}
-        {activeTab === 'alerts' && <AlertsScreen serverUrl={normalizedServerUrl} />}
-        {activeTab === 'history' && <HistoryScreen serverUrl={normalizedServerUrl} />}
-        {activeTab === 'system' && <SystemScreen serverUrl={normalizedServerUrl} />}
-        {activeTab === 'config' && <ConfigScreen serverUrl={serverUrl} setServerUrl={(v) => setServerUrl(normalizeServerUrl(v) || v)} logout={() => {setToken(null); AsyncStorage.removeItem('cg_token');}} />}
+        {activeTab === 'birds' && allowedTabs.has('birds') && <BirdsScreen serverUrl={normalizedServerUrl} enviarComandoVoz={enviarComandoVoz} />}
+        {activeTab === 'smart' && allowedTabs.has('smart') && <SmartOpsScreen serverUrl={normalizedServerUrl} token={token} />}
+        {activeTab === 'management' && allowedTabs.has('management') && <ManagementScreen serverUrl={normalizedServerUrl} />}
+        {activeTab === 'alerts' && allowedTabs.has('alerts') && <AlertsScreen serverUrl={normalizedServerUrl} />}
+        {activeTab === 'history' && allowedTabs.has('history') && <HistoryScreen serverUrl={normalizedServerUrl} />}
+        {activeTab === 'system' && allowedTabs.has('system') && <SystemScreen serverUrl={normalizedServerUrl} />}
+        {activeTab === 'config' && allowedTabs.has('config') && <ConfigScreen serverUrl={serverUrl} setServerUrl={(v) => setServerUrl(normalizeServerUrl(v) || v)} logout={() => {setToken(null); setRole('admin'); setUsername(''); AsyncStorage.multiRemove(['cg_token', 'cg_role', 'cg_username']);}} />}
       </View>
 
       {/* Tab Bar (Menu Inferior) */}
       <View style={styles.tabBar}>
-        <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('monitor')}>
-          <LayoutDashboard color={activeTab==='monitor'?'#10b981':'#64748b'} size={24}/>
-          <Text style={[styles.tabLabel, {color: activeTab==='monitor'?'#10b981':'#64748b'}]}>Monitor</Text>
-        </TouchableOpacity>
+        {allowedTabs.has('monitor') && (
+          <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('monitor')}>
+            <LayoutDashboard color={activeTab==='monitor'?'#10b981':'#64748b'} size={24}/>
+            <Text style={[styles.tabLabel, {color: activeTab==='monitor'?'#10b981':'#64748b'}]}>Monitor</Text>
+          </TouchableOpacity>
+        )}
         
         <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('history')}>
           <History color={activeTab==='history'?'#10b981':'#64748b'} size={24}/>
@@ -1084,6 +1135,13 @@ const styles = StyleSheet.create({
   appName: { fontSize: 20, fontWeight: 'bold', color: 'white' },
   loginLogoWrap: { backgroundColor:'rgba(16,185,129,0.1)', width: 104, height: 104, borderRadius: 99, marginBottom:15, borderWidth:1, borderColor: 'rgba(16,185,129,0.2)', alignItems:'center', justifyContent:'center' },
   loginLogoImage: { width: 72, height: 72 },
+  loginModeRow: { flexDirection: 'row', gap: 10, marginBottom: 15, width: '100%' },
+  loginModeBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#334155', alignItems: 'center', backgroundColor: '#1e293b' },
+  loginModeBtnActive: { backgroundColor: 'rgba(16,185,129,0.2)', borderColor: 'rgba(16,185,129,0.4)' },
+  loginModeBtnActiveBlue: { backgroundColor: 'rgba(59,130,246,0.2)', borderColor: 'rgba(59,130,246,0.4)' },
+  loginModeText: { color: '#94a3b8', fontSize: 12, fontWeight: 'bold' },
+  loginModeTextActive: { color: '#34d399' },
+  loginModeTextActiveBlue: { color: '#93c5fd' },
   pageTitle: { fontSize: 22, fontWeight:'bold', color:'white', marginBottom:20, marginTop:10, marginLeft:20 },
   
   // Tabs
@@ -1138,6 +1196,7 @@ const styles = StyleSheet.create({
   // Action Grid
   actionGrid: { flexDirection:'row', gap:15 },
   actionButton: { flex:1, backgroundColor:'#1e2b3b', padding:15, borderRadius:20, alignItems:'center', borderWidth:1, borderColor:'#334155' },
+  actionButtonDisabled: { opacity: 0.5 },
   actionButtonActiveBlue: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
   actionButtonActiveOrange: { backgroundColor: '#f97316', borderColor: '#f97316' },
   actionLabel: { color:'#cbd5e1', marginTop:10, fontWeight:'bold', fontSize:12 },

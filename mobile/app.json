@@ -24,6 +24,13 @@
     },
     "android": {
       "package": "com.nicolastech125.mobile"
-    }
+    },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/88d7f081-ad08-425e-ba52-e1a199cb661e"
+    },
+    "ios": {}
   }
 }
