@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, Response, send_file, has_request_context
+from flask import Flask, jsonify, request, send_file, has_request_context
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager, create_access_token, verify_jwt_in_request, get_jwt_identity
@@ -576,12 +576,21 @@ def _estimate_bird_temp_proxy(gray_frame, box, ambient_temp):
 with app.app_context():
     db.create_all()
     if not User.query.filter_by(username="admin").first():
-        hashed = bcrypt.generate_password_hash("admin123").decode("utf-8")
+        admin_password = os.getenv("ADMIN_PASSWORD", "").strip()
+        if not admin_password:
+            raise RuntimeError("ADMIN_PASSWORD environment variable is not set. Cannot create default admin user securely.")
+        hashed = bcrypt.generate_password_hash(admin_password).decode("utf-8")
         db.session.add(User(username="admin", password=hashed))
         db.session.commit()
     if not Account.query.filter_by(username="admin").first():
         legacy_admin = User.query.filter_by(username="admin").first()
-        admin_hash = legacy_admin.password if legacy_admin is not None else bcrypt.generate_password_hash("admin123").decode("utf-8")
+        if legacy_admin is not None:
+            admin_hash = legacy_admin.password
+        else:
+            admin_password = os.getenv("ADMIN_PASSWORD", "").strip()
+            if not admin_password:
+                raise RuntimeError("ADMIN_PASSWORD environment variable is not set. Cannot create default admin account securely.")
+            admin_hash = bcrypt.generate_password_hash(admin_password).decode("utf-8")
         db.session.add(Account(username="admin", password_hash=admin_hash, role="admin", active=True))
         db.session.commit()
     if VIEWER_USERNAME and VIEWER_PASSWORD and not Account.query.filter_by(username=VIEWER_USERNAME).first():
