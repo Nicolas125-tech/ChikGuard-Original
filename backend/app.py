@@ -158,6 +158,7 @@ COUGH_MODEL_FEATURES = int(os.getenv("COUGH_MODEL_FEATURES", "48"))
 SIM_VIDEO_PATH = os.getenv("SIM_VIDEO_PATH", "video_granja.mp4").strip()
 VIEWER_USERNAME = os.getenv("VIEWER_USERNAME", "").strip()
 VIEWER_PASSWORD = os.getenv("VIEWER_PASSWORD", "").strip()
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "").strip()
 
 REPORTS_DIR = os.path.join(os.path.dirname(__file__), "reports")
 HEATMAP_DIR = os.path.join(REPORTS_DIR, "heatmaps")
@@ -568,12 +569,21 @@ def _estimate_bird_temp_proxy(gray_frame, box, ambient_temp):
 with app.app_context():
     db.create_all()
     if not User.query.filter_by(username="admin").first():
-        hashed = bcrypt.generate_password_hash("admin123").decode("utf-8")
+        if not ADMIN_PASSWORD:
+            raise RuntimeError("Admin user not found and ADMIN_PASSWORD environment variable is not set. "
+                               "Please set ADMIN_PASSWORD to initialize the admin account.")
+        hashed = bcrypt.generate_password_hash(ADMIN_PASSWORD).decode("utf-8")
         db.session.add(User(username="admin", password=hashed))
         db.session.commit()
     if not Account.query.filter_by(username="admin").first():
         legacy_admin = User.query.filter_by(username="admin").first()
-        admin_hash = legacy_admin.password if legacy_admin is not None else bcrypt.generate_password_hash("admin123").decode("utf-8")
+        if legacy_admin is not None:
+            admin_hash = legacy_admin.password
+        else:
+            if not ADMIN_PASSWORD:
+                raise RuntimeError("Admin account not found and ADMIN_PASSWORD environment variable is not set. "
+                                   "Please set ADMIN_PASSWORD to initialize the admin account.")
+            admin_hash = bcrypt.generate_password_hash(ADMIN_PASSWORD).decode("utf-8")
         db.session.add(Account(username="admin", password_hash=admin_hash, role="admin", active=True))
         db.session.commit()
     if VIEWER_USERNAME and VIEWER_PASSWORD and not Account.query.filter_by(username=VIEWER_USERNAME).first():
