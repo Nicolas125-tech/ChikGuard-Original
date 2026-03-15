@@ -12,3 +12,4 @@ reportlab
 librosa
 soundfile
 joblib
+pytest
