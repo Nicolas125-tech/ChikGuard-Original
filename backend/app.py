@@ -3446,9 +3446,6 @@ def get_alerts():
 
 @app.route("/api/summary", methods=["GET"])
 def get_summary():
-    ok, resp = _guard_critical_action("summary_view", permission="monitor.read")
-    if not ok:
-        return resp
     ultima = Reading.query.order_by(Reading.id.desc()).first()
     recentes = Reading.query.order_by(Reading.id.desc()).limit(30).all()
     temperaturas = [item.temperatura for item in recentes]
