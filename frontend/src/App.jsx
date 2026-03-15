@@ -29,6 +29,8 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YA
 
 const STORAGE = {
   token: 'cg_token',
+  role: 'cg_role',
+  username: 'cg_username',
   server: 'cg_ip',
   prefs: 'cg_prefs',
 };
@@ -62,6 +64,8 @@ const readPrefs = () => {
 export default function App() {
   const [booting, setBooting] = useState(true);
   const [token, setToken] = useState(localStorage.getItem(STORAGE.token));
+  const [role, setRole] = useState(localStorage.getItem(STORAGE.role) || 'admin');
+  const [username, setUsername] = useState(localStorage.getItem(STORAGE.username) || '');
   const [serverIP, setServerIP] = useState(localStorage.getItem(STORAGE.server) || '127.0.0.1');
   const [showLogin, setShowLogin] = useState(false);
   const [prefs, setPrefs] = useState(readPrefs);
@@ -90,17 +94,40 @@ export default function App() {
     return <TVScreen serverIP={serverIP} />;
   }
 
+  if (token && role === 'viewer') {
+    return (
+      <TVScreen
+        serverIP={serverIP}
+        showHeader
+        onLogout={() => {
+          localStorage.removeItem(STORAGE.token);
+          localStorage.removeItem(STORAGE.role);
+          localStorage.removeItem(STORAGE.username);
+          setToken(null);
+          setRole('admin');
+          setUsername('');
+        }}
+      />
+    );
+  }
+
   if (token) {
     return (
       <Dashboard
         token={token}
+        role={role}
+        username={username}
         serverIP={serverIP}
         prefs={prefs}
         onSavePrefs={savePrefs}
         onSaveServer={saveServer}
         onLogout={() => {
           localStorage.removeItem(STORAGE.token);
+          localStorage.removeItem(STORAGE.role);
+          localStorage.removeItem(STORAGE.username);
           setToken(null);
+          setRole('admin');
+          setUsername('');
         }}
       />
     );
@@ -112,9 +139,14 @@ export default function App() {
         serverIP={serverIP}
         setServerIP={saveServer}
         onBack={() => setShowLogin(false)}
-        onLogin={(accessToken) => {
+        onLogin={({ accessToken, role: nextRole, username: nextUser }) => {
+          const safeRole = nextRole || 'admin';
           localStorage.setItem(STORAGE.token, accessToken);
+          localStorage.setItem(STORAGE.role, safeRole);
+          localStorage.setItem(STORAGE.username, nextUser || '');
           setToken(accessToken);
+          setRole(safeRole);
+          setUsername(nextUser || '');
         }}
       />
     );
@@ -123,7 +155,7 @@ export default function App() {
   return <LandingPage onLoginClick={() => setShowLogin(true)} />;
 }
 
-function TVScreen({ serverIP }) {
+function TVScreen({ serverIP, showHeader = false, onLogout }) {
   const [summary, setSummary] = useState(null);
   const [alerts, setAlerts] = useState([]);
   const [weather, setWeather] = useState(null);
@@ -148,7 +180,14 @@ function TVScreen({ serverIP }) {
   }, [load]);
 
   return (
-    <div className="min-h-screen bg-black text-white p-6">
+    <div className="min-h-screen bg-black text-white">
+      {showHeader && (
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950">
+          <div className="font-bold text-lg">ChikGuard Visitante</div>
+          <button onClick={onLogout} className="text-sm text-slate-300 hover:text-white">Sair</button>
+        </div>
+      )}
+      <div className="p-6">
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden">
           <div className="p-4 border-b border-slate-800 text-2xl font-bold">ChikGuard TV</div>
@@ -175,6 +214,7 @@ function TVScreen({ serverIP }) {
             ))}
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
@@ -227,6 +267,7 @@ function LandingPage({ onLoginClick }) {
 }
 
 function LoginScreen({ serverIP, setServerIP, onBack, onLogin }) {
+  const [accessMode, setAccessMode] = useState('admin');
   const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
   const [loading, setLoading] = useState(false);
@@ -241,6 +282,10 @@ function LoginScreen({ serverIP, setServerIP, onBack, onLogin }) {
     }
   }, [setServerIP]);
 
+  useEffect(() => {
+    if (accessMode === 'viewer' && !user) setUser('visitante');
+  }, [accessMode, user]);
+
   const handleLogin = async (event) => {
     event.preventDefault();
     setLoading(true);
@@ -253,7 +298,7 @@ function LoginScreen({ serverIP, setServerIP, onBack, onLogin }) {
       });
       const data = await response.json();
       if (!response.ok) setError(data.msg || 'Credenciais invalidas.');
-      else onLogin(data.access_token);
+      else onLogin({ accessToken: data.access_token, role: data.role, username: data.username || user });
     } catch {
       setError('Falha de conexao. Verifique servidor.');
     } finally {
@@ -268,8 +313,13 @@ function LoginScreen({ serverIP, setServerIP, onBack, onLogin }) {
         <button onClick={() => setShowConfig((v) => !v)} className="absolute top-6 right-6 text-slate-500 hover:text-emerald-500"><Settings size={20} /></button>
 
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white">Login operacional</h1>
-          <p className="text-slate-400 text-sm mt-1">Acesso seguro</p>
+          <h1 className="text-3xl font-bold text-white">{accessMode === 'viewer' ? 'Login visitante' : 'Login administrador'}</h1>
+          <p className="text-slate-400 text-sm mt-1">{accessMode === 'viewer' ? 'Acesso somente leitura' : 'Acesso seguro'}</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 mb-5">
+          <button onClick={() => setAccessMode('admin')} className={`py-2 rounded-lg text-sm border ${accessMode === 'admin' ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-300' : 'bg-slate-950 border-slate-800 text-slate-400'}`}>Administrador</button>
+          <button onClick={() => setAccessMode('viewer')} className={`py-2 rounded-lg text-sm border ${accessMode === 'viewer' ? 'bg-blue-600/20 border-blue-500/40 text-blue-300' : 'bg-slate-950 border-slate-800 text-slate-400'}`}>Visitante</button>
         </div>
 
         {showConfig && (
@@ -293,9 +343,10 @@ function LoginScreen({ serverIP, setServerIP, onBack, onLogin }) {
   );
 }
 
-function Dashboard({ token, serverIP, prefs, onSavePrefs, onSaveServer, onLogout }) {
+function Dashboard({ token, role, username, serverIP, prefs, onSavePrefs, onSaveServer, onLogout }) {
   const [tab, setTab] = useState('overview');
-  const tabs = useMemo(() => [
+  const tabs = useMemo(() => {
+    const allTabs = [
     { id: 'overview', label: 'Visao Geral', icon: LayoutDashboard },
     { id: 'birds', label: 'Aves Vistas', icon: Users },
     { id: 'devices', label: 'Dispositivos', icon: SlidersHorizontal },
@@ -305,7 +356,15 @@ function Dashboard({ token, serverIP, prefs, onSavePrefs, onSaveServer, onLogout
     { id: 'history', label: 'Historico', icon: History },
     { id: 'system', label: 'Sistema', icon: Cpu },
     { id: 'settings', label: 'Configuracoes', icon: Settings },
-  ], []);
+    ];
+    if (role === 'viewer') {
+      const allow = new Set(['overview', 'alerts', 'history', 'system']);
+      return allTabs.filter((item) => allow.has(item.id));
+    }
+    return allTabs;
+  }, [role]);
+
+  const canControlDevices = role === 'admin' || role === 'operator';
 
   const settingsKey = `${serverIP}:${prefs.statusMs}:${prefs.historyMs}:${prefs.devicesMs}:${prefs.countMs}`;
 
@@ -322,9 +381,9 @@ function Dashboard({ token, serverIP, prefs, onSavePrefs, onSaveServer, onLogout
         </div>
       </header>
       <main className="flex-1 p-6 max-w-screen-2xl mx-auto w-full">
-        {tab === 'overview' && <OverviewPanel token={token} serverIP={serverIP} prefs={prefs} />}
+        {tab === 'overview' && <OverviewPanel token={token} serverIP={serverIP} prefs={prefs} canControlDevices={canControlDevices} />}
         {tab === 'birds' && <BirdsPanel token={token} serverIP={serverIP} prefs={prefs} />}
-        {tab === 'devices' && <DevicesPanel token={token} serverIP={serverIP} />}
+        {tab === 'devices' && <DevicesPanel token={token} serverIP={serverIP} canControlDevices={canControlDevices} />}
         {tab === 'smart' && <SmartOpsPanel serverIP={serverIP} prefs={prefs} token={token} />}
         {tab === 'management' && <ManagementPanel serverIP={serverIP} prefs={prefs} />}
         {tab === 'alerts' && <AlertsPanel serverIP={serverIP} prefs={prefs} />}
@@ -336,7 +395,7 @@ function Dashboard({ token, serverIP, prefs, onSavePrefs, onSaveServer, onLogout
   );
 }
 
-function OverviewPanel({ token, serverIP, prefs }) {
+function OverviewPanel({ token, serverIP, prefs, canControlDevices }) {
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState(false);
   const [videoBlocked, setVideoBlocked] = useState(false);
@@ -439,6 +498,7 @@ function OverviewPanel({ token, serverIP, prefs }) {
   }, [carcass?.audio_alert, carcass?.count]);
 
   const toggleDevice = async (tipo, ligar) => {
+    if (!canControlDevices) return;
     await fetch(`${baseUrl}/api/${tipo}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -480,8 +540,8 @@ function OverviewPanel({ token, serverIP, prefs }) {
 
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
           <div className="grid grid-cols-2 gap-4">
-            <button onClick={() => toggleDevice('ventilacao', !dispositivos.ventilacao)} className="bg-slate-950 border border-slate-800 p-4 rounded-xl flex flex-col items-center gap-3"><Wind size={22} className="text-blue-400" /><span className="text-sm">Ventilacao</span></button>
-            <button onClick={() => toggleDevice('aquecedor', !dispositivos.aquecedor)} className="bg-slate-950 border border-slate-800 p-4 rounded-xl flex flex-col items-center gap-3"><Zap size={22} className="text-orange-400" /><span className="text-sm">Aquecedor</span></button>
+            <button disabled={!canControlDevices} onClick={() => toggleDevice('ventilacao', !dispositivos.ventilacao)} className={`bg-slate-950 border border-slate-800 p-4 rounded-xl flex flex-col items-center gap-3 ${!canControlDevices ? 'opacity-50 cursor-not-allowed' : ''}`}><Wind size={22} className="text-blue-400" /><span className="text-sm">Ventilacao</span></button>
+            <button disabled={!canControlDevices} onClick={() => toggleDevice('aquecedor', !dispositivos.aquecedor)} className={`bg-slate-950 border border-slate-800 p-4 rounded-xl flex flex-col items-center gap-3 ${!canControlDevices ? 'opacity-50 cursor-not-allowed' : ''}`}><Zap size={22} className="text-orange-400" /><span className="text-sm">Aquecedor</span></button>
           </div>
         </div>
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
@@ -521,7 +581,7 @@ function OverviewPanel({ token, serverIP, prefs }) {
   );
 }
 
-function DevicesPanel({ token, serverIP }) {
+function DevicesPanel({ token, serverIP, canControlDevices }) {
   const [dispositivos, setDispositivos] = useState({ ventilacao: false, aquecedor: false });
   const [autoMode, setAutoMode] = useState({ enabled: false, effective_targets: null });
   const [lightPct, setLightPct] = useState(0);
@@ -550,6 +610,7 @@ function DevicesPanel({ token, serverIP }) {
   }, [loadDevices]);
 
   const toggleDevice = async (tipo, ligar) => {
+    if (!canControlDevices) return;
     await fetch(`${baseUrl}/api/${tipo}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -559,6 +620,7 @@ function DevicesPanel({ token, serverIP }) {
   };
 
   const toggleAuto = async (enabled) => {
+    if (!canControlDevices) return;
     await fetch(`${baseUrl}/api/auto-mode`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -568,6 +630,7 @@ function DevicesPanel({ token, serverIP }) {
   };
 
   const setDimmer = async (value) => {
+    if (!canControlDevices) return;
     setLightPct(value);
     await fetch(`${baseUrl}/api/luz-dimmer`, {
       method: 'POST',
@@ -582,25 +645,25 @@ function DevicesPanel({ token, serverIP }) {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <button onClick={() => toggleAuto(!autoMode.enabled)} className={`rounded-2xl border p-6 text-left ${autoMode.enabled ? 'bg-emerald-600/20 border-emerald-500/40' : 'bg-slate-900 border-slate-800'}`}>
+      <button disabled={!canControlDevices} onClick={() => toggleAuto(!autoMode.enabled)} className={`rounded-2xl border p-6 text-left ${autoMode.enabled ? 'bg-emerald-600/20 border-emerald-500/40' : 'bg-slate-900 border-slate-800'} ${!canControlDevices ? 'opacity-50 cursor-not-allowed' : ''}`}>
         <div className="flex items-center justify-between mb-3"><Cpu className={autoMode.enabled ? 'text-emerald-300' : 'text-emerald-400'} /><span className={`text-xs font-bold ${autoMode.enabled ? 'text-emerald-300' : 'text-slate-500'}`}>{autoMode.enabled ? 'PILOTO AUTOMATICO' : 'MANUAL'}</span></div>
         <h3 className="font-bold text-lg">Termostato inteligente</h3>
         <p className="text-slate-400 text-sm mt-1">Liga ventilacao/aquecedor com histerese.</p>
         {autoMode.effective_targets && <p className="text-xs text-slate-400 mt-2">Fan on: {autoMode.effective_targets.fan_on_temp} C | Heater on: {autoMode.effective_targets.heater_on_temp} C</p>}
       </button>
-      <button onClick={() => toggleDevice('ventilacao', !dispositivos.ventilacao)} className={`rounded-2xl border p-6 text-left ${dispositivos.ventilacao ? 'bg-blue-600/20 border-blue-500/40' : 'bg-slate-900 border-slate-800'}`}>
+      <button disabled={!canControlDevices} onClick={() => toggleDevice('ventilacao', !dispositivos.ventilacao)} className={`rounded-2xl border p-6 text-left ${dispositivos.ventilacao ? 'bg-blue-600/20 border-blue-500/40' : 'bg-slate-900 border-slate-800'} ${!canControlDevices ? 'opacity-50 cursor-not-allowed' : ''}`}>
         <div className="flex items-center justify-between mb-3"><Wind className={dispositivos.ventilacao ? 'text-blue-300' : 'text-blue-400'} /><span className={`text-xs font-bold ${dispositivos.ventilacao ? 'text-blue-300' : 'text-slate-500'}`}>{dispositivos.ventilacao ? 'ATIVO' : 'INATIVO'}</span></div>
         <h3 className="font-bold text-lg">Ventilacao</h3>
         <p className="text-slate-400 text-sm mt-1">Controle de fluxo de ar no galpao.</p>
       </button>
-      <button onClick={() => toggleDevice('aquecedor', !dispositivos.aquecedor)} className={`rounded-2xl border p-6 text-left ${dispositivos.aquecedor ? 'bg-orange-600/20 border-orange-500/40' : 'bg-slate-900 border-slate-800'}`}>
+      <button disabled={!canControlDevices} onClick={() => toggleDevice('aquecedor', !dispositivos.aquecedor)} className={`rounded-2xl border p-6 text-left ${dispositivos.aquecedor ? 'bg-orange-600/20 border-orange-500/40' : 'bg-slate-900 border-slate-800'} ${!canControlDevices ? 'opacity-50 cursor-not-allowed' : ''}`}>
         <div className="flex items-center justify-between mb-3"><Zap className={dispositivos.aquecedor ? 'text-orange-300' : 'text-orange-400'} /><span className={`text-xs font-bold ${dispositivos.aquecedor ? 'text-orange-300' : 'text-slate-500'}`}>{dispositivos.aquecedor ? 'ATIVO' : 'INATIVO'}</span></div>
         <h3 className="font-bold text-lg">Aquecedor</h3>
         <p className="text-slate-400 text-sm mt-1">Estabilizacao termica automatizada.</p>
       </button>
       <div className="rounded-2xl border p-6 text-left bg-slate-900 border-slate-800 md:col-span-2">
         <div className="flex items-center justify-between mb-3"><span className="text-lg font-bold">Dimmer de Luz</span><span className="text-sm text-slate-400">{lightPct}%</span></div>
-        <input type="range" min="0" max="100" value={lightPct} onChange={(e) => setLightPct(Number(e.target.value))} onMouseUp={(e) => setDimmer(Number(e.currentTarget.value))} onTouchEnd={(e) => setDimmer(Number(e.currentTarget.value))} className="w-full" />
+        <input disabled={!canControlDevices} type="range" min="0" max="100" value={lightPct} onChange={(e) => setLightPct(Number(e.target.value))} onMouseUp={(e) => setDimmer(Number(e.currentTarget.value))} onTouchEnd={(e) => setDimmer(Number(e.currentTarget.value))} className={`w-full ${!canControlDevices ? 'opacity-50 cursor-not-allowed' : ''}`} />
         <p className="text-slate-400 text-sm mt-2">Simulador de amanhecer/anoitecer por intensidade gradual.</p>
       </div>
     </div>

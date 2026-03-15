@@ -71,6 +71,11 @@ except Exception:
     winsound = None
 
 try:
+    from video_processor import VideoProcessor
+except Exception:
+    VideoProcessor = None
+
+try:
     from reportlab.lib.pagesizes import A4
     from reportlab.pdfgen import canvas
 except Exception:
@@ -150,6 +155,9 @@ LOGIN_RATE_WINDOW_SEC = int(os.getenv("LOGIN_RATE_WINDOW_SEC", "300"))
 LOGIN_RATE_MAX_ATTEMPTS = int(os.getenv("LOGIN_RATE_MAX_ATTEMPTS", "10"))
 COUGH_MODEL_PATH = os.getenv("COUGH_MODEL_PATH", os.path.join(os.path.dirname(__file__), "models", "cough_classifier.joblib"))
 COUGH_MODEL_FEATURES = int(os.getenv("COUGH_MODEL_FEATURES", "48"))
+SIM_VIDEO_PATH = os.getenv("SIM_VIDEO_PATH", "video_granja.mp4").strip()
+VIEWER_USERNAME = os.getenv("VIEWER_USERNAME", "").strip()
+VIEWER_PASSWORD = os.getenv("VIEWER_PASSWORD", "").strip()
 
 REPORTS_DIR = os.path.join(os.path.dirname(__file__), "reports")
 HEATMAP_DIR = os.path.join(REPORTS_DIR, "heatmaps")
@@ -567,6 +575,10 @@ with app.app_context():
         legacy_admin = User.query.filter_by(username="admin").first()
         admin_hash = legacy_admin.password if legacy_admin is not None else bcrypt.generate_password_hash("admin123").decode("utf-8")
         db.session.add(Account(username="admin", password_hash=admin_hash, role="admin", active=True))
+        db.session.commit()
+    if VIEWER_USERNAME and VIEWER_PASSWORD and not Account.query.filter_by(username=VIEWER_USERNAME).first():
+        viewer_hash = bcrypt.generate_password_hash(VIEWER_PASSWORD).decode("utf-8")
+        db.session.add(Account(username=VIEWER_USERNAME, password_hash=viewer_hash, role="viewer", active=True))
         db.session.commit()
 
     default_perms = {
@@ -2238,6 +2250,7 @@ def camera_loop():
     global global_frame, db_last_save_time, fps_last_time, last_temp_emergency_notification_ts
     cap = None
     use_basic_simulation = False
+    video_sim = None
     last_error_print_time = 0.0
     consecutive_read_failures = 0
     last_reopen_attempt_ts = 0.0
@@ -2250,7 +2263,13 @@ def camera_loop():
         _configure_camera_capture(cap)
     else:
         use_basic_simulation = True
-        _log_event("camera_fallback", "medium", "Camera real nao encontrada. Simulacao ativada.")
+        sim_msg = "Camera real nao encontrada. Simulacao basica ativada."
+        sim_path = SIM_VIDEO_PATH
+        if sim_path:
+            sim_path = sim_path if os.path.isabs(sim_path) else os.path.join(os.path.dirname(__file__), sim_path)
+            if VideoProcessor is not None and os.path.exists(sim_path):
+                sim_msg = "Camera real nao encontrada. Simulacao em video ativada."
+        _log_event("camera_fallback", "medium", sim_msg)
 
     while True:
         try:
@@ -2271,12 +2290,31 @@ def camera_loop():
                         camera_lost_logged = False
                         _log_event("camera_reconnected", "info", "Camera reconectada com sucesso.")
                         continue
-
-                frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                cv2.rectangle(frame, (200, 150), (350, 300), (0, 255, 0), 2)
-                cv2.putText(frame, "TEST_OBJECT", (200, 140), cv2.FONT_HERSHEY_PLAIN, 2, (0, 255, 0), 2)
-                processed_frame = frame
-                temp_atual = 28 + random.uniform(-5, 5)
+                frame = None
+                sim_path = SIM_VIDEO_PATH
+                if sim_path:
+                    sim_path = sim_path if os.path.isabs(sim_path) else os.path.join(os.path.dirname(__file__), sim_path)
+                    if VideoProcessor is not None and os.path.exists(sim_path):
+                        if video_sim is None:
+                            try:
+                                video_sim = VideoProcessor(sim_path)
+                            except Exception:
+                                video_sim = None
+                        if video_sim is not None:
+                            try:
+                                frame = video_sim.get_next_frame()
+                            except Exception:
+                                video_sim = None
+                if frame is None:
+                    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+                    cv2.rectangle(frame, (200, 150), (350, 300), (0, 255, 0), 2)
+                    cv2.putText(frame, "TEST_OBJECT", (200, 140), cv2.FONT_HERSHEY_PLAIN, 2, (0, 255, 0), 2)
+                    processed_frame = frame
+                    temp_atual = 28 + random.uniform(-5, 5)
+                else:
+                    processed_frame = detectar_objetos(frame) if MODO_DETECCAO == "aves" else frame
+                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                    temp_atual = 20 + (float(np.mean(gray)) / 255.0) * 20
             else:
                 ret, frame = cap.read()
                 if not ret:
