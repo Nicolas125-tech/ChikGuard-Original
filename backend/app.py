@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, Response, send_file, has_request_context
+from flask import Flask, jsonify, request, send_file, has_request_context
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager, create_access_token, verify_jwt_in_request, get_jwt_identity
@@ -395,12 +395,20 @@ def _log_event(event_type, level, message, metadata=None, camera_id=ACTIVE_CAMER
 
 
 def _enqueue_sync_item(item_type, payload):
+    _enqueue_sync_items_bulk(item_type, [payload])
+
+
+def _enqueue_sync_items_bulk(item_type, payloads):
     try:
         with app.app_context():
-            db.session.add(SyncQueueItem(item_type=item_type, payload_json=_safe_json(payload), status="pending"))
+            rows = [
+                SyncQueueItem(item_type=item_type, payload_json=_safe_json(p), status="pending")
+                for p in payloads
+            ]
+            db.session.bulk_save_objects(rows)
             db.session.commit()
     except Exception as exc:
-        LOGGER.exception("[SYNC] enqueue failed: %s", exc)
+        LOGGER.exception("[SYNC] bulk enqueue failed: %s", exc)
 
 
 def _request_actor():
@@ -568,12 +576,21 @@ def _estimate_bird_temp_proxy(gray_frame, box, ambient_temp):
 with app.app_context():
     db.create_all()
     if not User.query.filter_by(username="admin").first():
-        hashed = bcrypt.generate_password_hash("admin123").decode("utf-8")
+        admin_password = os.getenv("ADMIN_PASSWORD", "").strip()
+        if not admin_password:
+            raise RuntimeError("ADMIN_PASSWORD environment variable is not set. Cannot create default admin user securely.")
+        hashed = bcrypt.generate_password_hash(admin_password).decode("utf-8")
         db.session.add(User(username="admin", password=hashed))
         db.session.commit()
     if not Account.query.filter_by(username="admin").first():
         legacy_admin = User.query.filter_by(username="admin").first()
-        admin_hash = legacy_admin.password if legacy_admin is not None else bcrypt.generate_password_hash("admin123").decode("utf-8")
+        if legacy_admin is not None:
+            admin_hash = legacy_admin.password
+        else:
+            admin_password = os.getenv("ADMIN_PASSWORD", "").strip()
+            if not admin_password:
+                raise RuntimeError("ADMIN_PASSWORD environment variable is not set. Cannot create default admin account securely.")
+            admin_hash = bcrypt.generate_password_hash(admin_password).decode("utf-8")
         db.session.add(Account(username="admin", password_hash=admin_hash, role="admin", active=True))
         db.session.commit()
     if VIEWER_USERNAME and VIEWER_PASSWORD and not Account.query.filter_by(username=VIEWER_USERNAME).first():
@@ -999,8 +1016,7 @@ def _detect_thermal_anomalies(gray_frame, ambient_temp, frame_shape):
         rows = [ThermalAnomaly(camera_id=ACTIVE_CAMERA_ID, **a) for a in anomalies[:30]]
         db.session.bulk_save_objects(rows)
         db.session.commit()
-        for row in rows:
-            _enqueue_sync_item("thermal_anomaly", row.to_dict())
+        _enqueue_sync_items_bulk("thermal_anomaly", [r.to_dict() for r in rows])
 
     if (now - last_thermal_alert_ts) >= THERMAL_ANOMALY_COOLDOWN_SEC:
         last_thermal_alert_ts = now
@@ -3430,6 +3446,9 @@ def get_alerts():
 
 @app.route("/api/summary", methods=["GET"])
 def get_summary():
+    ok, resp = _guard_critical_action("summary_view", permission="monitor.read")
+    if not ok:
+        return resp
     ultima = Reading.query.order_by(Reading.id.desc()).first()
     recentes = Reading.query.order_by(Reading.id.desc()).limit(30).all()
     temperaturas = [item.temperatura for item in recentes]
