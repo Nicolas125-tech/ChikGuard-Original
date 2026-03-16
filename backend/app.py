@@ -1,6 +1,5 @@
 from flask import Flask, jsonify, request, Response, send_file, has_request_context
 from flask_cors import CORS
-from flask_socketio import SocketIO, emit
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager, create_access_token, verify_jwt_in_request, get_jwt_identity
 from database import (
@@ -31,7 +30,6 @@ import time
 import os
 import random
 import json
-import psutil
 import math
 import ipaddress
 from datetime import datetime, timedelta, timezone
@@ -345,7 +343,6 @@ app.config["JWT_SECRET_KEY"] = SETTINGS.jwt_secret_key
 
 CORS(app)
 db.init_app(app)
-socketio = SocketIO(app, cors_allowed_origins="*")
 bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
 ALERT_PROVIDER = build_alert_provider(SETTINGS)
@@ -383,19 +380,6 @@ def _log_event(event_type, level, message, metadata=None, camera_id=ACTIVE_CAMER
             sent = ALERT_PROVIDER.send(f"[{event_type}] {message}")
             if not sent:
                 LOGGER.warning("Alert provider failed for event_type=%s", event_type)
-            _send_fcm_push(f"ChikGuard Alerta: {event_type}", message)
-
-        try:
-            socketio.emit('new_alert', {
-                'id': f"event-{row.id}",
-                'tipo': event_type.upper(),
-                'nivel': 'alto' if level == 'high' else 'medio' if level == 'medium' else 'baixo',
-                'mensagem': message,
-                'hora': _utcnow().strftime("%H:%M:%S"),
-                'data': _utcnow().strftime("%d/%m/%Y")
-            })
-        except Exception:
-            pass
         PLUGIN_MANAGER.emit_event(
             "event_log",
             {
@@ -409,20 +393,6 @@ def _log_event(event_type, level, message, metadata=None, camera_id=ACTIVE_CAMER
     except Exception as exc:
         LOGGER.exception("[EVENT] failed to persist '%s': %s", event_type, exc)
 
-
-def _send_fcm_push(title, body):
-    if SETTINGS.app_env == "development":
-        LOGGER.info(f"[FCM MOCK] Push: {title} - {body}")
-        return True
-    try:
-        token = os.getenv("FCM_SERVER_KEY")
-        if not token: return False
-        headers = {"Authorization": f"key={token}", "Content-Type": "application/json"}
-        payload = {"to": "/topics/alerts", "notification": {"title": title, "body": body}}
-        resp = requests.post("https://fcm.googleapis.com/fcm/send", json=payload, headers=headers, timeout=5)
-        return resp.ok
-    except Exception:
-        return False
 
 def _enqueue_sync_item(item_type, payload):
     try:
@@ -658,14 +628,7 @@ lock = threading.Lock()
 object_count = 0
 APP_START_TIME = time.time()
 
-def _resolve_model_path(base_path):
-    onnx_path = base_path.replace('.pt', '.onnx')
-    if os.path.exists(onnx_path):
-        return onnx_path
-    return base_path
-
-_base_yolo = YOLO_SEG_MODEL_PATH if os.path.exists(YOLO_SEG_MODEL_PATH) else YOLO_MODEL_PATH
-_resolved_model_path = _resolve_model_path(_base_yolo)
+_resolved_model_path = YOLO_SEG_MODEL_PATH if os.path.exists(YOLO_SEG_MODEL_PATH) else YOLO_MODEL_PATH
 detector = ObjectDetector(model_path=_resolved_model_path)
 audio_classifier = RespiratoryAudioClassifier(COUGH_MODEL_PATH)
 live_birds = {}
@@ -1315,13 +1278,12 @@ def _analyze_behavior(selected, frame_shape):
     status = "NORMAL"
     message = "Distribuicao comportamental normal"
 
-    temp_c = float(sensor_state.get("temperature_c", 25.0))
-    if dispersion_ratio < 0.12 and count >= 8 and temp_c < 26.0:
+    if dispersion_ratio < 0.12 and count >= 8:
         status = "FRIO_COMPORTAMENTAL"
-        message = "Aviso: aves amontoadas e temp baixa. Risco de mortalidade por hipotermia. Falha provavel no aquecedor."
-    elif edge_ratio > 0.45 and dispersion_ratio > 0.18 and count >= 8 and temp_c > 29.0:
+        message = "Aviso: aves amontoadas. Possivel falha no aquecedor."
+    elif edge_ratio > 0.45 and dispersion_ratio > 0.18 and count >= 8:
         status = "CALOR_COMPORTAMENTAL"
-        message = "Aviso: aves nas bordas e dispersas com alta temperatura. Risco de estresse termico e mortalidade. Verifique ventilacao."
+        message = "Aviso: aves nas bordas e dispersas. Possivel estresse termico por calor."
 
     behavior_state.update(
         {
@@ -3598,52 +3560,6 @@ def reload_plugins():
     return jsonify({"msg": "Plugins recarregados", "count": len(items), "plugins": items})
 
 
-@app.route("/api/hardware", methods=["GET"])
-def hardware_stats():
-    if SETTINGS.app_env == "development":
-        cpu = 45.2
-        ram = 60.1
-        disk = 40.5
-    else:
-        try:
-            cpu = psutil.cpu_percent(interval=None)
-            ram = psutil.virtual_memory().percent
-            disk = psutil.disk_usage('/').percent
-        except Exception:
-            cpu, ram, disk = 0.0, 0.0, 0.0
-    return jsonify({
-        "cpu_percent": cpu,
-        "ram_percent": ram,
-        "disk_percent": disk,
-    })
-
-def _telemetry_worker():
-    while True:
-        time.sleep(3)
-        try:
-            with app.app_context():
-                ultima = Reading.query.order_by(Reading.id.desc()).first()
-                with lock:
-                    count = object_count
-                payload = {
-                    "temperatura_atual": ultima.temperatura if ultima else 0,
-                    "status_atual": ultima.status if ultima else "INICIANDO",
-                    "contagem_aves": count,
-                    "dispositivos": estado_dispositivos,
-                    "behavior": {
-                        "status": behavior_state["status"],
-                        "message": behavior_state["message"],
-                    },
-                    "sensors": {
-                        "temperature_c": sensor_state["temperature_c"],
-                        "humidity_pct": sensor_state["humidity_pct"],
-                    },
-                    "comfort_score": _comfort_score(),
-                }
-                socketio.emit('telemetry_update', payload)
-        except Exception:
-            pass
-
 if __name__ == "__main__":
     LOGGER.info(
         "Starting API host=%s port=%s env=%s",
@@ -3651,7 +3567,5 @@ if __name__ == "__main__":
         SETTINGS.flask_port,
         SETTINGS.app_env,
     )
-        telemetry_thread = threading.Thread(target=_telemetry_worker, daemon=True)
-    telemetry_thread.start()
-    socketio.run(app, host=SETTINGS.flask_host, port=SETTINGS.flask_port, debug=False, allow_unsafe_werkzeug=True)
+    app.run(host=SETTINGS.flask_host, port=SETTINGS.flask_port, debug=False)
 
