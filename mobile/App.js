@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import * as Notifications from 'expo-notifications';
 import { 
   StyleSheet, Text, View, TextInput, TouchableOpacity,
   SafeAreaView, StatusBar, ScrollView, ActivityIndicator, Alert, Linking, Image
@@ -58,11 +59,28 @@ const fetchWithTimeout = async (url, options = {}, timeoutMs = 9000) => {
 
 // 1. TELA DE MONITORAMENTO (HOME)
 const MonitorScreen = ({ serverUrl, dados, loading, chickCount, dispositivos, controlarDispositivo, loadingAcao, enviarComandoVoz, canControlDevices }) => {
+  const [offlineMode, setOfflineMode] = useState(false);
+  const [offlineDados, setOfflineDados] = useState(null);
+
+  useEffect(() => {
+    if (dados) {
+      setOfflineMode(false);
+      AsyncStorage.setItem('cg_last_dados', JSON.stringify(dados));
+    } else if (!loading) {
+      setOfflineMode(true);
+      AsyncStorage.getItem('cg_last_dados').then(d => {
+        if(d) setOfflineDados(JSON.parse(d));
+      });
+    }
+  }, [dados, loading]);
+
+  const displayDados = dados || offlineDados;
+
   const [videoError, setVideoError] = useState('');
   const getStatusColor = () => {
-    if (!dados) return "#334155";
-    if (dados.status === 'CALOR') return "#dc2626";
-    if (dados.status === 'FRIO') return "#2563eb";
+    if (!displayDados) return "#334155";
+    if (displayDados.status === 'CALOR') return "#dc2626";
+    if (displayDados.status === 'FRIO') return "#2563eb";
     return "#10b981";
   };
 
@@ -76,16 +94,17 @@ const MonitorScreen = ({ serverUrl, dados, loading, chickCount, dispositivos, co
         <View style={styles.cardHeader}>
           <View>
             <Text style={styles.cardLabel}>TEMPERATURA ATUAL</Text>
-            {loading ? <ActivityIndicator color="#fff"/> : 
-              <Text style={styles.tempText}>{dados?.temperatura}°C</Text>
+            {loading && !offlineMode ? <ActivityIndicator color="#fff"/> :
+              <Text style={styles.tempText}>{displayDados?.temperatura}°C</Text>
             }
           </View>
           <View style={styles.iconBox}>
-            {dados?.status === 'NORMAL' ? <CheckCircle size={32} color="#FFF"/> : <AlertTriangle size={32} color="#FFF"/>}
+            {displayDados?.status === 'NORMAL' ? <CheckCircle size={32} color="#FFF"/> : <AlertTriangle size={32} color="#FFF"/>}
           </View>
         </View>
-        <Text style={styles.statusTitle}>{dados?.status || "Conectando..."}</Text>
-        <Text style={styles.statusMsg}>{dados?.mensagem || "Verificando sensores..."}</Text>
+        <Text style={styles.statusTitle}>{displayDados?.status || "Conectando..."}</Text>
+        <Text style={styles.statusMsg}>{displayDados?.mensagem || "Verificando sensores..."}</Text>
+        {offlineMode && <Text style={{color:'yellow', fontSize: 12, marginTop: 10}}>Modo Offline (Ultima Leitura)</Text>}
       </View>
 
       {/* Novo Card de Contagem de Aves */}
@@ -786,13 +805,50 @@ export default function App() {
     : new Set(['monitor', 'history', 'birds', 'smart', 'management', 'alerts', 'system', 'config']);
 
   useEffect(() => {
-    // Carregar dados salvos
-    AsyncStorage.multiGet(['cg_token', 'cg_server_url', 'cg_role', 'cg_username']).then(values => {
-      if(values[0][1]) setToken(values[0][1]);
-      if(values[1][1]) setServerUrl(normalizeServerUrl(values[1][1]) || values[1][1]);
-      if(values[2][1]) setRole(values[2][1] || 'admin');
-      if(values[3][1]) setUsername(values[3][1] || '');
-    });
+    // FCM Setup stub
+    const registerForPushNotificationsAsync = async () => {
+      try {
+        let token;
+        const { status: existingStatus } = await Notifications.getPermissionsAsync();
+        let finalStatus = existingStatus;
+        if (existingStatus !== 'granted') {
+          const { status } = await Notifications.requestPermissionsAsync();
+          finalStatus = status;
+        }
+        if (finalStatus !== 'granted') return;
+        token = (await Notifications.getExpoPushTokenAsync()).data;
+      } catch (e) {}
+    };
+    registerForPushNotificationsAsync();
+  }, []);
+
+  useEffect(() => {
+    // Carregar dados salvos e tentar login biometrico automatico
+    const loadAndAuth = async () => {
+      const values = await AsyncStorage.multiGet(['cg_token', 'cg_server_url', 'cg_role', 'cg_username']);
+      if(values[0][1]) {
+        // Has previous token, try face id
+        try {
+          const hasHardware = await LocalAuthentication.hasHardwareAsync();
+          const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+          if (hasHardware && isEnrolled) {
+             const result = await LocalAuthentication.authenticateAsync({
+                promptMessage: 'Desbloquear ChikGuard',
+                cancelLabel: 'Cancelar'
+             });
+             if (!result.success) {
+                 // failed to unlock
+                 return;
+             }
+          }
+        } catch(e) {}
+        setToken(values[0][1]);
+        if(values[1][1]) setServerUrl(normalizeServerUrl(values[1][1]) || values[1][1]);
+        if(values[2][1]) setRole(values[2][1] || 'admin');
+        if(values[3][1]) setUsername(values[3][1] || '');
+      }
+    };
+    loadAndAuth();
   }, []);
 
   useEffect(() => {

@@ -1,4 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import io from 'socket.io-client';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 import {
   Activity,
   AlertTriangle,
@@ -344,6 +348,16 @@ function LoginScreen({ serverIP, setServerIP, onBack, onLogin }) {
 }
 
 function Dashboard({ token, role, username, serverIP, prefs, onSavePrefs, onSaveServer, onLogout }) {
+  const [telemetry, setTelemetry] = useState(null);
+
+  useEffect(() => {
+    const baseUrl = getBaseUrl(serverIP);
+    const socket = io(baseUrl);
+    socket.on('telemetry_update', (data) => {
+       setTelemetry(data);
+    });
+    return () => socket.disconnect();
+  }, [serverIP]);
   const [tab, setTab] = useState('overview');
   const tabs = useMemo(() => {
     const allTabs = [
@@ -381,7 +395,7 @@ function Dashboard({ token, role, username, serverIP, prefs, onSavePrefs, onSave
         </div>
       </header>
       <main className="flex-1 p-6 max-w-screen-2xl mx-auto w-full">
-        {tab === 'overview' && <OverviewPanel token={token} serverIP={serverIP} prefs={prefs} canControlDevices={canControlDevices} />}
+        {tab === 'overview' && <OverviewPanel token={token} serverIP={serverIP} prefs={prefs} canControlDevices={canControlDevices} telemetry={telemetry} />}
         {tab === 'birds' && <BirdsPanel token={token} serverIP={serverIP} prefs={prefs} />}
         {tab === 'devices' && <DevicesPanel token={token} serverIP={serverIP} canControlDevices={canControlDevices} />}
         {tab === 'smart' && <SmartOpsPanel serverIP={serverIP} prefs={prefs} token={token} />}
@@ -395,7 +409,7 @@ function Dashboard({ token, role, username, serverIP, prefs, onSavePrefs, onSave
   );
 }
 
-function OverviewPanel({ token, serverIP, prefs, canControlDevices }) {
+function OverviewPanel({ token, serverIP, prefs, canControlDevices, telemetry }) {
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState(false);
   const [videoBlocked, setVideoBlocked] = useState(false);
@@ -409,6 +423,47 @@ function OverviewPanel({ token, serverIP, prefs, canControlDevices }) {
   const baseUrl = getBaseUrl(serverIP);
   const videoUrl = `${baseUrl}/api/video`;
   const heatmap24Url = `${baseUrl}/api/heatmap/rolling24/image?hours=24&t=${Date.now()}`;
+
+  const [hwStats, setHwStats] = useState(null);
+
+  useEffect(() => {
+    if (telemetry) {
+      setDados({
+        temperatura: telemetry.temperatura_atual,
+        status: telemetry.status_atual,
+        mensagem: telemetry.behavior?.message
+      });
+      setContagem(telemetry.contagem_aves);
+      setDispositivos(telemetry.dispositivos);
+      setSummary((prev) => ({ ...prev, comfort_score: telemetry.comfort_score }));
+    }
+  }, [telemetry]);
+
+  const exportPDF = () => {
+    try {
+      const doc = new jsPDF();
+      doc.text('Relatorio de Sensores e Metricas', 14, 20);
+      const tableRows = [];
+      historico.forEach(item => {
+        tableRows.push([item.status, item.temp, item.hora, item.data]);
+      });
+      doc.autoTable({
+        head: [["Status", "Temp (C)", "Hora", "Data"]],
+        body: tableRows,
+        startY: 30,
+      });
+      doc.save(`relatorio_historico_${new Date().toISOString()}.pdf`);
+    } catch (e) { console.error('Error generating PDF', e); }
+  };
+
+  const exportExcel = () => {
+    try {
+      const ws = XLSX.utils.json_to_sheet(historico);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Historico");
+      XLSX.writeFile(wb, `relatorio_historico_${new Date().toISOString()}.xlsx`);
+    } catch (e) { console.error('Error generating Excel', e); }
+  };
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -467,6 +522,7 @@ function OverviewPanel({ token, serverIP, prefs, canControlDevices }) {
 
   useEffect(() => {
     fetchStatus(); fetchHistory(); fetchDevices(); fetchCount(); fetchCarcassAndSummary();
+    fetch(`${baseUrl}/api/hardware`).then(r => r.json()).then(d => setHwStats(d)).catch(e => {});
     const a = setInterval(fetchStatus, prefs.statusMs);
     const b = setInterval(fetchHistory, prefs.historyMs);
     const c = setInterval(fetchDevices, prefs.devicesMs);
@@ -522,7 +578,13 @@ function OverviewPanel({ token, serverIP, prefs, canControlDevices }) {
         </div>
 
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-          <h3 className="text-slate-400 text-xs font-bold uppercase mb-4 flex items-center gap-2 tracking-widest"><LayoutDashboard size={14} /> Historico</h3>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-slate-400 text-xs font-bold uppercase flex items-center gap-2 tracking-widest"><LayoutDashboard size={14} /> Historico</h3>
+            <div className="flex gap-2">
+              <button onClick={exportPDF} className="bg-red-600 hover:bg-red-500 text-white text-xs px-2 py-1 rounded">PDF</button>
+              <button onClick={exportExcel} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-2 py-1 rounded">Excel</button>
+            </div>
+          </div>
           <div className="h-40">
             {historico.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -553,6 +615,19 @@ function OverviewPanel({ token, serverIP, prefs, canControlDevices }) {
               style={{ width: `${Math.max(0, Math.min(100, Number(summary?.comfort_score || 0)))}%` }}
             />
           </div>
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+          <div className="text-xs uppercase tracking-wider text-slate-400 mb-1">Hardware (Mini PC)</div>
+          {hwStats ? (
+             <div className="text-sm space-y-2 mt-2">
+                <div className="flex justify-between"><span>CPU</span> <span>{hwStats.cpu_percent}%</span></div>
+                <div className="w-full bg-slate-800 h-2 rounded"><div className="bg-emerald-500 h-2 rounded" style={{width: `${hwStats.cpu_percent}%`}}></div></div>
+                <div className="flex justify-between mt-2"><span>RAM</span> <span>{hwStats.ram_percent}%</span></div>
+                <div className="w-full bg-slate-800 h-2 rounded"><div className="bg-blue-500 h-2 rounded" style={{width: `${hwStats.ram_percent}%`}}></div></div>
+                <div className="flex justify-between mt-2"><span>Disco</span> <span>{hwStats.disk_percent}%</span></div>
+             </div>
+          ) : <div className="text-slate-500 text-sm">Carregando hardware...</div>}
         </div>
       </div>
 
