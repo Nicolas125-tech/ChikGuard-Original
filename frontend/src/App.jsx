@@ -26,6 +26,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { io } from 'socket.io-client';
 
 const STORAGE = {
   token: 'cg_token',
@@ -65,7 +66,6 @@ export default function App() {
   const [booting, setBooting] = useState(true);
   const [token, setToken] = useState(localStorage.getItem(STORAGE.token));
   const [role, setRole] = useState(localStorage.getItem(STORAGE.role) || 'admin');
-  const [username, setUsername] = useState(localStorage.getItem(STORAGE.username) || '');
   const [serverIP, setServerIP] = useState(localStorage.getItem(STORAGE.server) || '127.0.0.1');
   const [showLogin, setShowLogin] = useState(false);
   const [prefs, setPrefs] = useState(readPrefs);
@@ -105,7 +105,6 @@ export default function App() {
           localStorage.removeItem(STORAGE.username);
           setToken(null);
           setRole('admin');
-          setUsername('');
         }}
       />
     );
@@ -116,7 +115,6 @@ export default function App() {
       <Dashboard
         token={token}
         role={role}
-        username={username}
         serverIP={serverIP}
         prefs={prefs}
         onSavePrefs={savePrefs}
@@ -127,7 +125,6 @@ export default function App() {
           localStorage.removeItem(STORAGE.username);
           setToken(null);
           setRole('admin');
-          setUsername('');
         }}
       />
     );
@@ -146,7 +143,6 @@ export default function App() {
           localStorage.setItem(STORAGE.username, nextUser || '');
           setToken(accessToken);
           setRole(safeRole);
-          setUsername(nextUser || '');
         }}
       />
     );
@@ -174,10 +170,22 @@ function TVScreen({ serverIP, showHeader = false, onLogout }) {
   }, [baseUrl]);
 
   useEffect(() => {
-    load();
+    const bootstrap = setTimeout(load, 0);
     const timer = setInterval(load, 4000);
-    return () => clearInterval(timer);
-  }, [load]);
+
+    // WebSocket listener for instant updates
+    const socket = io(baseUrl);
+    socket.on('new_alert', (data) => {
+      console.log('Socket event received (TVScreen):', data);
+      load();
+    });
+
+    return () => {
+      clearTimeout(bootstrap);
+      clearInterval(timer);
+      socket.disconnect();
+    };
+  }, [load, baseUrl]);
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -343,7 +351,7 @@ function LoginScreen({ serverIP, setServerIP, onBack, onLogin }) {
   );
 }
 
-function Dashboard({ token, role, username, serverIP, prefs, onSavePrefs, onSaveServer, onLogout }) {
+function Dashboard({ token, role, serverIP, prefs, onSavePrefs, onSaveServer, onLogout }) {
   const [tab, setTab] = useState('overview');
   const tabs = useMemo(() => {
     const allTabs = [
@@ -472,8 +480,23 @@ function OverviewPanel({ token, serverIP, prefs, canControlDevices }) {
     const c = setInterval(fetchDevices, prefs.devicesMs);
     const d = setInterval(fetchCount, prefs.countMs);
     const e = setInterval(fetchCarcassAndSummary, prefs.statusMs);
-    return () => { clearInterval(a); clearInterval(b); clearInterval(c); clearInterval(d); clearInterval(e); };
-  }, [fetchStatus, fetchHistory, fetchDevices, fetchCount, fetchCarcassAndSummary, prefs]);
+
+    // WebSocket listener
+    const socket = io(baseUrl);
+    socket.on('new_alert', (data) => {
+      console.log('Socket event received (OverviewPanel):', data);
+      fetchStatus();
+      fetchCount();
+      fetchCarcassAndSummary();
+      // Optionally trigger history reload if needed
+      fetchHistory();
+    });
+
+    return () => {
+      clearInterval(a); clearInterval(b); clearInterval(c); clearInterval(d); clearInterval(e);
+      socket.disconnect();
+    };
+  }, [fetchStatus, fetchHistory, fetchDevices, fetchCount, fetchCarcassAndSummary, prefs, baseUrl]);
 
   useEffect(() => {
     if (!carcass?.audio_alert) return;
@@ -494,7 +517,9 @@ function OverviewPanel({ token, serverIP, prefs, canControlDevices }) {
         oscillator.stop();
         ctx.close();
       }, 280);
-    } catch {}
+    } catch (err) {
+      console.debug('Audio error', err);
+    }
   }, [carcass?.audio_alert, carcass?.count]);
 
   const toggleDevice = async (tipo, ligar) => {
@@ -688,8 +713,19 @@ function AlertsPanel({ serverIP, prefs }) {
   useEffect(() => {
     loadAlerts();
     const timer = setInterval(loadAlerts, prefs.statusMs);
-    return () => clearInterval(timer);
-  }, [loadAlerts, prefs.statusMs]);
+
+    // WebSocket listener for instant alert updates
+    const socket = io(baseUrl);
+    socket.on('new_alert', (data) => {
+      console.log('Socket event received (AlertsPanel):', data);
+      loadAlerts();
+    });
+
+    return () => {
+      clearInterval(timer);
+      socket.disconnect();
+    };
+  }, [loadAlerts, prefs.statusMs, baseUrl]);
 
   if (loading) {
     return <div className="text-slate-400">Carregando alertas...</div>;
@@ -870,9 +906,12 @@ function SmartOpsPanel({ serverIP, prefs, token }) {
   }, [baseUrl]);
 
   useEffect(() => {
-    loadData();
+    const bootstrap = setTimeout(loadData, 0);
     const timer = setInterval(loadData, prefs.statusMs);
-    return () => clearInterval(timer);
+    return () => {
+      clearTimeout(bootstrap);
+      clearInterval(timer);
+    };
   }, [loadData, prefs.statusMs]);
 
   const toggleAuto = async () => {
@@ -1047,9 +1086,12 @@ function ManagementPanel({ serverIP, prefs }) {
   };
 
   useEffect(() => {
-    loadManagement();
+    const bootstrap = setTimeout(loadManagement, 0);
     const timer = setInterval(loadManagement, prefs.historyMs);
-    return () => clearInterval(timer);
+    return () => {
+      clearTimeout(bootstrap);
+      clearInterval(timer);
+    };
   }, [loadManagement, prefs.historyMs]);
 
   return (
