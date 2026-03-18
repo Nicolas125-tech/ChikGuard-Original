@@ -2,6 +2,7 @@ from flask import Flask, jsonify, request, Response, send_file, has_request_cont
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager, create_access_token, verify_jwt_in_request, get_jwt_identity
+from flask_socketio import SocketIO
 from database import (
     db,
     User,
@@ -342,6 +343,7 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["JWT_SECRET_KEY"] = SETTINGS.jwt_secret_key
 
 CORS(app)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 db.init_app(app)
 bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
@@ -380,16 +382,15 @@ def _log_event(event_type, level, message, metadata=None, camera_id=ACTIVE_CAMER
             sent = ALERT_PROVIDER.send(f"[{event_type}] {message}")
             if not sent:
                 LOGGER.warning("Alert provider failed for event_type=%s", event_type)
-        PLUGIN_MANAGER.emit_event(
-            "event_log",
-            {
-                "camera_id": camera_id,
-                "event_type": event_type,
-                "level": level,
-                "message": message,
-                "metadata": metadata or {},
-            },
-        )
+        event_payload = {
+            "camera_id": camera_id,
+            "event_type": event_type,
+            "level": level,
+            "message": message,
+            "metadata": metadata or {},
+        }
+        PLUGIN_MANAGER.emit_event("event_log", event_payload)
+        socketio.emit('new_alert', event_payload, namespace='/')
     except Exception as exc:
         LOGGER.exception("[EVENT] failed to persist '%s': %s", event_type, exc)
 
@@ -628,7 +629,19 @@ lock = threading.Lock()
 object_count = 0
 APP_START_TIME = time.time()
 
-_resolved_model_path = YOLO_SEG_MODEL_PATH if os.path.exists(YOLO_SEG_MODEL_PATH) else YOLO_MODEL_PATH
+# Prioritize ONNX over PT models for edge acceleration
+_onnx_seg_path = YOLO_SEG_MODEL_PATH.replace('.pt', '.onnx')
+_onnx_path = YOLO_MODEL_PATH.replace('.pt', '.onnx')
+
+if os.path.exists(_onnx_seg_path):
+    _resolved_model_path = _onnx_seg_path
+elif os.path.exists(YOLO_SEG_MODEL_PATH):
+    _resolved_model_path = YOLO_SEG_MODEL_PATH
+elif os.path.exists(_onnx_path):
+    _resolved_model_path = _onnx_path
+else:
+    _resolved_model_path = YOLO_MODEL_PATH
+
 detector = ObjectDetector(model_path=_resolved_model_path)
 audio_classifier = RespiratoryAudioClassifier(COUGH_MODEL_PATH)
 live_birds = {}
@@ -1102,10 +1115,14 @@ def _sync_worker():
                             else:
                                 for item in pending:
                                     item.attempts = int(item.attempts or 0) + 1
+                                    if item.attempts >= 10:
+                                        item.status = "failed"
                                 db.session.commit()
                         except Exception:
                             for item in pending:
                                 item.attempts = int(item.attempts or 0) + 1
+                                if item.attempts >= 10:
+                                    item.status = "failed"
                             db.session.commit()
         except Exception as exc:
             LOGGER.exception("[SYNC] worker error: %s", exc)
@@ -1278,12 +1295,26 @@ def _analyze_behavior(selected, frame_shape):
     status = "NORMAL"
     message = "Distribuicao comportamental normal"
 
-    if dispersion_ratio < 0.12 and count >= 8:
+    # Cross-reference with IoT sensors to generate logical heatmap/predictive alerts
+    current_temp = float(sensor_state.get("temperature_c", 25.0))
+    targets = _temperature_targets(ACTIVE_CAMERA_ID)
+    target_temp = float(targets.get("target_temp") or 28.0)
+
+    is_cold_environment = current_temp < (target_temp - 1.5)
+    is_hot_environment = current_temp > (target_temp + 1.5)
+
+    if dispersion_ratio < 0.15 and count >= 8:
         status = "FRIO_COMPORTAMENTAL"
-        message = "Aviso: aves amontoadas. Possivel falha no aquecedor."
-    elif edge_ratio > 0.45 and dispersion_ratio > 0.18 and count >= 8:
+        if is_cold_environment:
+            message = f"ALERTA PREDITIVO: Aves fortemente amontoadas e temperatura baixa ({current_temp}C). Risco de hipotermia/mortalidade."
+        else:
+            message = "Aviso: aves amontoadas. Verifique possiveis correntes de ar frio locais."
+    elif edge_ratio > 0.40 and dispersion_ratio > 0.18 and count >= 8:
         status = "CALOR_COMPORTAMENTAL"
-        message = "Aviso: aves nas bordas e dispersas. Possivel estresse termico por calor."
+        if is_hot_environment:
+            message = f"ALERTA PREDITIVO: Aves nas bordas (dispersao extrema) e temperatura alta ({current_temp}C). Risco de estresse termico."
+        else:
+            message = "Aviso: aves espalhadas nas bordas. Possivel desordem no ambiente."
 
     behavior_state.update(
         {
@@ -3567,5 +3598,5 @@ if __name__ == "__main__":
         SETTINGS.flask_port,
         SETTINGS.app_env,
     )
-    app.run(host=SETTINGS.flask_host, port=SETTINGS.flask_port, debug=False)
+    socketio.run(app, host=SETTINGS.flask_host, port=SETTINGS.flask_port, debug=False)
 
