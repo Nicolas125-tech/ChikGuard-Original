@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/app/backend/app.py", line 44, in <module>
+    from src.alerts.providers import build_alert_provider
+ModuleNotFoundError: No module named 'src.alerts'
