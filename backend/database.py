@@ -343,3 +343,15 @@ class BatchLogbook(db.Model):
             "author": self.author,
             "timestamp": self.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
         }
+
+class PushToken(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    token = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "token": self.token,
+            "timestamp": self.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+        }

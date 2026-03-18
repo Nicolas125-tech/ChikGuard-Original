@@ -1,17 +1,60 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   StyleSheet, Text, View, TextInput, TouchableOpacity,
-  SafeAreaView, StatusBar, ScrollView, ActivityIndicator, Alert, Linking, Image
+  SafeAreaView, StatusBar, ScrollView, ActivityIndicator, Alert, Linking, Image, Platform
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WebView } from 'react-native-webview';
 import * as LocalAuthentication from 'expo-local-authentication';
+import * as Device from 'expo-device';
+import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import { 
   Thermometer, Activity, AlertTriangle, CheckCircle, 
   Settings, Save, Zap, Wind, LayoutDashboard, History, LogOut, User, Key, Users, Bell, Cpu, Database
 } from 'lucide-react-native';
 
 const appLogo = require('./assets/logo.png');
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
+async function registerForPushNotificationsAsync() {
+  let token;
+  if (Platform.OS === 'android') {
+    Notifications.setNotificationChannelAsync('default', {
+      name: 'default',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#FF231F7C',
+    });
+  }
+
+  if (Device.isDevice) {
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    if (finalStatus !== 'granted') {
+      console.log('Failed to get push token for push notification!');
+      return;
+    }
+    const projectId = Constants?.expoConfig?.extra?.eas?.projectId || '88d7f081-ad08-425e-ba52-e1a199cb661e';
+    token = (await Notifications.getExpoPushTokenAsync({
+      projectId
+    })).data;
+  } else {
+    console.log('Must use physical device for Push Notifications');
+  }
+  return token;
+}
 
 const normalizeServerUrl = (value) => {
   const raw = String(value || '').trim();
@@ -57,7 +100,7 @@ const fetchWithTimeout = async (url, options = {}, timeoutMs = 9000) => {
 // --- COMPONENTES DE TELA ---
 
 // 1. TELA DE MONITORAMENTO (HOME)
-const MonitorScreen = ({ serverUrl, dados, loading, chickCount, dispositivos, controlarDispositivo, loadingAcao, enviarComandoVoz, canControlDevices }) => {
+const MonitorScreen = ({ serverUrl, dados, loading, chickCount, dispositivos, controlarDispositivo, loadingAcao, enviarComandoVoz, canControlDevices, isOffline }) => {
   const [videoError, setVideoError] = useState('');
   const getStatusColor = () => {
     if (!dados) return "#334155";
@@ -71,6 +114,12 @@ const MonitorScreen = ({ serverUrl, dados, loading, chickCount, dispositivos, co
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContent}>
+      {isOffline && (
+        <View style={styles.offlineBanner}>
+          <AlertTriangle size={20} color="#f59e0b" />
+          <Text style={styles.offlineText}>Modo Offline - Lendo dados locais</Text>
+        </View>
+      )}
       {/* Card Principal */}
       <View style={[styles.mainCard, { backgroundColor: getStatusColor() }]}>
         <View style={styles.cardHeader}>
@@ -778,6 +827,7 @@ export default function App() {
   const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
   const [loadingLogin, setLoadingLogin] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
   const normalizedServerUrl = normalizeServerUrl(serverUrl);
   const isViewer = role === 'viewer';
   const canControlDevices = role === 'admin' || role === 'operator';
@@ -787,11 +837,45 @@ export default function App() {
 
   useEffect(() => {
     // Carregar dados salvos
-    AsyncStorage.multiGet(['cg_token', 'cg_server_url', 'cg_role', 'cg_username']).then(values => {
-      if(values[0][1]) setToken(values[0][1]);
-      if(values[1][1]) setServerUrl(normalizeServerUrl(values[1][1]) || values[1][1]);
-      if(values[2][1]) setRole(values[2][1] || 'admin');
-      if(values[3][1]) setUsername(values[3][1] || '');
+    AsyncStorage.multiGet(['cg_token', 'cg_server_url', 'cg_role', 'cg_username']).then(async values => {
+      const savedToken = values[0][1];
+      const savedUrl = values[1][1];
+      const savedRole = values[2][1] || 'admin';
+      const savedUser = values[3][1] || '';
+
+      if (savedUrl) setServerUrl(normalizeServerUrl(savedUrl) || savedUrl);
+      if (savedRole) setRole(savedRole);
+      if (savedUser) setUsername(savedUser);
+
+      if (savedToken) {
+        if (savedRole !== 'viewer') {
+          try {
+            const hasHardware = await LocalAuthentication.hasHardwareAsync();
+            const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+            if (hasHardware && isEnrolled) {
+              const result = await LocalAuthentication.authenticateAsync({
+                promptMessage: 'Autentique para aceder ao sistema',
+                fallbackLabel: 'Usar código',
+                cancelLabel: 'Cancelar',
+                disableDeviceFallback: false,
+              });
+
+              if (result.success) {
+                setToken(savedToken);
+              } else {
+                // Remove token to force login
+                AsyncStorage.removeItem('cg_token');
+              }
+            } else {
+              setToken(savedToken);
+            }
+          } catch (e) {
+            setToken(savedToken);
+          }
+        } else {
+          setToken(savedToken);
+        }
+      }
     });
   }, []);
 
@@ -815,23 +899,41 @@ export default function App() {
           const res = await fetch(`${normalizedServerUrl}/api/status`);
           const json = await res.json();
           setDados(json);
-        } catch (e) { console.log("Erro conexão polling"); }
+          setIsOffline(false);
+          await AsyncStorage.setItem('offline_dados', JSON.stringify(json));
+        } catch (e) {
+          setIsOffline(true);
+          const local = await AsyncStorage.getItem('offline_dados');
+          if (local) setDados(JSON.parse(local));
+        }
       };
 
       const fetchChickCount = async () => {
         try {
           const res = await fetch(`${normalizedServerUrl}/api/chick_count`);
           const json = await res.json();
-          if (res.ok) setChickCount(json.count);
-        } catch (e) { console.log("Erro conexão contagem"); }
+          if (res.ok) {
+            setChickCount(json.count);
+            await AsyncStorage.setItem('offline_chickCount', JSON.stringify(json.count));
+          }
+        } catch (e) {
+          const local = await AsyncStorage.getItem('offline_chickCount');
+          if (local) setChickCount(JSON.parse(local));
+        }
       };
 
       const fetchDeviceStatus = async () => {
         try {
           const res = await fetch(`${normalizedServerUrl}/api/estado-dispositivos`);
           const json = await res.json();
-          if (res.ok) setDispositivos(json);
-        } catch (e) { console.log("Erro conexão dispositivos"); }
+          if (res.ok) {
+            setDispositivos(json);
+            await AsyncStorage.setItem('offline_dispositivos', JSON.stringify(json));
+          }
+        } catch (e) {
+          const local = await AsyncStorage.getItem('offline_dispositivos');
+          if (local) setDispositivos(JSON.parse(local));
+        }
       };
 
       fetchStatus();
@@ -872,6 +974,16 @@ export default function App() {
         setToken(data.access_token);
         setRole(data.role || 'admin');
         setUsername(data.username || user);
+
+        registerForPushNotificationsAsync().then(pushToken => {
+          if (pushToken) {
+            fetch(`${normalizedServerUrl}/api/push-token`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token: pushToken })
+            }).catch(e => console.log('Failed to save push token', e));
+          }
+        });
       } else {
         Alert.alert("Erro", data?.msg || "Login falhou");
       }
@@ -1067,6 +1179,7 @@ export default function App() {
             loadingAcao={loadingAcao}
             enviarComandoVoz={enviarComandoVoz}
             canControlDevices={canControlDevices}
+            isOffline={isOffline}
           />}
         {activeTab === 'birds' && allowedTabs.has('birds') && <BirdsScreen serverUrl={normalizedServerUrl} enviarComandoVoz={enviarComandoVoz} />}
         {activeTab === 'smart' && allowedTabs.has('smart') && <SmartOpsScreen serverUrl={normalizedServerUrl} token={token} />}
@@ -1186,6 +1299,10 @@ const styles = StyleSheet.create({
   tunnelText: { color: '#94a3b8', textAlign: 'center', marginBottom: 20 },
   tunnelButton: { backgroundColor: '#2563eb', padding: 12, borderRadius: 8, width: '100%', alignItems: 'center', marginBottom: 10 },
   tunnelButtonText: { color: 'white', fontWeight: 'bold' },
+
+  // Offline
+  offlineBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(245,158,11,0.2)', padding: 12, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(245,158,11,0.5)' },
+  offlineText: { color: '#f59e0b', fontWeight: 'bold', marginLeft: 10 },
 
   // History List
   historyItem: { flexDirection:'row', alignItems:'center', backgroundColor:'#1e293b', padding:15, borderRadius:12, marginBottom:10 },
