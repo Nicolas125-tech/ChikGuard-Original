@@ -13,3 +13,4 @@ librosa
 soundfile
 joblib
 pytest
+Flask-SocketIO==5.3.6
