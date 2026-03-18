@@ -27,6 +27,9 @@ import {
 } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { io } from 'socket.io-client';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import * as XLSX from 'xlsx';
 
 const STORAGE = {
   token: 'cg_token',
@@ -417,6 +420,7 @@ function OverviewPanel({ token, serverIP, prefs, canControlDevices }) {
   const baseUrl = getBaseUrl(serverIP);
   const videoUrl = `${baseUrl}/api/video`;
   const heatmap24Url = `${baseUrl}/api/heatmap/rolling24/image?hours=24&t=${Date.now()}`;
+  const [showHeatmapOverlay, setShowHeatmapOverlay] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -498,6 +502,34 @@ function OverviewPanel({ token, serverIP, prefs, canControlDevices }) {
     };
   }, [fetchStatus, fetchHistory, fetchDevices, fetchCount, fetchCarcassAndSummary, prefs, baseUrl]);
 
+  const exportToPDF = async () => {
+    const el = document.getElementById('overview-panel-content');
+    if (!el) return;
+    const canvas = await html2canvas(el, { scale: 1.5, useCORS: true });
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('l', 'pt', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+    pdf.save(`relatorio-granja-${new Date().toISOString().slice(0,10)}.pdf`);
+  };
+
+  const exportToExcel = () => {
+    const wb = XLSX.utils.book_new();
+    const wsHistory = XLSX.utils.json_to_sheet(historico || []);
+    XLSX.utils.book_append_sheet(wb, wsHistory, "Historico");
+
+    const wsSummary = XLSX.utils.json_to_sheet([{
+      Data: new Date().toISOString(),
+      TemperaturaAtual: dados?.temperatura,
+      ContagemAves: contagem,
+      ComfortScore: summary?.comfort_score
+    }]);
+    XLSX.utils.book_append_sheet(wb, wsSummary, "Resumo");
+
+    XLSX.writeFile(wb, `relatorio-granja-${new Date().toISOString().slice(0,10)}.xlsx`);
+  };
+
   useEffect(() => {
     if (!carcass?.audio_alert) return;
     try {
@@ -533,7 +565,15 @@ function OverviewPanel({ token, serverIP, prefs, canControlDevices }) {
   };
 
   return (
-    <div className="grid gap-6 grid-cols-1 lg:grid-cols-3">
+    <div id="overview-panel-content" className="grid gap-6 grid-cols-1 lg:grid-cols-3 relative">
+      <div className="absolute -top-12 right-0 flex gap-2 z-10 hidden md:flex">
+        <button onClick={exportToPDF} className="bg-slate-800 border border-slate-700 hover:bg-slate-700 text-xs px-3 py-1.5 rounded-lg flex items-center gap-1">
+          PDF
+        </button>
+        <button onClick={exportToExcel} className="bg-emerald-600/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-600/40 text-xs px-3 py-1.5 rounded-lg flex items-center gap-1">
+          Excel
+        </button>
+      </div>
       <div className="lg:col-span-1 space-y-6">
         <div className="p-6 rounded-2xl border-2 bg-slate-900 border-slate-700">
           <div className="flex items-center gap-2 text-slate-300 font-bold text-xs uppercase tracking-widest mb-4"><Thermometer size={16} /> Temperatura media</div>
@@ -585,11 +625,16 @@ function OverviewPanel({ token, serverIP, prefs, canControlDevices }) {
         <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden min-h-[400px] relative">
           <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950/50 absolute top-0 left-0 right-0 z-20">
             <h3 className="font-bold text-slate-200 flex items-center gap-2 text-sm"><Maximize size={16} className="text-slate-500" /> Transmissao da camera</h3>
-            <button onClick={() => setShowHeatmap24((v) => !v)} className="text-xs bg-slate-800 border border-slate-700 rounded px-2 py-1">
-              {showHeatmap24 ? 'Mostrar Video' : 'Heatmap 24h'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setShowHeatmapOverlay((v) => !v)} className="text-xs bg-slate-800 border border-slate-700 hover:bg-slate-700 rounded px-2 py-1 transition-colors">
+                {showHeatmapOverlay ? 'Ocultar Heatmap Visual' : 'Mostrar Heatmap Visual'}
+              </button>
+              <button onClick={() => setShowHeatmap24((v) => !v)} className="text-xs bg-slate-800 border border-slate-700 hover:bg-slate-700 rounded px-2 py-1 transition-colors">
+                {showHeatmap24 ? 'Mostrar Video' : 'Heatmap 24h'}
+              </button>
+            </div>
           </div>
-          <div className="relative flex-1 bg-black flex items-center justify-center h-[500px]">
+          <div className="relative flex-1 bg-black flex items-center justify-center h-[500px] overflow-hidden">
             {erro ? (
               <div className="text-center flex flex-col items-center justify-center h-full w-full bg-slate-900/50"><WifiOff size={32} className="text-slate-500 mb-3" /><p className="text-slate-400">Sem video</p></div>
             ) : videoBlocked ? (
@@ -597,11 +642,75 @@ function OverviewPanel({ token, serverIP, prefs, canControlDevices }) {
             ) : showHeatmap24 ? (
               <img src={heatmap24Url} alt="Heatmap 24h" className="w-full h-full object-contain" />
             ) : (
-              <img src={videoUrl} alt="Visao da Camera" className="w-full h-full object-contain" onError={() => { if (isTunnelHost(window.location.hostname) || isTunnelHost(serverIP)) setVideoBlocked(true); }} />
+              <>
+                <img src={videoUrl} alt="Visao da Camera" className="w-full h-full object-contain relative z-0" onError={() => { if (isTunnelHost(window.location.hostname) || isTunnelHost(serverIP)) setVideoBlocked(true); }} />
+                {showHeatmapOverlay && <HeatmapOverlay serverIP={serverIP} />}
+              </>
             )}
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function HeatmapOverlay({ serverIP }) {
+  const [points, setPoints] = useState([]);
+  const baseUrl = getBaseUrl(serverIP);
+
+  const fetchHeatmapData = useCallback(async () => {
+    try {
+      const response = await fetch(`${baseUrl}/api/heatmap/3d?hours=2&grid=32`);
+      if (response.ok) {
+        const data = await response.json();
+        setPoints(data.points || []);
+      }
+    } catch (err) {
+      console.error('Heatmap fetch error:', err);
+    }
+  }, [baseUrl]);
+
+  useEffect(() => {
+    const bootstrap = setTimeout(fetchHeatmapData, 0);
+    const interval = setInterval(fetchHeatmapData, 5000);
+    return () => {
+      clearTimeout(bootstrap);
+      clearInterval(interval);
+    };
+  }, [fetchHeatmapData]);
+
+  if (points.length === 0) return null;
+
+  return (
+    <div className="absolute inset-0 z-10 pointer-events-none" style={{ mixBlendMode: 'screen' }}>
+      {points.map((pt, i) => {
+        const intensity = pt.heat_intensity || 0;
+        if (intensity < 0.05) return null;
+
+        // Define color based on intensity (blue for low, red for high)
+        const isHot = intensity > 0.5;
+        const colorStops = isHot
+          ? `rgba(255, 0, 0, ${intensity * 0.7}) 0%, rgba(255, 0, 0, 0) 70%`
+          : `rgba(0, 100, 255, ${intensity * 0.7}) 0%, rgba(0, 100, 255, 0) 70%`;
+
+        const size = 15 + (intensity * 25);
+
+        return (
+          <div
+            key={i}
+            className="absolute rounded-full"
+            style={{
+              left: `${pt.x * 100}%`,
+              top: `${pt.y * 100}%`,
+              width: `${size}%`,
+              height: `${size}%`,
+              transform: 'translate(-50%, -50%)',
+              background: `radial-gradient(circle, ${colorStops})`,
+              filter: 'blur(8px)',
+            }}
+          />
+        );
+      })}
     </div>
   );
 }
