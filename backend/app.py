@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, Response, send_file, has_request_context
+from flask import Flask, jsonify, request, send_file, has_request_context
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager, create_access_token, verify_jwt_in_request, get_jwt_identity
@@ -22,6 +22,7 @@ from database import (
     BatchLogbook,
     Account,
     RolePermission,
+    PushToken,
 )
 
 import cv2
@@ -382,6 +383,25 @@ def _log_event(event_type, level, message, metadata=None, camera_id=ACTIVE_CAMER
             sent = ALERT_PROVIDER.send(f"[{event_type}] {message}")
             if not sent:
                 LOGGER.warning("Alert provider failed for event_type=%s", event_type)
+
+            # Send Expo Push Notifications
+            try:
+                with app.app_context():
+                    tokens = PushToken.query.all()
+                    for token_obj in tokens:
+                        payload = {
+                            "to": token_obj.token,
+                            "title": f"Alerta {level.upper()}: {event_type}",
+                            "body": message,
+                            "data": {"event_type": event_type, "level": level, "camera_id": camera_id}
+                        }
+                        try:
+                            if "requests" in globals() and requests is not None:
+                                requests.post("https://exp.host/--/api/v2/push/send", json=payload, timeout=5)
+                        except Exception as e:
+                            LOGGER.exception("Error sending push to %s: %s", token_obj.token, e)
+            except Exception as e:
+                LOGGER.exception("Failed to query PushTokens: %s", e)
         event_payload = {
             "camera_id": camera_id,
             "event_type": event_type,
@@ -3600,3 +3620,24 @@ if __name__ == "__main__":
     )
     socketio.run(app, host=SETTINGS.flask_host, port=SETTINGS.flask_port, debug=False)
 
+
+
+@app.route("/api/push-token", methods=["POST"])
+def register_push_token():
+    try:
+        data = request.get_json(silent=True) or {}
+        token = data.get("token")
+        if not token:
+            return jsonify({"msg": "Token e obrigatorio"}), 400
+
+        with app.app_context():
+            existing = PushToken.query.filter_by(token=token).first()
+            if not existing:
+                new_token = PushToken(token=token)
+                db.session.add(new_token)
+                db.session.commit()
+                return jsonify({"msg": "Token registrado com sucesso"}), 201
+            return jsonify({"msg": "Token ja existe"}), 200
+    except Exception as exc:
+        LOGGER.exception("[PUSH] falha ao registrar token: %s", exc)
+        return jsonify({"msg": "Falha interna"}), 500
