@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -64,6 +64,94 @@ const readPrefs = () => {
     return DEFAULT_PREFS;
   }
 };
+
+function WebRTCVideo({ url, className, onConnectionStateChange }) {
+  const videoRef = useRef(null);
+  const callbackRef = useRef(onConnectionStateChange);
+
+  useEffect(() => {
+    callbackRef.current = onConnectionStateChange;
+  }, [onConnectionStateChange]);
+
+  useEffect(() => {
+    const config = {
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+    };
+    let pc = new RTCPeerConnection(config);
+
+    const startWebRTC = async () => {
+      pc.addTransceiver('video', { direction: 'recvonly' });
+
+      pc.addEventListener('track', (evt) => {
+        if (evt.track.kind === 'video') {
+          if (videoRef.current) {
+            videoRef.current.srcObject = evt.streams[0];
+          }
+        }
+      });
+
+      pc.addEventListener('connectionstatechange', () => {
+        console.log('WebRTC connection state:', pc.connectionState);
+        if (callbackRef.current) {
+          callbackRef.current(pc.connectionState);
+        }
+      });
+
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        // Wait for ICE gathering to complete before sending the offer
+        await new Promise((resolve) => {
+          if (pc.iceGatheringState === 'complete') {
+            resolve();
+          } else {
+            const checkState = () => {
+              if (pc.iceGatheringState === 'complete') {
+                pc.removeEventListener('icegatheringstatechange', checkState);
+                resolve();
+              }
+            };
+            pc.addEventListener('icegatheringstatechange', checkState);
+            // Fallback timeout just in case it takes too long
+            setTimeout(() => {
+              pc.removeEventListener('icegatheringstatechange', checkState);
+              resolve();
+            }, 3000);
+          }
+        });
+
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            sdp: pc.localDescription.sdp,
+            type: pc.localDescription.type,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to send WebRTC offer');
+        }
+
+        const answer = await response.json();
+        await pc.setRemoteDescription(answer);
+      } catch (err) {
+        console.error('WebRTC negotiation error:', err);
+      }
+    };
+
+    startWebRTC();
+
+    return () => {
+      pc.close();
+    };
+  }, [url]);
+
+  return <video ref={videoRef} className={className} autoPlay playsInline muted />;
+}
 
 export default function App() {
   const [booting, setBooting] = useState(true);
@@ -419,6 +507,7 @@ function OverviewPanel({ token, serverIP, prefs, canControlDevices }) {
 
   const baseUrl = getBaseUrl(serverIP);
   const videoUrl = `${baseUrl}/api/video`;
+  const webrtcUrl = `${baseUrl}/api/webrtc/offer`;
   const heatmap24Url = `${baseUrl}/api/heatmap/rolling24/image?hours=24&t=${Date.now()}`;
   const [showHeatmapOverlay, setShowHeatmapOverlay] = useState(false);
 
@@ -643,7 +732,7 @@ function OverviewPanel({ token, serverIP, prefs, canControlDevices }) {
               <img src={heatmap24Url} alt="Heatmap 24h" className="w-full h-full object-contain" />
             ) : (
               <>
-                <img src={videoUrl} alt="Visao da Camera" className="w-full h-full object-contain relative z-0" onError={() => { if (isTunnelHost(window.location.hostname) || isTunnelHost(serverIP)) setVideoBlocked(true); }} />
+                <WebRTCVideo url={webrtcUrl} className="w-full h-full object-contain relative z-0" onConnectionStateChange={(state) => { if(state === 'failed' && (isTunnelHost(window.location.hostname) || isTunnelHost(serverIP))) setVideoBlocked(true); }} />
                 {showHeatmapOverlay && <HeatmapOverlay serverIP={serverIP} />}
               </>
             )}
