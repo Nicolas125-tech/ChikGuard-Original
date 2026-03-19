@@ -1783,6 +1783,16 @@ def detectar_objetos(frame):
     global object_count
     draw_frame = frame.copy()
     detections = detector.detect(draw_frame)
+
+    # Active Learning Pipeline: Capture uncertain detections for retraining
+    try:
+        from src.mlops import active_learning_pipeline
+        for det in detections:
+            class_name = _class_name_by_id(det["class_id"])
+            active_learning_pipeline.process_detection(frame, det, class_name)
+    except Exception as e:
+        LOGGER.error(f"Failed to process active learning: {e}")
+
     _detect_intrusion(detections, frame)
 
     frame_area = frame.shape[0] * frame.shape[1]
@@ -2277,6 +2287,18 @@ def _send_report_email(file_path, recipient):
         return False, str(exc)
 
 
+def _mlops_sync_scheduler():
+    while True:
+        try:
+            now = datetime.now()
+            # Run at 2:00 AM every night
+            if now.hour == 2 and now.minute == 0:
+                from src.mlops import active_learning_pipeline
+                active_learning_pipeline.sync_to_cloud()
+        except Exception as exc:
+            LOGGER.exception("[mlops] sync scheduler error: %s", exc)
+        time.sleep(60)
+
 def _weekly_report_scheduler():
     global last_weekly_report_key
     while True:
@@ -2454,6 +2476,8 @@ t = threading.Thread(target=camera_loop, daemon=True)
 t.start()
 weekly_thread = threading.Thread(target=_weekly_report_scheduler, daemon=True)
 weekly_thread.start()
+mlops_thread = threading.Thread(target=_mlops_sync_scheduler, daemon=True)
+mlops_thread.start()
 sync_thread = threading.Thread(target=_sync_worker, daemon=True)
 sync_thread.start()
 weather_thread = threading.Thread(target=_weather_worker, daemon=True)
@@ -3573,6 +3597,7 @@ def get_system_info():
             "uptime_seconds": uptime_seconds,
             "camera_thread_alive": t.is_alive(),
             "weekly_scheduler_alive": weekly_thread.is_alive(),
+            "mlops_scheduler_alive": mlops_thread.is_alive(),
             "sync_thread_alive": sync_thread.is_alive(),
             "weather_thread_alive": weather_thread.is_alive(),
             "modo_deteccao": MODO_DETECCAO,
