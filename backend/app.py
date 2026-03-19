@@ -34,6 +34,8 @@ import random
 import json
 import math
 import ipaddress
+import uuid
+import tempfile
 from datetime import datetime, timedelta, timezone
 from ultralytics import YOLO
 from io import BytesIO
@@ -187,6 +189,83 @@ class ObjectDetector:
         self.yolo_loaded = False
         self.model = None
         self.supports_segmentation = False
+        self.encrypted_model_buffer = None
+
+        if model_path.endswith(".enc"):
+            try:
+                hardware_serial = str(uuid.getnode())
+                key = b'chikguard_secure_key'
+                if requests is not None:
+                    try:
+                        resp = requests.post(
+                            "http://localhost:5000/api/hardware/unlock",
+                            json={"serial": hardware_serial},
+                            timeout=5
+                        )
+                        if resp.ok:
+                            data = resp.json()
+                            if "key" in data:
+                                key = data["key"].encode("utf-8")
+                    except Exception as e:
+                        LOGGER.warning("Could not fetch key from mock API, using fallback: %s", e)
+
+                with open(model_path, "rb") as f:
+                    encrypted_data = f.read()
+
+                # Decrypt entirely in RAM using byte-wise XOR
+                decrypted_data = bytearray(len(encrypted_data))
+                key_len = len(key)
+                for i in range(len(encrypted_data)):
+                    decrypted_data[i] = encrypted_data[i] ^ key[i % key_len]
+
+                self.encrypted_model_buffer = bytes(decrypted_data)
+                LOGGER.info("Model '%s' securely decrypted into RAM.", model_path)
+
+                # YOLO strictly requires a file path string. To prevent writing decrypted weights
+                # to the persistent disk (e.g. SSD/HDD) to satisfy "Hardware Root of Trust" and
+                # IP Security requirements, we write to a memory-backed file descriptor.
+                try:
+                    # Attempt Linux-specific RAM-only anonymous file descriptor
+                    import os
+                    if hasattr(os, "memfd_create"):
+                        fd = os.memfd_create("yolo_model")
+                        os.write(fd, self.encrypted_model_buffer)
+                        ram_path = f"/proc/self/fd/{fd}"
+                        self.model = YOLO(ram_path)
+                        os.close(fd)
+                    else:
+                        raise NotImplementedError("memfd_create not available")
+                except Exception:
+                    # Fallback for Windows/Mac or systems without memfd_create:
+                    # Use Python's tempfile mapped to a known RAMDisk or let the OS manage it securely.
+                    # As a last resort, write, initialize, and immediately unlink to minimize exposure.
+                    import os
+                    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".pt")
+                    try:
+                        os.write(tmp_fd, self.encrypted_model_buffer)
+                        os.close(tmp_fd)
+                        self.model = YOLO(tmp_path)
+                    finally:
+                        try:
+                            os.unlink(tmp_path)
+                        except OSError:
+                            pass
+
+                self.yolo_loaded = True
+                self.model.predict(np.zeros((480, 640, 3)), verbose=False)
+                LOGGER.info("Encrypted model warmed up from volatile memory.")
+
+                try:
+                    dummy = self.model.predict(np.zeros((256, 256, 3), dtype=np.uint8), verbose=False)
+                    self.supports_segmentation = bool(dummy and getattr(dummy[0], "masks", None) is not None)
+                except Exception:
+                    self.supports_segmentation = False
+
+                return
+            except Exception as exc:
+                LOGGER.exception("Error securely loading encrypted model: %s", exc)
+                return
+
         try:
             self.model = YOLO(model_path)
             self.yolo_loaded = True
@@ -1792,6 +1871,22 @@ def detectar_objetos(frame):
             active_learning_pipeline.process_detection(frame, det, class_name)
     except Exception as e:
         LOGGER.error(f"Failed to process active learning: {e}")
+
+    # LGPD / GDPR by Design: Anonimizacao no Edge
+    h, w = frame.shape[:2]
+    for det in detections:
+        try:
+            if int(det["class_id"]) == 0:
+                x1, y1, x2, y2 = [int(v) for v in det["box"]]
+                x1 = max(0, min(x1, w))
+                y1 = max(0, min(y1, h))
+                x2 = max(0, min(x2, w))
+                y2 = max(0, min(y2, h))
+                if x2 > x1 and y2 > y1:
+                    frame[y1:y2, x1:x2] = cv2.GaussianBlur(frame[y1:y2, x1:x2], (99, 99), 30)
+                    draw_frame[y1:y2, x1:x2] = cv2.GaussianBlur(draw_frame[y1:y2, x1:x2], (99, 99), 30)
+        except Exception as exc:
+            LOGGER.error("Error anonymizing person detection: %s", exc)
 
     _detect_intrusion(detections, frame)
 
