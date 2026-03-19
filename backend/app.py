@@ -2382,6 +2382,84 @@ def _send_report_email(file_path, recipient):
         return False, str(exc)
 
 
+def _data_lifecycle_worker():
+    last_run_date = None
+    while True:
+        try:
+            now = datetime.now()
+            # Run at 3:00 AM every night to clean up Hot Storage and simulate Cold Storage
+            if now.hour == 3 and last_run_date != now.date():
+                last_run_date = now.date()
+                _process_data_lifecycle(now)
+        except Exception as exc:
+            LOGGER.exception("[data-lifecycle] worker error: %s", exc)
+        time.sleep(60)
+
+
+def _process_data_lifecycle(now):
+    cutoff = now - timedelta(days=3)
+
+    tables_to_clean = [
+        (Reading, "Reading"),
+        (BirdSnapshot, "BirdSnapshot"),
+        (BirdTrackPoint, "BirdTrackPoint"),
+        (EventLog, "EventLog"),
+        (SensorReading, "SensorReading"),
+        (ThermalAnomaly, "ThermalAnomaly"),
+        (AcousticReading, "AcousticReading")
+    ]
+
+    with app.app_context():
+        # Quick check if there are pending syncs.
+        pending_syncs = SyncQueueItem.query.filter_by(status="pending").count()
+        if pending_syncs > 1000:
+            LOGGER.warning("[data-lifecycle] Skipping cleanup. Too many pending syncs: %d", pending_syncs)
+            return
+
+        total_deleted = 0
+
+        for ModelClass, name in tables_to_clean:
+            # Delete one by one to respect ORM cascades and events
+            old_records = ModelClass.query.filter(ModelClass.timestamp < cutoff).all()
+            if not old_records:
+                continue
+
+            count = len(old_records)
+            for record in old_records:
+                db.session.delete(record)
+            total_deleted += count
+            LOGGER.info("[data-lifecycle] Deleted %d records from %s (older than 3 days)", count, name)
+
+        db.session.commit()
+
+        # Also clean up old report/heatmap files that might accumulate on disk
+        # (Since images are mentioned, we want to make sure physical files are cleaned)
+        files_deleted = 0
+        for directory in [REPORTS_DIR, HEATMAP_DIR]:
+            if not os.path.exists(directory):
+                continue
+            for filename in os.listdir(directory):
+                filepath = os.path.join(directory, filename)
+                if not os.path.isfile(filepath):
+                    continue
+                file_mtime = datetime.fromtimestamp(os.path.getmtime(filepath))
+                if file_mtime < cutoff:
+                    try:
+                        os.remove(filepath)
+                        files_deleted += 1
+                    except Exception as e:
+                        LOGGER.error("[data-lifecycle] Failed to delete file %s: %s", filepath, e)
+
+        if total_deleted > 0 or files_deleted > 0:
+            LOGGER.info("[data-lifecycle] Cleanup finished: %d DB records, %d files", total_deleted, files_deleted)
+            _log_event(
+                event_type="data_lifecycle_cleanup",
+                level="info",
+                message=f"Limpeza de Hot Storage Edge: apagados {total_deleted} registros DB e {files_deleted} arquivos.",
+                metadata={"db_deleted_count": total_deleted, "files_deleted": files_deleted}
+            )
+
+
 def _mlops_sync_scheduler():
     while True:
         try:
@@ -2577,6 +2655,8 @@ sync_thread = threading.Thread(target=_sync_worker, daemon=True)
 sync_thread.start()
 weather_thread = threading.Thread(target=_weather_worker, daemon=True)
 weather_thread.start()
+data_lifecycle_thread = threading.Thread(target=_data_lifecycle_worker, daemon=True)
+data_lifecycle_thread.start()
 
 api_blueprint = create_api_blueprint(
     {
@@ -3695,6 +3775,7 @@ def get_system_info():
             "mlops_scheduler_alive": mlops_thread.is_alive(),
             "sync_thread_alive": sync_thread.is_alive(),
             "weather_thread_alive": weather_thread.is_alive(),
+            "data_lifecycle_thread_alive": data_lifecycle_thread.is_alive(),
             "modo_deteccao": MODO_DETECCAO,
             "yolo_loaded": detector.yolo_loaded,
             "yolo_segmentation": bool(detector.supports_segmentation),
