@@ -3827,7 +3827,27 @@ if __name__ == "__main__":
         SETTINGS.flask_port,
         SETTINGS.app_env,
     )
-    socketio.run(app, host=SETTINGS.flask_host, port=SETTINGS.flask_port, debug=False)
+
+    import ssl
+    import os
+
+    ca_cert = os.getenv("MTLS_CA_CERT")
+    server_cert = os.getenv("MTLS_SERVER_CERT")
+    server_key = os.getenv("MTLS_SERVER_KEY")
+
+    ssl_context = None
+    if ca_cert and server_cert and server_key:
+        LOGGER.info("Starting with mTLS enabled (Zero Trust)")
+        try:
+            ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+            ssl_context.load_cert_chain(certfile=server_cert, keyfile=server_key)
+            ssl_context.load_verify_locations(cafile=ca_cert)
+            ssl_context.verify_mode = ssl.CERT_REQUIRED
+        except Exception as e:
+            LOGGER.exception("Failed to configure mTLS context")
+            raise
+
+    socketio.run(app, host=SETTINGS.flask_host, port=SETTINGS.flask_port, debug=False, ssl_context=ssl_context)
 
 
 
