@@ -45,6 +45,11 @@ import io
 
 from src.alerts.providers import build_alert_provider
 from src.api.routes import create_api_blueprint
+from src.api.reports_api import create_reports_blueprint
+from src.api.auth import create_auth_blueprint
+from src.api.devices import create_devices_blueprint
+from src.api.sensors_api import create_sensors_blueprint
+
 from src.core.config import load_settings
 from src.core.logger import configure_logging
 from src.plugins.manager import PluginManager
@@ -170,7 +175,6 @@ os.makedirs(HEATMAP_DIR, exist_ok=True)
 STREAM_JPEG_QUALITY = max(40, min(STREAM_JPEG_QUALITY, 95))
 STREAM_FRAME_INTERVAL_SEC = 1.0 / STREAM_TARGET_FPS if STREAM_TARGET_FPS > 0 else 0.0
 
-
 def _configure_camera_capture(cap):
     if cap is None:
         return
@@ -183,7 +187,6 @@ def _configure_camera_capture(cap):
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     except Exception:
         pass
-
 
 class ObjectDetector:
     def __init__(self, model_path="yolov8n.pt"):
@@ -332,7 +335,6 @@ class ObjectDetector:
             )
         return detections
 
-
 class RespiratoryAudioClassifier:
     def __init__(self, model_path):
         self.model_path = model_path
@@ -417,7 +419,6 @@ class RespiratoryAudioClassifier:
             self.last_error = str(exc)
             return None
 
-
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = SETTINGS.database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -433,18 +434,15 @@ PLUGINS_ROOT = os.getenv("PLUGINS_DIR", os.path.join(os.path.dirname(__file__), 
 PLUGIN_MANAGER = PluginManager(plugins_root=PLUGINS_ROOT, logger=LOGGER)
 PLUGIN_MANAGER.load_all({"logger": LOGGER, "settings": SETTINGS})
 
-
 def _safe_json(value):
     try:
         return json.dumps(value, ensure_ascii=False)
     except Exception:
         return json.dumps({"raw": str(value)})
 
-
 def _utcnow():
     # Python is deprecating naive utcnow(); keep UTC source but store naive UTC in DB.
     return datetime.now(timezone.utc).replace(tzinfo=None)
-
 
 def _log_event(event_type, level, message, metadata=None, camera_id=ACTIVE_CAMERA_ID):
     try:
@@ -494,7 +492,6 @@ def _log_event(event_type, level, message, metadata=None, camera_id=ACTIVE_CAMER
     except Exception as exc:
         LOGGER.exception("[EVENT] failed to persist '%s': %s", event_type, exc)
 
-
 def _enqueue_sync_item(item_type, payload):
     try:
         with app.app_context():
@@ -502,7 +499,6 @@ def _enqueue_sync_item(item_type, payload):
             db.session.commit()
     except Exception as exc:
         LOGGER.exception("[SYNC] enqueue failed: %s", exc)
-
 
 def _request_actor():
     actor = "system"
@@ -515,13 +511,11 @@ def _request_actor():
         actor = "system"
     return actor
 
-
 def _request_ip():
     try:
         return str(request.headers.get("X-Forwarded-For", request.remote_addr) or "").split(",")[0].strip()
     except Exception:
         return ""
-
 
 def _ip_allowed_for_critical(ip_str):
     if not CRITICAL_ALLOWED_CIDRS:
@@ -537,7 +531,6 @@ def _ip_allowed_for_critical(ip_str):
         except Exception:
             continue
     return False
-
 
 def _guard_critical_action(action_name, permission=None):
     try:
@@ -556,7 +549,6 @@ def _guard_critical_action(action_name, permission=None):
             return False, resp_perm
     return True, None
 
-
 def _get_current_account():
     try:
         verify_jwt_in_request(optional=True)
@@ -567,7 +559,6 @@ def _get_current_account():
         return None
     return Account.query.filter_by(username=str(username)).first()
 
-
 def _account_has_permission(account, permission):
     if account is None or not account.active:
         return False
@@ -577,14 +568,12 @@ def _account_has_permission(account, permission):
         return True
     return permission in perms
 
-
 def _require_permission(permission):
     account = _get_current_account()
     if not _account_has_permission(account, permission):
         _audit("permission_denied", source="security", details={"permission": permission, "actor": account.username if account else None})
         return False, (jsonify({"msg": f"Permissao negada: {permission}"}), 403)
     return True, None
-
 
 def _audit(action, source="backend", details=None, actor=None):
     try:
@@ -605,7 +594,6 @@ def _audit(action, source="backend", details=None, actor=None):
     except Exception as exc:
         LOGGER.exception("[AUDIT] failed: %s", exc)
 
-
 def _class_name_by_id(class_id):
     names = detector.model.names if detector and detector.model is not None else {}
     if isinstance(names, dict):
@@ -614,14 +602,12 @@ def _class_name_by_id(class_id):
         return str(names[class_id])
     return ""
 
-
 def _box_center_area(box):
     x1, y1, x2, y2 = [int(v) for v in box]
     cx = int((x1 + x2) / 2)
     cy = int((y1 + y2) / 2)
     area = max(1, (x2 - x1) * (y2 - y1))
     return cx, cy, area
-
 
 def _extract_appearance_signature(frame, box):
     x1, y1, x2, y2 = [int(v) for v in box]
@@ -640,7 +626,6 @@ def _extract_appearance_signature(frame, box):
     hist = cv2.normalize(hist, hist).flatten()
     return hist.astype(np.float32)
 
-
 def _appearance_similarity(hist_a, hist_b):
     if hist_a is None or hist_b is None:
         return 0.0
@@ -648,7 +633,6 @@ def _appearance_similarity(hist_a, hist_b):
     if np.isnan(score):
         return 0.0
     return max(0.0, min(1.0, (score + 1.0) / 2.0))
-
 
 def _estimate_bird_temp_proxy(gray_frame, box, ambient_temp):
     x1, y1, x2, y2 = box
@@ -664,7 +648,6 @@ def _estimate_bird_temp_proxy(gray_frame, box, ambient_temp):
     local_brightness = float(np.mean(roi))
     adjustment = ((local_brightness / 255.0) - 0.5) * 2.5
     return round(float(ambient_temp + adjustment), 2)
-
 
 with app.app_context():
     db.create_all()
@@ -717,7 +700,6 @@ with app.app_context():
             )
         )
         db.session.commit()
-
 
 CAMERA_INDEX = SETTINGS.camera_index
 global_frame = None
@@ -852,7 +834,6 @@ intrusion_active_until = 0.0
 
 last_weekly_report_key = None
 
-
 def _init_bird_uid_counter():
     global next_bird_uid
     with app.app_context():
@@ -861,13 +842,11 @@ def _init_bird_uid_counter():
     max_seen = max(filter(lambda v: v is not None, [max_identity, max_snapshot]), default=0)
     next_bird_uid = int(max_seen) + 1
 
-
 def _allocate_new_bird_uid():
     global next_bird_uid
     uid = int(next_bird_uid)
     next_bird_uid += 1
     return uid
-
 
 def _resolve_stable_bird_uid(track_id, box, now_ts, frame, used_uids):
     if track_id in track_to_bird_uid:
@@ -930,7 +909,6 @@ def _active_batch(camera_id):
             .first()
         )
 
-
 def _ideal_temp_for_age_day(age_day):
     if age_day <= 7:
         return 32.0
@@ -941,7 +919,6 @@ def _ideal_temp_for_age_day(age_day):
     if age_day <= 28:
         return 24.0
     return 22.0
-
 
 def _temperature_targets(camera_id):
     fan_on = auto_config["fan_on_temp"]
@@ -970,7 +947,6 @@ def _temperature_targets(camera_id):
         "batch_age_day": age_day,
     }
 
-
 def _ideal_weight_for_age_day(age_day):
     # Curva de referência simplificada (broiler), em gramas.
     curve = {
@@ -987,7 +963,6 @@ def _ideal_weight_for_age_day(age_day):
             ratio = (age_day - a) / float(max(1, b - a))
             return float(curve[a] + ((curve[b] - curve[a]) * ratio))
     return float(curve[keys[-1]])
-
 
 def _estimate_weight_from_live_birds(frame_shape):
     now = time.time()
@@ -1035,7 +1010,6 @@ def _estimate_weight_from_live_birds(frame_shape):
         "age_day": int(age_day),
     }
 
-
 def _persist_weight_estimate(frame_shape):
     global last_weight_save_ts
     now = time.time()
@@ -1067,7 +1041,6 @@ def _persist_weight_estimate(frame_shape):
         _enqueue_sync_item("weight_estimate", row.to_dict())
     last_weight_save_ts = now
 
-
 def _sector_from_point(x, y, frame_shape):
     h, w = frame_shape[:2]
     if w <= 0 or h <= 0:
@@ -1075,7 +1048,6 @@ def _sector_from_point(x, y, frame_shape):
     col = min(2, int((x / float(w)) * 3))
     row = min(2, int((y / float(h)) * 3))
     return f"{chr(ord('A') + row)}{col + 1}"
-
 
 def _detect_thermal_anomalies(gray_frame, ambient_temp, frame_shape):
     global last_thermal_alert_ts
@@ -1128,7 +1100,6 @@ def _detect_thermal_anomalies(gray_frame, ambient_temp, frame_shape):
             metadata={"count": len(anomalies), "sectors": sectors},
         )
 
-
 def _simulate_acoustic_analysis():
     global last_acoustic_save_ts
     now = time.time()
@@ -1171,7 +1142,6 @@ def _simulate_acoustic_analysis():
         )
     last_acoustic_save_ts = now
 
-
 def _update_energy_runtime():
     now = time.time()
     last_tick = float(energy_runtime_state.get("last_tick", now))
@@ -1194,7 +1164,6 @@ def _update_energy_runtime():
         row.ventilacao_seconds = float(energy_runtime_state["ventilacao_seconds_today"])
         row.aquecedor_seconds = float(energy_runtime_state["aquecedor_seconds_today"])
         db.session.commit()
-
 
 def _sync_worker():
     if requests is None:
@@ -1231,7 +1200,6 @@ def _sync_worker():
             LOGGER.exception("[SYNC] worker error: %s", exc)
         time.sleep(SYNC_PUSH_INTERVAL_SEC)
 
-
 def _persist_sensor_reading(source="simulated"):
     with app.app_context():
         row = SensorReading(
@@ -1247,7 +1215,6 @@ def _persist_sensor_reading(source="simulated"):
         db.session.commit()
         _enqueue_sync_item("sensor_reading", row.to_dict())
 
-
 def _maybe_alert_sensor(kind, value, message):
     now = time.time()
     last_ts = float(sensor_alert_state.get(kind, 0.0))
@@ -1260,7 +1227,6 @@ def _maybe_alert_sensor(kind, value, message):
         message=message,
         metadata={"kind": kind, "value": value},
     )
-
 
 def _evaluate_sensor_alerts():
     h = float(sensor_state["humidity_pct"])
@@ -1278,7 +1244,6 @@ def _evaluate_sensor_alerts():
         _maybe_alert_sensor("feed_low", f, f"Racao baixa: {f:.1f}%")
     if w < sensor_thresholds["water_low"]:
         _maybe_alert_sensor("water_low", w, f"Agua baixa: {w:.1f}%")
-
 
 def _simulate_sensor_updates(temp_atual):
     now = time.time()
@@ -1308,7 +1273,6 @@ def _simulate_sensor_updates(temp_atual):
 
     _persist_sensor_reading(source="simulated")
     _evaluate_sensor_alerts()
-
 
 def _apply_automatic_control(temp_atual):
     if not estado_dispositivos.get("modo_automatico"):
@@ -1355,7 +1319,6 @@ def _apply_automatic_control(temp_atual):
                 "state": state
             },
         )
-
 
 def _analyze_behavior(selected, frame_shape):
     now = time.time()
@@ -1444,7 +1407,6 @@ def _analyze_behavior(selected, frame_shape):
             },
         )
 
-
 def _update_immobility(selected):
     now = time.time()
     tracked_uids = set()
@@ -1528,7 +1490,6 @@ def _telegram_send(frame_bgr, caption):
     except Exception as exc:
         return False, str(exc)
 
-
 def _telegram_send_text(message):
     token = SETTINGS.telegram_bot_token
     chat_id = SETTINGS.telegram_chat_id
@@ -1541,7 +1502,6 @@ def _telegram_send_text(message):
     except Exception as exc:
         return False, str(exc)
 
-
 def _trigger_local_alarm():
     try:
         for _ in range(3):
@@ -1552,7 +1512,6 @@ def _trigger_local_alarm():
             time.sleep(0.08)
     except Exception:
         pass
-
 
 def _check_tampering(frame):
     global last_visible_frame, _tamper_prev_gray
@@ -1624,7 +1583,6 @@ def _check_tampering(frame):
         details={"causes": causes, "telegram_sent": sent},
     )
 
-
 def _update_carcass_detection(selected):
     now = time.time()
     carcasses = []
@@ -1671,7 +1629,6 @@ def _update_carcass_detection(selected):
                 _audit("carcass_alert_triggered", source="ai", actor="chikguard-ai", details=item)
     carcass_state["items"] = carcasses
     carcass_state["uids"] = set([c["bird_uid"] for c in carcasses])
-
 
 def _fetch_weather_forecast_once():
     if not WEATHER_API_KEY or not WEATHER_LAT or not WEATHER_LON or requests is None:
@@ -1720,12 +1677,10 @@ def _fetch_weather_forecast_once():
     except Exception as exc:
         LOGGER.exception("[WEATHER] fetch error: %s", exc)
 
-
 def _weather_worker():
     while True:
         _fetch_weather_forecast_once()
         time.sleep(WEATHER_CHECK_INTERVAL_SEC)
-
 
 def _comfort_score():
     temp_status_score = 100
@@ -1740,7 +1695,6 @@ def _comfort_score():
     carcass_penalty = min(30, len(carcass_state.get("items", [])) * 10)
     base = temp_status_score - intrusion_penalty - carcass_penalty + movement_bonus
     return int(max(0, min(100, base)))
-
 
 def _detect_intrusion(all_detections, frame):
     now = time.time()
@@ -1780,7 +1734,6 @@ def _detect_intrusion(all_detections, frame):
         actor="chikguard-ai",
         details={"detections": len(person_dets), "telegram_sent": sent},
     )
-
 
 def _save_bird_snapshots(frame, ambient_temp):
     global last_bird_snapshot_save_time
@@ -1840,7 +1793,6 @@ def _save_bird_snapshots(frame, ambient_temp):
 
     last_bird_snapshot_save_time = now
 
-
 def _save_bird_track_points():
     global last_track_point_save_time
     now = time.time()
@@ -1864,7 +1816,6 @@ def _save_bird_track_points():
         db.session.bulk_save_objects(rows)
         db.session.commit()
     last_track_point_save_time = now
-
 
 def detectar_objetos(frame):
     global object_count
@@ -2007,7 +1958,6 @@ def detectar_objetos(frame):
     cv2.putText(draw_frame, cfg, (10, 78), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 0), 1)
     return draw_frame
 
-
 def _heatmap_grid(date_ref=None, grid_size=32):
     if date_ref is None:
         date_ref = _utcnow().date()
@@ -2032,7 +1982,6 @@ def _heatmap_grid(date_ref=None, grid_size=32):
         heat[gy, gx] += 1.0
     return heat
 
-
 def _heatmap_grid_last_hours(hours=24, grid_size=32):
     end_dt = _utcnow()
     start_dt = end_dt - timedelta(hours=max(1, min(hours, 168)))
@@ -2053,7 +2002,6 @@ def _heatmap_grid_last_hours(hours=24, grid_size=32):
         heat[gy, gx] += 1.0
     return heat
 
-
 def _heatmap_image_bytes(heat):
     if np.max(heat) <= 0:
         canvas_img = np.zeros((480, 640, 3), dtype=np.uint8)
@@ -2068,7 +2016,6 @@ def _heatmap_image_bytes(heat):
     if not ok:
         return None
     return buf.tobytes()
-
 
 def _heatmap_points_3d(hours=24, grid_size=24):
     heat = _heatmap_grid_last_hours(hours=hours, grid_size=grid_size)
@@ -2093,7 +2040,6 @@ def _heatmap_points_3d(hours=24, grid_size=24):
                 }
             )
     return points
-
 
 def _simulate_airflow_field(fans=None, grid_size=24):
     fans = fans or [{"x": 0.5, "y": 0.2, "power": 1.0, "angle_deg": 90}]
@@ -2132,7 +2078,6 @@ def _simulate_airflow_field(fans=None, grid_size=24):
         "avg_speed": round(avg_speed, 4),
         "vectors": vectors,
     }
-
 
 def _energy_forecast(hours=12):
     hours = max(1, min(int(hours), 48))
@@ -2190,205 +2135,7 @@ def _energy_forecast(hours=12):
         "message": message,
     }
 
-
-def _generate_weekly_report(camera_id, week_end=None):
-    if canvas is None or A4 is None:
-        raise RuntimeError("reportlab nao instalado. Instale reportlab no backend.")
-
-    if week_end is None:
-        week_end = _utcnow()
-    week_start = week_end - timedelta(days=7)
-
-    with app.app_context():
-        readings = Reading.query.filter(Reading.timestamp >= week_start, Reading.timestamp <= week_end).all()
-        sensors = SensorReading.query.filter(
-            SensorReading.camera_id == camera_id,
-            SensorReading.timestamp >= week_start,
-            SensorReading.timestamp <= week_end,
-        ).all()
-        events = EventLog.query.filter(
-            EventLog.camera_id == camera_id,
-            EventLog.timestamp >= week_start,
-            EventLog.timestamp <= week_end,
-        ).all()
-
-    temps = [r.temperatura for r in readings]
-    temp_min = min(temps) if temps else None
-    temp_max = max(temps) if temps else None
-    temp_avg = (sum(temps) / len(temps)) if temps else None
-
-    amms = [s.ammonia_ppm for s in sensors if s.ammonia_ppm is not None]
-    hums = [s.humidity_pct for s in sensors if s.humidity_pct is not None]
-    feed = [s.feed_level_pct for s in sensors if s.feed_level_pct is not None]
-    water = [s.water_level_pct for s in sensors if s.water_level_pct is not None]
-
-    fname = f"weekly_report_{camera_id}_{week_end.strftime('%Y%m%d_%H%M%S')}.pdf"
-    path = os.path.join(REPORTS_DIR, fname)
-    os.makedirs(REPORTS_DIR, exist_ok=True)
-
-    c = canvas.Canvas(path, pagesize=A4)
-    width, height = A4
-    y = height - 40
-
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(40, y, f"ChikGuard - Relatorio semanal ({camera_id})")
-    y -= 26
-    c.setFont("Helvetica", 10)
-    c.drawString(40, y, f"Periodo: {week_start.strftime('%Y-%m-%d')} ate {week_end.strftime('%Y-%m-%d')}")
-    y -= 20
-
-    lines = [
-        f"Temperatura minima: {temp_min:.1f} C" if temp_min is not None else "Temperatura minima: sem dados",
-        f"Temperatura maxima: {temp_max:.1f} C" if temp_max is not None else "Temperatura maxima: sem dados",
-        f"Temperatura media: {temp_avg:.1f} C" if temp_avg is not None else "Temperatura media: sem dados",
-        f"Alertas/eventos: {len(events)}",
-        f"Umidade media: {sum(hums)/len(hums):.1f}%" if hums else "Umidade media: sem dados",
-        f"Amonia media: {sum(amms)/len(amms):.1f} ppm" if amms else "Amonia media: sem dados",
-        f"Racao media restante: {sum(feed)/len(feed):.1f}%" if feed else "Racao media restante: sem dados",
-        f"Agua media restante: {sum(water)/len(water):.1f}%" if water else "Agua media restante: sem dados",
-    ]
-    for line in lines:
-        c.drawString(40, y, line)
-        y -= 16
-
-    y -= 8
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(40, y, "Eventos recentes")
-    y -= 18
-    c.setFont("Helvetica", 9)
-    for ev in sorted(events, key=lambda e: e.timestamp, reverse=True)[:20]:
-        msg = f"{ev.timestamp.strftime('%Y-%m-%d %H:%M:%S')} [{ev.level}] {ev.event_type} - {ev.message}"
-        c.drawString(40, y, msg[:110])
-        y -= 13
-        if y < 50:
-            c.showPage()
-            y = height - 40
-            c.setFont("Helvetica", 9)
-
-    c.save()
-    return path
-
-
-def _generate_esg_report(camera_id, days=30):
-    if canvas is None or A4 is None:
-        raise RuntimeError("reportlab nao instalado. Instale reportlab no backend.")
-
-    days = max(7, min(int(days), 120))
-    end_dt = _utcnow()
-    start_dt = end_dt - timedelta(days=days)
-
-    with app.app_context():
-        readings = Reading.query.filter(Reading.timestamp >= start_dt, Reading.timestamp <= end_dt).all()
-        acoustic_rows = AcousticReading.query.filter(
-            AcousticReading.camera_id == camera_id,
-            AcousticReading.timestamp >= start_dt,
-            AcousticReading.timestamp <= end_dt,
-        ).all()
-        events = EventLog.query.filter(
-            EventLog.camera_id == camera_id,
-            EventLog.timestamp >= start_dt,
-            EventLog.timestamp <= end_dt,
-        ).all()
-
-    total = len(readings)
-    normal = len([r for r in readings if r.status == "NORMAL"])
-    calor = len([r for r in readings if r.status == "CALOR"])
-    frio = len([r for r in readings if r.status == "FRIO"])
-    low_stress_pct = (normal / total * 100.0) if total else 0.0
-    thermal_stress_pct = (100.0 - low_stress_pct) if total else 0.0
-    avg_resp = (
-        sum(float(a.respiratory_health_index) for a in acoustic_rows) / len(acoustic_rows)
-        if acoustic_rows
-        else 100.0
-    )
-    critical_events = len([e for e in events if str(e.level).lower() == "high"])
-    esg_score = max(0.0, min(100.0, (low_stress_pct * 0.55) + (avg_resp * 0.35) - (critical_events * 0.8)))
-    market_flag = "APTO para mercados exigentes (Europa/Japao)" if esg_score >= 80 else "Necessita melhorias para mercados premium"
-
-    fname = f"esg_report_{camera_id}_{end_dt.strftime('%Y%m%d_%H%M%S')}.pdf"
-    path = os.path.join(REPORTS_DIR, fname)
-    os.makedirs(REPORTS_DIR, exist_ok=True)
-
-    c = canvas.Canvas(path, pagesize=A4)
-    width, height = A4
-    y = height - 40
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(40, y, f"ChikGuard - Relatorio ESG ({camera_id})")
-    y -= 24
-    c.setFont("Helvetica", 10)
-    c.drawString(40, y, f"Periodo analisado: {start_dt.strftime('%Y-%m-%d')} ate {end_dt.strftime('%Y-%m-%d')}")
-    y -= 22
-
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(40, y, "Indicadores de Sustentabilidade e Bem-Estar")
-    y -= 18
-    c.setFont("Helvetica", 10)
-    lines = [
-        f"Leituras termicas totais: {total}",
-        f"Baixo stress termico (status NORMAL): {low_stress_pct:.1f}%",
-        f"Stress termico (CALOR+FRIO): {thermal_stress_pct:.1f}%",
-        f"Ocorrencias CALOR: {calor} | FRIO: {frio}",
-        f"Saude respiratoria media (acustica): {avg_resp:.1f}/100",
-        f"Eventos criticos de operacao: {critical_events}",
-        f"ESG Score consolidado: {esg_score:.1f}/100",
-        f"Status exportacao: {market_flag}",
-    ]
-    for line in lines:
-        c.drawString(40, y, line)
-        y -= 16
-
-    y -= 10
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(40, y, "Conclusao automatica")
-    y -= 16
-    c.setFont("Helvetica", 10)
-    conclusion = (
-        "As aves apresentaram baixo stress termico e estabilidade ambiental, "
-        "favorecendo conformidade ESG e valor agregado para exportacao."
-        if esg_score >= 80
-        else
-        "Foram detectadas variacoes relevantes de conforto termico. Recomenda-se "
-        "otimizar ventilacao, setpoint termico e rotina de monitoramento."
-    )
-    c.drawString(40, y, conclusion[:120])
-    y -= 14
-    if len(conclusion) > 120:
-        c.drawString(40, y, conclusion[120:240])
-
-    c.save()
-    return path
-
-
-def _send_report_email(file_path, recipient):
-    smtp_host = os.getenv("SMTP_HOST", "").strip()
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_user = os.getenv("SMTP_USER", "").strip()
-    smtp_pass = os.getenv("SMTP_PASS", "").strip()
-    sender = os.getenv("SMTP_FROM", smtp_user).strip()
-
-    if not smtp_host or not sender or not recipient:
-        return False, "smtp_not_configured"
-
-    msg = EmailMessage()
-    msg["Subject"] = "ChikGuard - Relatorio semanal"
-    msg["From"] = sender
-    msg["To"] = recipient
-    msg.set_content("Segue o relatorio semanal do ChikGuard em anexo.")
-
-    with open(file_path, "rb") as f:
-        data = f.read()
-    msg.add_attachment(data, maintype="application", subtype="pdf", filename=os.path.basename(file_path))
-
-    try:
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
-            server.starttls()
-            if smtp_user and smtp_pass:
-                server.login(smtp_user, smtp_pass)
-            server.send_message(msg)
-        return True, "sent"
-    except Exception as exc:
-        return False, str(exc)
-
+# Report generation functions have been moved to src/reports/generator.py
 
 def _data_lifecycle_worker():
     last_run_date = None
@@ -2402,7 +2149,6 @@ def _data_lifecycle_worker():
         except Exception as exc:
             LOGGER.exception("[data-lifecycle] worker error: %s", exc)
         time.sleep(60)
-
 
 def _process_data_lifecycle(now):
     cutoff = now - timedelta(days=3)
@@ -2467,7 +2213,6 @@ def _process_data_lifecycle(now):
                 metadata={"db_deleted_count": total_deleted, "files_deleted": files_deleted}
             )
 
-
 def _mlops_sync_scheduler():
     while True:
         try:
@@ -2487,7 +2232,8 @@ def _weekly_report_scheduler():
             now = datetime.now()
             key = f"{now.isocalendar().year}-W{now.isocalendar().week}"
             if now.weekday() == 6 and now.hour == 23 and key != last_weekly_report_key:
-                path = _generate_weekly_report(ACTIVE_CAMERA_ID, week_end=now)
+                from src.reports.generator import generate_weekly_report
+                path = generate_weekly_report(app.app_context, ACTIVE_CAMERA_ID, _utcnow, week_end=now)
                 last_weekly_report_key = key
                 _log_event(
                     event_type="weekly_report",
@@ -2498,7 +2244,6 @@ def _weekly_report_scheduler():
         except Exception as exc:
             LOGGER.exception("[weekly-report] scheduler error: %s", exc)
         time.sleep(60)
-
 
 def camera_loop():
     global global_frame, db_last_save_time, fps_last_time, last_temp_emergency_notification_ts
@@ -2651,7 +2396,6 @@ def camera_loop():
                     global_frame = error_frame
             time.sleep(1)
 
-
 _init_bird_uid_counter()
 t = threading.Thread(target=camera_loop, daemon=True)
 t.start()
@@ -2666,38 +2410,61 @@ weather_thread.start()
 data_lifecycle_thread = threading.Thread(target=_data_lifecycle_worker, daemon=True)
 data_lifecycle_thread.start()
 
-api_blueprint = create_api_blueprint(
-    {
-        "time": time,
-        "cv2": cv2,
-        "db": db,
-        "bcrypt": bcrypt,
-        "create_access_token": create_access_token,
-        "request_ip": _request_ip,
-        "audit": _audit,
-        "utcnow": _utcnow,
-        "login_attempt_state": login_attempt_state,
-        "login_rate_window_sec": LOGIN_RATE_WINDOW_SEC,
-        "login_rate_max_attempts": LOGIN_RATE_MAX_ATTEMPTS,
-        "Account": Account,
-        "User": User,
-        "Reading": Reading,
-        "lock": lock,
-        "get_global_frame": lambda: global_frame,
-        "get_object_count": lambda: object_count,
-        "stream_jpeg_quality": STREAM_JPEG_QUALITY,
-        "stream_frame_interval_sec": STREAM_FRAME_INTERVAL_SEC,
-        "camera_thread": t,
-        "weekly_thread": weekly_thread,
-        "sync_thread": sync_thread,
-        "weather_thread": weather_thread,
-        "settings": SETTINGS,
-        "active_camera_id": ACTIVE_CAMERA_ID,
-        "camera_index": CAMERA_INDEX,
-    }
-)
-app.register_blueprint(api_blueprint)
+api_deps = {
+    "time": time,
+    "cv2": cv2,
+    "db": db,
+    "bcrypt": bcrypt,
+    "create_access_token": create_access_token,
+    "request_ip": _request_ip,
+    "audit": _audit,
+    "utcnow": _utcnow,
+    "login_attempt_state": login_attempt_state,
+    "login_rate_window_sec": LOGIN_RATE_WINDOW_SEC,
+    "login_rate_max_attempts": LOGIN_RATE_MAX_ATTEMPTS,
+    "Account": Account,
+    "User": User,
+    "Reading": Reading,
+    "lock": lock,
+    "get_global_frame": lambda: global_frame,
+    "get_object_count": lambda: object_count,
+    "stream_jpeg_quality": STREAM_JPEG_QUALITY,
+    "stream_frame_interval_sec": STREAM_FRAME_INTERVAL_SEC,
+    "camera_thread": t,
+    "weekly_thread": weekly_thread,
+    "sync_thread": sync_thread,
+    "weather_thread": weather_thread,
+    "settings": SETTINGS,
+    "active_camera_id": ACTIVE_CAMERA_ID,
+    "camera_index": CAMERA_INDEX,
+    "guard_critical_action": _guard_critical_action,
+    "get_current_account": _get_current_account,
+    "RolePermission": RolePermission,
+    "log_event": _log_event,
+    "estado_dispositivos": estado_dispositivos,
+    "auto_config": auto_config,
+    "temperature_targets": _temperature_targets,
+    "sensor_state": sensor_state,
+    "sensor_thresholds": sensor_thresholds,
+    "SensorReading": SensorReading,
+    "ThermalAnomaly": ThermalAnomaly,
+    "AcousticReading": AcousticReading,
+    "acoustic_state": acoustic_state,
+    "audio_classifier": audio_classifier,
+    "persist_sensor_reading": _persist_sensor_reading,
+    "evaluate_sensor_alerts": _evaluate_sensor_alerts,
+    "enqueue_sync_item": _enqueue_sync_item,
+    "timedelta": timedelta,
+    "sf": sf,
+    "io": io,
+    "np": np
+}
 
+app.register_blueprint(create_api_blueprint(api_deps))
+app.register_blueprint(create_auth_blueprint(api_deps))
+app.register_blueprint(create_devices_blueprint(api_deps))
+app.register_blueprint(create_sensors_blueprint(api_deps))
+app.register_blueprint(create_reports_blueprint(api_deps))
 
 @app.route("/api/birds/live", methods=["GET"])
 def get_live_birds():
@@ -2724,14 +2491,12 @@ def get_birds_history():
     rows = BirdSnapshot.query.order_by(BirdSnapshot.id.desc()).limit(limit).all()
     return jsonify([row.to_dict() for row in reversed(rows)])
 
-
 @app.route("/api/birds/registry", methods=["GET"])
 def get_birds_registry():
     limit = request.args.get("limit", default=500, type=int)
     limit = max(1, min(limit, 10000))
     rows = BirdIdentity.query.order_by(BirdIdentity.last_seen.desc()).limit(limit).all()
     return jsonify({"count": len(rows), "items": [row.to_dict() for row in rows]})
-
 
 @app.route("/api/birds/path/<int:bird_uid>", methods=["GET"])
 def get_bird_path(bird_uid):
@@ -2742,7 +2507,6 @@ def get_bird_path(bird_uid):
     )
     items = [row.to_dict() for row in reversed(rows)]
     return jsonify({"bird_uid": bird_uid, "count": len(items), "items": items})
-
 
 @app.route("/api/behavior/live", methods=["GET"])
 def get_behavior_live():
@@ -2756,7 +2520,6 @@ def get_behavior_live():
             "updated_at_epoch": behavior_state["updated_at"],
         }
     )
-
 
 @app.route("/api/immobility/live", methods=["GET"])
 def get_immobility_live():
@@ -2776,7 +2539,6 @@ def get_immobility_live():
     items.sort(key=lambda x: x["immobile_seconds"], reverse=True)
     return jsonify({"count": len(items), "items": items[:200]})
 
-
 @app.route("/api/carcass/live", methods=["GET"])
 def carcass_live():
     items = carcass_state.get("items", [])
@@ -2788,7 +2550,6 @@ def carcass_live():
             "items": items,
         }
     )
-
 
 @app.route("/api/heatmap/daily", methods=["GET"])
 def get_daily_heatmap():
@@ -2814,7 +2575,6 @@ def get_daily_heatmap():
         }
     )
 
-
 @app.route("/api/heatmap/daily/image", methods=["GET"])
 def get_daily_heatmap_image():
     date_str = request.args.get("date")
@@ -2834,7 +2594,6 @@ def get_daily_heatmap_image():
         f.write(img_bytes)
     return send_file(BytesIO(img_bytes), mimetype="image/jpeg", as_attachment=False, download_name=file_name)
 
-
 @app.route("/api/heatmap/rolling24", methods=["GET"])
 def get_rolling24_heatmap():
     hours = request.args.get("hours", default=24, type=int)
@@ -2846,7 +2605,6 @@ def get_rolling24_heatmap():
     norm = (heat / max_cell).tolist() if max_cell > 0 else heat.tolist()
     return jsonify({"hours": hours, "grid_size": grid_size, "total_points": int(total), "matrix": norm})
 
-
 @app.route("/api/heatmap/rolling24/image", methods=["GET"])
 def get_rolling24_heatmap_image():
     hours = request.args.get("hours", default=24, type=int)
@@ -2855,7 +2613,6 @@ def get_rolling24_heatmap_image():
     if img_bytes is None:
         return jsonify({"msg": "Falha ao gerar heatmap rolling"}), 500
     return send_file(BytesIO(img_bytes), mimetype="image/jpeg", as_attachment=False, download_name="heatmap_rolling24.jpg")
-
 
 @app.route("/api/heatmap/3d", methods=["GET"])
 def get_heatmap_3d():
@@ -2873,7 +2630,6 @@ def get_heatmap_3d():
         }
     )
 
-
 @app.route("/api/airflow/simulate", methods=["POST"])
 def airflow_simulate():
     payload = request.get_json(silent=True) or {}
@@ -2884,24 +2640,6 @@ def airflow_simulate():
         return jsonify({"msg": "Campo fans deve ser lista"}), 400
     result = _simulate_airflow_field(fans=fans, grid_size=grid_size)
     return jsonify(result)
-
-
-@app.route("/api/sensors/live", methods=["GET"])
-def get_sensors_live():
-    return jsonify(
-        {
-            "camera_id": ACTIVE_CAMERA_ID,
-            "temperature_c": sensor_state["temperature_c"],
-            "humidity_pct": sensor_state["humidity_pct"],
-            "ammonia_ppm": sensor_state["ammonia_ppm"],
-            "feed_level_pct": sensor_state["feed_level_pct"],
-            "water_level_pct": sensor_state["water_level_pct"],
-            "source": sensor_state["source"],
-            "updated_at_epoch": sensor_state["updated_at"],
-            "thresholds": sensor_thresholds,
-        }
-    )
-
 
 @app.route("/api/security/tamper", methods=["GET"])
 def tamper_status():
@@ -2919,44 +2657,6 @@ def tamper_status():
         }
     )
 
-
-@app.route("/api/sensors/history", methods=["GET"])
-def get_sensors_history():
-    limit = request.args.get("limit", default=100, type=int)
-    limit = max(1, min(limit, 5000))
-    rows = (
-        SensorReading.query.filter_by(camera_id=ACTIVE_CAMERA_ID)
-        .order_by(SensorReading.id.desc())
-        .limit(limit)
-        .all()
-    )
-    return jsonify({"count": len(rows), "items": [r.to_dict() for r in reversed(rows)]})
-
-
-@app.route("/api/sensors/ingest", methods=["POST"])
-def ingest_sensor_data():
-    payload = request.get_json(silent=True) or {}
-    required = ["temperature_c", "humidity_pct", "ammonia_ppm", "feed_level_pct", "water_level_pct"]
-    missing = [k for k in required if k not in payload]
-    if missing:
-        return jsonify({"msg": f"Campos obrigatorios ausentes: {', '.join(missing)}"}), 400
-
-    sensor_state.update(
-        {
-            "temperature_c": float(payload["temperature_c"]),
-            "humidity_pct": float(payload["humidity_pct"]),
-            "ammonia_ppm": float(payload["ammonia_ppm"]),
-            "feed_level_pct": float(payload["feed_level_pct"]),
-            "water_level_pct": float(payload["water_level_pct"]),
-            "source": str(payload.get("source", "external")),
-            "updated_at": time.time(),
-        }
-    )
-    _persist_sensor_reading(source=sensor_state["source"])
-    _evaluate_sensor_alerts()
-    return jsonify({"msg": "Leitura de sensores recebida", "state": sensor_state}), 200
-
-
 @app.route("/api/weight/live", methods=["GET"])
 def weight_live():
     return jsonify(
@@ -2969,7 +2669,6 @@ def weight_live():
             "updated_at_epoch": weight_state["updated_at"],
         }
     )
-
 
 @app.route("/api/weight/curve", methods=["GET"])
 def weight_curve():
@@ -2984,21 +2683,6 @@ def weight_curve():
     points = [r.to_dict() for r in rows]
     return jsonify({"count": len(points), "items": points})
 
-
-@app.route("/api/acoustic/live", methods=["GET"])
-def acoustic_live():
-    return jsonify(
-        {
-            "camera_id": ACTIVE_CAMERA_ID,
-            "respiratory_health_index": acoustic_state["respiratory_health_index"],
-            "cough_index": acoustic_state["cough_index"],
-            "stress_audio_index": acoustic_state["stress_audio_index"],
-            "source": acoustic_state["source"],
-            "updated_at_epoch": acoustic_state["updated_at"],
-        }
-    )
-
-
 @app.route("/api/acoustic/model-info", methods=["GET"])
 def acoustic_model_info():
     return jsonify(
@@ -3010,120 +2694,6 @@ def acoustic_model_info():
             "soundfile_available": sf is not None,
         }
     )
-
-
-@app.route("/api/acoustic/classify", methods=["POST"])
-def acoustic_classify():
-    if not audio_classifier.loaded:
-        return jsonify({"msg": "Modelo de tosse nao carregado", "model_error": audio_classifier.last_error}), 400
-    if sf is None:
-        return jsonify({"msg": "Dependencia soundfile nao disponivel no backend"}), 500
-    f = request.files.get("audio")
-    if f is None:
-        return jsonify({"msg": "Envie arquivo de audio no campo 'audio'"}), 400
-    try:
-        raw = f.read()
-        y, sr = sf.read(io.BytesIO(raw), always_2d=False)
-        if isinstance(y, np.ndarray) and y.ndim > 1:
-            y = np.mean(y, axis=1)
-        result = audio_classifier.classify(y, int(sr))
-        if result is None:
-            return jsonify({"msg": "Falha na inferencia de tosse", "error": audio_classifier.last_error}), 500
-
-        acoustic_state.update(
-            {
-                "respiratory_health_index": float(result["respiratory_health_index"]),
-                "cough_index": float(result["cough_index"]),
-                "stress_audio_index": float(result["stress_audio_index"]),
-                "source": "trained_model",
-                "updated_at": time.time(),
-            }
-        )
-        row = AcousticReading(
-            camera_id=ACTIVE_CAMERA_ID,
-            respiratory_health_index=acoustic_state["respiratory_health_index"],
-            cough_index=acoustic_state["cough_index"],
-            stress_audio_index=acoustic_state["stress_audio_index"],
-            source="trained_model",
-        )
-        with app.app_context():
-            db.session.add(row)
-            db.session.commit()
-            _enqueue_sync_item("acoustic_reading", row.to_dict())
-        if acoustic_state["cough_index"] > 60:
-            _log_event(
-                event_type="respiratory_alert",
-                level="high",
-                message="Pico de tosse detectado por modelo acustico treinado",
-                metadata={"cough_index": acoustic_state["cough_index"], "source": "trained_model"},
-            )
-        _audit(
-            "acoustic_file_classified",
-            source="manual",
-            details={"source": "trained_model", "cough_index": acoustic_state["cough_index"]},
-        )
-        return jsonify({"msg": "Audio classificado com sucesso", "result": acoustic_state})
-    except Exception as exc:
-        return jsonify({"msg": f"Falha ao processar audio: {exc}"}), 500
-
-
-@app.route("/api/acoustic/history", methods=["GET"])
-def acoustic_history():
-    limit = request.args.get("limit", default=200, type=int)
-    limit = max(1, min(limit, 5000))
-    rows = (
-        AcousticReading.query.filter_by(camera_id=ACTIVE_CAMERA_ID)
-        .order_by(AcousticReading.id.desc())
-        .limit(limit)
-        .all()
-    )
-    return jsonify({"count": len(rows), "items": [r.to_dict() for r in reversed(rows)]})
-
-
-@app.route("/api/acoustic/ingest", methods=["POST"])
-def acoustic_ingest():
-    payload = request.get_json(silent=True) or {}
-    required = ["respiratory_health_index", "cough_index", "stress_audio_index"]
-    missing = [k for k in required if k not in payload]
-    if missing:
-        return jsonify({"msg": f"Campos obrigatorios ausentes: {', '.join(missing)}"}), 400
-    acoustic_state.update(
-        {
-            "respiratory_health_index": float(payload["respiratory_health_index"]),
-            "cough_index": float(payload["cough_index"]),
-            "stress_audio_index": float(payload["stress_audio_index"]),
-            "source": str(payload.get("source", "external")),
-            "updated_at": time.time(),
-        }
-    )
-    row = AcousticReading(
-        camera_id=ACTIVE_CAMERA_ID,
-        respiratory_health_index=acoustic_state["respiratory_health_index"],
-        cough_index=acoustic_state["cough_index"],
-        stress_audio_index=acoustic_state["stress_audio_index"],
-        source=acoustic_state["source"],
-    )
-    with app.app_context():
-        db.session.add(row)
-        db.session.commit()
-        _enqueue_sync_item("acoustic_reading", row.to_dict())
-    return jsonify({"msg": "Leitura acustica recebida", "state": acoustic_state}), 200
-
-
-@app.route("/api/thermal-anomalies/live", methods=["GET"])
-def thermal_anomalies_live():
-    last_minutes = request.args.get("minutes", default=20, type=int)
-    start = _utcnow() - timedelta(minutes=max(1, min(last_minutes, 240)))
-    rows = (
-        ThermalAnomaly.query.filter(ThermalAnomaly.camera_id == ACTIVE_CAMERA_ID, ThermalAnomaly.timestamp >= start)
-        .order_by(ThermalAnomaly.id.desc())
-        .limit(200)
-        .all()
-    )
-    items = [r.to_dict() for r in rows]
-    sectors = sorted(list({i["sector"] for i in items if i.get("sector")}))
-    return jsonify({"count": len(items), "sectors": sectors, "items": items})
-
 
 @app.route("/api/energy/summary", methods=["GET"])
 def energy_summary():
@@ -3154,7 +2724,6 @@ def energy_summary():
         }
     )
 
-
 @app.route("/api/energy/forecast", methods=["GET"])
 def energy_forecast():
     hours = request.args.get("hours", default=12, type=int)
@@ -3162,14 +2731,12 @@ def energy_forecast():
         forecast = _energy_forecast(hours=hours)
     return jsonify(forecast)
 
-
 @app.route("/api/audit/logs", methods=["GET"])
 def audit_logs():
     limit = request.args.get("limit", default=200, type=int)
     limit = max(1, min(limit, 5000))
     rows = AuditLog.query.order_by(AuditLog.id.desc()).limit(limit).all()
     return jsonify({"count": len(rows), "items": [r.to_dict() for r in rows]})
-
 
 @app.route("/api/sync/status", methods=["GET"])
 def sync_status():
@@ -3185,14 +2752,12 @@ def sync_status():
         }
     )
 
-
 @app.route("/api/sync/pending", methods=["GET"])
 def sync_pending():
     limit = request.args.get("limit", default=200, type=int)
     limit = max(1, min(limit, 2000))
     rows = SyncQueueItem.query.filter_by(status="pending").order_by(SyncQueueItem.id.asc()).limit(limit).all()
     return jsonify({"count": len(rows), "items": [r.to_dict() for r in rows]})
-
 
 @app.route("/api/sync/ack", methods=["POST"])
 def sync_ack():
@@ -3207,215 +2772,6 @@ def sync_ack():
         row.synced_at = now
     db.session.commit()
     return jsonify({"msg": "Itens marcados como sincronizados", "count": len(rows)})
-
-
-@app.route("/api/accounts/me", methods=["GET"])
-def accounts_me():
-    ok, resp = _guard_critical_action("accounts_me_view", permission="monitor.read")
-    if not ok:
-        return resp
-    account = _get_current_account()
-    if account is None:
-        return jsonify({"msg": "Conta nao encontrada"}), 404
-    return jsonify(account.to_dict())
-
-
-@app.route("/api/accounts/users", methods=["GET", "POST"])
-def accounts_users():
-    ok, resp = _guard_critical_action("accounts_manage", permission="accounts.manage")
-    if not ok:
-        return resp
-    if request.method == "GET":
-        rows = Account.query.order_by(Account.id.asc()).all()
-        return jsonify({"count": len(rows), "items": [r.to_dict() for r in rows]})
-
-    data = request.get_json(silent=True) or {}
-    username = str(data.get("username", "")).strip()
-    password = str(data.get("password", "")).strip()
-    role = str(data.get("role", "operator")).strip().lower()
-    active = bool(data.get("active", True))
-    if not username or not password:
-        return jsonify({"msg": "username e password sao obrigatorios"}), 400
-    if role not in ("admin", "operator", "viewer"):
-        return jsonify({"msg": "role invalido"}), 400
-    if Account.query.filter_by(username=username).first() is not None:
-        return jsonify({"msg": "usuario ja existe"}), 409
-    row = Account(
-        username=username,
-        password_hash=bcrypt.generate_password_hash(password).decode("utf-8"),
-        role=role,
-        active=active,
-    )
-    db.session.add(row)
-    db.session.commit()
-    _audit("account_created", source="security", details={"username": username, "role": role, "active": active})
-    return jsonify({"msg": "Conta criada", "item": row.to_dict()}), 201
-
-
-@app.route("/api/accounts/users/<int:account_id>", methods=["PATCH"])
-def accounts_user_update(account_id):
-    ok, resp = _guard_critical_action("accounts_manage", permission="accounts.manage")
-    if not ok:
-        return resp
-    row = Account.query.get(account_id)
-    if row is None:
-        return jsonify({"msg": "Conta nao encontrada"}), 404
-    data = request.get_json(silent=True) or {}
-    if "role" in data:
-        role = str(data.get("role", "")).strip().lower()
-        if role not in ("admin", "operator", "viewer"):
-            return jsonify({"msg": "role invalido"}), 400
-        row.role = role
-    if "active" in data:
-        row.active = bool(data.get("active"))
-    if "password" in data:
-        pwd = str(data.get("password", "")).strip()
-        if len(pwd) < 6:
-            return jsonify({"msg": "password muito curto (min 6)"}), 400
-        row.password_hash = bcrypt.generate_password_hash(pwd).decode("utf-8")
-    db.session.commit()
-    _audit("account_updated", source="security", details={"account_id": account_id, "payload_keys": list(data.keys())})
-    return jsonify({"msg": "Conta atualizada", "item": row.to_dict()})
-
-
-@app.route("/api/accounts/permissions", methods=["GET", "POST"])
-def accounts_permissions():
-    ok, resp = _guard_critical_action("permissions_manage", permission="accounts.manage")
-    if not ok:
-        return resp
-    if request.method == "GET":
-        rows = RolePermission.query.order_by(RolePermission.role.asc(), RolePermission.permission.asc()).all()
-        return jsonify({"count": len(rows), "items": [r.to_dict() for r in rows]})
-
-    data = request.get_json(silent=True) or {}
-    role = str(data.get("role", "")).strip().lower()
-    permission = str(data.get("permission", "")).strip()
-    allowed = bool(data.get("allowed", True))
-    if role not in ("admin", "operator", "viewer") or not permission:
-        return jsonify({"msg": "role e permission sao obrigatorios"}), 400
-    row = RolePermission.query.filter_by(role=role, permission=permission).first()
-    if row is None:
-        row = RolePermission(role=role, permission=permission, allowed=allowed)
-        db.session.add(row)
-    else:
-        row.allowed = allowed
-    db.session.commit()
-    _audit("permission_updated", source="security", details={"role": role, "permission": permission, "allowed": allowed})
-    return jsonify({"msg": "Permissao atualizada", "item": row.to_dict()})
-
-
-@app.route("/api/auto-mode", methods=["GET", "POST"])
-def auto_mode():
-    if request.method == "GET":
-        targets = _temperature_targets(ACTIVE_CAMERA_ID)
-        return jsonify(
-            {
-                "enabled": bool(estado_dispositivos["modo_automatico"]),
-                "config": auto_config,
-                "effective_targets": targets,
-                "camera_id": ACTIVE_CAMERA_ID,
-            }
-        )
-    ok, resp = _guard_critical_action("auto_mode_change", permission="automation.manage")
-    if not ok:
-        return resp
-
-    data = request.get_json(silent=True) or {}
-    if "enabled" in data:
-        estado_dispositivos["modo_automatico"] = bool(data["enabled"])
-    for key in ("fan_on_temp", "fan_off_temp", "heater_on_temp", "heater_off_temp"):
-        if key in data:
-            auto_config[key] = float(data[key])
-    if "use_batch_curve" in data:
-        auto_config["use_batch_curve"] = bool(data["use_batch_curve"])
-
-    _log_event(
-        event_type="auto_mode_config",
-        level="info",
-        message=f"Modo automatico {'ativado' if estado_dispositivos['modo_automatico'] else 'desativado'}",
-        metadata={"config": auto_config},
-    )
-    _audit(
-        "auto_mode_changed",
-        source="manual",
-        details={"enabled": estado_dispositivos["modo_automatico"], "config": auto_config},
-    )
-    return jsonify({"enabled": estado_dispositivos["modo_automatico"], "config": auto_config})
-
-
-@app.route("/api/ventilacao", methods=["POST"])
-def controlar_ventilacao():
-    data = request.get_json(silent=True) or {}
-    if "ligar" not in data:
-        return jsonify({"msg": "Parametro 'ligar' e obrigatorio"}), 400
-    ligar = bool(data["ligar"])
-    perm = "device.power_on" if ligar else "device.power_off"
-    ok, resp = _guard_critical_action("ventilacao_toggle", permission=perm)
-    if not ok:
-        return resp
-    estado_dispositivos["ventilacao"] = ligar
-    _log_event(
-        event_type="manual_device_action",
-        level="info",
-        message=f"Ventilacao {'ligada' if estado_dispositivos['ventilacao'] else 'desligada'} manualmente",
-    )
-    _audit(
-        "manual_ventilacao_toggle",
-        source="manual",
-        details={"ligar": estado_dispositivos["ventilacao"]},
-    )
-    return jsonify(
-        {
-            "ventilacao": estado_dispositivos["ventilacao"],
-            "msg": "Ventilacao ligada" if estado_dispositivos["ventilacao"] else "Ventilacao desligada",
-        }
-    )
-
-
-@app.route("/api/aquecedor", methods=["POST"])
-def controlar_aquecedor():
-    data = request.get_json(silent=True) or {}
-    if "ligar" not in data:
-        return jsonify({"msg": "Parametro 'ligar' e obrigatorio"}), 400
-    ligar = bool(data["ligar"])
-    perm = "device.power_on" if ligar else "device.power_off"
-    ok, resp = _guard_critical_action("aquecedor_toggle", permission=perm)
-    if not ok:
-        return resp
-    estado_dispositivos["aquecedor"] = ligar
-    _log_event(
-        event_type="manual_device_action",
-        level="info",
-        message=f"Aquecedor {'ligado' if estado_dispositivos['aquecedor'] else 'desligado'} manualmente",
-    )
-    _audit(
-        "manual_aquecedor_toggle",
-        source="manual",
-        details={"ligar": estado_dispositivos["aquecedor"]},
-    )
-    return jsonify(
-        {
-            "aquecedor": estado_dispositivos["aquecedor"],
-            "msg": "Aquecedor ligado" if estado_dispositivos["aquecedor"] else "Aquecedor desligado",
-        }
-    )
-
-
-@app.route("/api/luz-dimmer", methods=["GET", "POST"])
-def controlar_luz_dimmer():
-    if request.method == "GET":
-        return jsonify({"luz_intensidade_pct": int(estado_dispositivos.get("luz_intensidade_pct", 0))})
-    ok, resp = _guard_critical_action("light_dimmer_change", permission="lighting.manage")
-    if not ok:
-        return resp
-    data = request.get_json(silent=True) or {}
-    intensidade = int(data.get("intensidade_pct", 0))
-    intensidade = max(0, min(100, intensidade))
-    estado_dispositivos["luz_intensidade_pct"] = intensidade
-    _log_event("light_dimmer_changed", "info", f"Intensidade da luz ajustada para {intensidade}%")
-    _audit("light_dimmer_changed", source="manual", details={"intensidade_pct": intensidade})
-    return jsonify({"luz_intensidade_pct": intensidade, "msg": "Dimmer atualizado"})
-
 
 @app.route("/api/voice/command", methods=["POST"])
 def voice_command():
@@ -3459,12 +2815,6 @@ def voice_command():
     _audit("voice_command_executed", source="mobile_voice", details={"command": command, "action": action})
     return jsonify({"msg": "Comando executado", "action": action, "devices": estado_dispositivos})
 
-
-@app.route("/api/estado-dispositivos", methods=["GET"])
-def get_estado_dispositivos():
-    return jsonify(estado_dispositivos)
-
-
 @app.route("/api/events", methods=["GET"])
 def get_events():
     limit = request.args.get("limit", default=100, type=int)
@@ -3476,7 +2826,6 @@ def get_events():
         .all()
     )
     return jsonify({"count": len(rows), "items": [row.to_dict() for row in rows]})
-
 
 @app.route("/api/cameras", methods=["GET", "POST"])
 def cameras():
@@ -3493,7 +2842,6 @@ def cameras():
     camera_registry.append({"camera_id": camera_id, "source": source, "enabled": bool(data.get("enabled", True))})
     _log_event("camera_registry", "info", f"Camera cadastrada: {camera_id}", {"source": source})
     return jsonify({"msg": "Camera cadastrada", "items": camera_registry}), 201
-
 
 @app.route("/api/batches", methods=["GET", "POST"])
 def batches():
@@ -3527,7 +2875,6 @@ def batches():
     _log_event("batch_created", "info", f"Lote criado: {name}", {"start_date": start_date_raw})
     return jsonify({"msg": "Lote criado", "item": row.to_dict()}), 201
 
-
 @app.route("/api/batches/<int:batch_id>/activate", methods=["POST"])
 def activate_batch(batch_id):
     with app.app_context():
@@ -3539,7 +2886,6 @@ def activate_batch(batch_id):
         db.session.commit()
     _log_event("batch_activated", "info", f"Lote ativado: {row.name}", {"batch_id": batch_id})
     return jsonify({"msg": "Lote ativado", "item": row.to_dict()})
-
 
 @app.route("/api/logbook", methods=["GET", "POST"])
 def logbook():
@@ -3567,83 +2913,9 @@ def logbook():
     _audit("logbook_note_created", source="manual", actor=author, details={"batch_id": row.batch_id})
     return jsonify({"msg": "Nota registrada", "item": row.to_dict()}), 201
 
-
 @app.route("/api/weather/forecast", methods=["GET"])
 def weather_forecast():
     return jsonify(weather_state)
-
-
-@app.route("/api/reports/esg", methods=["POST"])
-def generate_esg_report():
-    data = request.get_json(silent=True) or {}
-    days = int(data.get("days", 30))
-    email = str(data.get("email", "")).strip() or None
-    try:
-        path = _generate_esg_report(ACTIVE_CAMERA_ID, days=days)
-    except Exception as exc:
-        return jsonify({"msg": f"Falha ao gerar PDF ESG: {exc}"}), 500
-
-    email_status = None
-    if email:
-        ok, detail = _send_report_email(path, email)
-        email_status = {"sent": ok, "detail": detail, "email": email}
-
-    _log_event(
-        event_type="esg_report",
-        level="info",
-        message="Relatorio ESG gerado",
-        metadata={"file": path, "days": days, "email_status": email_status},
-    )
-    return jsonify({"msg": "Relatorio ESG gerado", "file": path, "email_status": email_status})
-
-
-@app.route("/api/reports/esg/download", methods=["GET"])
-def download_esg_report():
-    days = request.args.get("days", default=30, type=int)
-    try:
-        path = _generate_esg_report(ACTIVE_CAMERA_ID, days=days)
-        return send_file(path, mimetype="application/pdf", as_attachment=True, download_name=os.path.basename(path))
-    except Exception as exc:
-        return jsonify({"msg": f"Falha ao gerar/exportar PDF ESG: {exc}"}), 500
-
-
-@app.route("/api/reports/weekly", methods=["POST"])
-def generate_weekly_report():
-    data = request.get_json(silent=True) or {}
-    email = str(data.get("email", "")).strip() or None
-    try:
-        path = _generate_weekly_report(ACTIVE_CAMERA_ID)
-    except Exception as exc:
-        return jsonify({"msg": f"Falha ao gerar PDF: {exc}"}), 500
-
-    email_status = None
-    if email:
-        ok, detail = _send_report_email(path, email)
-        email_status = {"sent": ok, "detail": detail, "email": email}
-
-    _log_event(
-        event_type="weekly_report",
-        level="info",
-        message="Relatorio semanal gerado manualmente",
-        metadata={"file": path, "email_status": email_status},
-    )
-    return jsonify({"msg": "Relatorio gerado", "file": path, "email_status": email_status})
-
-
-@app.route("/api/reports/weekly/download", methods=["GET"])
-def download_weekly_report():
-    try:
-        path = _generate_weekly_report(ACTIVE_CAMERA_ID)
-        _log_event(
-            event_type="weekly_report",
-            level="info",
-            message="Relatorio semanal exportado pelo painel",
-            metadata={"file": path},
-        )
-        return send_file(path, mimetype="application/pdf", as_attachment=True, download_name=os.path.basename(path))
-    except Exception as exc:
-        return jsonify({"msg": f"Falha ao gerar/exportar PDF: {exc}"}), 500
-
 
 @app.route("/api/alerts", methods=["GET"])
 def get_alerts():
@@ -3684,7 +2956,6 @@ def get_alerts():
 
     itens.sort(key=lambda x: f"{x['data']} {x['hora']}", reverse=True)
     return jsonify(itens[:100])
-
 
 @app.route("/api/summary", methods=["GET"])
 def get_summary():
@@ -3771,7 +3042,6 @@ def get_summary():
         }
     )
 
-
 @app.route("/api/system-info", methods=["GET"])
 def get_system_info():
     uptime_seconds = int(time.time() - APP_START_TIME)
@@ -3802,12 +3072,10 @@ def get_system_info():
         }
     )
 
-
 @app.route("/api/plugins", methods=["GET"])
 def get_plugins():
     items = PLUGIN_MANAGER.list_plugins()
     return jsonify({"count": len(items), "plugins": items, "plugins_root": PLUGINS_ROOT})
-
 
 @app.route("/api/plugins/reload", methods=["POST"])
 def reload_plugins():
@@ -3818,7 +3086,6 @@ def reload_plugins():
     items = PLUGIN_MANAGER.list_plugins()
     _audit("plugins_reloaded", source="backend", details={"count": len(items)})
     return jsonify({"msg": "Plugins recarregados", "count": len(items), "plugins": items})
-
 
 if __name__ == "__main__":
     LOGGER.info(
@@ -3848,8 +3115,6 @@ if __name__ == "__main__":
             raise
 
     socketio.run(app, host=SETTINGS.flask_host, port=SETTINGS.flask_port, debug=False, ssl_context=ssl_context)
-
-
 
 @app.route("/api/push-token", methods=["POST"])
 def register_push_token():
