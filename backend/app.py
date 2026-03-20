@@ -48,6 +48,7 @@ from src.api.routes import create_api_blueprint
 from src.core.config import load_settings
 from src.core.logger import configure_logging
 from src.plugins.manager import PluginManager
+from src.core.state_machine import BusinessStateMachine
 
 try:
     import requests
@@ -846,6 +847,9 @@ last_visible_frame = None
 _tamper_prev_gray = None
 login_attempt_state = {}
 
+global_fsm = BusinessStateMachine()
+intrusion_active_until = 0.0
+
 last_weekly_report_key = None
 
 
@@ -1310,47 +1314,47 @@ def _apply_automatic_control(temp_atual):
     if not estado_dispositivos.get("modo_automatico"):
         return
 
-    thresholds = _temperature_targets(ACTIVE_CAMERA_ID)
-    changes = []
+    targets = _temperature_targets(ACTIVE_CAMERA_ID)
+    hour = datetime.now().hour
 
-    if temp_atual >= thresholds["fan_on_temp"] and not estado_dispositivos["ventilacao"]:
-        estado_dispositivos["ventilacao"] = True
-        changes.append("ventilacao ligada")
+    context = {
+        'temp_atual': temp_atual,
+        'targets': targets,
+        'hour': hour,
+        'intrusion_active': time.time() < intrusion_active_until,
+        'preheat_recommended': weather_state.get('preheat_recommended', False),
+        'ventilacao_on': estado_dispositivos['ventilacao'],
+        'aquecedor_on': estado_dispositivos['aquecedor']
+    }
 
-    if temp_atual <= thresholds["fan_off_temp"] and estado_dispositivos["ventilacao"] and temp_atual < thresholds["fan_on_temp"]:
-        estado_dispositivos["ventilacao"] = False
-        changes.append("ventilacao desligada")
+    result = global_fsm.process_context(context)
 
-    if temp_atual <= thresholds["heater_on_temp"] and not estado_dispositivos["aquecedor"]:
-        estado_dispositivos["aquecedor"] = True
-        changes.append("aquecedor ligado")
+    estado_dispositivos['ventilacao'] = result['ventilacao']
+    estado_dispositivos['aquecedor'] = result['aquecedor']
 
-    if temp_atual >= thresholds["heater_off_temp"] and estado_dispositivos["aquecedor"]:
-        estado_dispositivos["aquecedor"] = False
-        changes.append("aquecedor desligado")
+    changes = result['changes']
+    state = result['state']
+
+    if 'aquecedor ligado' in changes and state == 'NOITE_POUPANCA_ENERGIA_PREHEAT':
+        _log_event(
+            event_type="weather_preheat",
+            level="medium",
+            message="Frente fria a chegar esta noite. O aquecedor foi pre-ativado.",
+            metadata=weather_state,
+        )
+        changes.remove('aquecedor ligado')
 
     if changes:
         _log_event(
             event_type="automation_action",
             level="info",
-            message=f"Acionamento automatico: {', '.join(changes)}",
+            message=f"Acionamento automatico: {', '.join(changes)} | Estado: {state}",
             metadata={
                 "temp_atual": round(float(temp_atual), 2),
-                "thresholds": thresholds,
+                "thresholds": targets,
+                "state": state
             },
         )
-
-    # Weather-based pre-heating safety window (night cold front).
-    hour = datetime.now().hour
-    if weather_state.get("preheat_recommended") and (hour >= 18 or hour <= 6):
-        if not estado_dispositivos["aquecedor"]:
-            estado_dispositivos["aquecedor"] = True
-            _log_event(
-                event_type="weather_preheat",
-                level="medium",
-                message="Frente fria a chegar esta noite. O aquecedor foi pre-ativado.",
-                metadata=weather_state,
-            )
 
 
 def _analyze_behavior(selected, frame_shape):
@@ -1745,6 +1749,7 @@ def _detect_intrusion(all_detections, frame):
     if not is_night_window:
         return
 
+    global intrusion_active_until
     person_dets = []
     for det in all_detections:
         cname = _class_name_by_id(det["class_id"]).lower()
@@ -1753,6 +1758,9 @@ def _detect_intrusion(all_detections, frame):
 
     if not person_dets:
         return
+
+    # Update global state for FSM
+    intrusion_active_until = now + 1800
 
     if now - float(intrusion_state["last_alert_ts"]) < INTRUSION_COOLDOWN_SEC:
         return
