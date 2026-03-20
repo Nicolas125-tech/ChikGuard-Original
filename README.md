@@ -14,25 +14,29 @@ Sistema de monitoramento para criacao de frangos com visao computacional.
 ```text
 ChikGuard/
 |- backend/
-|  |- app.py
+|  |- app.py (Entrypoint principal)
 |  |- plugins/
 |  |  |- face_recognition/
 |  |  |- weapon_detection/
 |  |  |- fire_detection/
 |  |- src/
 |  |  |- api/
-|  |  |  |- routes.py
-|  |  |- plugins/
-|  |     |- manager.py
-|  |     |- base.py
+|  |  |  |- auth.py (Rotas de Contas e Permissoes)
+|  |  |  |- devices.py (Rotas de Atuadores e Automacao)
+|  |  |  |- reports_api.py (Rotas de Relatorios PDF)
+|  |  |  |- routes.py (Rotas de WebRTC)
+|  |  |  |- sensors_api.py (Rotas de Sensores e Anomalias)
 |  |  |- core/
 |  |  |  |- config.py
 |  |  |  |- logger.py
+|  |  |- plugins/
+|  |     |- manager.py
+|  |     |- base.py
+|  |  |- reports/
+|  |     |- generator.py (Geracao de PDF com ReportLab)
 |  |  |- alerts/
 |  |     |- providers.py
 |  |- tests/
-|     |- test_config.py
-|     |- test_alerts.py
 |- frontend/
 |- mobile/
 ```
