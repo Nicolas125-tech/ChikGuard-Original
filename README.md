@@ -43,7 +43,7 @@ ChikGuard/
 
 ## Pre-requisitos
 
-- Python 3.11+
+- Python 3.12 (ou superior)
 - Node.js 18+
 - npm ou yarn
 - Docker e Docker Compose (opcional, recomendado)
@@ -59,8 +59,13 @@ cd backend
 2. Crie e ative um ambiente virtual:
 
 ```bash
+# Windows
 python -m venv venv
 venv\Scripts\activate
+
+# Linux/macOS
+python3 -m venv venv
+source venv/bin/activate
 ```
 
 3. Instale dependencias:
@@ -69,16 +74,26 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-4. Configure ambiente:
+4. Configure o ambiente:
 
 ```bash
+# Windows
 copy .env.example .env
+
+# Linux/macOS
+cp .env.example .env
 ```
 
-5. Rode a API:
+**Nota de Seguranca:** O backend enforce uma politica estrita de inicializacao para a conta do administrador. Certifique-se que variaveis sensiveis como `ADMIN_PASSWORD` estao preenchidas no seu `.env` antes da primeira inicializacao, ou ele podera falhar.
+
+5. Rode a API (garantindo que o PYTHONPATH enxergue o pacote `src/`):
 
 ```bash
-python app.py
+# Windows (PowerShell)
+$env:PYTHONPATH="." ; python app.py
+
+# Linux/macOS
+PYTHONPATH=. python3 app.py
 ```
 
 API padrao: `http://localhost:5000`
@@ -103,14 +118,13 @@ python -m pytest backend/tests -q
 
 ## Endpoints importantes
 
-- `GET /api/health`
-- `GET /api/runtime-status`
-- `GET /api/plugins`
-- `POST /api/plugins/reload`
-- `POST /api/login`
-- `GET /api/status`
-- `GET /api/history`
-- `GET /api/video`
+- `GET /api/summary` - Resumo em tempo real do sistema (CV + Sensores).
+- `GET /api/system-info` - Status interno e recursos em execucao.
+- `GET /api/sensors/live` - Leitura atual dos sensores (temperatura, umidade, amonia).
+- `POST /api/auto-mode` - Alterar ou consultar automacoes da FSM.
+- `POST /api/reports/esg` - Gera Relatorio de Conformidade ESG em PDF.
+- `GET /api/accounts/me` - Retorna detalhes do usuario logado (sujeito a RBAC).
+- `POST /api/webrtc/offer` - Handshake de transmissao de video ao vivo (aiortc).
 
 ## Sistema de plugins
 
