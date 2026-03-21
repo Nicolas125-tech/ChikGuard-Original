@@ -11,7 +11,7 @@ import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { 
   Thermometer, Activity, AlertTriangle, CheckCircle, 
-  Settings, Save, Zap, Wind, LayoutDashboard, History, LogOut, User, Key, Users, Bell, Cpu, Database
+  Settings, Save, Zap, Wind, LayoutDashboard, History, LogOut, User, Key, Bird, Bell, Cpu, Database
 } from 'lucide-react-native';
 
 const appLogo = require('./assets/logo.png');
@@ -145,7 +145,7 @@ const MonitorScreen = ({ serverUrl, dados, loading, chickCount, dispositivos, co
             <Text style={styles.countText}>{chickCount}</Text>
           </View>
           <View style={[styles.iconBox, { backgroundColor: 'rgba(16, 185, 129, 0.2)' }]}>
-            <Users size={32} color="#10b981"/>
+            <Bird size={32} color="#10b981"/>
           </View>
         </View>
         <Text style={styles.statusMsg}>Contagem em tempo real via IA.</Text>
@@ -1205,7 +1205,7 @@ export default function App() {
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('birds')}>
-          <Users color={activeTab==='birds'?'#10b981':'#64748b'} size={24}/>
+          <Bird color={activeTab==='birds'?'#10b981':'#64748b'} size={24}/>
           <Text style={[styles.tabLabel, {color: activeTab==='birds'?'#10b981':'#64748b'}]}>Aves</Text>
         </TouchableOpacity>
 
