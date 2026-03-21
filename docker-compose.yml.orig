@@ -11,7 +11,7 @@ services:
       - FLASK_ENV=production
       - ADMIN_PASSWORD=admin123
       - CORS_ORIGINS=*
-      - DATABASE_URL=${DATABASE_URL:-sqlite:///chikguard.db}
+      - DATABASE_URL=${DATABASE_URL}
     volumes:
       - ./data:/app/data
     restart: unless-stopped
