@@ -299,3 +299,111 @@ $$;
 3. **Uso no RLS (Exemplo atualizado):**
 Em vez de `(SELECT status FROM profiles WHERE id = auth.uid()) = 'ACTIVE'`, podemos usar apenas:
 `(auth.jwt() ->> 'user_status') = 'ACTIVE'`
+
+### Exemplo de Painel de Controlo do SuperAdmin (React)
+
+Este é um exemplo básico de um componente React (Painel Admin) que lista os utilizadores pendentes e permite aprová-los definindo uma `role`. O componente interage diretamente com as RPCs configuradas na base de dados.
+
+```tsx
+import { useEffect, useState } from 'react';
+import { supabase } from './supabaseClient';
+
+export default function AdminDashboard() {
+  const [pendingUsers, setPendingUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  // 1. Buscar Utilizadores Pendentes
+  const fetchPendingUsers = async () => {
+    setLoading(true);
+    // Chamada à RPC criada: get_pending_users
+    const { data, error } = await supabase.rpc('get_pending_users');
+
+    if (error) {
+      console.error('Erro ao buscar utilizadores pendentes:', error);
+      setError('Acesso negado ou erro no servidor.');
+    } else {
+      setPendingUsers(data || []);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchPendingUsers();
+  }, []);
+
+  // 2. Aprovar Utilizador
+  const handleApprove = async (userId, targetRole) => {
+    const confirmApproval = window.confirm(`Aprovar utilizador como ${targetRole}?`);
+    if (!confirmApproval) return;
+
+    // Chamada à RPC criada: approve_user
+    const { error } = await supabase.rpc('approve_user', {
+      target_user_id: userId,
+      target_role: targetRole,
+    });
+
+    if (error) {
+      alert(`Erro ao aprovar: ${error.message}`);
+    } else {
+      alert('Utilizador aprovado com sucesso!');
+      // Atualizar a lista local
+      setPendingUsers(pendingUsers.filter((user) => user.id !== userId));
+    }
+  };
+
+  if (loading) return <p className="text-emerald-500">A carregar painel admin...</p>;
+  if (error) return <p className="text-red-500">{error}</p>;
+
+  return (
+    <div className="bg-slate-900 text-white p-6 rounded-lg min-h-screen">
+      <h1 className="text-2xl text-emerald-500 font-bold mb-6">Painel de Controlo IAM</h1>
+
+      {pendingUsers.length === 0 ? (
+        <p>Não há utilizadores aguardando aprovação.</p>
+      ) : (
+        <table className="min-w-full bg-slate-950 rounded overflow-hidden">
+          <thead className="bg-slate-800 text-emerald-500">
+            <tr>
+              <th className="py-2 px-4 text-left">ID (UUID)</th>
+              <th className="py-2 px-4 text-left">Data de Criação</th>
+              <th className="py-2 px-4 text-left">Ação</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pendingUsers.map((user) => (
+              <tr key={user.id} className="border-b border-slate-800">
+                <td className="py-2 px-4">{user.id}</td>
+                <td className="py-2 px-4">{new Date(user.created_at).toLocaleDateString()}</td>
+                <td className="py-2 px-4 flex gap-2 items-center">
+                  <select
+                    id={`role-${user.id}`}
+                    className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white"
+                    defaultValue="VIEWER"
+                  >
+                    <option value="VIEWER">VIEWER</option>
+                    <option value="OPERATOR">OPERATOR</option>
+                    <option value="FARM_ADMIN">FARM_ADMIN</option>
+                    <option value="SUPERADMIN">SUPERADMIN</option>
+                  </select>
+                  <button
+                    onClick={() => {
+                      const selectElement = document.getElementById(`role-${user.id}`);
+                      if (selectElement) {
+                        handleApprove(user.id, selectElement.value);
+                      }
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-1 px-3 rounded"
+                  >
+                    Aprovar
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+```
