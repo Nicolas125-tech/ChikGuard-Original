@@ -1,3 +1,4 @@
+import time
 from flask import Blueprint, jsonify, request
 
 def create_auth_blueprint(deps):
@@ -11,6 +12,12 @@ def create_auth_blueprint(deps):
     db = deps.get("db")
     Account = deps.get("Account")
     RolePermission = deps.get("RolePermission")
+    create_access_token = deps.get("create_access_token")
+    request_ip = deps.get("request_ip")
+    utcnow = deps.get("utcnow")
+    login_attempt_state = deps.get("login_attempt_state", {})
+    LOGIN_RATE_WINDOW_SEC = deps.get("login_rate_window_sec", 300)
+    LOGIN_RATE_MAX_ATTEMPTS = deps.get("login_rate_max_attempts", 5)
 
     @bp.route("/api/accounts/me", methods=["GET"])
     def accounts_me():
@@ -109,5 +116,58 @@ def create_auth_blueprint(deps):
         db.session.commit()
         audit("permission_updated", source="security", details={"role": role, "permission": permission, "allowed": allowed})
         return jsonify({"msg": "Permissao atualizada", "item": row.to_dict()})
+
+
+
+    @bp.route("/api/login", methods=["POST", "OPTIONS"])
+    def login():
+        if request.method == "OPTIONS":
+            return jsonify({}), 200
+
+        ip = request_ip()
+        now_ts = time.time()
+
+        # Rate limit cleanup
+        state = login_attempt_state.get(ip, {"count": 0, "first_attempt": now_ts})
+        if now_ts - state["first_attempt"] > LOGIN_RATE_WINDOW_SEC:
+            state = {"count": 0, "first_attempt": now_ts}
+            login_attempt_state[ip] = state
+
+        if state["count"] >= LOGIN_RATE_MAX_ATTEMPTS:
+            audit("login_failed_rate_limit", source="security", details={"ip": ip}, actor="anonymous")
+            return jsonify({"msg": "Muitas tentativas. Tente mais tarde."}), 429
+
+        data = request.get_json(silent=True) or {}
+        username = str(data.get("username", "")).strip()
+        password = str(data.get("password", "")).strip()
+
+        if not username or not password:
+            return jsonify({"msg": "Usuario e senha obrigatorios"}), 400
+
+        account = Account.query.filter_by(username=username).first()
+        if not account or not account.active or not bcrypt.check_password_hash(account.password_hash, password):
+            state["count"] += 1
+            login_attempt_state[ip] = state
+            audit("login_failed", source="security", details={"username": username, "ip": ip}, actor=username)
+            return jsonify({"msg": "Credenciais invalidas"}), 401
+
+        # Success reset
+        if ip in login_attempt_state:
+            del login_attempt_state[ip]
+
+        account.last_login_at = utcnow()
+        db.session.commit()
+
+        audit("login_success", source="security", details={"ip": ip}, actor=account.username)
+
+        access_token = create_access_token(
+            identity=str(account.id),
+            additional_claims={"role": account.role, "username": account.username}
+        )
+        return jsonify({
+            "access_token": access_token,
+            "role": account.role,
+            "username": account.username
+        }), 200
 
     return bp
