@@ -1,4 +1,3 @@
-version: '3.8'
 
 services:
   backend:
@@ -9,7 +8,7 @@ services:
       - "5000:5000"
     environment:
       - FLASK_ENV=production
-      - ADMIN_PASSWORD=admin123
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
       - CORS_ORIGINS=*
       - DATABASE_URL=${DATABASE_URL:-sqlite:///chikguard.db}
     volumes:

@@ -651,15 +651,31 @@ def _estimate_bird_temp_proxy(gray_frame, box, ambient_temp):
 
 with app.app_context():
     db.create_all()
-    if not User.query.filter_by(username="admin").first():
-        hashed = bcrypt.generate_password_hash("admin123").decode("utf-8")
+    admin_password_env = os.getenv("ADMIN_PASSWORD", "").strip()
+
+    admin_user = User.query.filter_by(username="admin").first()
+    admin_account = Account.query.filter_by(username="admin").first()
+
+    if not admin_user and not admin_account and not admin_password_env:
+        raise RuntimeError("ADMIN_PASSWORD environment variable is required to initialize the admin account.")
+
+    if not admin_user and admin_password_env:
+        hashed = bcrypt.generate_password_hash(admin_password_env).decode("utf-8")
         db.session.add(User(username="admin", password=hashed))
         db.session.commit()
-    if not Account.query.filter_by(username="admin").first():
+
+    if not admin_account:
         legacy_admin = User.query.filter_by(username="admin").first()
-        admin_hash = legacy_admin.password if legacy_admin is not None else bcrypt.generate_password_hash("admin123").decode("utf-8")
+        if legacy_admin is not None:
+            admin_hash = legacy_admin.password
+        elif admin_password_env:
+            admin_hash = bcrypt.generate_password_hash(admin_password_env).decode("utf-8")
+        else:
+            raise RuntimeError("ADMIN_PASSWORD environment variable is required to initialize the admin account.")
+
         db.session.add(Account(username="admin", password_hash=admin_hash, role="admin", active=True))
         db.session.commit()
+
     if VIEWER_USERNAME and VIEWER_PASSWORD and not Account.query.filter_by(username=VIEWER_USERNAME).first():
         viewer_hash = bcrypt.generate_password_hash(VIEWER_PASSWORD).decode("utf-8")
         db.session.add(Account(username=VIEWER_USERNAME, password_hash=viewer_hash, role="viewer", active=True))
