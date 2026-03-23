@@ -692,6 +692,8 @@ with app.app_context():
             "lighting.manage",
             "voice.command",
             "logbook.write",
+            "batch.manage",
+            "camera.manage",
         ],
         "viewer": [
             "monitor.read",
@@ -2749,6 +2751,9 @@ def energy_forecast():
 
 @app.route("/api/audit/logs", methods=["GET"])
 def audit_logs():
+    ok, resp = _require_permission("audit.read")
+    if not ok:
+        return resp
     limit = request.args.get("limit", default=200, type=int)
     limit = max(1, min(limit, 5000))
     rows = AuditLog.query.order_by(AuditLog.id.desc()).limit(limit).all()
@@ -2846,7 +2851,14 @@ def get_events():
 @app.route("/api/cameras", methods=["GET", "POST"])
 def cameras():
     if request.method == "GET":
+        ok, resp = _require_permission("monitor.read")
+        if not ok:
+            return resp
         return jsonify({"active_camera_id": ACTIVE_CAMERA_ID, "items": camera_registry})
+
+    ok, resp = _guard_critical_action("camera_registry", permission="camera.manage")
+    if not ok:
+        return resp
 
     data = request.get_json(silent=True) or {}
     camera_id = str(data.get("camera_id", "")).strip()
@@ -2862,8 +2874,15 @@ def cameras():
 @app.route("/api/batches", methods=["GET", "POST"])
 def batches():
     if request.method == "GET":
+        ok, resp = _require_permission("monitor.read")
+        if not ok:
+            return resp
         rows = Batch.query.filter_by(camera_id=ACTIVE_CAMERA_ID).order_by(Batch.id.desc()).all()
         return jsonify({"count": len(rows), "items": [r.to_dict() for r in rows]})
+
+    ok, resp = _guard_critical_action("batch_creation", permission="batch.manage")
+    if not ok:
+        return resp
 
     data = request.get_json(silent=True) or {}
     name = str(data.get("name", "")).strip()
@@ -2893,6 +2912,10 @@ def batches():
 
 @app.route("/api/batches/<int:batch_id>/activate", methods=["POST"])
 def activate_batch(batch_id):
+    ok, resp = _guard_critical_action("batch_activation", permission="batch.manage")
+    if not ok:
+        return resp
+
     with app.app_context():
         row = Batch.query.get(batch_id)
         if row is None:
@@ -2906,10 +2929,18 @@ def activate_batch(batch_id):
 @app.route("/api/logbook", methods=["GET", "POST"])
 def logbook():
     if request.method == "GET":
+        ok, resp = _require_permission("monitor.read")
+        if not ok:
+            return resp
         limit = request.args.get("limit", default=100, type=int)
         limit = max(1, min(limit, 1000))
         rows = BatchLogbook.query.filter_by(camera_id=ACTIVE_CAMERA_ID).order_by(BatchLogbook.id.desc()).limit(limit).all()
         return jsonify({"count": len(rows), "items": [r.to_dict() for r in rows]})
+
+    ok, resp = _require_permission("logbook.write")
+    if not ok:
+        return resp
+
     data = request.get_json(silent=True) or {}
     note = str(data.get("note", "")).strip()
     author = str(data.get("author", "")).strip() or "operador"
