@@ -407,3 +407,87 @@ export default function AdminDashboard() {
   );
 }
 ```
+
+## 5. Automação de Notificação por E-mail (Database Webhooks)
+
+Para notificar o SuperAdmin sempre que uma nova conta for criada e estiver a aguardar aprovação (status `PENDING`), podemos usar os **Database Webhooks** do Supabase. Isto permite que a própria base de dados envie um *POST HTTP* (via `pg_net`) para o nosso backend Python sempre que uma nova linha for inserida na tabela `public.profiles`.
+
+### 5.1 Configuração do Webhook no Supabase
+
+No painel do Supabase, em **Database > Webhooks**, criamos um novo Webhook:
+* **Table:** `profiles`
+* **Events:** `Insert`
+* **Method:** `POST`
+* **URL:** `https://api.chikguard.com/api/admin/notify-new-user` (A URL pública do nosso backend)
+* **Headers:** Opcional (por exemplo, `Authorization: Bearer <WEBHOOK_SECRET>` para segurança, permitindo ao backend validar a proveniência do pedido).
+
+### 5.2 Endpoint no Backend (Python/Flask) para Envio do E-mail
+
+O backend recebe a *payload* do Webhook (que contém os dados da nova linha inserida) e utiliza uma biblioteca como o `Flask-Mail` ou a API de um serviço como SendGrid/Resend para enviar o e-mail ao SuperAdmin.
+
+```python
+# Exemplo no backend (src/api/admin_api.py)
+import os
+import smtplib
+from email.message import EmailMessage
+from flask import Blueprint, request, jsonify
+
+admin_api = Blueprint('admin_api', __name__)
+
+SUPERADMIN_EMAIL = os.environ.get("SUPERADMIN_EMAIL", "admin@chikguard.com")
+SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.sendgrid.net")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
+SMTP_USER = os.environ.get("SMTP_USER")
+SMTP_PASS = os.environ.get("SMTP_PASS")
+WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET")
+
+def send_approval_email(user_id):
+    msg = EmailMessage()
+    msg['Subject'] = 'ChikGuard: Nova conta a aguardar aprovação'
+    msg['From'] = 'noreply@chikguard.com'
+    msg['To'] = SUPERADMIN_EMAIL
+
+    # Corpo do e-mail
+    msg.set_content(
+        f"Olá SuperAdmin,\n\n"
+        f"Um novo utilizador registou-se no sistema e está a aguardar a sua aprovação.\n\n"
+        f"ID do Utilizador: {user_id}\n\n"
+        f"Por favor, aceda ao Painel de Controlo do Supabase ou ao Painel Admin do ChikGuard para aprovar ou rejeitar o utilizador."
+    )
+
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls()
+            if SMTP_USER and SMTP_PASS:
+                server.login(SMTP_USER, SMTP_PASS)
+            server.send_message(msg)
+        print("E-mail de notificação enviado ao SuperAdmin.")
+    except Exception as e:
+        print(f"Erro ao enviar e-mail: {e}")
+
+@admin_api.route('/api/admin/notify-new-user', methods=['POST'])
+def webhook_notify_new_user():
+    # 1. Validação de Segurança (Garantir que o pedido vem do Supabase)
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or auth_header != f"Bearer {WEBHOOK_SECRET}":
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.json
+
+    # 2. O Supabase Webhook envia os dados dentro da chave 'record' para eventos INSERT
+    # Exemplo de payload: {"type": "INSERT", "table": "profiles", "record": {"id": "uuid-aqui", "status": "PENDING", ...}}
+    if data and data.get("type") == "INSERT" and "record" in data:
+        new_profile = data["record"]
+
+        # Verificar se realmente está pendente (por precaução)
+        if new_profile.get("status") == "PENDING":
+            user_id = new_profile.get("id")
+            # Executar o envio do e-mail (idealmente de forma assíncrona, ex: via Celery ou threading)
+            send_approval_email(user_id)
+
+            return jsonify({"message": "Notificação processada com sucesso"}), 200
+
+    return jsonify({"message": "Evento ignorado ou formato inválido"}), 400
+```
+
+Desta forma, assim que o `handle_new_user()` cria o perfil `PENDING` no banco de dados, o trigger do Webhook do Supabase dispara instantaneamente, alertando o(s) administrador(es).
