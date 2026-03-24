@@ -491,3 +491,142 @@ def webhook_notify_new_user():
 ```
 
 Desta forma, assim que o `handle_new_user()` cria o perfil `PENDING` no banco de dados, o trigger do Webhook do Supabase dispara instantaneamente, alertando o(s) administrador(es).
+
+### Exemplo de Painel de Controlo do SuperAdmin (Mobile / React Native / Expo)
+
+Este exemplo demonstra como a mesma lógica de RPCs é consumida na aplicação móvel (React Native) para aprovar contas diretamente do smartphone do SuperAdmin.
+
+```tsx
+import React, { useEffect, useState } from 'react';
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
+import { supabase } from './supabaseClient'; // Cliente Supabase configurado no Mobile
+
+export default function MobileAdminDashboard() {
+  const [pendingUsers, setPendingUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedRoles, setSelectedRoles] = useState({});
+
+  const fetchPendingUsers = async () => {
+    setLoading(true);
+    // Chamada à RPC criada: get_pending_users
+    const { data, error } = await supabase.rpc('get_pending_users');
+
+    if (error) {
+      Alert.alert('Erro', 'Acesso negado ou erro ao buscar utilizadores.');
+    } else {
+      setPendingUsers(data || []);
+
+      // Iniciar todas as roles selecionadas com o padrão 'VIEWER'
+      const initialRoles = {};
+      data?.forEach(u => initialRoles[u.id] = 'VIEWER');
+      setSelectedRoles(initialRoles);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchPendingUsers();
+  }, []);
+
+  const handleApprove = async (userId) => {
+    const targetRole = selectedRoles[userId] || 'VIEWER';
+
+    Alert.alert(
+      "Confirmar Aprovação",
+      `Deseja aprovar o utilizador como ${targetRole}?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Aprovar",
+          onPress: async () => {
+            // Chamada à RPC criada: approve_user
+            const { error } = await supabase.rpc('approve_user', {
+              target_user_id: userId,
+              target_role: targetRole,
+            });
+
+            if (error) {
+              Alert.alert('Erro', `Falha ao aprovar: ${error.message}`);
+            } else {
+              Alert.alert('Sucesso', 'Utilizador aprovado com sucesso!');
+              setPendingUsers(prev => prev.filter(user => user.id !== userId));
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const renderItem = ({ item }) => (
+    <View style={styles.card}>
+      <Text style={styles.idText}>ID: {item.id.substring(0, 8)}...</Text>
+      <Text style={styles.dateText}>Registado: {new Date(item.created_at).toLocaleDateString()}</Text>
+
+      <View style={styles.actionRow}>
+        <View style={styles.pickerContainer}>
+          <Picker
+            selectedValue={selectedRoles[item.id]}
+            style={styles.picker}
+            onValueChange={(itemValue) =>
+              setSelectedRoles({ ...selectedRoles, [item.id]: itemValue })
+            }
+          >
+            <Picker.Item label="Viewer" value="VIEWER" />
+            <Picker.Item label="Operator" value="OPERATOR" />
+            <Picker.Item label="Farm Admin" value="FARM_ADMIN" />
+            <Picker.Item label="Super Admin" value="SUPERADMIN" />
+          </Picker>
+        </View>
+
+        <TouchableOpacity
+          style={styles.button}
+          onPress={() => handleApprove(item.id)}
+        >
+          <Text style={styles.buttonText}>Aprovar</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#10b981" />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Aprovação de Contas (IAM)</Text>
+
+      {pendingUsers.length === 0 ? (
+        <Text style={styles.emptyText}>Nenhuma conta aguardando aprovação.</Text>
+      ) : (
+        <FlatList
+          data={pendingUsers}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          contentContainerStyle={{ paddingBottom: 20 }}
+        />
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#0f172a', padding: 16 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' },
+  title: { fontSize: 22, fontWeight: 'bold', color: '#10b981', marginBottom: 20, textAlign: 'center' },
+  emptyText: { color: '#94a3b8', textAlign: 'center', marginTop: 40 },
+  card: { backgroundColor: '#1e293b', padding: 16, borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: '#334155' },
+  idText: { color: '#f8fafc', fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
+  dateText: { color: '#94a3b8', fontSize: 14, marginBottom: 16 },
+  actionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  pickerContainer: { flex: 1, backgroundColor: '#0f172a', borderRadius: 4, marginRight: 10, overflow: 'hidden' },
+  picker: { color: '#f8fafc', height: 40 },
+  button: { backgroundColor: '#10b981', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 6 },
+  buttonText: { color: '#ffffff', fontWeight: 'bold' }
+});
+```
