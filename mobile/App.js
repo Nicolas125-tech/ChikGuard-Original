@@ -9,9 +9,14 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
+import AdminPanel from './AdminPanel';
+import AdminPanel from './AdminPanel';
+import AdminPanel from './AdminPanel';
+import AdminPanel from './AdminPanel';
+import AdminPanel from './AdminPanel';
 import { 
   Thermometer, Activity, AlertTriangle, CheckCircle, 
-  Settings, Save, Zap, Wind, LayoutDashboard, History, LogOut, User, Key, Bird, Bell, Cpu, Database
+  Settings, Save, Zap, Wind, LayoutDashboard, History, LogOut, User, Key, Bird, Bell, Cpu, Database, AlertTriangle, AlertTriangle, AlertTriangle, AlertTriangle, AlertTriangle
 } from 'lucide-react-native';
 
 const appLogo = require('./assets/logo.png');
@@ -814,6 +819,11 @@ const ConfigScreen = ({ serverUrl, setServerUrl, logout }) => {
 export default function App() {
   const [token, setToken] = useState(null);
   const [role, setRole] = useState('admin');
+  const [status, setStatus] = useState('ACTIVE');
+  const [status, setStatus] = useState('ACTIVE');
+  const [status, setStatus] = useState('ACTIVE');
+  const [status, setStatus] = useState('ACTIVE');
+  const [status, setStatus] = useState('ACTIVE');
   const [username, setUsername] = useState('');
   const [serverUrl, setServerUrl] = useState('');
   const [activeTab, setActiveTab] = useState('monitor'); // monitor, birds, smart, management, alerts, history, system, config
@@ -893,7 +903,197 @@ export default function App() {
 
   // Polling de dados (Só roda se estiver logado e na aba monitor)
   useEffect(() => {
-    if (token && normalizedServerUrl && activeTab === 'monitor') {
+    if (token && activeTab === 'admin') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        <AdminPanel serverIP={normalizedServerUrl || serverIP} token={token} />
+        {renderTabBar()}
+      </SafeAreaView>
+    );
+  }
+
+
+  if (token && status === 'PENDING') {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <StatusBar barStyle="light-content" />
+        <View style={{ backgroundColor: '#1e293b', padding: 24, borderRadius: 12, width: '85%', alignItems: 'center' }}>
+          <AlertTriangle color="#f59e0b" size={48} style={{ marginBottom: 16 }} />
+          <Text style={{ color: '#10b981', fontSize: 20, fontWeight: 'bold', marginBottom: 12 }}>Aguardando Aprovação</Text>
+          <Text style={{ color: '#94a3b8', textAlign: 'center', marginBottom: 24 }}>A sua conta foi registada mas precisa ser ativada por um administrador do sistema.</Text>
+
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: '#334155', width: '100%' }]}
+            onPress={() => {
+              AsyncStorage.multiRemove(['userToken', 'userRole', 'userName', 'userStatus']);
+              setToken(null);
+              setRole('admin');
+              setStatus('ACTIVE');
+            }}
+          >
+            <Text style={[styles.buttonText, { textAlign: 'center' }]}>Voltar ao Login</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (token && activeTab === 'admin') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        <AdminPanel serverIP={normalizedServerUrl || serverIP} token={token} />
+        {renderTabBar()}
+      </SafeAreaView>
+    );
+  }
+
+
+  if (token && status === 'PENDING') {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <StatusBar barStyle="light-content" />
+        <View style={{ backgroundColor: '#1e293b', padding: 24, borderRadius: 12, width: '85%', alignItems: 'center' }}>
+          <AlertTriangle color="#f59e0b" size={48} style={{ marginBottom: 16 }} />
+          <Text style={{ color: '#10b981', fontSize: 20, fontWeight: 'bold', marginBottom: 12 }}>Aguardando Aprovação</Text>
+          <Text style={{ color: '#94a3b8', textAlign: 'center', marginBottom: 24 }}>A sua conta foi registada mas precisa ser ativada por um administrador do sistema.</Text>
+
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: '#334155', width: '100%' }]}
+            onPress={() => {
+              AsyncStorage.multiRemove(['userToken', 'userRole', 'userName', 'userStatus']);
+              setToken(null);
+              setRole('admin');
+              setStatus('ACTIVE');
+            }}
+          >
+            <Text style={[styles.buttonText, { textAlign: 'center' }]}>Voltar ao Login</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (token && activeTab === 'admin') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        <AdminPanel serverIP={normalizedServerUrl || serverIP} token={token} />
+        {renderTabBar()}
+      </SafeAreaView>
+    );
+  }
+
+
+  if (token && status === 'PENDING') {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <StatusBar barStyle="light-content" />
+        <View style={{ backgroundColor: '#1e293b', padding: 24, borderRadius: 12, width: '85%', alignItems: 'center' }}>
+          <AlertTriangle color="#f59e0b" size={48} style={{ marginBottom: 16 }} />
+          <Text style={{ color: '#10b981', fontSize: 20, fontWeight: 'bold', marginBottom: 12 }}>Aguardando Aprovação</Text>
+          <Text style={{ color: '#94a3b8', textAlign: 'center', marginBottom: 24 }}>A sua conta foi registada mas precisa ser ativada por um administrador do sistema.</Text>
+
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: '#334155', width: '100%' }]}
+            onPress={() => {
+              AsyncStorage.multiRemove(['userToken', 'userRole', 'userName', 'userStatus']);
+              setToken(null);
+              setRole('admin');
+              setStatus('ACTIVE');
+            }}
+          >
+            <Text style={[styles.buttonText, { textAlign: 'center' }]}>Voltar ao Login</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (token && activeTab === 'admin') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        <AdminPanel serverIP={normalizedServerUrl || serverIP} token={token} />
+        {renderTabBar()}
+      </SafeAreaView>
+    );
+  }
+
+
+  if (token && status === 'PENDING') {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <StatusBar barStyle="light-content" />
+        <View style={{ backgroundColor: '#1e293b', padding: 24, borderRadius: 12, width: '85%', alignItems: 'center' }}>
+          <AlertTriangle color="#f59e0b" size={48} style={{ marginBottom: 16 }} />
+          <Text style={{ color: '#10b981', fontSize: 20, fontWeight: 'bold', marginBottom: 12 }}>Aguardando Aprovação</Text>
+          <Text style={{ color: '#94a3b8', textAlign: 'center', marginBottom: 24 }}>A sua conta foi registada mas precisa ser ativada por um administrador do sistema.</Text>
+
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: '#334155', width: '100%' }]}
+            onPress={() => {
+              AsyncStorage.multiRemove(['userToken', 'userRole', 'userName', 'userStatus']);
+              setToken(null);
+              setRole('admin');
+              setStatus('ACTIVE');
+            }}
+          >
+            <Text style={[styles.buttonText, { textAlign: 'center' }]}>Voltar ao Login</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (token && activeTab === 'admin') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        <AdminPanel serverIP={normalizedServerUrl || serverIP} token={token} />
+        {renderTabBar()}
+      </SafeAreaView>
+    );
+  }
+
+
+  if (token && status === 'PENDING') {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <StatusBar barStyle="light-content" />
+        <View style={{ backgroundColor: '#1e293b', padding: 24, borderRadius: 12, width: '85%', alignItems: 'center' }}>
+          <AlertTriangle color="#f59e0b" size={48} style={{ marginBottom: 16 }} />
+          <Text style={{ color: '#10b981', fontSize: 20, fontWeight: 'bold', marginBottom: 12 }}>Aguardando Aprovação</Text>
+          <Text style={{ color: '#94a3b8', textAlign: 'center', marginBottom: 24 }}>A sua conta foi registada mas precisa ser ativada por um administrador do sistema.</Text>
+
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: '#334155', width: '100%' }]}
+            onPress={() => {
+              AsyncStorage.multiRemove(['userToken', 'userRole', 'userName', 'userStatus']);
+              setToken(null);
+              setRole('admin');
+              setStatus('ACTIVE');
+            }}
+          >
+            <Text style={[styles.buttonText, { textAlign: 'center' }]}>Voltar ao Login</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (token && activeTab === 'admin') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        <AdminPanel serverIP={normalizedServerUrl || serverIP} token={token} />
+        {renderTabBar()}
+      </SafeAreaView>
+    );
+  }
+
+  if (token && normalizedServerUrl && activeTab === 'monitor') {
       const fetchStatus = async () => {
         try {
           const res = await fetch(`${normalizedServerUrl}/api/status`);
