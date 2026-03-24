@@ -1,5 +1,9 @@
+import os
 import time
+import smtplib
+from email.message import EmailMessage
 from flask import Blueprint, jsonify, request
+from supabase import create_client
 
 def create_auth_blueprint(deps):
     bp = Blueprint("auth_api", __name__)
@@ -119,7 +123,117 @@ def create_auth_blueprint(deps):
 
 
 
+
+    @bp.route("/api/admin/pending-users", methods=["GET"])
+    def admin_pending_users():
+        ok, resp = guard_critical_action("admin_pending_users", permission="accounts.manage")
+        if not ok:
+            return resp
+
+        try:
+            SUPABASE_URL = os.environ.get("SUPABASE_URL")
+            SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+
+            if not SUPABASE_URL or not SUPABASE_KEY:
+                return jsonify({"msg": "Supabase credenciais ausentes no backend"}), 500
+
+            supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+            # Usamos a service_role key que da bypass ao RLS.
+            # Validamos a permissao "accounts.manage" no Flask e listamos
+            response = supabase.table("profiles").select("*").eq("status", "PENDING").execute()
+            return jsonify({"items": response.data or []}), 200
+
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
+
+    @bp.route("/api/admin/approve-user", methods=["POST"])
+    def admin_approve_user():
+        ok, resp = guard_critical_action("admin_approve_user", permission="accounts.manage")
+        if not ok:
+            return resp
+
+        data = request.get_json(silent=True) or {}
+        target_user_id = data.get("target_user_id")
+        target_role = data.get("target_role", "VIEWER")
+
+        if not target_user_id:
+            return jsonify({"msg": "target_user_id é obrigatorio"}), 400
+
+        try:
+            SUPABASE_URL = os.environ.get("SUPABASE_URL")
+            SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+
+            if not SUPABASE_URL or not SUPABASE_KEY:
+                return jsonify({"msg": "Supabase credenciais ausentes no backend"}), 500
+
+            supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+            # Update direto usando service_role
+            response = supabase.table("profiles").update({
+                "status": "ACTIVE",
+                "role": target_role,
+                "approved_at": "now()"
+            }).eq("id", target_user_id).execute()
+
+            if not response.data:
+                return jsonify({"msg": "Falha ao atualizar no Supabase"}), 400
+
+            audit("iam_user_approved", source="security", details={"target_user_id": target_user_id, "role": target_role})
+            return jsonify({"message": "User approved successfully", "data": response.data}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
+
+    @bp.route("/api/admin/notify-new-user", methods=["POST"])
+    def webhook_notify_new_user():
+        WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET")
+
+        auth_header = request.headers.get("Authorization")
+        if WEBHOOK_SECRET and (not auth_header or auth_header != f"Bearer {WEBHOOK_SECRET}"):
+            return jsonify({"error": "Unauthorized"}), 401
+
+        data = request.get_json(silent=True) or {}
+
+        if data.get("type") == "INSERT" and "record" in data:
+            new_profile = data["record"]
+
+            if new_profile.get("status") == "PENDING":
+                user_id = new_profile.get("id")
+
+                SUPERADMIN_EMAIL = os.environ.get("SUPERADMIN_EMAIL", "admin@chikguard.com")
+                SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.sendgrid.net")
+                SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
+                SMTP_USER = os.environ.get("SMTP_USER")
+                SMTP_PASS = os.environ.get("SMTP_PASS")
+
+                msg = EmailMessage()
+                msg["Subject"] = "ChikGuard: Nova conta a aguardar aprovação"
+                msg["From"] = "noreply@chikguard.com"
+                msg["To"] = SUPERADMIN_EMAIL
+
+                msg.set_content(
+                    f"Olá SuperAdmin,\n\n"
+                    f"Um novo utilizador registou-se no sistema e está a aguardar a sua aprovação.\n\n"
+                    f"ID do Utilizador: {user_id}\n\n"
+                    f"Por favor, aceda ao Painel Admin do ChikGuard para aprovar ou rejeitar o utilizador."
+                )
+
+                try:
+                    if SMTP_HOST and SMTP_PORT:
+                        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+                            server.starttls()
+                            if SMTP_USER and SMTP_PASS:
+                                server.login(SMTP_USER, SMTP_PASS)
+                            server.send_message(msg)
+                except Exception as e:
+                    print(f"Erro SMTP webhook: {e}")
+
+                return jsonify({"message": "Notificação processada"}), 200
+
+        return jsonify({"message": "Ignorado"}), 400
+
     @bp.route("/api/login", methods=["POST", "OPTIONS"])
+
     def login():
         if request.method == "OPTIONS":
             return jsonify({}), 200
@@ -160,14 +274,31 @@ def create_auth_blueprint(deps):
 
         audit("login_success", source="security", details={"ip": ip}, actor=account.username)
 
+        # Verifica o status no Supabase profiles se configurado
+        # Fail closed: Utilizadores normais comecam como PENDING por defeito
+        status = "PENDING" if account.role not in ["admin", "superadmin"] else "ACTIVE"
+
+        try:
+            SUPABASE_URL = os.environ.get("SUPABASE_URL")
+            SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+            if SUPABASE_URL and SUPABASE_KEY:
+                supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+                # RPC segura (bypassa a limitacao de public rest)
+                resp = supabase.rpc("get_user_status_by_email", {"user_email": account.username}).execute()
+                if resp.data:
+                    status = resp.data
+        except Exception as e:
+            print(f"Supabase sync error: {e}")
+
         access_token = create_access_token(
             identity=str(account.id),
-            additional_claims={"role": account.role, "username": account.username}
+            additional_claims={"role": account.role, "username": account.username, "status": status}
         )
         return jsonify({
             "access_token": access_token,
             "role": account.role,
-            "username": account.username
+            "username": account.username,
+            "status": status
         }), 200
 
     return bp

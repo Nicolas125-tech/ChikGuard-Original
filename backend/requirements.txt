@@ -17,3 +17,5 @@ Flask-SocketIO==5.3.6
 psutil
 aiortc
 aiohttp
+
+supabase==2.4.3

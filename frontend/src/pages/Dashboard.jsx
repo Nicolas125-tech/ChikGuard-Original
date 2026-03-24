@@ -11,6 +11,7 @@ import AlertsPanel from '../components/AlertsPanel';
 import HistoryPanel from '../components/HistoryPanel';
 import SystemPanel from '../components/SystemPanel';
 import SettingsPanel from '../components/SettingsPanel';
+import AdminPanel from '../components/AdminPanel';
 
 export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, onSaveServer, onLogout }) {
   const [tab, setTab] = useState('overview');
@@ -21,20 +22,29 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
       { id: 'devices', label: 'Dispositivos', icon: SlidersHorizontal },
       { id: 'smart', label: 'IA + IoT', icon: Activity },
       { id: 'management', label: 'Gestao', icon: Database },
-      { id: 'alerts', label: 'Alertas', icon: Bell },
+            { id: 'alerts', label: 'Alertas', icon: Bell },
       { id: 'history', label: 'Historico', icon: History },
       { id: 'system', label: 'Sistema', icon: Cpu },
       { id: 'settings', label: 'Configuracoes', icon: Settings },
+      { id: 'admin', label: 'IAM Admin', icon: Database },
+
     ];
-    if (role === 'viewer') {
+        if (role === 'viewer') {
       const allow = new Set(['overview', 'alerts', 'history', 'system']);
-      return allTabs.filter((item) => allow.has(item.id));
+      return allTabs.filter(t => allow.has(t.id));
+    }
+    if (role === 'operator') {
+      const allow = new Set(['overview', 'birds', 'devices', 'alerts', 'history', 'system']);
+      return allTabs.filter(t => allow.has(t.id));
+    }
+    if (role !== 'superadmin' && role !== 'admin') {
+      return allTabs.filter(t => t.id !== 'admin');
     }
     return allTabs;
   }, [role]);
 
   const canControlDevices = role === 'admin' || role === 'operator';
-  const settingsKey = `${serverIP}:${prefs.statusMs}:${prefs.historyMs}:${prefs.devicesMs}:${prefs.countMs}`;
+
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col font-sans">
@@ -85,8 +95,10 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
           {tab === 'management' && <ManagementPanel serverIP={serverIP} prefs={prefs} />}
           {tab === 'alerts' && <AlertsPanel serverIP={serverIP} prefs={prefs} />}
           {tab === 'history' && <HistoryPanel serverIP={serverIP} prefs={prefs} />}
-          {tab === 'system' && <SystemPanel serverIP={serverIP} prefs={prefs} />}
-          {tab === 'settings' && <SettingsPanel key={settingsKey} serverIP={serverIP} prefs={prefs} onSavePrefs={onSavePrefs} onSaveServer={onSaveServer} />}
+                {tab === 'system' && <SystemPanel serverIP={serverIP} />}
+      {tab === 'settings' && <SettingsPanel serverIP={serverIP} token={token} prefs={prefs} onSavePrefs={onSavePrefs} onSaveServer={onSaveServer} />}
+      {tab === 'admin' && <AdminPanel serverIP={serverIP} token={token} />}
+
         </div>
       </main>
     </div>
