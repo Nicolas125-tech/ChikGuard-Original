@@ -3191,7 +3191,7 @@ if __name__ == "__main__":
             LOGGER.exception("Failed to configure mTLS context")
             raise
 
-    socketio.run(app, host=SETTINGS.flask_host, port=SETTINGS.flask_port, debug=False, ssl_context=ssl_context)
+    socketio.run(app, host=SETTINGS.flask_host, port=SETTINGS.flask_port, debug=False, ssl_context=ssl_context, allow_unsafe_werkzeug=True)
 
 @app.route("/api/push-token", methods=["POST"])
 def register_push_token():

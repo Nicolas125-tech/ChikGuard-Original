@@ -100,6 +100,33 @@ API padrao: `http://localhost:5000`
 
 ## Docker (padronizado)
 
+## Configuração do Supabase e Docker
+
+Se você for rodar o projeto utilizando o Supabase como banco de dados (o que é recomendado em produção), siga os passos abaixo:
+
+1. Crie ou copie o arquivo `.env` na raiz do projeto (como mostrado acima `cp .env.example .env`).
+2. Obtenha a URL de conexão do seu projeto Supabase (Configurações > Database > Connection string > URI).
+3. Cole a URL na variável `DATABASE_URL` no seu arquivo `.env`.
+
+**IMPORTANTE:** Se a sua senha do Supabase contiver caracteres especiais (como `@`, `#`, `$`, `&`), você **deve** realizar o URL-encode desses caracteres, caso contrário a aplicação irá falhar ao tentar conectar ao banco. Por exemplo, se a sua senha for `p@ssword!123`, a sua senha na URL ficará `p%40ssword%21123`:
+```env
+DATABASE_URL="postgresql://postgres:p%40ssword%21123@db.seusupabase.supabase.co:5432/postgres"
+```
+
+4. Você precisará de um túnel da Cloudflare caso deseje expor o Frontend. Preencha o `TUNNEL_TOKEN` no `.env` com o token gerado no seu Dashboard da Cloudflare (em Zero Trust > Networks > Tunnels).
+
+5. Crie a pasta `data` na raiz do repositório para evitar erros de permissão de montagem de volume no Docker:
+```bash
+mkdir -p data
+```
+
+6. Agora, basta rodar o Docker Compose:
+```bash
+docker-compose up --build
+```
+
+Nesta configuração o backend cuidará de inicializar todas as tabelas no Supabase na primeira execução de forma automática.
+
 Na raiz do projeto:
 
 ```bash
