@@ -1,4 +1,3 @@
-
 services:
   backend:
     build:
@@ -11,6 +10,7 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
       - CORS_ORIGINS=*
       - DATABASE_URL=${DATABASE_URL:-sqlite:///chikguard.db}
+      - PYTHONPATH=/app
     volumes:
       - ./data:/app/data
     restart: unless-stopped
@@ -25,5 +25,5 @@ services:
 
   cloudflared:
     image: cloudflare/cloudflared:latest
-    command: tunnel --no-autoupdate run --url http://frontend:80
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
     restart: unless-stopped
