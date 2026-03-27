@@ -3004,6 +3004,36 @@ def get_alerts():
     itens.sort(key=lambda x: f"{x['data']} {x['hora']}", reverse=True)
     return jsonify(itens[:100])
 
+
+@app.route("/api/status", methods=["GET"])
+def get_status():
+    ultima = Reading.query.order_by(Reading.id.desc()).first()
+    return jsonify({
+        "temperatura": ultima.temperatura if ultima else 0,
+        "status": ultima.status if ultima else "INICIANDO"
+    })
+
+@app.route("/api/history", methods=["GET"])
+def get_history():
+    limit = request.args.get("limit", default=20, type=int)
+    recentes = Reading.query.order_by(Reading.id.desc()).limit(limit).all()
+    itens = []
+    for r in reversed(recentes):
+        itens.append({
+            "hora": r.timestamp.strftime("%H:%M:%S"),
+            "temp": r.temperatura,
+            "status": r.status
+        })
+    return jsonify(itens)
+
+@app.route("/api/chick_count", methods=["GET"])
+def get_chick_count():
+    now = time.time()
+    with lock:
+        count = object_count
+    return jsonify({"count": count})
+
+
 @app.route("/api/summary", methods=["GET"])
 def get_summary():
     ultima = Reading.query.order_by(Reading.id.desc()).first()
