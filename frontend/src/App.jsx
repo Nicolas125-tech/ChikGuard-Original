@@ -5,6 +5,7 @@ import LoginScreen from './pages/LoginScreen';
 import TVScreen from './pages/TVScreen';
 import Dashboard from './pages/Dashboard';
 import { STORAGE, readPrefs } from './utils/config';
+import { supabase } from './utils/supabaseClient';
 
 export default function App() {
   const [booting, setBooting] = useState(true);
@@ -20,6 +21,42 @@ export default function App() {
     return () => clearTimeout(t);
   }, []);
 
+  // Set up Supabase Auth state listener
+  useEffect(() => {
+    if (!supabase.supabaseUrl) return;
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        const accessToken = session.access_token;
+        const nextRole = session.user.app_metadata?.role || 'VIEWER';
+        const nextUser = session.user.email;
+        const nextStatus = session.user.app_metadata?.status || 'PENDING'; // Default to PENDING for OAuth users until approved
+
+        localStorage.setItem(STORAGE.token, accessToken);
+        localStorage.setItem(STORAGE.role, nextRole);
+        localStorage.setItem(STORAGE.username, nextUser || '');
+        localStorage.setItem('cg_status', nextStatus);
+
+        setToken(accessToken);
+        setRole(nextRole);
+        setStatus(nextStatus);
+        setShowLogin(false);
+      } else if (event === 'SIGNED_OUT') {
+        localStorage.removeItem(STORAGE.token);
+        localStorage.removeItem(STORAGE.role);
+        localStorage.removeItem(STORAGE.username);
+        localStorage.removeItem('cg_status');
+        setToken(null);
+        setRole('admin');
+        setStatus('ACTIVE');
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
   const saveServer = useCallback((value) => {
     const clean = value.replace(/\/$/, '');
     setServerIP(clean);
@@ -30,6 +67,20 @@ export default function App() {
     setPrefs(next);
     localStorage.setItem(STORAGE.prefs, JSON.stringify(next));
   }, []);
+
+  const handleLogout = async () => {
+    if (supabase.supabaseUrl) {
+       await supabase.auth.signOut();
+    }
+
+    localStorage.removeItem(STORAGE.token);
+    localStorage.removeItem(STORAGE.role);
+    localStorage.removeItem('cg_status');
+    localStorage.removeItem(STORAGE.username);
+    setToken(null);
+    setRole('admin');
+    setStatus('ACTIVE');
+  };
 
   const tvMode = window.location.pathname === '/tv';
 
@@ -44,18 +95,10 @@ export default function App() {
       <TVScreen
         serverIP={serverIP}
         showHeader
-        onLogout={() => {
-          localStorage.removeItem(STORAGE.token);
-          localStorage.removeItem(STORAGE.role);
-          localStorage.removeItem('cg_status');
-          localStorage.removeItem(STORAGE.username);
-          setToken(null);
-          setRole('admin');
-        }}
+        onLogout={handleLogout}
       />
     );
   }
-
 
   if (token && status === 'PENDING') {
     return (
@@ -64,18 +107,10 @@ export default function App() {
           <h1 className="text-2xl font-bold text-emerald-500 mb-4">Aguardando Aprovação</h1>
           <p className="text-slate-300 mb-6">A sua conta foi criada com sucesso, mas precisa de ser aprovada por um administrador antes de aceder ao sistema.</p>
           <button
-            onClick={() => {
-              localStorage.removeItem(STORAGE.token);
-              localStorage.removeItem(STORAGE.role);
-              localStorage.removeItem(STORAGE.username);
-              localStorage.removeItem('cg_status');
-              setToken(null);
-              setRole('admin');
-              setStatus('ACTIVE');
-            }}
+            onClick={handleLogout}
             className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded"
           >
-            Voltar ao Login
+            Sair e Voltar ao Login
           </button>
         </div>
       </div>
@@ -83,7 +118,6 @@ export default function App() {
   }
 
   if (token) {
-
     return (
       <Dashboard
         token={token}
@@ -92,14 +126,7 @@ export default function App() {
         prefs={prefs}
         onSavePrefs={savePrefs}
         onSaveServer={saveServer}
-        onLogout={() => {
-          localStorage.removeItem(STORAGE.token);
-          localStorage.removeItem(STORAGE.role);
-          localStorage.removeItem('cg_status');
-          localStorage.removeItem(STORAGE.username);
-          setToken(null);
-          setRole('admin');
-        }}
+        onLogout={handleLogout}
       />
     );
   }

@@ -102,6 +102,30 @@ API padrao: `http://localhost:5000`
 
 ## Configuração do Supabase e Docker
 
+### Configuração do Frontend (Supabase Auth)
+
+Para que o fluxo de criação de contas e login com provedores OAuth (como Google, GitHub, etc.) funcione no Frontend, precisa de configurar as credenciais públicas do Supabase:
+
+1. Entre no diretório `frontend/` e crie um ficheiro `.env` a partir do modelo:
+   ```bash
+   cd frontend
+   cp .env.example .env
+   ```
+
+2. No painel do Supabase, vá a **Project Settings > API**.
+3. Copie o **Project URL** e cole na variável `VITE_SUPABASE_URL`.
+4. Copie a chave **anon public** e cole na variável `VITE_SUPABASE_ANON_KEY`.
+
+Exemplo `frontend/.env`:
+```env
+VITE_SUPABASE_URL=https://<seu-projeto>.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbG...
+```
+
+*(O frontend agora usará o Supabase Auth para gerir registos, login e contas OAuth, definindo o utilizador recém-criado como "PENDING" e aguardando a aprovação do SuperAdmin.)*
+
+### Configuração do Backend e Docker
+
 Se você for rodar o projeto utilizando o Supabase como banco de dados (o que é recomendado em produção), siga os passos abaixo:
 
 1. Crie ou copie o arquivo `.env` na raiz do projeto (como mostrado acima `cp .env.example .env`).

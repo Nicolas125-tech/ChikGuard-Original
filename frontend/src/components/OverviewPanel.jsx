@@ -5,7 +5,7 @@ import { io } from 'socket.io-client';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import * as XLSX from 'xlsx';
-import { getBaseUrl, isTunnelHost } from '../utils/config';
+import { getBaseUrl } from '../utils/config';
 import WebRTCVideo from './WebRTCVideo';
 import HeatmapOverlay from './HeatmapOverlay';
 
