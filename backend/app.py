@@ -720,7 +720,8 @@ with app.app_context():
         db.session.commit()
 
 CAMERA_INDEX = SETTINGS.camera_index
-global_frame = None
+global_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+cv2.putText(global_frame, "AGUARDANDO CAMERA...", (100, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
 fps_last_time = 0.0
 db_last_save_time = 0.0
 last_bird_snapshot_save_time = 0.0
