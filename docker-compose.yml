@@ -13,6 +13,8 @@ services:
       - PYTHONPATH=/app
     volumes:
       - ./data:/app/data
+    devices:
+      - "/dev/video0:/dev/video0"
     restart: unless-stopped
 
   frontend:
