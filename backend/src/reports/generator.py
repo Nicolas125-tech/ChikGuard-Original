@@ -1,8 +1,8 @@
 import os
 import smtplib
 from email.message import EmailMessage
-from datetime import datetime, timedelta
-from database import db, Reading, SensorReading, EventLog, AcousticReading
+from datetime import timedelta
+from database import Reading, SensorReading, EventLog, AcousticReading
 
 try:
     from reportlab.lib.pagesizes import A4
