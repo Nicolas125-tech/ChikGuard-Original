@@ -9,6 +9,9 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
+import { supabase } from './supabaseClient';
+import * as WebBrowser from 'expo-web-browser';
+WebBrowser.maybeCompleteAuthSession();
 import AdminPanel from './AdminPanel';
 import AdminPanel from './AdminPanel';
 import AdminPanel from './AdminPanel';
@@ -837,6 +840,7 @@ export default function App() {
   const [loadingAcao, setLoadingAcao] = useState(false);
 
   // Login States
+  const [isSignUp, setIsSignUp] = useState(false);
   const [accessMode, setAccessMode] = useState('admin');
   const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
@@ -1227,50 +1231,107 @@ export default function App() {
     }
   }, [token, normalizedServerUrl, activeTab]);
 
-  const handleLogin = async () => {
-    if(!normalizedServerUrl) return Alert.alert("Erro", "Configure um URL valido do servidor (http/https).");
+
+  const handleGoogleLogin = async () => {
     setLoadingLogin(true);
     try {
-      const health = await fetchWithTimeout(`${normalizedServerUrl}/api/health`, { method: 'GET' }, 7000);
-      if (!health.ok) {
-        throw new Error("Servidor nao respondeu /api/health");
-      }
-      const req = await fetchWithTimeout(`${normalizedServerUrl}/api/login`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ username: user, password: pass })
-      }, 10000);
-      const data = await req.json();
-      if(req.ok) {
-        await AsyncStorage.setItem('cg_token', data.access_token);
-        await AsyncStorage.setItem('cg_server_url', normalizedServerUrl);
-        await AsyncStorage.setItem('cg_role', data.role || 'admin');
-        await AsyncStorage.setItem('cg_username', data.username || user);
-        setServerUrl(normalizedServerUrl);
-        setToken(data.access_token);
-        setRole(data.role || 'admin');
-        setUsername(data.username || user);
-
-        registerForPushNotificationsAsync().then(pushToken => {
-          if (pushToken) {
-            fetch(`${normalizedServerUrl}/api/push-token`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ token: pushToken })
-            }).catch(e => console.log('Failed to save push token', e));
-          }
-        });
-      } else {
-        Alert.alert("Erro", data?.msg || "Login falhou");
-      }
+      if (!supabase.supabaseUrl) throw new Error('Supabase nao configurado');
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: "exp://127.0.0.1:19000",
+        }
+      });
+      if (error) throw error;
+      // Tratar a sessao se o app for reaberto pela URL
     } catch (e) {
-      const msg = String(e?.message || '');
-      const hint = /abort|network|name_not_resolved|failed to fetch/i.test(msg)
-        ? "Verifique se o link Cloudflare ainda esta ativo e acessivel no navegador do celular."
-        : "Confirme o URL e tente novamente.";
-      Alert.alert("Erro de conexão", `${normalizedServerUrl}\n\n${hint}`);
+      Alert.alert('Erro', e.message);
+    } finally {
+      setLoadingLogin(false);
     }
-    finally { setLoadingLogin(false); }
+  };
+
+  const handleLogin = async () => {
+    if (!user || !pass) return Alert.alert('Erro', 'Preencha usuário e senha.');
+    setLoadingLogin(true);
+
+    try {
+      if (isSignUp) {
+        // Registo no Supabase
+        if (!supabase.supabaseUrl) throw new Error('Supabase nao configurado para registo.');
+        const { data, error } = await supabase.auth.signUp({
+          email: user,
+          password: pass,
+        });
+        if (error) throw error;
+        if (data?.user) {
+           Alert.alert('Sucesso', 'Conta criada! Aguardando aprovação.');
+           setIsSignUp(false);
+           setPass('');
+        }
+        setLoadingLogin(false);
+        return;
+      }
+
+      // Tentativa login Supabase se for email
+      if (supabase.supabaseUrl && user.includes('@')) {
+         const { data, error } = await supabase.auth.signInWithPassword({
+            email: user,
+            password: pass,
+         });
+
+         if (!error && data?.session) {
+             const userRole = data.user.app_metadata?.role || 'VIEWER';
+             const userStatus = data.user.app_metadata?.status || 'ACTIVE';
+             await finishLogin(data.session.access_token, userRole, data.user.email, userStatus);
+             return;
+         }
+      }
+
+      // Fallback para API Flask Legacy
+      const url = `${normalizedServerUrl}/api/login`;
+      const response = await fetchWithTimeout(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: user, password: pass }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        Alert.alert('Erro', data.msg || 'Credenciais inválidas.');
+      } else {
+        await finishLogin(data.access_token, data.role, data.username || user, data.status || 'ACTIVE');
+      }
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Erro', 'Falha de conexão. Verifique o servidor IP ou URL.');
+    } finally {
+      setLoadingLogin(false);
+    }
+  };
+
+
+  const handleLogout = async () => {
+    if (supabase.supabaseUrl) {
+       await supabase.auth.signOut();
+    }
+    setToken(null);
+    setRole('admin');
+    setUsername('');
+    setStatus('ACTIVE');
+    AsyncStorage.multiRemove(['cg_token', 'cg_role', 'cg_username']);
+  };
+
+  const finishLogin = async (accessToken, userRole, userName, userStatus) => {
+      setToken(accessToken);
+      setRole(userRole);
+      setUsername(userName);
+      setStatus(userStatus || 'ACTIVE');
+      setIsOffline(false);
+      AsyncStorage.setItem('cg_token', accessToken);
+      AsyncStorage.setItem('cg_role', userRole);
+      AsyncStorage.setItem('cg_username', userName);
+      AsyncStorage.setItem('cg_server_url', serverUrl);
   };
 
   const solicitarBiometria = async (reason) => {
@@ -1402,10 +1463,51 @@ export default function App() {
              <TextInput style={styles.input} value={serverUrl} onChangeText={setServerUrl} placeholder="https://exemplo.trycloudflare.com" placeholderTextColor="#64748b" autoCapitalize='none'/>
           </View>
 
+
           <View style={styles.loginModeRow}>
-            <TouchableOpacity onPress={() => setAccessMode('admin')} style={[styles.loginModeBtn, accessMode === 'admin' && styles.loginModeBtnActive]}>
-              <Text style={[styles.loginModeText, accessMode === 'admin' && styles.loginModeTextActive]}>Administrador</Text>
+            {!isSignUp && (
+               <>
+                 <TouchableOpacity onPress={() => setAccessMode('admin')} style={[styles.loginModeBtn, accessMode === 'admin' && styles.loginModeBtnActive]}>
+                   <Text style={[styles.loginModeText, accessMode === 'admin' && styles.loginModeTextActive]}>Administrador</Text>
+                 </TouchableOpacity>
+                 <TouchableOpacity onPress={() => setAccessMode('viewer')} style={[styles.loginModeBtn, accessMode === 'viewer' && styles.loginModeBtnActiveBlue]}>
+                   <Text style={[styles.loginModeText, accessMode === 'viewer' && styles.loginModeTextActiveBlue]}>Visitante</Text>
+                 </TouchableOpacity>
+               </>
+            )}
+            {isSignUp && (
+                 <View style={[styles.loginModeBtn, styles.loginModeBtnActive]}>
+                   <Text style={[styles.loginModeText, styles.loginModeTextActive]}>Criar Nova Conta</Text>
+                 </View>
+            )}
+          </View>
+
+          <View style={styles.inputContainer}>
+            <User color="#64748b" size={20}/>
+            <TextInput style={styles.inputField} placeholder={isSignUp ? "E-mail" : "Usuário ou E-mail"} placeholderTextColor="#64748b" value={user} onChangeText={setUser} autoCapitalize='none' autoCorrect={false}/>
+          </View>
+          <View style={styles.inputContainer}>
+            <Key color="#64748b" size={20}/>
+            <TextInput style={styles.inputField} placeholder="Senha" placeholderTextColor="#64748b" secureTextEntry value={pass} onChangeText={setPass} autoCapitalize='none'/>
+          </View>
+
+          <TouchableOpacity style={styles.btnPrimary} onPress={handleLogin}>
+            {loadingLogin ? <ActivityIndicator color="#fff"/> : <Text style={styles.btnText}>{isSignUp ? 'CRIAR CONTA' : 'ACEDER AO SISTEMA'}</Text>}
+          </TouchableOpacity>
+
+          <TouchableOpacity style={{marginTop: 15}} onPress={() => setIsSignUp(!isSignUp)}>
+            <Text style={{color: '#10b981', textAlign: 'center'}}>
+              {isSignUp ? 'Já tem uma conta? Fazer Login' : 'Não tem conta? Criar agora'}
+            </Text>
+          </TouchableOpacity>
+
+          <View style={{marginTop: 30, alignItems: 'center'}}>
+            <Text style={{color: '#64748b', marginBottom: 10}}>Ou continue com</Text>
+            <TouchableOpacity style={styles.btnGoogle} onPress={handleGoogleLogin}>
+               <Text style={styles.btnGoogleText}>Google</Text>
             </TouchableOpacity>
+          </View>
+
             <TouchableOpacity onPress={() => setAccessMode('viewer')} style={[styles.loginModeBtn, accessMode === 'viewer' && styles.loginModeBtnActiveBlue]}>
               <Text style={[styles.loginModeText, accessMode === 'viewer' && styles.loginModeTextActiveBlue]}>Visitante</Text>
             </TouchableOpacity>
@@ -1463,7 +1565,7 @@ export default function App() {
         {activeTab === 'alerts' && allowedTabs.has('alerts') && <AlertsScreen serverUrl={normalizedServerUrl} />}
         {activeTab === 'history' && allowedTabs.has('history') && <HistoryScreen serverUrl={normalizedServerUrl} />}
         {activeTab === 'system' && allowedTabs.has('system') && <SystemScreen serverUrl={normalizedServerUrl} />}
-        {activeTab === 'config' && allowedTabs.has('config') && <ConfigScreen serverUrl={serverUrl} setServerUrl={(v) => setServerUrl(normalizeServerUrl(v) || v)} logout={() => {setToken(null); setRole('admin'); setUsername(''); AsyncStorage.multiRemove(['cg_token', 'cg_role', 'cg_username']);}} />}
+        {activeTab === 'config' && allowedTabs.has('config') && <ConfigScreen serverUrl={serverUrl} setServerUrl={(v) => setServerUrl(normalizeServerUrl(v) || v)} logout={handleLogout} />}
       </View>
 
       {/* Tab Bar (Menu Inferior) */}
@@ -1557,6 +1659,8 @@ const styles = StyleSheet.create({
   input: { backgroundColor:'#1e293b', color:'white', padding:15, borderRadius:12, marginBottom:20, borderWidth:1, borderColor:'#334155' },
   
   // Buttons
+  btnGoogle: { backgroundColor: '#ffffff', padding: 15, borderRadius: 10, width: '100%', alignItems: 'center', borderColor: '#e2e8f0', borderWidth: 1 },
+  btnGoogleText: { color: '#0f172a', fontWeight: 'bold' },
   btnPrimary: { backgroundColor: '#10b981', width:'100%', padding:18, borderRadius:16, alignItems:'center', flexDirection:'row', justifyContent:'center', gap:10 },
   btnText: { color: 'white', fontWeight: 'bold', fontSize:16 },
   btnLogout: { flexDirection:'row', alignItems:'center', padding:15, backgroundColor:'#1e293b', borderRadius:12, justifyContent:'center' },
