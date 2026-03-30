@@ -1377,7 +1377,7 @@ def _analyze_behavior(selected, frame_shape):
     edge_ratio = float(edge_count) / float(max(1, count))
 
     status = "NORMAL"
-    message = "Distribuicao comportamental normal"
+    message = "Aves ativas e com distribuicao saudavel."
 
     # Cross-reference with IoT sensors to generate logical heatmap/predictive alerts
     current_temp = float(sensor_state.get("temperature_c", 25.0))
@@ -1387,18 +1387,38 @@ def _analyze_behavior(selected, frame_shape):
     is_cold_environment = current_temp < (target_temp - 1.5)
     is_hot_environment = current_temp > (target_temp + 1.5)
 
-    if dispersion_ratio < 0.15 and count >= 8:
-        status = "FRIO_COMPORTAMENTAL"
+    # Calculate proportion of immobile/prostrated birds to detect "passando mal"
+    immobile_count = 0
+    prostrated_count = 0
+    for uid, state in immobility_state.items():
+        if now - state["since"] > (IMMOBILITY_MIN_SEC / 2):
+            immobile_count += 1
+            if state.get("start_aspect_ratio", 1.0) > 1.5:  # Laying flat
+                prostrated_count += 1
+
+    immobility_ratio = immobile_count / max(1, count)
+    prostration_ratio = prostrated_count / max(1, count)
+
+    if prostration_ratio > 0.15 and count >= 4:
+        status = "PASSANDO_MAL"
+        message = "ALERTA CRITICO: Aves prostradas (possivel doenca, falta de ar ou exaustao)."
+    elif immobility_ratio > 0.35 and count >= 4:
+        status = "LETARGIA"
+        message = "Aviso: Alto numero de aves inativas. Verificar se precisam de algo (agua/racao ou desconforto global)."
+    elif dispersion_ratio < 0.15 and count >= 8:
         if is_cold_environment:
-            message = f"ALERTA PREDITIVO: Aves fortemente amontoadas e temperatura baixa ({current_temp}C). Risco de hipotermia/mortalidade."
+            status = "PRECISA_AQUECIMENTO"
+            message = f"IA: Aves amontoadas e tremendo devido ao frio ({current_temp}C). Risco de hipotermia/mortalidade."
         else:
-            message = "Aviso: aves amontoadas. Verifique possiveis correntes de ar frio locais."
+            status = "POSSIVEL_MEDO"
+            message = "IA: Aves amontoadas, mas temperatura normal. Verificar predadores, ruidos fortes ou agrupamento em comedouros."
     elif edge_ratio > 0.40 and dispersion_ratio > 0.18 and count >= 8:
-        status = "CALOR_COMPORTAMENTAL"
         if is_hot_environment:
-            message = f"ALERTA PREDITIVO: Aves nas bordas (dispersao extrema) e temperatura alta ({current_temp}C). Risco de estresse termico."
+            status = "PRECISA_VENTILACAO"
+            message = f"IA: Aves nas bordas e ofegantes, alta dispersao. Estresse termico grave pelo calor ({current_temp}C)."
         else:
-            message = "Aviso: aves espalhadas nas bordas. Possivel desordem no ambiente."
+            status = "FOME_SEDE"
+            message = "IA: Aves se espalhando erraticamente nas bordas e bicos buscando recursos."
 
     behavior_state.update(
         {
@@ -1415,7 +1435,7 @@ def _analyze_behavior(selected, frame_shape):
         behavior_state["last_alert_ts"] = now
         _log_event(
             event_type="behavior_alert",
-            level="high" if status == "CALOR_COMPORTAMENTAL" else "medium",
+            level="high" if status in ["PASSANDO_MAL", "PRECISA_VENTILACAO", "PRECISA_AQUECIMENTO"] else "medium",
             message=message,
             metadata={
                 "status": status,
@@ -1434,11 +1454,20 @@ def _update_immobility(selected):
         if uid < 0:
             continue
         tracked_uids.add(uid)
-        cx, cy, _ = _box_center_area(det["box"])
+        cx, cy, area = _box_center_area(det["box"])
+
+        # Calculate aspect ratio (width / height). Values >> 1 mean laying down/prostrated
+        x1, y1, x2, y2 = det["box"]
+        w = max(1, x2 - x1)
+        h = max(1, y2 - y1)
+        aspect_ratio = float(w) / float(h)
+
         state = immobility_state.get(uid)
         if state is None:
             immobility_state[uid] = {
                 "anchor": (cx, cy),
+                "start_area": area,
+                "start_aspect_ratio": aspect_ratio,
                 "since": now,
                 "last_seen": now,
                 "alerted": False,
@@ -1448,28 +1477,48 @@ def _update_immobility(selected):
 
         ax, ay = state["anchor"]
         dist = math.hypot(cx - ax, cy - ay)
+
         if dist <= IMMOBILITY_MOVE_PX:
             state["last_seen"] = now
         else:
             state["anchor"] = (cx, cy)
+            state["start_area"] = area
+            state["start_aspect_ratio"] = aspect_ratio
             state["since"] = now
             state["last_seen"] = now
             state["alerted"] = False
 
         stayed_sec = now - float(state["since"])
         since_last = now - float(state.get("last_alert_ts", 0.0))
+
         if stayed_sec >= IMMOBILITY_MIN_SEC and (not state["alerted"]) and since_last >= IMMOBILITY_ALERT_COOLDOWN_SEC:
+            # Check for prostration (passando mal) - significant change in aspect ratio or area while immobile
+            start_ar = state.get("start_aspect_ratio", aspect_ratio)
+            ar_change = aspect_ratio / max(0.01, start_ar)
+
+            is_prostrated = False
+            msg_prefix = "Possivel imobilidade"
+            level = "medium"
+
+            # If aspect ratio increased by 30% or is already very high (laying flat), and immobile -> sick/prostrated
+            if ar_change > 1.3 or aspect_ratio > 1.8:
+                is_prostrated = True
+                msg_prefix = "ALERTA CRITICO: Ave passando mal/prostrada"
+                level = "high"
+
             state["alerted"] = True
             state["last_alert_ts"] = now
             _log_event(
-                event_type="immobility_alert",
-                level="high",
-                message=f"Possivel imobilidade detectada na ave UID {uid}",
+                event_type="prostration_alert" if is_prostrated else "immobility_alert",
+                level=level,
+                message=f"{msg_prefix} detectada na ave UID {uid}.",
                 metadata={
                     "bird_uid": uid,
                     "x": cx,
                     "y": cy,
                     "immobile_seconds": round(stayed_sec, 1),
+                    "aspect_ratio": round(aspect_ratio, 2),
+                    "is_prostrated": is_prostrated
                 },
             )
 
