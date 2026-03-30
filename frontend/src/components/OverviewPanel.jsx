@@ -265,19 +265,12 @@ export default function OverviewPanel({ token, serverIP, prefs, canControlDevice
                 </div>
               </div>
             ) : videoBlocked ? (
-              <div className="text-center flex flex-col items-center justify-center h-full w-full bg-slate-950/90 p-6 sm:p-8 absolute inset-0 backdrop-blur-sm">
-                <AlertTriangle size={56} className="text-amber-500 mb-6 drop-shadow-md" />
-                <h2 className="text-xl sm:text-2xl font-bold text-white mb-3">Bloqueio de Tunnel Detectado</h2>
-                <p className="text-slate-400 text-sm mb-6 max-w-md">O provedor de tunnel bloqueou a reprodução direta. Abra a stream em uma nova aba.</p>
-                <a href={videoUrl} target="_blank" rel="noreferrer" className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 shadow-lg shadow-blue-600/20 transition-all hover:-translate-y-1">
-                  <ExternalLink size={20} /> Abrir Stream Externa
-                </a>
-              </div>
+              <img src={videoUrl} alt="Camera Fallback" className="absolute inset-0 w-full h-full object-contain z-0" />
             ) : showHeatmap24 ? (
               <img src={heatmap24Url} alt="Heatmap 24h" className="absolute inset-0 w-full h-full object-contain" />
             ) : (
               <>
-                <WebRTCVideo url={webrtcUrl} className="absolute inset-0 w-full h-full object-contain z-0" onConnectionStateChange={(state) => { if(state === 'failed' && (isTunnelHost(window.location.hostname) || isTunnelHost(serverIP))) setVideoBlocked(true); }} />
+                <WebRTCVideo url={webrtcUrl} token={token} className="absolute inset-0 w-full h-full object-contain z-0" onConnectionStateChange={(state) => { if(state === 'failed' || state === 'disconnected' || state === 'closed') { console.warn("WebRTC failed, falling back to MJPEG"); setVideoBlocked(true); } }} />
                 {showHeatmapOverlay && <HeatmapOverlay serverIP={serverIP} />}
               </>
             )}
