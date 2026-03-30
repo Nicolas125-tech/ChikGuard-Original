@@ -1399,7 +1399,25 @@ def _analyze_behavior(selected, frame_shape):
     immobility_ratio = immobile_count / max(1, count)
     prostration_ratio = prostrated_count / max(1, count)
 
-    if prostration_ratio > 0.15 and count >= 4:
+    # Calculate Panic / Flocking Rate (Sudden high velocity movement)
+    high_velocity_count = 0
+    total_velocity_measured = 0
+    PANIC_VELOCITY_THRESHOLD = max(w, h) * 0.10  # e.g., moving 10% of frame per second
+    for det in selected:
+        uid = int(det.get("stable_bird_uid", -1))
+        if uid >= 0 and uid in bird_last_state:
+            state = bird_last_state[uid]
+            v_mag = math.hypot(state.get("vx", 0), state.get("vy", 0))
+            if v_mag > PANIC_VELOCITY_THRESHOLD:
+                high_velocity_count += 1
+            total_velocity_measured += 1
+
+    panic_ratio = high_velocity_count / max(1, total_velocity_measured)
+
+    if panic_ratio > 0.30 and count >= 4:
+        status = "PANICO_AGITACAO"
+        message = "ALERTA CRITICO: Agitacao extrema (possivel ataque de predador ou barulho assustador)."
+    elif prostration_ratio > 0.15 and count >= 4:
         status = "PASSANDO_MAL"
         message = "ALERTA CRITICO: Aves prostradas (possivel doenca, falta de ar ou exaustao)."
     elif immobility_ratio > 0.35 and count >= 4:
@@ -1435,7 +1453,7 @@ def _analyze_behavior(selected, frame_shape):
         behavior_state["last_alert_ts"] = now
         _log_event(
             event_type="behavior_alert",
-            level="high" if status in ["PASSANDO_MAL", "PRECISA_VENTILACAO", "PRECISA_AQUECIMENTO"] else "medium",
+            level="high" if status in ["PASSANDO_MAL", "PANICO_AGITACAO", "PRECISA_VENTILACAO", "PRECISA_AQUECIMENTO"] else "medium",
             message=message,
             metadata={
                 "status": status,
