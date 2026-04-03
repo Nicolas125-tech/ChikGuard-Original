@@ -51,6 +51,7 @@ from src.api.reports_api import create_reports_blueprint
 from src.api.auth import create_auth_blueprint
 from src.api.devices import create_devices_blueprint
 from src.api.sensors_api import create_sensors_blueprint
+from src.api.sync_api import create_sync_blueprint
 
 from src.core.config import load_settings
 from src.core.logger import configure_logging
@@ -2552,6 +2553,7 @@ app.register_blueprint(create_api_blueprint(api_deps))
 app.register_blueprint(create_auth_blueprint(api_deps))
 app.register_blueprint(create_devices_blueprint(api_deps))
 app.register_blueprint(create_sensors_blueprint(api_deps))
+app.register_blueprint(create_sync_blueprint(api_deps))
 app.register_blueprint(create_reports_blueprint(api_deps))
 
 @app.route("/api/birds/live", methods=["GET"])
@@ -2828,41 +2830,6 @@ def audit_logs():
     limit = max(1, min(limit, 5000))
     rows = AuditLog.query.order_by(AuditLog.id.desc()).limit(limit).all()
     return jsonify({"count": len(rows), "items": [r.to_dict() for r in rows]})
-
-@app.route("/api/sync/status", methods=["GET"])
-def sync_status():
-    pending = SyncQueueItem.query.filter_by(status="pending").count()
-    synced = SyncQueueItem.query.filter_by(status="synced").count()
-    failed = SyncQueueItem.query.filter_by(status="failed").count()
-    return jsonify(
-        {
-            "pending": pending,
-            "synced": synced,
-            "failed": failed,
-            "cloud_sync_url_configured": bool(CLOUD_SYNC_URL),
-        }
-    )
-
-@app.route("/api/sync/pending", methods=["GET"])
-def sync_pending():
-    limit = request.args.get("limit", default=200, type=int)
-    limit = max(1, min(limit, 2000))
-    rows = SyncQueueItem.query.filter_by(status="pending").order_by(SyncQueueItem.id.asc()).limit(limit).all()
-    return jsonify({"count": len(rows), "items": [r.to_dict() for r in rows]})
-
-@app.route("/api/sync/ack", methods=["POST"])
-def sync_ack():
-    payload = request.get_json(silent=True) or {}
-    ids = payload.get("ids", [])
-    if not isinstance(ids, list) or not ids:
-        return jsonify({"msg": "Forneca lista de ids"}), 400
-    rows = SyncQueueItem.query.filter(SyncQueueItem.id.in_(ids)).all()
-    now = _utcnow()
-    for row in rows:
-        row.status = "synced"
-        row.synced_at = now
-    db.session.commit()
-    return jsonify({"msg": "Itens marcados como sincronizados", "count": len(rows)})
 
 @app.route("/api/voice/command", methods=["POST"])
 def voice_command():
