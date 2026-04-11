@@ -50,6 +50,12 @@ export default function LoginScreen({ serverIP, setServerIP, onBack, onLogin }) 
     setSuccessMsg('');
 
     if (isSignUp) {
+      if (!supabase.supabaseUrl) {
+        setError('Configuração do Supabase (Autenticação) está ausente neste ambiente.');
+        setLoading(false);
+        return;
+      }
+
       // Supabase Sign Up
       try {
         const { data, error: signUpError } = await supabase.auth.signUp({
@@ -68,7 +74,7 @@ export default function LoginScreen({ serverIP, setServerIP, onBack, onLogin }) 
             // Optional: you could auto-login here and set status to PENDING
             onLogin({
               accessToken: data.session?.access_token || 'temp-token',
-              role: 'VIEWER',
+              role: 'viewer',
               username: user,
               status: 'PENDING'
             });
@@ -97,7 +103,7 @@ export default function LoginScreen({ serverIP, setServerIP, onBack, onLogin }) 
                   // Login com sucesso no Supabase
                   onLogin({
                       accessToken: data.session.access_token,
-                      role: data.user.app_metadata?.role || 'VIEWER',
+                      role: String(data.user.app_metadata?.role || 'viewer').toLowerCase(),
                       username: data.user.email,
                       status: data.user.app_metadata?.status || 'ACTIVE'
                   });
@@ -116,6 +122,10 @@ export default function LoginScreen({ serverIP, setServerIP, onBack, onLogin }) 
   };
 
   const handleOAuthSignIn = async (provider) => {
+    if (!supabase.supabaseUrl) {
+      setError('Configuração do Supabase ausente para autenticação OAuth.');
+      return;
+    }
     setLoading(true);
     setError('');
     try {

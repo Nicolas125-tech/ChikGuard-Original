@@ -13,6 +13,22 @@ export default function WebRTCVideo({ url, className, onConnectionStateChange })
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
     };
     let pc = new RTCPeerConnection(config);
+    let timeoutId;
+    let fallbackTriggered = false;
+
+    const triggerFallback = () => {
+      if (!fallbackTriggered) {
+        fallbackTriggered = true;
+        if (callbackRef.current) {
+          callbackRef.current('failed');
+        }
+      }
+    };
+
+    timeoutId = setTimeout(() => {
+      console.warn("WebRTC Watchdog timeout: no connection established in 6s.");
+      triggerFallback();
+    }, 6000);
 
     const startWebRTC = async () => {
       pc.addTransceiver('video', { direction: 'recvonly' });
@@ -27,7 +43,10 @@ export default function WebRTCVideo({ url, className, onConnectionStateChange })
 
       pc.addEventListener('connectionstatechange', () => {
         console.log('WebRTC connection state:', pc.connectionState);
-        if (callbackRef.current) {
+        if (pc.connectionState === 'connected') {
+          clearTimeout(timeoutId);
+        }
+        if (callbackRef.current && !fallbackTriggered) {
           callbackRef.current(pc.connectionState);
         }
       });
@@ -75,12 +94,14 @@ export default function WebRTCVideo({ url, className, onConnectionStateChange })
         await pc.setRemoteDescription(answer);
       } catch (err) {
         console.error('WebRTC negotiation error:', err);
+        triggerFallback();
       }
     };
 
     startWebRTC();
 
     return () => {
+      clearTimeout(timeoutId);
       pc.close();
     };
   }, [url]);

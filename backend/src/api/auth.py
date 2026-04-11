@@ -78,7 +78,7 @@ def create_auth_blueprint(deps):
         data = request.get_json(silent=True) or {}
         if "role" in data:
             role = str(data.get("role", "")).strip().lower()
-            if role not in ("admin", "operator", "viewer"):
+            if role not in ("superadmin", "admin", "operator", "viewer"):
                 return jsonify({"msg": "role invalido"}), 400
             row.role = role
         if "active" in data:
@@ -107,7 +107,7 @@ def create_auth_blueprint(deps):
         permission = str(data.get("permission", "")).strip()
         allowed = bool(data.get("allowed", True))
 
-        if role not in ("admin", "operator", "viewer") or not permission:
+        if role not in ("superadmin", "admin", "operator", "viewer") or not permission:
             return jsonify({"msg": "role e permission sao obrigatorios"}), 400
 
         row = RolePermission.query.filter_by(role=role, permission=permission).first()

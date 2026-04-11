@@ -23,12 +23,12 @@ export default function App() {
 
   // Set up Supabase Auth state listener
   useEffect(() => {
-    if (!supabase.supabaseUrl) return;
+    if (!supabase.supabaseUrl || !supabase.auth) return;
 
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
         const accessToken = session.access_token;
-        const nextRole = session.user.app_metadata?.role || 'VIEWER';
+        const nextRole = String(session.user.app_metadata?.role || 'viewer').toLowerCase();
         const nextUser = session.user.email;
         const nextStatus = session.user.app_metadata?.status || 'PENDING'; // Default to PENDING for OAuth users until approved
 
@@ -69,7 +69,7 @@ export default function App() {
   }, []);
 
   const handleLogout = async () => {
-    if (supabase.supabaseUrl) {
+    if (supabase.supabaseUrl && supabase.auth) {
        await supabase.auth.signOut();
     }
 
@@ -138,7 +138,7 @@ export default function App() {
         setServerIP={saveServer}
         onBack={() => setShowLogin(false)}
         onLogin={({ accessToken, role: nextRole, username: nextUser, status: nextStatus }) => {
-          const safeRole = nextRole || 'admin';
+          const safeRole = String(nextRole || 'admin').toLowerCase();
           localStorage.setItem(STORAGE.token, accessToken);
           localStorage.setItem(STORAGE.role, safeRole);
           localStorage.setItem(STORAGE.username, nextUser || '');
