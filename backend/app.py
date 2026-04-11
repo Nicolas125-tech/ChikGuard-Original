@@ -574,8 +574,11 @@ def _account_has_permission(account, permission):
 def _require_permission(permission):
     account = _get_current_account()
     if not _account_has_permission(account, permission):
-        _audit("permission_denied", source="security", details={"permission": permission, "actor": account.username if account else None})
-        return False, (jsonify({"msg": f"Permissao negada: {permission}"}), 403)
+        actor_name = account.username if account is not None else "<no_account>"
+        LOGGER.warning("[PERM] denied '%s' to '%s' (account_found=%s)", permission, actor_name, account is not None)
+        _audit("permission_denied", source="security", details={"permission": permission, "actor": actor_name})
+        msg = "Token invalido ou sessao expirada" if account is None else f"Permissao negada: {permission}"
+        return False, (jsonify({"msg": msg}), 403 if account is not None else 401)
     return True, None
 
 def _audit(action, source="backend", details=None, actor=None):
