@@ -143,7 +143,7 @@ export default function LoginScreen({ serverIP, setServerIP, onBack, onLogin }) 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: provider,
         options: {
-          redirectTo: import.meta.env.VITE_SITE_URL || window.location.origin
+          redirectTo: window.location.origin
         }
       });
       if (error) setError(error.message);

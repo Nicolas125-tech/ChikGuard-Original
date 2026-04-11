@@ -555,12 +555,12 @@ def _guard_critical_action(action_name, permission=None):
 def _get_current_account():
     try:
         verify_jwt_in_request(optional=True)
-        username = get_jwt_identity()
+        identity = get_jwt_identity()
     except Exception:
-        username = None
-    if not username:
+        identity = None
+    if not identity:
         return None
-    return Account.query.filter_by(username=str(username)).first()
+    return Account.query.filter_by(id=int(identity)).first()
 
 def _account_has_permission(account, permission):
     if account is None or not account.active:

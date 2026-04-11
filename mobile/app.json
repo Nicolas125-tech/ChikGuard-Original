@@ -3,6 +3,7 @@
     "name": "ChickGuard Mobile",
     "slug": "mobile",
     "version": "1.0.0",
+    "scheme": "chickguard",
     "platforms": [
       "ios",
       "android",

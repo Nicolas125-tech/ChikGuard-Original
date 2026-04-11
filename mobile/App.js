@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   StyleSheet, Text, View, TextInput, TouchableOpacity,
-  SafeAreaView, StatusBar, ScrollView, ActivityIndicator, Alert, Linking, Image, Platform
+  SafeAreaView, StatusBar, ScrollView, ActivityIndicator, Alert, Linking, Image, Platform, BackHandler
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WebView } from 'react-native-webview';
@@ -892,6 +892,19 @@ export default function App() {
   }, [isViewer, allowedTabs, activeTab]);
 
   useEffect(() => {
+    const onBackPress = () => {
+      if (!token) return false; // Not logged in, let default behavior happen
+      if (activeTab !== 'monitor') {
+        setActiveTab('monitor');
+        return true; // prevent default behavior (app exit)
+      }
+      return false; // already on home tab, exit app
+    };
+    BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => BackHandler.removeEventListener('hardwareBackPress', onBackPress);
+  }, [activeTab, token]);
+
+  useEffect(() => {
     if (accessMode === 'viewer' && !user) {
       setUser('visitante');
     }
@@ -962,10 +975,11 @@ export default function App() {
     setLoadingLogin(true);
     try {
       if (!supabase.supabaseUrl) throw new Error('Supabase nao configurado');
+      const redirectUrl = Linking.createURL('');
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: "exp://127.0.0.1:19000",
+          redirectTo: redirectUrl,
         }
       });
       if (error) throw error;

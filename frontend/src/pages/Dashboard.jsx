@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   LayoutDashboard, Bird, SlidersHorizontal, Activity, Database, Bell, History, Cpu, Settings, LogOut
 } from 'lucide-react';
@@ -14,7 +14,26 @@ import SettingsPanel from '../components/SettingsPanel';
 import AdminPanel from '../components/AdminPanel';
 
 export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, onSaveServer, onLogout }) {
-  const [tab, setTab] = useState('overview');
+  const [tab, setTab] = useState(() => {
+    const hash = window.location.hash.replace('#', '');
+    return hash || 'overview';
+  });
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '');
+      setTab(hash || 'overview');
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  const handleTabChange = (newTab) => {
+    if (window.location.hash !== `#${newTab}`) {
+      window.location.hash = newTab;
+    }
+  };
+
   const tabs = useMemo(() => {
     const allTabs = [
       { id: 'overview', label: 'Visao Geral', icon: LayoutDashboard },
@@ -68,7 +87,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
             return (
               <button
                 key={item.id}
-                onClick={() => setTab(item.id)}
+                onClick={() => handleTabChange(item.id)}
                 className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap flex flex-row items-center gap-2 transition-all duration-200 border shadow-sm ${
                   isActive
                     ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 ring-1 ring-emerald-500/20'
