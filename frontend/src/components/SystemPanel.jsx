@@ -6,24 +6,29 @@ export default function SystemPanel({ serverIP, prefs }) {
   const [info, setInfo] = useState(null);
   const [summary, setSummary] = useState(null);
   const baseUrl = getBaseUrl(serverIP);
+  const pollMs = prefs?.statusMs || 5000;
 
   const loadSystem = useCallback(async () => {
-    const [infoRes, summaryRes] = await Promise.all([
-      fetch(`${baseUrl}/api/system-info`),
-      fetch(`${baseUrl}/api/summary`),
-    ]);
-    if (infoRes.ok) setInfo(await infoRes.json());
-    if (summaryRes.ok) setSummary(await summaryRes.json());
+    try {
+      const [infoRes, summaryRes] = await Promise.all([
+        fetch(`${baseUrl}/api/system-info`),
+        fetch(`${baseUrl}/api/summary`),
+      ]);
+      if (infoRes.ok) setInfo(await infoRes.json());
+      if (summaryRes.ok) setSummary(await summaryRes.json());
+    } catch (e) {
+      // Network error - keep previous state, do not crash
+    }
   }, [baseUrl]);
 
   useEffect(() => {
     const bootstrap = setTimeout(loadSystem, 0);
-    const timer = setInterval(loadSystem, prefs.statusMs);
+    const timer = setInterval(loadSystem, pollMs);
     return () => {
       clearTimeout(bootstrap);
       clearInterval(timer);
     };
-  }, [loadSystem, prefs.statusMs]);
+  }, [loadSystem, pollMs]);
 
   const uptime = info ? `${Math.floor(info.uptime_seconds / 3600)}h ${Math.floor((info.uptime_seconds % 3600) / 60)}m` : '--';
 
