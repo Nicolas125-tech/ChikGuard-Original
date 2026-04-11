@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { getBaseUrl } from '../utils/config';
 
 export default function AdminPanel({ token, serverIP }) {
   const [pendingUsers, setPendingUsers] = useState([]);
@@ -8,7 +9,7 @@ export default function AdminPanel({ token, serverIP }) {
   const fetchPendingUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`http://${serverIP}:5000/api/admin/pending-users`, {
+      const res = await fetch(`${getBaseUrl(serverIP)}/api/admin/pending-users`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -37,7 +38,7 @@ export default function AdminPanel({ token, serverIP }) {
     if (!confirmApproval) return;
 
     try {
-      const res = await fetch(`http://${serverIP}:5000/api/admin/approve-user`, {
+      const res = await fetch(`${getBaseUrl(serverIP)}/api/admin/approve-user`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

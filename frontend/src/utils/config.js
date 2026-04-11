@@ -19,7 +19,13 @@ export const getBaseUrl = (ipOrUrl) => {
   if (isTunnelHost(window.location.hostname)) return window.location.origin;
   if (!ipOrUrl) return 'http://127.0.0.1:5000';
   const clean = ipOrUrl.replace(/\/$/, '');
+  
   if (clean.startsWith('http://') || clean.startsWith('https://')) return clean;
+  
+  if (/(trycloudflare|cfargotunnel|ngrok|onrender|herokuapp|vercel\.app)/i.test(clean)) {
+    return `https://${clean}`;
+  }
+  
   return `http://${clean}:5000`;
 };
 

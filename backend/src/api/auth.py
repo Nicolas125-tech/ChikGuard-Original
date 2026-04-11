@@ -160,12 +160,24 @@ def create_auth_blueprint(deps):
         if not target_user_id:
             return jsonify({"msg": "target_user_id é obrigatorio"}), 400
 
+        from sqlalchemy import text
+        try:
+            sql = text("UPDATE profiles SET status = 'ACTIVE', role = :r, approved_at = now() WHERE id = :uid RETURNING id")
+            res = db.session.execute(sql, {"r": target_role, "uid": target_user_id}).fetchone()
+            db.session.commit()
+            if res:
+                audit("iam_user_approved", source="security_db", details={"target_user_id": target_user_id, "role": target_role})
+                return jsonify({"message": "User approved successfully", "data": {"id": target_user_id}}), 200
+        except Exception as e:
+            db.session.rollback()
+            print("Direct DB Update Failed (trying Supabase REST Admin):", e)
+
         try:
             SUPABASE_URL = os.environ.get("SUPABASE_URL")
             SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 
-            if not SUPABASE_URL or not SUPABASE_KEY:
-                return jsonify({"msg": "Supabase credenciais ausentes no backend"}), 500
+            if not SUPABASE_URL or not SUPABASE_KEY or SUPABASE_KEY == "YOUR_SUPABASE_SERVICE_ROLE_KEY_HERE":
+                return jsonify({"msg": "Supabase credenciais REST ausentes e DB direta falhou"}), 500
 
             supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
