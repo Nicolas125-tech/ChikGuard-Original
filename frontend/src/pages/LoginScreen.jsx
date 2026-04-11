@@ -101,11 +101,22 @@ export default function LoginScreen({ serverIP, setServerIP, onBack, onLogin }) 
                   await handleLegacyLogin();
               } else if (data?.session) {
                   // Login com sucesso no Supabase
+                  let finalRole = String(data.user.app_metadata?.role || 'viewer').toLowerCase();
+                  let finalStatus = data.user.app_metadata?.status || 'ACTIVE';
+
+                  try {
+                      const { data: profile } = await supabase.from('profiles').select('role, status').eq('id', data.user.id).single();
+                      if (profile) {
+                          if (profile.role) finalRole = String(profile.role).toLowerCase();
+                          if (profile.status) finalStatus = profile.status;
+                      }
+                  } catch (e) {}
+
                   onLogin({
                       accessToken: data.session.access_token,
-                      role: String(data.user.app_metadata?.role || 'viewer').toLowerCase(),
+                      role: finalRole,
                       username: data.user.email,
-                      status: data.user.app_metadata?.status || 'ACTIVE'
+                      status: finalStatus
                   });
               }
           } catch {

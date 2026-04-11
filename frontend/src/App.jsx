@@ -25,12 +25,21 @@ export default function App() {
   useEffect(() => {
     if (!supabase.supabaseUrl || !supabase.auth) return;
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
-        const accessToken = session.access_token;
-        const nextRole = String(session.user.app_metadata?.role || 'viewer').toLowerCase();
-        const nextUser = session.user.email;
-        const nextStatus = session.user.app_metadata?.status || 'PENDING'; // Default to PENDING for OAuth users until approved
+        let accessToken = session.access_token;
+        let nextRole = String(session.user.app_metadata?.role || 'viewer').toLowerCase();
+        let nextUser = session.user.email;
+        let nextStatus = session.user.app_metadata?.status || 'PENDING'; // Default to PENDING for OAuth users until approved
+
+        // Fetch real status from profiles incase app_metadata is stale
+        try {
+          const { data: profile } = await supabase.from('profiles').select('role, status').eq('id', session.user.id).single();
+          if (profile) {
+              if (profile.role) nextRole = String(profile.role).toLowerCase();
+              if (profile.status) nextStatus = profile.status;
+          }
+        } catch (e) {}
 
         localStorage.setItem(STORAGE.token, accessToken);
         localStorage.setItem(STORAGE.role, nextRole);
