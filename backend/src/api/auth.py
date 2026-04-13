@@ -286,21 +286,33 @@ def create_auth_blueprint(deps):
 
         audit("login_success", source="security", details={"ip": ip}, actor=account.username)
 
-        # Verifica o status no Supabase profiles se configurado
-        # Fail closed: Utilizadores normais comecam como PENDING por defeito
+        # Verifica o status no Supabase profiles se configurado.
+        # REGRA: contas admin/superadmin locais são sempre ACTIVE.
+        # Para outros roles, tenta buscar o status real no Supabase (apenas se o
+        # username for um e-mail — contas locais como "admin" não existem no Supabase).
         status = "PENDING" if account.role not in ["admin", "superadmin"] else "ACTIVE"
 
         try:
             SUPABASE_URL = os.environ.get("SUPABASE_URL")
             SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-            if SUPABASE_URL and SUPABASE_KEY:
-                supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-                # RPC segura (bypassa a limitacao de public rest)
-                resp = supabase.rpc("get_user_status_by_email", {"user_email": account.username}).execute()
-                if resp.data:
-                    status = resp.data
+            is_email_login = "@" in account.username
+            if SUPABASE_URL and SUPABASE_KEY and is_email_login:
+                supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+                resp = supabase_client.rpc(
+                    "get_user_status_by_email", {"user_email": account.username}
+                ).execute()
+                # Só sobrescreve se o Supabase devolver um valor válido e diferente
+                # de PENDING para contas privilegiadas (evita regressão)
+                supabase_status = resp.data if resp.data else None
+                if supabase_status in ("ACTIVE", "SUSPENDED", "PENDING"):
+                    # Não regride admin/superadmin para PENDING por problema de sync
+                    if account.role in ("admin", "superadmin") and supabase_status == "PENDING":
+                        pass  # mantém ACTIVE
+                    else:
+                        status = supabase_status
         except Exception as e:
-            print(f"Supabase sync error: {e}")
+            print(f"Supabase sync error (non-critical): {e}")
+
 
         access_token = create_access_token(
             identity=str(account.id),
