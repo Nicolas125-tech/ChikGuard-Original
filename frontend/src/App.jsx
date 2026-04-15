@@ -94,7 +94,7 @@ function AppCore() {
             if (profile.role) nextRole = String(profile.role).toLowerCase();
             if (profile.status) nextStatus = profile.status;
           }
-        } catch (_) {
+        } catch {
           // Profile ainda não existe — usar valores padrão
         }
 
@@ -136,7 +136,11 @@ function AppCore() {
 
   const handleLogout = async () => {
     if (isSupabaseConfigured) {
-      await supabase.auth.signOut();
+      try {
+        await supabase.auth.signOut();
+      } catch (err) {
+        console.error('Erro ao fazer signOut do Supabase:', err);
+      }
     }
     localStorage.removeItem(STORAGE.token);
     localStorage.removeItem(STORAGE.role);
@@ -145,6 +149,7 @@ function AppCore() {
     setToken(null);
     setRole('admin');
     setStatus('ACTIVE');
+    setShowLogin(false);
   };
 
   const tvMode = window.location.pathname === '/tv';

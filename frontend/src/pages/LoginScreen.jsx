@@ -129,7 +129,7 @@ export default function LoginScreen({ serverIP, setServerIP, onBack, onLogin }) 
               if (profile.role) finalRole = String(profile.role).toLowerCase();
               if (profile.status) finalStatus = profile.status;
             }
-          } catch (_) {
+          } catch {
             // Profile ainda não criado — manter valores de app_metadata
           }
 
