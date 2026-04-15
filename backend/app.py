@@ -1981,9 +1981,10 @@ def detectar_objetos(frame):
     selected = []
     if MODO_DETECCAO == "aves":
         target_name = BIRD_CLASS_NAME.strip().lower()
+        allowed_names = {target_name, "bird", "ave", "chicken", "galinha", "frango", "chick", "pintinho"}
         for det in detections:
             class_name = _class_name_by_id(det["class_id"]).lower()
-            if class_name != target_name:
+            if class_name not in allowed_names:
                 continue
             x1, y1, x2, y2 = det["box"]
             area = max(0, x2 - x1) * max(0, y2 - y1)
