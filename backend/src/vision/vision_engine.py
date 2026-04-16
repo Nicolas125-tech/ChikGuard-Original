@@ -24,6 +24,7 @@ class VisionEngine:
         self.clahe = cv2.createCLAHE(
             clipLimit=2.0, tileGridSize=(
                 8, 8)) if use_clahe else None
+        self.model = None
         self._load_model()
 
     def _load_model(self):
