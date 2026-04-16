@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import SystemCard from './SystemCard';
 import { getBaseUrl } from '../utils/config';
+import { useAppStore } from '../store';
 
 export default function SystemPanel({ serverIP, prefs }) {
-  const [info, setInfo] = useState(null);
+  const { systemInfo: info, setSystemInfo: setInfo } = useAppStore();
   const [summary, setSummary] = useState(null);
   const baseUrl = getBaseUrl(serverIP);
   const pollMs = prefs?.statusMs || 5000;
@@ -22,12 +23,9 @@ export default function SystemPanel({ serverIP, prefs }) {
   }, [baseUrl]);
 
   useEffect(() => {
-    const bootstrap = setTimeout(loadSystem, 0);
-    const timer = setInterval(loadSystem, pollMs);
-    return () => {
-      clearTimeout(bootstrap);
-      clearInterval(timer);
-    };
+    loadSystem();
+
+
   }, [loadSystem, pollMs]);
 
   const uptime = info ? `${Math.floor(info.uptime_seconds / 3600)}h ${Math.floor((info.uptime_seconds % 3600) / 60)}m` : '--';

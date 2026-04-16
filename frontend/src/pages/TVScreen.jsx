@@ -21,19 +21,20 @@ export default function TVScreen({ serverIP, showHeader = false, onLogout }) {
   }, [baseUrl]);
 
   useEffect(() => {
-    const bootstrap = setTimeout(load, 0);
-    const timer = setInterval(load, 4000);
+    load();
 
-    // WebSocket listener for instant updates
     const socket = io(baseUrl);
+
+    socket.on('telemetry_update', () => {
+      load();
+    });
+
     socket.on('new_alert', (data) => {
       console.log('Socket event received (TVScreen):', data);
       load();
     });
 
     return () => {
-      clearTimeout(bootstrap);
-      clearInterval(timer);
       socket.disconnect();
     };
   }, [load, baseUrl]);

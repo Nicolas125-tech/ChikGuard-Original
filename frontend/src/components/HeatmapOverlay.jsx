@@ -19,10 +19,10 @@ export default function HeatmapOverlay({ serverIP }) {
 
   useEffect(() => {
     const bootstrap = setTimeout(fetchHeatmapData, 0);
-    const interval = setInterval(fetchHeatmapData, 5000);
+
     return () => {
       clearTimeout(bootstrap);
-      clearInterval(interval);
+
     };
   }, [fetchHeatmapData]);
 

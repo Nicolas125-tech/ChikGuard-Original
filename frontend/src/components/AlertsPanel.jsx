@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { getBaseUrl } from '../utils/config';
+import { useAppStore } from '../store';
 
-export default function AlertsPanel({ serverIP, prefs }) {
-  const [alerts, setAlerts] = useState([]);
+export default function AlertsPanel({ serverIP }) {
+  const { alerts, setAlerts } = useAppStore();
   const [loading, setLoading] = useState(true);
   const baseUrl = getBaseUrl(serverIP);
 
@@ -19,9 +20,7 @@ export default function AlertsPanel({ serverIP, prefs }) {
 
   useEffect(() => {
     loadAlerts();
-    const timer = setInterval(loadAlerts, prefs.statusMs);
 
-    // WebSocket listener for instant alert updates
     const socket = io(baseUrl);
     socket.on('new_alert', (data) => {
       console.log('Socket event received (AlertsPanel):', data);
@@ -29,10 +28,9 @@ export default function AlertsPanel({ serverIP, prefs }) {
     });
 
     return () => {
-      clearInterval(timer);
       socket.disconnect();
     };
-  }, [loadAlerts, prefs.statusMs, baseUrl]);
+  }, [loadAlerts, baseUrl]);
 
   if (loading) {
     return <div className="text-slate-400 p-4">Carregando alertas...</div>;

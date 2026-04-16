@@ -1,3 +1,4 @@
+import { io } from 'socket.io-client';
 import React, { useState, useEffect, useCallback } from 'react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import SystemCard from './SystemCard';
@@ -65,12 +66,15 @@ export default function ManagementPanel({ serverIP, prefs }) {
   };
 
   useEffect(() => {
-    const bootstrap = setTimeout(loadManagement, 0);
-    const timer = setInterval(loadManagement, prefs.historyMs);
-    return () => {
-      clearTimeout(bootstrap);
-      clearInterval(timer);
-    };
+    const _bootstrap = setTimeout(loadManagement, 0);
+
+
+    const socket = io(baseUrl);
+    socket.on('telemetry_update', () => {
+      loadManagement();
+    });
+    return () => socket.disconnect();
+
   }, [loadManagement, prefs.historyMs]);
 
   return (
@@ -142,7 +146,7 @@ export default function ManagementPanel({ serverIP, prefs }) {
                     {audioFile ? <span className="text-emerald-400 font-medium">{audioFile.name}</span> : 'Selecionar arquivo de áudio'}
                   </div>
                 </div>
-                <button onClick={classifyAudio} disabled={!audioFile} className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-lg font-bold shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap">
+                <button onClick={classifyAudio} disabled={!audioFile} className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-lg font-bold shadow-sm shadow-emerald-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap">
                   Analisar
                 </button>
               </div>
@@ -161,7 +165,7 @@ export default function ManagementPanel({ serverIP, prefs }) {
               </span>
               Anomalias Térmicas
             </h3>
-            <span className="bg-rose-500 text-white font-bold px-3 py-1 rounded-full text-sm shadow-md">{thermal.count || 0}</span>
+            <span className="bg-rose-500 text-white font-bold px-3 py-1 rounded-full text-sm shadow-sm">{thermal.count || 0}</span>
           </div>
           <p className="text-sm text-slate-400 mb-4 bg-slate-950/60 p-3 rounded-xl border border-slate-800 flex items-center gap-2">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500"><path d="m21.21 15.89-9-13a2 2 0 0 0-3.32 0l-9 13a2 2 0 0 0 1.66 3.1h18.66a2 2 0 0 0 1.66-3.1z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>

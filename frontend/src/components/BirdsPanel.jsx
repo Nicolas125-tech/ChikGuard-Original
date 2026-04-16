@@ -27,8 +27,8 @@ export default function BirdsPanel({ token, serverIP, prefs }) {
 
   useEffect(() => {
     loadBirds();
-    const timer = setInterval(loadBirds, prefs.countMs);
-    return () => clearInterval(timer);
+
+
   }, [loadBirds, prefs.countMs]);
 
   if (loading) {

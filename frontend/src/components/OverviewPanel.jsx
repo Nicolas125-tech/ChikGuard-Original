@@ -8,14 +8,12 @@ import * as XLSX from 'xlsx';
 import { getBaseUrl } from '../utils/config';
 import WebRTCVideo from './WebRTCVideo';
 import HeatmapOverlay from './HeatmapOverlay';
+import { useAppStore } from '../store';
 
 export default function OverviewPanel({ token, serverIP, prefs, canControlDevices }) {
-  const [dados, setDados] = useState(null);
+  const { status: dados, devices: dispositivos, count: contagem, updateTelemetry, history: historico, setHistory } = useAppStore();
   const [erro, setErro] = useState(false);
   const [videoBlocked, setVideoBlocked] = useState(false);
-  const [historico, setHistorico] = useState([]);
-  const [dispositivos, setDispositivos] = useState({ ventilacao: false, aquecedor: false });
-  const [contagem, setContagem] = useState(0);
   const [showHeatmap24, setShowHeatmap24] = useState(false);
   const [carcass, setCarcass] = useState({ count: 0, audio_alert: false, items: [] });
   const [summary, setSummary] = useState(null);
@@ -26,22 +24,13 @@ export default function OverviewPanel({ token, serverIP, prefs, canControlDevice
   const webrtcUrl = `${baseUrl}/api/webrtc/offer`;
   const heatmap24Url = `${baseUrl}/api/heatmap/rolling24/image?hours=24&t=${Date.now()}`;
 
-  const fetchStatus = useCallback(async () => {
-    try {
-      const r = await fetch(`${baseUrl}/api/status`, { headers: { Authorization: `Bearer ${token}` } });
-      if (!r.ok) throw new Error();
-      setDados(await r.json());
-      setErro(false);
-    } catch {
-      setErro(true);
-    }
-  }, [baseUrl, token]);
+
 
   const fetchHistory = useCallback(async () => {
     try {
       const r = await fetch(`${baseUrl}/api/history`, { headers: { Authorization: `Bearer ${token}` } });
       if (!r.ok) throw new Error('History fetch failed');
-      setHistorico(await r.json());
+      setHistory(await r.json());
     } catch {
       setErro(true);
     }
@@ -51,22 +40,13 @@ export default function OverviewPanel({ token, serverIP, prefs, canControlDevice
     try {
       const r = await fetch(`${baseUrl}/api/estado-dispositivos`, { headers: { Authorization: `Bearer ${token}` } });
       if (!r.ok) throw new Error('Device state fetch failed');
-      setDispositivos(await r.json());
+      updateTelemetry({ devices: await r.json() });
     } catch {
       setErro(true);
     }
   }, [baseUrl, token]);
 
-  const fetchCount = useCallback(async () => {
-    try {
-      const r = await fetch(`${baseUrl}/api/chick_count`, { headers: { Authorization: `Bearer ${token}` } });
-      if (!r.ok) throw new Error('Count fetch failed');
-      const data = await r.json();
-      setContagem(data.count || 0);
-    } catch {
-      setErro(true);
-    }
-  }, [baseUrl, token]);
+
 
   const fetchCarcassAndSummary = useCallback(async () => {
     try {
@@ -82,27 +62,34 @@ export default function OverviewPanel({ token, serverIP, prefs, canControlDevice
   }, [baseUrl, token]);
 
   useEffect(() => {
-    fetchStatus(); fetchHistory(); fetchDevices(); fetchCount(); fetchCarcassAndSummary();
-    const a = setInterval(fetchStatus, prefs.statusMs);
-    const b = setInterval(fetchHistory, prefs.historyMs);
-    const c = setInterval(fetchDevices, prefs.devicesMs);
-    const d = setInterval(fetchCount, prefs.countMs);
-    const e = setInterval(fetchCarcassAndSummary, prefs.statusMs);
+    fetchHistory();
+    fetchCarcassAndSummary();
 
     const socket = io(baseUrl);
-    socket.on('new_alert', (data) => {
-      console.log('Socket event received (OverviewPanel):', data);
-      fetchStatus();
-      fetchCount();
-      fetchCarcassAndSummary();
-      fetchHistory();
+    socket.on('telemetry_update', (data) => {
+      updateTelemetry(data);
+      setErro(false);
     });
 
+    socket.on('new_alert', (data) => {
+      console.log('Socket alert received:', data);
+      fetchHistory();
+      fetchCarcassAndSummary();
+    });
+
+    socket.on('connect_error', () => {
+      setErro(true);
+    });
+
+
+
+
     return () => {
-      clearInterval(a); clearInterval(b); clearInterval(c); clearInterval(d); clearInterval(e);
+
+
       socket.disconnect();
     };
-  }, [fetchStatus, fetchHistory, fetchDevices, fetchCount, fetchCarcassAndSummary, prefs, baseUrl]);
+  }, [fetchHistory, fetchCarcassAndSummary, prefs, baseUrl, updateTelemetry]);
 
   const exportToPDF = async () => {
     const el = document.getElementById('overview-panel-content');
@@ -169,7 +156,7 @@ export default function OverviewPanel({ token, serverIP, prefs, canControlDevice
   return (
     <div id="overview-panel-content" className="grid gap-6 grid-cols-1 lg:grid-cols-3 relative">
       <div className="flex sm:absolute sm:-top-16 sm:right-0 gap-3 z-10 mb-4 sm:mb-0">
-        <button onClick={exportToPDF} className="flex-1 sm:flex-none justify-center bg-slate-800 border border-slate-700 hover:bg-slate-700 font-medium px-4 py-2 rounded-xl flex items-center gap-2 shadow-sm transition-colors text-sm text-slate-200">
+        <button onClick={exportToPDF} className="flex-1 sm:flex-none justify-center bg-slate-900 border border-slate-800 hover:bg-slate-700 font-medium px-4 py-2 rounded-xl flex items-center gap-2 shadow-sm transition-colors text-sm text-slate-200">
           PDF
         </button>
         <button onClick={exportToExcel} className="flex-1 sm:flex-none justify-center bg-emerald-600/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-600/40 font-medium px-4 py-2 rounded-xl flex items-center gap-2 shadow-sm transition-colors text-sm">
@@ -247,10 +234,10 @@ export default function OverviewPanel({ token, serverIP, prefs, canControlDevice
           <div className="p-3 sm:p-4 border-b border-slate-800/80 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-950/80 backdrop-blur-md absolute top-0 left-0 right-0 z-20 gap-3 sm:gap-0">
             <h3 className="font-bold text-slate-200 flex items-center gap-2 text-sm uppercase tracking-wider"><Maximize size={16} className="text-emerald-400" /> Transmissao da camera</h3>
             <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-              <button onClick={() => setShowHeatmapOverlay((v) => !v)} className="flex-1 sm:flex-none justify-center text-xs font-semibold bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 rounded-lg px-3 py-1.5 transition-colors">
+              <button onClick={() => setShowHeatmapOverlay((v) => !v)} className="flex-1 sm:flex-none justify-center text-xs font-semibold bg-slate-900 border border-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg px-3 py-1.5 transition-colors">
                 {showHeatmapOverlay ? 'Ocultar Heatmap' : 'Mostrar Heatmap'}
               </button>
-              <button onClick={() => setShowHeatmap24((v) => !v)} className="flex-1 sm:flex-none justify-center text-xs font-semibold bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 rounded-lg px-3 py-1.5 transition-colors">
+              <button onClick={() => setShowHeatmap24((v) => !v)} className="flex-1 sm:flex-none justify-center text-xs font-semibold bg-slate-900 border border-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg px-3 py-1.5 transition-colors">
                 {showHeatmap24 ? 'Mostrar Video' : 'Heatmap 24h'}
               </button>
             </div>

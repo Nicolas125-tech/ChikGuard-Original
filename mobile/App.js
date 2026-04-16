@@ -13,6 +13,8 @@ import { supabase } from './supabaseClient';
 import * as WebBrowser from 'expo-web-browser';
 WebBrowser.maybeCompleteAuthSession();
 import AdminPanel from './AdminPanel';
+import { useAppStore } from './store';
+import { io } from 'socket.io-client';
 import { 
   Thermometer, Activity, CheckCircle, 
   Settings, Save, Zap, Wind, LayoutDashboard, History, LogOut, User, Key, Bird, Bell, Cpu, Database, AlertTriangle
@@ -216,7 +218,8 @@ const MonitorScreen = ({ serverUrl, dados, loading, chickCount, dispositivos, co
 
 // 2. TELA DE HISTÓRICO
 const HistoryScreen = ({ serverUrl }) => {
-  const [history, setHistory] = useState([]);
+  const history = useAppStore(state => state.history);
+  const setHistory = useAppStore(state => state.setHistory);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -295,9 +298,8 @@ const BirdsScreen = ({ serverUrl, enviarComandoVoz }) => {
 
   useEffect(() => {
     loadBirds();
-    const timer = setInterval(loadBirds, 2500);
-    return () => clearInterval(timer);
-  }, [loadBirds]);
+
+    }, [loadBirds]);
 
   useEffect(() => {
     if (selectedBird !== null) {
@@ -370,7 +372,8 @@ const BirdsScreen = ({ serverUrl, enviarComandoVoz }) => {
 
 // 2.1 TELA DE ALERTAS
 const AlertsScreen = ({ serverUrl }) => {
-  const [alerts, setAlerts] = useState([]);
+  const alerts = useAppStore(state => state.alerts);
+  const setAlerts = useAppStore(state => state.setAlerts);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -386,9 +389,8 @@ const AlertsScreen = ({ serverUrl }) => {
       }
     };
     fetchAlerts();
-    const timer = setInterval(fetchAlerts, 3000);
-    return () => clearInterval(timer);
-  }, [serverUrl]);
+
+    }, [serverUrl]);
 
   return (
     <View style={styles.container}>
@@ -412,7 +414,8 @@ const AlertsScreen = ({ serverUrl }) => {
 // 2.2 TELA DE SISTEMA
 const SystemScreen = ({ serverUrl }) => {
   const [summary, setSummary] = useState(null);
-  const [systemInfo, setSystemInfo] = useState(null);
+  const systemInfo = useAppStore(state => state.systemInfo);
+  const setSystemInfo = useAppStore(state => state.setSystemInfo);
 
   useEffect(() => {
     const load = async () => {
@@ -428,9 +431,8 @@ const SystemScreen = ({ serverUrl }) => {
       }
     };
     load();
-    const timer = setInterval(load, 3000);
-    return () => clearInterval(timer);
-  }, [serverUrl]);
+
+    }, [serverUrl]);
 
   const uptime = systemInfo ? `${Math.floor(systemInfo.uptime_seconds / 3600)}h ${Math.floor((systemInfo.uptime_seconds % 3600) / 60)}m` : "--";
 
@@ -493,9 +495,8 @@ const SmartOpsScreen = ({ serverUrl, token }) => {
 
   useEffect(() => {
     loadSmartData();
-    const timer = setInterval(loadSmartData, 3000);
-    return () => clearInterval(timer);
-  }, [loadSmartData]);
+
+    }, [loadSmartData]);
 
   const toggleAutoMode = async () => {
     try {
@@ -706,9 +707,8 @@ const ManagementScreen = ({ serverUrl }) => {
 
   useEffect(() => {
     load();
-    const timer = setInterval(load, 5000);
-    return () => clearInterval(timer);
-  }, [load]);
+
+    }, [load]);
 
   if (loading) {
     return <View style={styles.container}><ActivityIndicator size="large" color="#10b981" /></View>;
@@ -910,65 +910,23 @@ export default function App() {
     }
   }, [accessMode, user]);
 
-  // Polling de dados (Só roda se estiver logado e na aba monitor)
+  // Conexão WebSocket Global
   useEffect(() => {
-  if (token && normalizedServerUrl && activeTab === 'monitor') {
-      const fetchStatus = async () => {
-        try {
-          const res = await fetch(`${normalizedServerUrl}/api/status`);
-          const json = await res.json();
-          setDados(json);
-          setIsOffline(false);
-          await AsyncStorage.setItem('offline_dados', JSON.stringify(json));
-        } catch (e) {
-          setIsOffline(true);
-          const local = await AsyncStorage.getItem('offline_dados');
-          if (local) setDados(JSON.parse(local));
-        }
-      };
+    if (token && normalizedServerUrl) {
+      const socket = io(normalizedServerUrl);
 
-      const fetchChickCount = async () => {
-        try {
-          const res = await fetch(`${normalizedServerUrl}/api/chick_count`);
-          const json = await res.json();
-          if (res.ok) {
-            setChickCount(json.count);
-            await AsyncStorage.setItem('offline_chickCount', JSON.stringify(json.count));
-          }
-        } catch (e) {
-          const local = await AsyncStorage.getItem('offline_chickCount');
-          if (local) setChickCount(JSON.parse(local));
-        }
-      };
+      socket.on('telemetry_update', (data) => {
+        useAppStore.getState().updateTelemetry(data);
+      });
 
-      const fetchDeviceStatus = async () => {
-        try {
-          const res = await fetch(`${normalizedServerUrl}/api/estado-dispositivos`);
-          const json = await res.json();
-          if (res.ok) {
-            setDispositivos(json);
-            await AsyncStorage.setItem('offline_dispositivos', JSON.stringify(json));
-          }
-        } catch (e) {
-          const local = await AsyncStorage.getItem('offline_dispositivos');
-          if (local) setDispositivos(JSON.parse(local));
-        }
-      };
+      socket.on('new_alert', (data) => {
+        console.log('Mobile socket event received:', data);
+        // Podemo também refazer o fetch manual aqui para sincronizar o cache se preciso
+      });
 
-      fetchStatus();
-      fetchChickCount();
-      fetchDeviceStatus();
-
-      const intervalStatus = setInterval(fetchStatus, 2000);
-      const intervalCount = setInterval(fetchChickCount, 2000);
-      const intervalDevices = setInterval(fetchDeviceStatus, 5000);
-      return () => {
-        clearInterval(intervalStatus);
-        clearInterval(intervalCount);
-        clearInterval(intervalDevices);
-      };
+      return () => socket.disconnect();
     }
-  }, [token, normalizedServerUrl, activeTab]);
+  }, [token, normalizedServerUrl]);
 
 
   const handleGoogleLogin = async () => {
@@ -1266,7 +1224,7 @@ export default function App() {
     return (
       <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <StatusBar barStyle="light-content" />
-        <View style={{ backgroundColor: '#1e293b', padding: 24, borderRadius: 12, width: '85%', alignItems: 'center' }}>
+        <View style={{ backgroundColor: '#0f172a', padding: 24, borderRadius: 12, width: '85%', alignItems: 'center' }}>
           <AlertTriangle color="#f59e0b" size={48} style={{ marginBottom: 16 }} />
           <Text style={{ color: '#10b981', fontSize: 20, fontWeight: 'bold', marginBottom: 12 }}>Aguardando Aprovação</Text>
           <Text style={{ color: '#94a3b8', textAlign: 'center', marginBottom: 24 }}>A sua conta foi registada mas precisa ser ativada por um administrador do sistema.</Text>
@@ -1384,7 +1342,7 @@ const styles = StyleSheet.create({
   loginLogoWrap: { backgroundColor:'rgba(16,185,129,0.1)', width: 104, height: 104, borderRadius: 99, marginBottom:15, borderWidth:1, borderColor: 'rgba(16,185,129,0.2)', alignItems:'center', justifyContent:'center' },
   loginLogoImage: { width: 72, height: 72 },
   loginModeRow: { flexDirection: 'row', gap: 10, marginBottom: 15, width: '100%' },
-  loginModeBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#334155', alignItems: 'center', backgroundColor: '#1e293b' },
+  loginModeBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#1e293b', alignItems: 'center', backgroundColor: '#0f172a' },
   loginModeBtnActive: { backgroundColor: 'rgba(16,185,129,0.2)', borderColor: 'rgba(16,185,129,0.4)' },
   loginModeBtnActiveBlue: { backgroundColor: 'rgba(59,130,246,0.2)', borderColor: 'rgba(59,130,246,0.4)' },
   loginModeText: { color: '#94a3b8', fontSize: 12, fontWeight: 'bold' },
@@ -1403,10 +1361,10 @@ const styles = StyleSheet.create({
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   cardLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: 'bold' },
   tempText: { fontSize: 56, fontWeight: 'bold', color: '#FFF' },
-  iconBox: { backgroundColor: 'rgba(255,255,255,0.1)', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+  iconBox: { backgroundColor: 'rgba(255,255,255,0.1)', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
   statusTitle: { fontSize: 20, fontWeight: 'bold', color: 'white', marginTop: 10 },
   statusMsg: { color: 'rgba(255,255,255,0.9)', marginTop: 5 },
-  countCard: { padding: 20, borderRadius: 24, marginBottom: 20, backgroundColor: '#1e293b' },
+  countCard: { padding: 20, borderRadius: 24, marginBottom: 20, backgroundColor: '#0f172a' },
   countText: { fontSize: 48, fontWeight: 'bold', color: '#FFF', letterSpacing: -2 },
 
   // Inputs
@@ -1424,14 +1382,14 @@ const styles = StyleSheet.create({
 
   // Video
   sectionTitle: { color: '#94a3b8', fontSize: 12, fontWeight: 'bold', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
-  videoContainer: { height: 220, backgroundColor: 'black', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#334155', marginBottom: 20, position:'relative' },
-  heatmapCard: { height: 220, backgroundColor: '#111827', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#334155', marginBottom: 20 },
+  videoContainer: { height: 220, backgroundColor: 'black', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#1e293b', marginBottom: 20, position:'relative' },
+  heatmapCard: { height: 220, backgroundColor: '#111827', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#1e293b', marginBottom: 20 },
   heatmapImage: { width: '100%', height: '100%' },
   liveBadge: { position:'absolute', top:10, left:10, backgroundColor:'red', paddingHorizontal:8, paddingVertical:4, borderRadius:4 },
   liveText: { color:'white', fontSize:10, fontWeight:'bold' },
 
   // Tunnel Blocker
-  tunnelBlockerContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#1e293b', padding: 20 },
+  tunnelBlockerContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0f172a', padding: 20 },
   tunnelTitle: { color: 'white', fontSize: 18, fontWeight: 'bold', marginTop: 10, marginBottom: 5 },
   tunnelText: { color: '#94a3b8', textAlign: 'center', marginBottom: 20 },
   tunnelButton: { backgroundColor: '#2563eb', padding: 12, borderRadius: 8, width: '100%', alignItems: 'center', marginBottom: 10 },
@@ -1461,19 +1419,19 @@ const styles = StyleSheet.create({
   alertCard: { padding: 16, borderRadius: 12, marginBottom: 10, borderWidth: 1 },
   alertHigh: { backgroundColor: 'rgba(239,68,68,0.15)', borderColor: 'rgba(239,68,68,0.4)' },
   alertMedium: { backgroundColor: 'rgba(245,158,11,0.15)', borderColor: 'rgba(245,158,11,0.4)' },
-  alertLow: { backgroundColor: '#1e293b', borderColor: '#334155' },
+  alertLow: { backgroundColor: '#0f172a', borderColor: '#1e293b' },
   alertType: { color: '#fff', fontWeight: 'bold', marginBottom: 6 },
   alertMessage: { color: '#cbd5e1', marginBottom: 8 },
   alertMeta: { color: '#94a3b8', fontSize: 12 },
 
   // System
   metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  metricCard: { width: '48%', backgroundColor: '#1e293b', borderColor: '#334155', borderWidth: 1, borderRadius: 12, padding: 14 },
+  metricCard: { width: '48%', backgroundColor: '#0f172a', borderColor: '#1e293b', borderWidth: 1, borderRadius: 12, padding: 14 },
   metricLabel: { color: '#94a3b8', fontSize: 11, marginBottom: 6 },
   metricValue: { color: 'white', fontSize: 20, fontWeight: 'bold' },
 
   // Birds
-  listCard: { backgroundColor: '#1e293b', borderColor: '#334155', borderWidth: 1, borderRadius: 12, overflow: 'hidden', marginBottom: 16 },
+  listCard: { backgroundColor: '#0f172a', borderColor: '#1e293b', borderWidth: 1, borderRadius: 12, overflow: 'hidden', marginBottom: 16 },
   rowItem: { padding: 12, borderBottomColor: '#334155', borderBottomWidth: 1 },
   rowTitle: { color: 'white', fontWeight: 'bold' },
   rowMeta: { color: '#94a3b8', fontSize: 12, marginTop: 2 },

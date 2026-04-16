@@ -1,3 +1,4 @@
+import { io } from 'socket.io-client';
 import React, { useState, useEffect, useCallback } from 'react';
 import SystemCard from './SystemCard';
 import { getBaseUrl } from '../utils/config';
@@ -37,12 +38,15 @@ export default function SmartOpsPanel({ serverIP, prefs, token }) {
   }, [baseUrl]);
 
   useEffect(() => {
-    const bootstrap = setTimeout(loadData, 0);
-    const timer = setInterval(loadData, prefs.statusMs);
-    return () => {
-      clearTimeout(bootstrap);
-      clearInterval(timer);
-    };
+    const _bootstrap = setTimeout(loadData, 0);
+
+
+    const socket = io(baseUrl);
+    socket.on('telemetry_update', () => {
+      loadData();
+    });
+    return () => socket.disconnect();
+
   }, [loadData, prefs.statusMs]);
 
   const toggleAuto = async () => {
@@ -119,7 +123,7 @@ export default function SmartOpsPanel({ serverIP, prefs, token }) {
               <span className="text-slate-500 font-medium block mb-1">Água</span>
               <span className="text-xl sm:text-2xl font-bold text-cyan-300">{sensors?.water_level_pct ?? '--'} <span className="text-sm text-slate-400">%</span></span>
             </div>
-            <button onClick={toggleAuto} className={`rounded-xl p-3 sm:p-4 font-bold text-sm sm:text-base flex flex-col items-center justify-center gap-1 sm:gap-2 border transition-all ${autoMode?.enabled ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}>
+            <button onClick={toggleAuto} className={`rounded-xl p-3 sm:p-4 font-bold text-sm sm:text-base flex flex-col items-center justify-center gap-1 sm:gap-2 border transition-all ${autoMode?.enabled ? 'bg-emerald-600 border-emerald-500 text-white shadow-sm shadow-emerald-500/20' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={autoMode?.enabled ? 'text-white' : 'text-slate-400'}><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
               {autoMode?.enabled ? 'Auto Ativo' : 'Ativar Auto'}
             </button>
@@ -144,7 +148,7 @@ export default function SmartOpsPanel({ serverIP, prefs, token }) {
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-4">
             <input value={batchForm.name} onChange={(e) => setBatchForm((p) => ({ ...p, name: e.target.value }))} placeholder="Nome do lote (ex: Lote B)" className="flex-1 bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-2.5 text-sm sm:text-base focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all placeholder:text-slate-600" />
             <input type="date" value={batchForm.start_date} onChange={(e) => setBatchForm((p) => ({ ...p, start_date: e.target.value }))} className="flex-1 sm:w-auto bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-2.5 text-sm sm:text-base focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all text-slate-300" />
-            <button onClick={createBatch} className="bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-5 py-2.5 font-bold shadow-lg shadow-blue-500/20 transition-all text-sm sm:text-base hover:-translate-y-0.5 whitespace-nowrap">
+            <button onClick={createBatch} className="bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-5 py-2.5 font-bold shadow-sm shadow-blue-500/20 transition-all text-sm sm:text-base hover:-translate-y-0.5 whitespace-nowrap">
               + Novo
             </button>
           </div>
@@ -182,7 +186,7 @@ export default function SmartOpsPanel({ serverIP, prefs, token }) {
                 <span className="block font-semibold text-white mb-1">Relatórios Periódicos</span>
                 <span className="text-slate-400 text-xs">Gere um consolidado em PDF com gráficos semanais.</span>
               </div>
-              <button onClick={generateWeeklyReport} className="w-full sm:w-auto bg-amber-600 hover:bg-amber-500 text-white rounded-xl px-5 py-3 font-bold shadow-lg shadow-amber-500/20 transition-all text-sm hover:-translate-y-0.5">
+              <button onClick={generateWeeklyReport} className="w-full sm:w-auto bg-amber-600 hover:bg-amber-500 text-white rounded-xl px-5 py-3 font-bold shadow-sm shadow-amber-500/20 transition-all text-sm hover:-translate-y-0.5">
                 Gerar PDF Semanal
               </button>
             </div>
@@ -197,7 +201,7 @@ export default function SmartOpsPanel({ serverIP, prefs, token }) {
         </h3>
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-5">
           <input value={logNote} onChange={(e) => setLogNote(e.target.value)} placeholder="Descreva eventos importantes (ex: Dia 12: Vacinação Gumboro via água)..." className="flex-1 bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-3 text-sm sm:text-base focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all placeholder:text-slate-600" />
-          <button onClick={saveLogNote} className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl px-6 py-3 text-sm sm:text-base font-bold shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 whitespace-nowrap">
+          <button onClick={saveLogNote} className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl px-6 py-3 text-sm sm:text-base font-bold shadow-sm shadow-emerald-500/20 transition-all hover:-translate-y-0.5 whitespace-nowrap">
             Registrar Log
           </button>
         </div>

@@ -2725,6 +2725,21 @@ def camera_loop():
                 time.sleep(1)
 
 _init_bird_uid_counter()
+def _telemetry_broadcast_worker():
+    with app.app_context():
+        while True:
+            try:
+                now = time.time()
+                count = object_count
+                ultima = Reading.query.order_by(Reading.id.desc()).first()
+                status_data = {"temperatura": ultima.temperatura if ultima else 0, "status": ultima.status if ultima else "INICIANDO"}
+                socketio.emit("telemetry_update", {"count": count, "status": status_data, "devices": estado_dispositivos, "timestamp": now}, namespace="/")
+            except Exception as e:
+                LOGGER.exception("[Telemetry Broadcast] Error: %s", e)
+            time.sleep(3.0)
+telemetry_thread = threading.Thread(target=_telemetry_broadcast_worker, daemon=True)
+telemetry_thread.start()
+
 t = threading.Thread(target=camera_loop, daemon=True)
 t.start()
 weekly_thread = threading.Thread(target=_weekly_report_scheduler, daemon=True)
