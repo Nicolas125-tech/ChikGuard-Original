@@ -1,0 +1,19 @@
+[Unit]
+Description=ChikGuard Edge Service
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/chikguard
+ExecStart=/usr/local/bin/docker-compose up
+ExecStop=/usr/local/bin/docker-compose down
+Restart=on-failure
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=chikguard
+
+[Install]
+WantedBy=multi-user.target
