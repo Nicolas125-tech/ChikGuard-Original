@@ -477,7 +477,7 @@ class InferencePipeline:
                 frame = self._in_queue.get(timeout=0.1)
                 t0 = time.perf_counter()
 
-                raw_dets = self._detector.detect(frame)
+                raw_dets = self._detector.detect(frame) # _detector is configured in app.py, assume model.track is handled there or here if updated.
                 detections = self._enrich(frame, raw_dets)
 
                 lat_ms = (time.perf_counter() - t0) * 1000.0

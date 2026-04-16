@@ -4,12 +4,14 @@ import os
 from collections import deque
 import threading
 
+
 class VisionEngine:
     """
     VisionEngine: Pipeline otimizado para carreamento de modelos (.engine, .xml, .onnx)
     e processamento de video com leitura assíncrona.
     """
-    def __init__(self, model_path, camera_index=0):
+
+    def __init__(self, model_path, camera_index=0, use_clahe=True):
         self.model_path = model_path
         self.camera_index = camera_index
         self.cap = None
@@ -17,6 +19,11 @@ class VisionEngine:
         self._frame_buffer = deque(maxlen=3)
         self._lock = threading.Lock()
         self._capture_thread = None
+        self.use_clahe = use_clahe
+        # Initialize CLAHE for dynamic lighting contrast enhancement
+        self.clahe = cv2.createCLAHE(
+            clipLimit=2.0, tileGridSize=(
+                8, 8)) if use_clahe else None
         self._load_model()
 
     def _load_model(self):
@@ -32,7 +39,8 @@ class VisionEngine:
             print(f"Carregando modelo {ext}: {self.model_path}")
             # Placeholder for existing ultralytics YOLO logic
         else:
-            print(f"Aviso: Formato de modelo não suportado nativamente pelo VisionEngine: {ext}")
+            print(
+                f"Aviso: Formato de modelo não suportado nativamente pelo VisionEngine: {ext}")
 
     def start_capture(self):
         """Inicia a captura de vídeo de forma assíncrona para evitar lag"""
@@ -42,7 +50,8 @@ class VisionEngine:
             return False
 
         self.is_running = True
-        self._capture_thread = threading.Thread(target=self._capture_loop, daemon=True)
+        self._capture_thread = threading.Thread(
+            target=self._capture_loop, daemon=True)
         self._capture_thread.start()
         return True
 
@@ -52,10 +61,24 @@ class VisionEngine:
             if self.cap is not None and self.cap.isOpened():
                 ret, frame = self.cap.read()
                 if ret:
+                    # Pré-processamento Dinâmico com CLAHE
+                    if self.use_clahe and self.clahe is not None:
+                        try:
+                            # Convert to LAB color space
+                            lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
+                            l, a, b = cv2.split(lab)
+                            # Apply CLAHE to L-channel
+                            cl = self.clahe.apply(l)
+                            # Merge back and convert to BGR
+                            limg = cv2.merge((cl, a, b))
+                            frame = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+                        except Exception as e:
+                            print(f"Erro ao aplicar CLAHE no frame: {e}")
+
                     with self._lock:
                         self._frame_buffer.append(frame)
                 else:
-                    time.sleep(0.01) # Avoid busy loop if frame drop
+                    time.sleep(0.01)  # Avoid busy loop if frame drop
             else:
                 time.sleep(0.1)
 
