@@ -16,8 +16,11 @@ services:
     volumes:
       - ./data:/app/data
     devices:
+      # Passthrough of the camera for Edge execution
       - "/dev/video0:/dev/video0"
-    restart: unless-stopped
+    # To use hardware acceleration, might need specific privileges
+    privileged: true
+    restart: always
     depends_on:
       - redis
 
@@ -34,7 +37,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     volumes:
       - ./data:/app/data
-    restart: unless-stopped
+    restart: always
     depends_on:
       - redis
 
@@ -42,7 +45,7 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
-    restart: unless-stopped
+    restart: always
 
   frontend:
     build:
@@ -50,9 +53,9 @@ services:
       dockerfile: Dockerfile
     ports:
       - "80:80"
-    restart: unless-stopped
+    restart: always
 
   cloudflared:
     image: cloudflare/cloudflared:latest
     command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
-    restart: unless-stopped
+    restart: always

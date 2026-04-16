@@ -17,6 +17,7 @@ class VisionEngine:
         self._frame_buffer = deque(maxlen=3)
         self._lock = threading.Lock()
         self._capture_thread = None
+        self.model = None
         self._load_model()
 
     def _load_model(self):
@@ -25,12 +26,44 @@ class VisionEngine:
         if ext == '.engine':
             print(f"Carregando modelo TensorRT: {self.model_path}")
             # Placeholder for actual TensorRT loading logic
+
         elif ext == '.xml':
             print(f"Carregando modelo OpenVINO: {self.model_path}")
-            # Placeholder for actual OpenVINO loading logic
-        elif ext in ['.onnx', '.pt']:
-            print(f"Carregando modelo {ext}: {self.model_path}")
-            # Placeholder for existing ultralytics YOLO logic
+            try:
+                from openvino.runtime import Core
+                ie = Core()
+                model_xml = self.model_path
+                model_bin = os.path.splitext(model_xml)[0] + ".bin"
+                self.model = ie.read_model(model=model_xml, weights=model_bin)
+                self.compiled_model = ie.compile_model(model=self.model, device_name="CPU")
+                print("OpenVINO model loaded successfully.")
+            except ImportError:
+                print("Aviso: 'openvino' não está instalado. Não é possível carregar modelos .xml")
+            except Exception as e:
+                print(f"Erro ao carregar modelo OpenVINO: {e}")
+
+        elif ext == '.onnx':
+            print(f"Carregando modelo ONNX: {self.model_path}")
+            try:
+                import onnxruntime as ort
+                self.model = ort.InferenceSession(self.model_path, providers=['CPUExecutionProvider'])
+                print("ONNX model loaded successfully.")
+            except ImportError:
+                print("Aviso: 'onnxruntime' não está instalado. Não é possível carregar modelos .onnx")
+            except Exception as e:
+                print(f"Erro ao carregar modelo ONNX: {e}")
+
+        elif ext == '.pt':
+            print(f"Carregando modelo PyTorch/YOLO: {self.model_path}")
+            try:
+                from ultralytics import YOLO
+                self.model = YOLO(self.model_path)
+                print("YOLO model loaded successfully.")
+            except ImportError:
+                print("Aviso: 'ultralytics' não está instalado. Não é possível carregar modelos .pt")
+            except Exception as e:
+                print(f"Erro ao carregar modelo PyTorch: {e}")
+
         else:
             print(f"Aviso: Formato de modelo não suportado nativamente pelo VisionEngine: {ext}")
 
