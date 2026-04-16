@@ -11,10 +11,37 @@ services:
       - CORS_ORIGINS=*
       - DATABASE_URL=${DATABASE_URL:-sqlite:///chikguard.db}
       - PYTHONPATH=/app
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
     volumes:
       - ./data:/app/data
     devices:
       - "/dev/video0:/dev/video0"
+    restart: unless-stopped
+    depends_on:
+      - redis
+
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A src.core.celery_app.celery_app worker --loglevel=info
+    environment:
+      - FLASK_ENV=production
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///chikguard.db}
+      - PYTHONPATH=/app
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
     restart: unless-stopped
 
   frontend:

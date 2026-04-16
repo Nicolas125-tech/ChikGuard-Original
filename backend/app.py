@@ -1,3 +1,5 @@
+from src.core.logging_config import setup_logging
+setup_logging()
 from flask import Flask, jsonify, request, send_file, has_request_context
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
@@ -48,6 +50,8 @@ import io
 from src.alerts.providers import build_alert_provider
 from src.api.routes import create_api_blueprint
 from src.api.reports_api import create_reports_blueprint
+import logging
+LOGGER = logging.getLogger(__name__)
 from src.api.auth import create_auth_blueprint
 from src.api.devices import create_devices_blueprint
 from src.api.sensors_api import create_sensors_blueprint
@@ -468,6 +472,15 @@ def _utcnow():
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 def _log_event(event_type, level, message, metadata=None, camera_id=ACTIVE_CAMERA_ID):
+    try:
+        log_level = getattr(logging, level.upper(), logging.INFO)
+        LOGGER.log(log_level, message, extra={
+            "event_type": event_type,
+            "camera_id": camera_id,
+            "metadata": metadata or {}
+        })
+    except Exception:
+        pass
     try:
         with app.app_context():
             row = EventLog(
@@ -1953,7 +1966,10 @@ def detectar_objetos(frame):
         from src.mlops import active_learning_pipeline
         for det in detections:
             class_name = _class_name_by_id(det["class_id"])
-            active_learning_pipeline.process_detection(frame, det, class_name)
+            target_names = ["bird", "ave", "chicken", "galinha", "frango"]
+            if class_name.lower() in target_names:
+                # Passa para o celery no arquivo original
+                active_learning_pipeline.process_detection(frame, det, class_name)
     except Exception as e:
         LOGGER.error(f"Failed to process active learning: {e}")
 

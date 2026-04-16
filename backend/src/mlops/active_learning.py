@@ -21,16 +21,14 @@ class ActiveLearningPipeline:
             LOGGER.error(f"Erro ao carregar face cascade: {e}")
 
     def process_detection(self, frame, detection, class_name):
-        # Apenas processa se for a classe alvo
-        target_names = ["bird", "ave", "chicken", "galinha", "frango"]
-        if class_name.lower() not in target_names:
-            return
-
         conf = detection.get("confidence", 1.0)
-
-        # Se a confianca esta na zona de incerteza
         if self.min_conf <= conf <= self.max_conf:
-            self._save_uncertain_frame(frame.copy(), detection, conf)
+            from src.tasks.vision_tasks import process_active_learning_task
+            import base64
+            import cv2
+            _, buffer = cv2.imencode('.jpg', frame)
+            frame_b64 = base64.b64encode(buffer).decode('utf-8')
+            process_active_learning_task.delay(frame_b64, detection, conf)
 
     def _save_uncertain_frame(self, frame, detection, conf):
         try:
