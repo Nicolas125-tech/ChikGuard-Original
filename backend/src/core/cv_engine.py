@@ -239,24 +239,36 @@ class SpeciesClassifier:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class PerfMetrics:
-    """Coleta FPS e latência de componentes individuais do pipeline."""
+    """Coleta FPS, latência e métricas SAHI de componentes do pipeline."""
 
     def __init__(self, window: int = 30):
         self._lock            = threading.Lock()
         self._cap_times:  deque   = deque(maxlen=window)
         self._inf_times:  deque   = deque(maxlen=window)
         self._inf_lat_ms: deque   = deque(maxlen=window)
+        # Métricas específicas do SAHI
+        self._sahi_tiles:     deque   = deque(maxlen=window)  # tiles por frame
+        self._sahi_enabled:   bool    = False
+        self._backend_name:   str     = "pytorch"
 
     def tick_capture(self):
         with self._lock:
             self._cap_times.append(time.perf_counter())
 
-    def tick_inference(self, latency_ms: float):
+    def tick_inference(self, latency_ms: float, sahi_tiles: int = 0):
         with self._lock:
             self._inf_times.append(time.perf_counter())
             self._inf_lat_ms.append(latency_ms)
+            if sahi_tiles > 0:
+                self._sahi_tiles.append(sahi_tiles)
+                self._sahi_enabled = True
 
-    def get(self) -> Dict[str, float]:
+    def set_backend(self, name: str):
+        """Registra o nome do backend de inferência para exibição no HUD."""
+        with self._lock:
+            self._backend_name = name
+
+    def get(self) -> Dict[str, Any]:
         with self._lock:
             def fps(ts: deque) -> float:
                 if len(ts) < 2:
@@ -265,10 +277,14 @@ class PerfMetrics:
                 return round((len(ts) - 1) / max(1e-6, elapsed), 1)
 
             lat = round(float(np.mean(self._inf_lat_ms)) if self._inf_lat_ms else 0.0, 1)
+            avg_tiles = round(float(np.mean(self._sahi_tiles)) if self._sahi_tiles else 0.0, 1)
             return {
                 "fps_camera":    fps(self._cap_times),
                 "fps_inference": fps(self._inf_times),
                 "latency_ms":    lat,
+                "sahi_enabled":  self._sahi_enabled,
+                "sahi_avg_tiles": avg_tiles,
+                "backend_name":  self._backend_name,
             }
 
 
@@ -588,37 +604,55 @@ class CVOverlay:
         return draw
 
     @staticmethod
-    def draw_hud(frame: np.ndarray, metrics: Dict[str, float],
+    def draw_hud(frame: np.ndarray, metrics: Dict[str, Any],
                  counts: Dict[str, int], behavior_status: str,
                  mode: str = "aves") -> np.ndarray:
         """Desenha o HUD de performance e contagem no canto do frame."""
         h, w = frame.shape[:2]
-        fps_cam  = metrics.get("fps_camera",    0.0)
-        fps_inf  = metrics.get("fps_inference", 0.0)
-        lat_ms   = metrics.get("latency_ms",    0.0)
-        total    = counts.get("total",   0)
-        chicks   = counts.get("chicks",  0)
-        hens     = counts.get("hens",    0)
+        fps_cam    = metrics.get("fps_camera",     0.0)
+        fps_inf    = metrics.get("fps_inference",  0.0)
+        lat_ms     = metrics.get("latency_ms",     0.0)
+        sahi_on    = bool(metrics.get("sahi_enabled", False))
+        n_tiles    = float(metrics.get("sahi_avg_tiles", 0.0))
+        backend    = str(metrics.get("backend_name", "pytorch"))
+        total      = counts.get("total",   0)
+        chicks     = counts.get("chicks",  0)
+        hens       = counts.get("hens",    0)
+
+        # ── Cor de indicador SAHI / backend ──────────────────────────────
+        sahi_clr   = (0, 255, 180) if sahi_on else (120, 120, 120)  # verde se ativo
+        be_clr_map = {"openvino": (0, 210, 255), "onnx": (255, 165, 0), "pytorch": (160, 160, 160)}
+        be_clr     = be_clr_map.get(backend.lower(), (160, 160, 160))
 
         # Painel semi-transparente no topo-esquerdo
         overlay  = frame.copy()
-        ph, pw   = 105, 340
-        cv2.rectangle(overlay, (0, 0), (pw, ph), (20, 20, 20), -1)
-        cv2.addWeighted(overlay, 0.55, frame, 0.45, 0, frame)
+        ph, pw   = 122, 380
+        cv2.rectangle(overlay, (0, 0), (pw, ph), (15, 15, 15), -1)
+        cv2.addWeighted(overlay, 0.58, frame, 0.42, 0, frame)
 
+        sahi_label = f"SAHI {n_tiles:.0f}t" if sahi_on else "DIR"
         lines = [
-            (f"📷 CAM {fps_cam:.0f} FPS  |  🧠 INF {fps_inf:.0f} FPS  |  ⏱ {lat_ms:.0f} ms",
+            # Linha 1: FPS câmera | FPS inferência | Latência
+            (f"CAM {fps_cam:.0f} FPS | INF {fps_inf:.0f} FPS | {lat_ms:.0f} ms",
              (8, 18), 0.46, (180, 255, 100)),
-            (f"🐣 Pintinhos: {chicks}   🐔 Galinhas: {hens}   TOTAL: {total}",
-             (8, 38), 0.46, (255, 220, 80)),
+            # Linha 2: Backend + modo SAHI
+            (f"[{backend.upper()}] [{sahi_label}] | Confianca min: 25%",
+             (8, 36), 0.42, be_clr),
+            # Linha 3: Contagens de espécie
+            (f"Pintinhos: {chicks}   Galinhas: {hens}   TOTAL: {total}",
+             (8, 56), 0.46, (255, 220, 80)),
+            # Linha 4: Comportamento
             (f"Comportamento: {behavior_status}",
-             (8, 58), 0.42, (80, 200, 255)),
+             (8, 74), 0.42, (80, 200, 255)),
         ]
 
         for text, pos, scale, clr in lines:
-            # Fallback ASCII para evitar crash com emoji em fonts padrão
             text_safe = _strip_emoji(text)
             cv2.putText(frame, text_safe, pos, FONT, scale, clr, 1, cv2.LINE_AA)
+
+        # Indicador SAHI (pastilha verde/cinza no canto direito do HUD)
+        ind_x = pw - 12
+        cv2.circle(frame, (ind_x, 56), 6, sahi_clr, -1)
 
         return frame
 
