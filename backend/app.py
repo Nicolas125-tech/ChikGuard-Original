@@ -1512,8 +1512,9 @@ def _check_tampering(frame):
     else:
         tamper_state["dark_frames"] = int(tamper_state.get("dark_frames", 0)) + 1
 
-    if _tamper_prev_gray is None:
+    if _tamper_prev_gray is None or _tamper_prev_gray.shape != gray.shape:
         _tamper_prev_gray = gray
+        diff = 100.0 # Force non-freeze on first frame of new resolution
     else:
         diff = float(np.mean(cv2.absdiff(gray, _tamper_prev_gray)))
         if diff < TAMPER_FREEZE_DIFF_THRESHOLD:

@@ -331,30 +331,48 @@ class CameraCapture:
     # ── Loop interno ───────────────────────────────────────────────────────
 
     def _open_camera(self) -> bool:
-        try:
-            cap = cv2.VideoCapture(self.camera_index, self.backend)
-            if not cap.isOpened():
-                cap.release()
-                return False
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH,  self.width)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
-            cap.set(cv2.CAP_PROP_FPS,          self.target_fps)
-            cap.set(cv2.CAP_PROP_BUFFERSIZE,   1)
-            # MJPEG codec: menor overhead de decodificação, mais FPS
-            cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
-            with self._lock:
-                if self._cap:
-                    self._cap.release()
-                self._cap    = cap
-                self._is_live = True
-            logger.info("[CameraCapture] Câmera aberta: %.0fx%.0f @ %.0f FPS",
-                        cap.get(cv2.CAP_PROP_FRAME_WIDTH),
-                        cap.get(cv2.CAP_PROP_FRAME_HEIGHT),
-                        cap.get(cv2.CAP_PROP_FPS))
-            return True
-        except Exception as exc:
-            logger.warning("[CameraCapture] Falha ao abrir câmera: %s", exc)
-            return False
+        backends_to_try = [self.backend, cv2.CAP_ANY]
+        if self.backend == cv2.CAP_ANY:
+            backends_to_try = [cv2.CAP_ANY]
+
+        for b in backends_to_try:
+            try:
+                cap = cv2.VideoCapture(self.camera_index, b)
+                if not cap.isOpened():
+                    cap.release()
+                    continue
+                
+                # Try to set resolution but don't fail if it doesn't stick
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH,  self.width)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+                cap.set(cv2.CAP_PROP_FPS,          self.target_fps)
+                cap.set(cv2.CAP_PROP_BUFFERSIZE,   1)
+                
+                # Check if we can actually read a frame
+                ret, _ = cap.read()
+                if not ret:
+                    cap.release()
+                    continue
+
+                with self._lock:
+                    if self._cap:
+                        self._cap.release()
+                    self._cap    = cap
+                    self._is_live = True
+                
+                backend_name = "DSHOW" if b == cv2.CAP_DSHOW else "MSMF" if b == cv2.CAP_MSMF else "ANY"
+                logger.info("[CameraCapture] Câmera aberta (%s): Index=%d Res=%.0fx%.0f @ %.0f FPS",
+                            backend_name, self.camera_index,
+                            cap.get(cv2.CAP_PROP_FRAME_WIDTH),
+                            cap.get(cv2.CAP_PROP_FRAME_HEIGHT),
+                            cap.get(cv2.CAP_PROP_FPS))
+                return True
+            except Exception as exc:
+                logger.warning("[CameraCapture] Falha ao abrir com backend %d: %s", b, exc)
+                continue
+        
+        logger.error("[CameraCapture] Nenhuma camera real encontrada nos backends testados.")
+        return False
 
     def _run(self):
         if not self._open_camera():
