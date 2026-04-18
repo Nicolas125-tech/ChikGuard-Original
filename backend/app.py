@@ -114,7 +114,7 @@ LOGGER = configure_logging(SETTINGS.log_level)
 MODO_DETECCAO = os.getenv("MODO_DETECCAO", "aves").strip().lower()
 ACTIVE_CAMERA_ID = os.getenv("ACTIVE_CAMERA_ID", "galpao-1")
 
-INFERENCE_IMGSZ = int(os.getenv("INFERENCE_IMGSZ", "480"))
+INFERENCE_IMGSZ = int(os.getenv("INFERENCE_IMGSZ", "640"))
 DETECTION_CONF = float(os.getenv("DETECTION_CONF", "0.20"))
 DETECTION_IOU = float(os.getenv("DETECTION_IOU", "0.35"))
 MIN_BIRD_AREA_RATIO = float(os.getenv("MIN_BIRD_AREA_RATIO", "0.00002"))  # pintinhos sao pequenos
@@ -211,152 +211,11 @@ def _configure_camera_capture(cap):
     except Exception:
         pass
 
-class ObjectDetector:
-    def __init__(self, model_path="yolov8n.pt"):
-        self.yolo_loaded = False
-        self.model = None
-        self.supports_segmentation = False
-        self.encrypted_model_buffer = None
-
-        if model_path.endswith(".enc"):
-            try:
-                hardware_serial = str(uuid.getnode())
-                key = b'chikguard_secure_key'
-                if requests is not None:
-                    try:
-                        resp = requests.post(
-                            "http://localhost:5000/api/hardware/unlock",
-                            json={"serial": hardware_serial},
-                            timeout=5
-                        )
-                        if resp.ok:
-                            data = resp.json()
-                            if "key" in data:
-                                key = data["key"].encode("utf-8")
-                    except Exception as e:
-                        LOGGER.warning("Could not fetch key from mock API, using fallback: %s", e)
-
-                with open(model_path, "rb") as f:
-                    encrypted_data = f.read()
-
-                # Decrypt entirely in RAM using byte-wise XOR
-                decrypted_data = bytearray(len(encrypted_data))
-                key_len = len(key)
-                for i in range(len(encrypted_data)):
-                    decrypted_data[i] = encrypted_data[i] ^ key[i % key_len]
-
-                self.encrypted_model_buffer = bytes(decrypted_data)
-                LOGGER.info("Model '%s' securely decrypted into RAM.", model_path)
-
-                # YOLO strictly requires a file path string. To prevent writing decrypted weights
-                # to the persistent disk (e.g. SSD/HDD) to satisfy "Hardware Root of Trust" and
-                # IP Security requirements, we write to a memory-backed file descriptor.
-                try:
-                    # Attempt Linux-specific RAM-only anonymous file descriptor
-                    import os
-                    if hasattr(os, "memfd_create"):
-                        fd = os.memfd_create("yolo_model")
-                        os.write(fd, self.encrypted_model_buffer)
-                        ram_path = f"/proc/self/fd/{fd}"
-                        self.model = YOLO(ram_path)
-                        os.close(fd)
-                    else:
-                        raise NotImplementedError("memfd_create not available")
-                except Exception:
-                    # Fallback for Windows/Mac or systems without memfd_create:
-                    # Use Python's tempfile mapped to a known RAMDisk or let the OS manage it securely.
-                    # As a last resort, write, initialize, and immediately unlink to minimize exposure.
-                    import os
-                    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".pt")
-                    try:
-                        os.write(tmp_fd, self.encrypted_model_buffer)
-                        os.close(tmp_fd)
-                        self.model = YOLO(tmp_path)
-                    finally:
-                        try:
-                            os.unlink(tmp_path)
-                        except OSError:
-                            pass
-
-                self.yolo_loaded = True
-                self.model.predict(np.zeros((480, 640, 3)), verbose=False)
-                LOGGER.info("Encrypted model warmed up from volatile memory.")
-
-                try:
-                    dummy = self.model.predict(np.zeros((256, 256, 3), dtype=np.uint8), verbose=False)
-                    self.supports_segmentation = bool(dummy and getattr(dummy[0], "masks", None) is not None)
-                except Exception:
-                    self.supports_segmentation = False
-
-                return
-            except Exception as exc:
-                LOGGER.exception("Error securely loading encrypted model: %s", exc)
-                return
-
-        try:
-            self.model = YOLO(model_path)
-            self.yolo_loaded = True
-            LOGGER.info("Model '%s' loaded.", model_path)
-            self.model.predict(np.zeros((480, 640, 3)), verbose=False)
-            LOGGER.info("Model warmed up.")
-            try:
-                # Seg models expose masks at inference time.
-                dummy = self.model.predict(np.zeros((256, 256, 3), dtype=np.uint8), verbose=False)
-                self.supports_segmentation = bool(dummy and getattr(dummy[0], "masks", None) is not None)
-            except Exception:
-                self.supports_segmentation = False
-        except Exception as exc:
-            LOGGER.exception("Error loading Ultralytics model: %s", exc)
-
-    def detect(self, frame):
-        if not self.yolo_loaded:
-            return []
-
-        results = self.model.track(
-            frame,
-            verbose=False,
-            persist=True,
-            tracker=TRACKER_CONFIG,
-            conf=DETECTION_CONF,
-            iou=DETECTION_IOU,
-            imgsz=INFERENCE_IMGSZ,
-        )
-
-        result = results[0]
-        boxes = result.boxes
-        if boxes is None or len(boxes) == 0:
-            return []
-
-        xyxy = boxes.xyxy.cpu().numpy().astype(int)
-        class_ids = boxes.cls.cpu().numpy().astype(int)
-        confidences = boxes.conf.cpu().numpy()
-        track_ids = (
-            boxes.id.cpu().numpy().astype(int)
-            if boxes.id is not None
-            else np.full(len(xyxy), -1, dtype=int)
-        )
-        mask_areas = np.zeros(len(xyxy), dtype=np.float32)
-        if getattr(result, "masks", None) is not None and getattr(result.masks, "data", None) is not None:
-            try:
-                mask_stack = result.masks.data.cpu().numpy()
-                for i in range(min(len(mask_stack), len(mask_areas))):
-                    mask_areas[i] = float(np.sum(mask_stack[i] > 0.5))
-                self.supports_segmentation = True
-            except Exception:
-                pass
-
-        detections = []
-        for i in range(len(xyxy)):
-            detections.append(
-                {
-                    "box": xyxy[i],
-                    "class_id": int(class_ids[i]),
-                    "confidence": float(confidences[i]),
-                    "track_id": int(track_ids[i]),
-                    "mask_area_px": float(mask_areas[i]) if i < len(mask_areas) else 0.0,
-                }
-            )
-        return detections
+try:
+    from src.vision.enhanced_detector import EnhancedObjectDetector as ObjectDetector
+except ImportError as e:
+    LOGGER.error("Failed to load EnhancedObjectDetector, falling back to None. Error: %s", e)
+    ObjectDetector = None
 
 class RespiratoryAudioClassifier:
     def __init__(self, model_path):

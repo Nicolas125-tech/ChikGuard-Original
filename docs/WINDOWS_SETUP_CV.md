@@ -25,8 +25,7 @@ Abra o **PowerShell** ou **CMD** na pasta do projeto:
 
 ```powershell
 cd backend
-python -m venv venv
-.\venv\Scripts\activate
+python -m venv venv .\venv\Scripts\activate
 python -m pip install --upgrade pip
 ```
 
