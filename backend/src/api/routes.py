@@ -51,11 +51,34 @@ webrtc_loop = asyncio.new_event_loop()
 webrtc_thread = Thread(target=_start_async_loop, args=(webrtc_loop,), daemon=True)
 webrtc_thread.start()
 
-async def _process_offer(pc, offer):
+async def _process_offer(offer_sdp, offer_type, pc_id, get_global_frame):
+    offer = RTCSessionDescription(sdp=offer_sdp, type=offer_type)
+    pc = RTCPeerConnection()
+    pcs.add(pc)
+
+    logger.info("Created %s", pc_id)
+
+    @pc.on("datachannel")
+    def on_datachannel(channel):
+        @channel.on("message")
+        def on_message(message):
+            if isinstance(message, str) and message.startswith("ping"):
+                channel.send("pong" + message[4:])
+
+    @pc.on("connectionstatechange")
+    async def on_connectionstatechange():
+        logger.info("Connection state is %s", pc.connectionState)
+        if pc.connectionState == "failed" or pc.connectionState == "closed":
+            await pc.close()
+            pcs.discard(pc)
+
+    track = GlobalFrameTrack(get_global_frame)
+    pc.addTrack(relay.subscribe(track))
+
     await pc.setRemoteDescription(offer)
     answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
-    return pc.localDescription
+    return answer
 
 def create_api_blueprint(deps):
     bp = Blueprint("api_routes", __name__)
@@ -84,39 +107,14 @@ def create_api_blueprint(deps):
         if not params or "sdp" not in params or "type" not in params:
             return jsonify({"error": "Missing sdp or type in request body"}), 400
 
-        offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
-        pc = RTCPeerConnection()
         pc_id = "PeerConnection(%s)" % uuid.uuid4()
-        pcs.add(pc)
 
-        logger.info("Created %s", pc_id)
-
-        @pc.on("datachannel")
-        def on_datachannel(channel):
-            @channel.on("message")
-            def on_message(message):
-                if isinstance(message, str) and message.startswith("ping"):
-                    channel.send("pong" + message[4:])
-
-        @pc.on("connectionstatechange")
-        async def on_connectionstatechange():
-            logger.info("Connection state is %s", pc.connectionState)
-            if pc.connectionState == "failed" or pc.connectionState == "closed":
-                await pc.close()
-                pcs.discard(pc)
-
-        # Create a track
-        track = GlobalFrameTrack(get_global_frame)
-        pc.addTrack(relay.subscribe(track))
-
-        # We need to process the answer asynchronously in the background loop
         future = asyncio.run_coroutine_threadsafe(
-            _process_offer(pc, offer),
+            _process_offer(params["sdp"], params["type"], pc_id, get_global_frame),
             webrtc_loop
         )
 
         try:
-            # Wait for the answer with a timeout
             answer = future.result(timeout=10)
             return jsonify({
                 "sdp": answer.sdp,
