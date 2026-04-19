@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import os
+
+login_screen_code = '''import React, { useState } from 'react';
 import { Mail, Lock, Server, ArrowRight, Loader } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 import { getBaseUrl, STORAGE } from '../utils/config';
@@ -139,3 +141,8 @@ export default function LoginScreen({ serverIP, setServerIP, onBack, onLogin }) 
     </div>
   );
 }
+'''
+
+with open('c:/nic/ChikGuard-Original/frontend/src/pages/LoginScreen.jsx', 'w', encoding='utf-8') as f:
+    f.write(login_screen_code)
+print("Updated LoginScreen")

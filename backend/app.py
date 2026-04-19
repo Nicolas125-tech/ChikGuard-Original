@@ -32,7 +32,6 @@ import time
 import os
 from dotenv import load_dotenv
 load_dotenv()
-import random
 import json
 import math
 import ipaddress
@@ -300,6 +299,66 @@ class RespiratoryAudioClassifier:
         except Exception as exc:
             self.last_error = str(exc)
             return None
+
+
+import jwt
+from functools import wraps
+from flask import request, jsonify
+from supabase import create_client, Client
+import os
+
+SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
+SUPABASE_KEY = os.environ.get('SUPABASE_KEY', '') # Service role key ideally, or anon key if RLS allows
+SUPABASE_JWT_SECRET = os.environ.get('SUPABASE_JWT_SECRET', '')
+
+if SUPABASE_URL and SUPABASE_KEY:
+    supabase_client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+else:
+    supabase_client = None
+
+def require_auth(roles=None):
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            auth_header = request.headers.get('Authorization', '')
+            if not auth_header.startswith('Bearer '):
+                return jsonify({'error': 'Missing or invalid token'}), 401
+            
+            token = auth_header.split(' ')[1]
+            try:
+                # Validate JWT
+                decoded = jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=['HS256'], audience='authenticated')
+                user_id = decoded.get('sub')
+                if not user_id:
+                    return jsonify({'error': 'Invalid token payload'}), 401
+                
+                # Fetch profile from DB to get the reliable role and status
+                if supabase_client:
+                    response = supabase_client.table('profiles').select('role, status').eq('id', user_id).single().execute()
+                    profile = response.data
+                    if not profile:
+                        return jsonify({'error': 'Profile not found'}), 403
+                    if profile.get('status') == 'PENDING':
+                        return jsonify({'error': 'User awaiting approval'}), 403
+                        
+                    user_role = profile.get('role', 'viewer').lower()
+                else:
+                    # Fallback if supabase client is not configured
+                    user_role = decoded.get('app_metadata', {}).get('role', 'viewer').lower()
+
+                if roles and user_role not in roles and 'admin' not in user_role and 'superadmin' not in user_role:
+                    return jsonify({'error': f'Insufficient permissions. Required: {roles}'}), 403
+                    
+                request.user_id = user_id
+                request.user_role = user_role
+            except jwt.ExpiredSignatureError:
+                return jsonify({'error': 'Token expired'}), 401
+            except Exception as e:
+                return jsonify({'error': str(e)}), 401
+                
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = SETTINGS.database_url
@@ -690,7 +749,7 @@ sensor_state = {
     "ammonia_ppm": 8.0,
     "feed_level_pct": 100.0,
     "water_level_pct": 100.0,
-    "source": "simulated",
+    "source": "sensor",
     "updated_at": time.time(),
 }
 
@@ -717,7 +776,7 @@ acoustic_state = {
     "respiratory_health_index": 100.0,
     "cough_index": 0.0,
     "stress_audio_index": 0.0,
-    "source": "simulated",
+    "source": "sensor",
     "updated_at": 0.0,
 }
 last_acoustic_save_ts = 0.0
@@ -1018,48 +1077,6 @@ def _detect_thermal_anomalies(gray_frame, ambient_temp, frame_shape):
             metadata={"count": len(anomalies), "sectors": sectors},
         )
 
-def _simulate_acoustic_analysis():
-    global last_acoustic_save_ts
-    now = time.time()
-    if now - last_acoustic_save_ts < ACOUSTIC_SAVE_INTERVAL:
-        return
-
-    ammonia_factor = min(35.0, float(sensor_state["ammonia_ppm"])) / 35.0
-    cough = max(0.0, min(100.0, (ammonia_factor * 65.0) + random.uniform(3, 20)))
-    stress = max(0.0, min(100.0, (float(behavior_state.get("edge_ratio", 0.0)) * 100.0) + random.uniform(2, 25)))
-    respiratory = max(0.0, min(100.0, 100.0 - ((0.65 * cough) + (0.35 * stress))))
-
-    acoustic_state.update(
-        {
-            "respiratory_health_index": round(respiratory, 2),
-            "cough_index": round(cough, 2),
-            "stress_audio_index": round(stress, 2),
-            "source": "simulated_fallback",
-            "updated_at": now,
-        }
-    )
-
-    with app.app_context():
-        row = AcousticReading(
-            camera_id=ACTIVE_CAMERA_ID,
-            respiratory_health_index=acoustic_state["respiratory_health_index"],
-            cough_index=acoustic_state["cough_index"],
-            stress_audio_index=acoustic_state["stress_audio_index"],
-            source="simulated",
-        )
-        db.session.add(row)
-        db.session.commit()
-        _enqueue_sync_item("acoustic_reading", row.to_dict())
-
-    if acoustic_state["cough_index"] > 70 or acoustic_state["respiratory_health_index"] < 45:
-        _log_event(
-            event_type="respiratory_alert",
-            level="high",
-            message="Indice respiratorio critico detectado pela analise acustica",
-            metadata=acoustic_state,
-        )
-    last_acoustic_save_ts = now
-
 def _update_energy_runtime():
     now = time.time()
     last_tick = float(energy_runtime_state.get("last_tick", now))
@@ -1118,7 +1135,7 @@ def _sync_worker():
             LOGGER.exception("[SYNC] worker error: %s", exc)
         time.sleep(SYNC_PUSH_INTERVAL_SEC)
 
-def _persist_sensor_reading(source="simulated"):
+def _persist_sensor_reading(source="sensor"):
     with app.app_context():
         row = SensorReading(
             camera_id=ACTIVE_CAMERA_ID,
@@ -1162,35 +1179,6 @@ def _evaluate_sensor_alerts():
         _maybe_alert_sensor("feed_low", f, f"Racao baixa: {f:.1f}%")
     if w < sensor_thresholds["water_low"]:
         _maybe_alert_sensor("water_low", w, f"Agua baixa: {w:.1f}%")
-
-def _simulate_sensor_updates(temp_atual):
-    now = time.time()
-    if now - float(sensor_state["updated_at"]) < SENSOR_SAVE_INTERVAL:
-        return
-
-    humidity = 68 - ((temp_atual - 24.0) * 1.3) + random.uniform(-2, 2)
-    humidity = max(25.0, min(95.0, humidity))
-
-    ammonia = float(sensor_state["ammonia_ppm"]) + random.uniform(-1.0, 1.1)
-    ammonia = max(2.0, min(45.0, ammonia))
-
-    feed = max(0.0, float(sensor_state["feed_level_pct"]) - random.uniform(0.1, 0.4))
-    water = max(0.0, float(sensor_state["water_level_pct"]) - random.uniform(0.1, 0.5))
-
-    sensor_state.update(
-        {
-            "temperature_c": round(float(temp_atual), 2),
-            "humidity_pct": round(float(humidity), 2),
-            "ammonia_ppm": round(float(ammonia), 2),
-            "feed_level_pct": round(float(feed), 2),
-            "water_level_pct": round(float(water), 2),
-            "source": "simulated",
-            "updated_at": now,
-        }
-    )
-
-    _persist_sensor_reading(source="simulated")
-    _evaluate_sensor_alerts()
 
 def _apply_automatic_control(temp_atual):
     if not estado_dispositivos.get("modo_automatico"):
@@ -2408,8 +2396,6 @@ def camera_loop():
                 temp_atual = 20.0 + (float(np.mean(gray)) / 255.0) * 20.0
 
                 _apply_automatic_control(temp_atual)
-                _simulate_sensor_updates(temp_atual)
-                _simulate_acoustic_analysis()
                 _update_energy_runtime()
 
                 if temp_atual >= 35.0 and (now_ts - float(last_temp_emergency_notification_ts)) > 600:
@@ -2548,8 +2534,6 @@ def camera_loop():
                     temp_atual = 20 + (float(np.mean(gray)) / 255.0) * 20
 
                 _apply_automatic_control(temp_atual)
-                _simulate_sensor_updates(temp_atual)
-                _simulate_acoustic_analysis()
                 _update_energy_runtime()
                 if temp_atual >= 35.0 and (time.time() - float(last_temp_emergency_notification_ts)) > 600:
                     last_temp_emergency_notification_ts = time.time()
@@ -2863,17 +2847,6 @@ def get_heatmap_3d():
             "points": points,
         }
     )
-
-@app.route("/api/airflow/simulate", methods=["POST"])
-def airflow_simulate():
-    payload = request.get_json(silent=True) or {}
-    fans = payload.get("fans")
-    grid_size = int(payload.get("grid_size", 24))
-    grid_size = max(8, min(grid_size, 40))
-    if fans is not None and not isinstance(fans, list):
-        return jsonify({"msg": "Campo fans deve ser lista"}), 400
-    result = _simulate_airflow_field(fans=fans, grid_size=grid_size)
-    return jsonify(result)
 
 @app.route("/api/security/tamper", methods=["GET"])
 def tamper_status():

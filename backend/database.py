@@ -156,7 +156,7 @@ class SensorReading(db.Model):
     ammonia_ppm = db.Column(db.Float, nullable=True)
     feed_level_pct = db.Column(db.Float, nullable=True)
     water_level_pct = db.Column(db.Float, nullable=True)
-    source = db.Column(db.String(50), nullable=False, default="simulated")
+    source = db.Column(db.String(50), nullable=False, default="sensor")
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
     def to_dict(self):
@@ -223,7 +223,7 @@ class AcousticReading(db.Model):
     respiratory_health_index = db.Column(db.Float, nullable=False)
     cough_index = db.Column(db.Float, nullable=False)
     stress_audio_index = db.Column(db.Float, nullable=False)
-    source = db.Column(db.String(40), nullable=False, default="simulated")
+    source = db.Column(db.String(40), nullable=False, default="sensor")
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
     def to_dict(self):

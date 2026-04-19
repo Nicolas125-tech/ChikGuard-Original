@@ -158,10 +158,6 @@ function AppCore() {
 
   if (tvMode) return <TVScreen serverIP={serverIP} />;
 
-  if (token && role === 'viewer') {
-    return <TVScreen serverIP={serverIP} showHeader onLogout={handleLogout} />;
-  }
-
   if (token && status === 'PENDING') {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
