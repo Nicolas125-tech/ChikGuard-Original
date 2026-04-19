@@ -52,11 +52,18 @@ INFERENCE_IMGSZ     = int(os.getenv("INFERENCE_IMGSZ",     "640"))
 TRACKER_TYPE        = os.getenv("TRACKER_TYPE",            "bytetrack").strip().lower()
 TRACKER_CONFIG      = "botsort.yaml" if TRACKER_TYPE == "botsort" else "bytetrack.yaml"
 
-ENABLE_SAHI         = os.getenv("ENABLE_SAHI",             "true").strip().lower() in ("true", "1", "yes")
+# SAHI desabilitado por padrão para não quebrar ambientes sem OpenVINO.
+# Ative manualmente no .env: ENABLE_SAHI=true
+# Recomendado apenas com INFERENCE_BACKEND=openvino ou com GPU NVIDIA.
+ENABLE_SAHI         = os.getenv("ENABLE_SAHI",             "false").strip().lower() in ("true", "1", "yes")
 SAHI_SLICE_SIZE     = int(os.getenv("SAHI_SLICE_SIZE",     "640"))
 SAHI_OVERLAP        = float(os.getenv("SAHI_OVERLAP",      "0.20"))
-SAHI_WORKERS        = int(os.getenv("SAHI_WORKERS",        "4"))
+SAHI_WORKERS        = int(os.getenv("SAHI_WORKERS",        "2"))
 SAHI_NMS_IOU        = float(os.getenv("SAHI_NMS_IOU",      "0.45"))
+# Número máximo de tiles processados por frame.
+# Com PyTorch CPU: use 4 (metade) para manter ~3-5 FPS.
+# Com OpenVINO: pode usar 0 (sem limite = todos os tiles).
+SAHI_MAX_TILES      = int(os.getenv("SAHI_MAX_TILES",      "4"))
 
 INFERENCE_BACKEND   = os.getenv("INFERENCE_BACKEND",       "pytorch").strip().lower()
 OPENVINO_MODEL_XML  = os.getenv("OPENVINO_MODEL_XML",      "").strip()
@@ -290,20 +297,24 @@ class SAHITileEngine:
         """
         Inferência fatiada assíncrona sobre o frame completo.
 
-        Args:
-            frame    : frame BGR (np.ndarray)
-            infer_fn : função que aceita um frame recortado e devolve list[dict]
-                       com chaves: box, class_id, confidence, track_id, mask_area_px
-
-        Returns:
-            Lista de detecções no espaço de coordenadas do frame completo,
-            já pós-NMS global.
+        Com PyTorch CPU: limita tiles a SAHI_MAX_TILES por frame (evita 0 FPS).
+        Com OpenVINO: pode processar todos os tiles sem limites.
         """
         h, w = frame.shape[:2]
-        tiles = self._compute_tiles(h, w)
-        n_tiles = len(tiles)
+        all_tiles = self._compute_tiles(h, w)
 
-        LOGGER.debug("[SAHI] Frame %dx%d → %d tiles", w, h, n_tiles)
+        # Limita o número de tiles se SAHI_MAX_TILES > 0
+        # Estratégia: distribui os tiles uniformemente para cobertura máxima
+        if SAHI_MAX_TILES > 0 and len(all_tiles) > SAHI_MAX_TILES:
+            step = len(all_tiles) / SAHI_MAX_TILES
+            tiles = [all_tiles[int(i * step)] for i in range(SAHI_MAX_TILES)]
+            LOGGER.debug("[SAHI] Limitado a %d/%d tiles (SAHI_MAX_TILES=%d)",
+                         len(tiles), len(all_tiles), SAHI_MAX_TILES)
+        else:
+            tiles = all_tiles
+
+        n_tiles = len(tiles)
+        LOGGER.debug("[SAHI] Frame %dx%d → %d tiles ativos", w, h, n_tiles)
 
         futures = {}
         for (x1, y1, x2, y2) in tiles:
@@ -316,7 +327,7 @@ class SAHITileEngine:
         all_dets: List[Dict] = []
         for future in as_completed(futures):
             try:
-                dets = future.result(timeout=5.0)
+                dets = future.result(timeout=8.0)
                 all_dets.extend(dets)
             except Exception as exc:
                 LOGGER.warning("[SAHI] Tile future exception: %s", exc)

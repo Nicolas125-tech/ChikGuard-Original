@@ -1803,10 +1803,26 @@ def _save_bird_track_points():
         db.session.commit()
     last_track_point_save_time = now
 
-def detectar_objetos(frame):
+def detectar_objetos(frame, pre_detections=None):
+    """
+    Processa detecções e atualiza o estado global de aves.
+
+    Args:
+        frame          : frame BGR atual
+        pre_detections : lista de detecções já calculadas (da InferencePipeline).
+                         Quando fornecidas, **não** chama detector.detect() novamente,
+                         evitando dupla inferência SAHI que causa 0 FPS.
+    """
     global object_count
     draw_frame = frame.copy()
-    detections = detector.detect(draw_frame)
+
+    # ── Inferência ─────────────────────────────────────────────────────────────
+    # Se detecções foram pré-calculadas (InferencePipeline / SAHI async), usa-as.
+    # Caso contrário cai para inferência síncrona direta (modo legado ou debug).
+    if pre_detections is not None:
+        detections = pre_detections
+    else:
+        detections = detector.detect(draw_frame)
 
     # Active Learning Pipeline: Capture uncertain detections for retraining
     try:
@@ -2372,10 +2388,10 @@ def camera_loop():
                     # Executar análise de comportamento/imobilidade no frame
                     if MODO_DETECCAO == "aves":
                         _check_tampering(frame)
-                        # Processar detecções YOLO brutas com o fluxo completo de rastreamento
-                        draw_frame = detectar_objetos(frame)
+                        # Passa detecções já calculadas — NÃO chama detector.detect() novamente
+                        draw_frame = detectar_objetos(frame, pre_detections=detections)
                     else:
-                        draw_frame = detectar_objetos(frame)
+                        draw_frame = detectar_objetos(frame, pre_detections=detections)
                 else:
                     # Sem resultado ainda: exibir frame bruto com HUD parcial
                     draw_frame = frame.copy()
