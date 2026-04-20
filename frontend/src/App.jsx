@@ -199,8 +199,6 @@ function AppCore() {
   if (showLogin) {
     return (
       <LoginScreen
-        serverIP={serverIP}
-        setServerIP={saveServer}
         onBack={() => setShowLogin(false)}
         onLogin={({ accessToken, role: nextRole, username: nextUser, status: nextStatus }) => {
           const safeRole = String(nextRole || 'admin').toLowerCase();
