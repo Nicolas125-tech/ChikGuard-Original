@@ -71,6 +71,16 @@ function AppCore() {
     return () => clearTimeout(t);
   }, []);
 
+  // Corrigir cache stale: admin/superadmin nunca devem ficar em PENDING
+  useEffect(() => {
+    const cachedRole = localStorage.getItem(STORAGE.role) || '';
+    const cachedStatus = localStorage.getItem('cg_status') || '';
+    if (['superadmin', 'admin'].includes(cachedRole) && cachedStatus === 'PENDING') {
+      localStorage.setItem('cg_status', 'ACTIVE');
+      setStatus('ACTIVE');
+    }
+  }, []);
+
   // Listener do Supabase Auth (OAuth redirect, session refresh, etc.)
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -80,8 +90,8 @@ function AppCore() {
         let accessToken = session.access_token;
         let nextRole = String(session.user.app_metadata?.role || 'viewer').toLowerCase();
         let nextUser = session.user.email;
-        // OAuth users começam como PENDING até o admin aprovar
-        let nextStatus = session.user.app_metadata?.status || 'PENDING';
+        // Default: ACTIVE (PENDING somente quando profile diz explicitamente)
+        let nextStatus = 'ACTIVE';
 
         // Buscar role/status real da tabela profiles
         try {
@@ -96,6 +106,11 @@ function AppCore() {
           }
         } catch {
           // Profile ainda não existe — usar valores padrão
+        }
+
+        // Superadmin e admin são sempre ACTIVE, nunca ficam em PENDING
+        if (['superadmin', 'admin'].includes(nextRole)) {
+          nextStatus = 'ACTIVE';
         }
 
         localStorage.setItem(STORAGE.token, accessToken);

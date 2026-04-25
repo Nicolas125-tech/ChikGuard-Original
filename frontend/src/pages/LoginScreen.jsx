@@ -25,12 +25,16 @@ export default function LoginScreen({ onBack, onLogin }) {
         if (error) throw error;
         
         let role = 'viewer';
-        let status = 'PENDING';
+        let status = 'ACTIVE';
         if (data.session) {
            const { data: profile } = await supabase.from('profiles').select('role, status').eq('id', data.session.user.id).single();
            if (profile) {
               role = profile.role || role;
-              status = profile.status || status;
+              status = profile.status || 'ACTIVE';
+           }
+           // Superadmin e admin sao sempre ACTIVE
+           if (['superadmin', 'admin'].includes(role)) {
+              status = 'ACTIVE';
            }
            onLogin({ accessToken: data.session.access_token, role, username: email, status });
         }
