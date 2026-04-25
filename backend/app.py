@@ -625,7 +625,22 @@ with app.app_context():
         db.session.add(Account(username=VIEWER_USERNAME, password_hash=viewer_hash, role="viewer", active=True))
         db.session.commit()
 
+    # ── Super Admin Account ───────────────────────────────────────────────────
+    SUPERADMIN_EMAIL = "nicolasbissoqui@gmail.com"
+    if not Account.query.filter_by(username=SUPERADMIN_EMAIL).first():
+        sa_hash = bcrypt.generate_password_hash(admin_password_env or "chikguard_admin_secure").decode("utf-8")
+        db.session.add(Account(username=SUPERADMIN_EMAIL, password_hash=sa_hash, role="superadmin", active=True))
+        db.session.commit()
+        print(f"[INIT] Super Admin account created: {SUPERADMIN_EMAIL}")
+    if not User.query.filter_by(username=SUPERADMIN_EMAIL).first():
+        sa_user_hash = bcrypt.generate_password_hash(admin_password_env or "chikguard_admin_secure").decode("utf-8")
+        db.session.add(User(username=SUPERADMIN_EMAIL, password=sa_user_hash))
+        db.session.commit()
+
     default_perms = {
+        "superadmin": [
+            "*"
+        ],
         "admin": [
             "*"
         ],
