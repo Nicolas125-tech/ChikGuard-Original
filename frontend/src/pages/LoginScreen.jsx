@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
-import { Mail, Lock, ArrowRight, Loader, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Loader, Eye, EyeOff, Globe, ChevronDown } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 import { STORAGE } from '../utils/config';
 
-export default function LoginScreen({ onBack, onLogin }) {
+export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [mode, setMode] = useState('login');
+  const [server, setServer] = useState(serverIP || localStorage.getItem('cg_ip') || '');
+  const [showServer, setShowServer] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -149,6 +151,36 @@ export default function LoginScreen({ onBack, onLogin }) {
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
+          </div>
+
+          {/* Server / Cloudflare Tunnel */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowServer(v => !v)}
+              className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2 hover:text-slate-300 transition-colors"
+            >
+              <Globe size={13} />
+              Servidor / Tunnel
+              <ChevronDown size={13} className={`transition-transform ${showServer ? 'rotate-180' : ''}`} />
+            </button>
+            {showServer && (
+              <div className="relative animate-fade-in-down">
+                <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                <input
+                  type="text"
+                  value={server}
+                  onChange={e => {
+                    setServer(e.target.value);
+                    localStorage.setItem('cg_ip', e.target.value);
+                    if (setServerIP) setServerIP(e.target.value);
+                  }}
+                  className="w-full bg-slate-950/80 border border-slate-800 text-white rounded-xl focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 pl-11 pr-4 py-3.5 outline-none transition-all placeholder:text-slate-600 text-sm"
+                  placeholder="ex: abc123.trycloudflare.com ou 192.168.1.100"
+                />
+                <p className="text-[10px] text-slate-600 mt-1.5 pl-1">Cole o link do Cloudflare Tunnel ou IP do servidor backend.</p>
+              </div>
+            )}
           </div>
 
           <button
