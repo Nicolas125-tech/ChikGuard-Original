@@ -14,6 +14,7 @@ import numpy as np
 import time
 import threading
 import logging
+import collections
 from typing import List, Dict, Any, Optional
 from ultralytics import YOLO
 
@@ -64,10 +65,71 @@ class VisionEngine:
         # 4. State Management
         self.last_results = None
         self.frame_count = 0
-        self.fps_metrics = deque_maxlen = 30
+        self.fps_metrics = collections.deque(maxlen=30)
         self._lock = threading.Lock()
         
+        # 5. Async Video Stream Management
+        self.cap = None
+        self.stream_thread = None
+        self.is_running = False
+        self.frame_buffer = collections.deque(maxlen=3) # Small buffer to prevent lag
+
         logger.info(f"VisionEngine V3 loaded on {device}. SAHI: {self.use_sahi}")
+
+    def start_stream(self, source: str | int) -> bool:
+        """Starts the asynchronous video stream."""
+        with self._lock:
+            if self.is_running:
+                logger.warning("Stream is already running.")
+                return False
+
+            self.cap = cv2.VideoCapture(source)
+            if not self.cap.isOpened():
+                logger.error(f"Failed to open video source: {source}")
+                return False
+
+            self.is_running = True
+            self.stream_thread = threading.Thread(target=self._capture_loop, daemon=True)
+            self.stream_thread.start()
+            logger.info(f"Started video stream from source: {source}")
+            return True
+
+    def _capture_loop(self):
+        """Background daemon thread that continuously reads frames."""
+        while self.is_running:
+            if self.cap is None or not self.cap.isOpened():
+                break
+
+            ret, frame = self.cap.read()
+            if not ret:
+                logger.warning("Failed to read frame from stream.")
+                time.sleep(0.1) # Prevent tight loop on failure
+                continue
+
+            # Put frame in deque (automatically drops oldest if full)
+            self.frame_buffer.append(frame)
+
+    def read_frame(self) -> Optional[np.ndarray]:
+        """Reads the latest frame from the buffer, preventing lag."""
+        try:
+            # Pop the most recent frame and clear older ones to maintain chronological sync
+            # with tracking algorithms
+            frame = self.frame_buffer.pop()
+            self.frame_buffer.clear()
+            return frame
+        except IndexError:
+            return None # Buffer is empty
+
+    def stop_stream(self):
+        """Stops the asynchronous video stream."""
+        with self._lock:
+            self.is_running = False
+            if self.stream_thread:
+                self.stream_thread.join(timeout=1.0)
+            if self.cap:
+                self.cap.release()
+            self.frame_buffer.clear()
+            logger.info("Video stream stopped.")
 
     def pre_process(self, frame: np.ndarray) -> np.ndarray:
         """
@@ -87,6 +149,15 @@ class VisionEngine:
         """
         t0 = time.perf_counter()
         
+        # Instantiate analytics engine on the fly if needed
+        analytics_engine = None
+        try:
+            from src.core.analytics_engine import AnalyticsEngine
+            from database import db
+            analytics_engine = AnalyticsEngine(db.session, camera_id="stream")
+        except ImportError:
+            pass
+
         # A. Pre-processing
         clean_frame = self.pre_process(frame)
         
@@ -122,6 +193,10 @@ class VisionEngine:
                     verbose=False
                 )
             detections = self._format_yolo_output(results[0])
+
+        # Generate metrics
+        if analytics_engine and detections:
+            analytics_engine.export_metrics(detections, t0)
 
         latency = (time.perf_counter() - t0) * 1000
         

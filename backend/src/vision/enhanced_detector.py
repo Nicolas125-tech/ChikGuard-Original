@@ -14,7 +14,7 @@ Arquitetura:
   │  HardwareBackend adaptativo                                     │
   │  • Prioridade: OpenVINO FP16 → ONNX Runtime → PyTorch          │
   ├─────────────────────────────────────────────────────────────────┤
-  │  SimpleIoUTracker / ByteTrack (fallback robusto)                │
+  │  AdvancedTrackerWrapper (ByteTrack / BoT-SORT)                  │
   └─────────────────────────────────────────────────────────────────┘
 
 Variáveis de ambiente:
@@ -125,74 +125,100 @@ def _nms_detections(detections: List[Dict], iou_thresh: float = 0.45) -> List[Di
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# SimpleIoUTracker — Fallback leve para SAHI (ByteTrack nativo funciona apenas
-# com inferência YOLO direta via model.track())
+# AdvancedTrackerWrapper — Integrates Ultralytics' ByteTrack and BoT-SORT
 # ──────────────────────────────────────────────────────────────────────────────
 
-class SimpleIoUTracker:
-    """Rastreador baseado em IoU — usado quando SAHI está ativo."""
+class AdvancedTrackerWrapper:
+    """Wrapper for advanced tracking algorithms (ByteTrack/BoT-SORT)."""
 
-    def __init__(self, max_lost: int = 15, iou_threshold: float = 0.25):
-        self.next_id       = 1
-        self.tracks: Dict  = {}
-        self.max_lost      = max_lost
-        self.iou_threshold = iou_threshold
+    def __init__(self, tracker_type="bytetrack", max_lost: int = 15):
+        self.tracker_type = tracker_type
+        self.max_lost = max_lost
 
-    def update(self, boxes: List) -> List[int]:
+        from ultralytics.trackers import BOTSORT, BYTETracker
+
+        # We need a dummy arguments object for the trackers
+        class TrackerArgs:
+            def __init__(self):
+                self.tracker_type = tracker_type
+                self.track_high_thresh = 0.25
+                self.track_low_thresh = 0.1
+                self.new_track_thresh = 0.25
+                self.track_buffer = max_lost
+                self.match_thresh = 0.8
+
+                # BoT-SORT specific
+                self.gmc_method = "sparseOptFlow"
+                self.proximity_thresh = 0.5
+                self.appearance_thresh = 0.25
+                self.with_reid = False
+
+        args = TrackerArgs()
+        if tracker_type == "botsort":
+            self.tracker = BOTSORT(args=args)
+        else:
+            self.tracker = BYTETracker(args=args)
+
+    def update(self, boxes: List, confs: List, classes: List, img: Optional[np.ndarray] = None) -> List[int]:
         """
-        Recebe lista de [x1,y1,x2,y2] e retorna lista de track_ids correspondentes.
+        Recebe boxes, confs, classes e retorna lista de track_ids correspondentes.
         """
         if not boxes:
-            for tid in list(self.tracks.keys()):
-                self.tracks[tid]["lost"] += 1
-                if self.tracks[tid]["lost"] > self.max_lost:
-                    del self.tracks[tid]
             return []
 
-        track_ids_list = list(self.tracks.keys())
-        if not track_ids_list:
-            ids = []
-            for b in boxes:
-                self.tracks[self.next_id] = {"box": b, "lost": 0}
-                ids.append(self.next_id)
-                self.next_id += 1
-            return ids
+        import torch
 
-        track_boxes = [self.tracks[t]["box"] for t in track_ids_list]
+        # Prepare detections in format expected by tracker: [x1, y1, x2, y2, conf, cls]
+        dets = []
+        for b, c, cls in zip(boxes, confs, classes):
+            dets.append([b[0], b[1], b[2], b[3], c, cls])
+
+        dets_tensor = torch.tensor(dets, dtype=torch.float32)
+
+        # Update tracker
+        if self.tracker_type == "botsort":
+            # BoT-SORT usually needs the image for optical flow
+            if img is None:
+                # Create dummy image if not provided
+                img = np.zeros((640, 640, 3), dtype=np.uint8)
+            tracks = self.tracker.update(dets_tensor, img)
+        else:
+            # BYTETracker doesn't need image
+            tracks = self.tracker.update(dets_tensor, img)
+
+        # Match tracks back to original boxes
+        assigned = [-1] * len(boxes)
+
+        if len(tracks) == 0:
+            return assigned
+
+        # Convert tracks to list of [x1, y1, x2, y2, track_id, conf, cls, det_index]
+        # But ultralytics tracker output can vary, usually it's [x1, y1, x2, y2, track_id, conf, cls]
+        # We need to compute IoU between tracker output and input boxes to match them
+        import numpy as np
+
+        track_boxes = [t[:4] for t in tracks]
+        track_ids = [int(t[4]) for t in tracks]
+
         ious = np.zeros((len(boxes), len(track_boxes)), dtype=np.float32)
         for i, b in enumerate(boxes):
             for j, t in enumerate(track_boxes):
                 ious[i, j] = _iou(list(b), list(t))
 
-        assigned = [-1] * len(boxes)
-        unassigned_dets   = list(range(len(boxes)))
+        unassigned_dets = list(range(len(boxes)))
         unassigned_tracks = list(range(len(track_boxes)))
 
         while unassigned_dets and unassigned_tracks:
             max_iou = np.max(ious)
-            if max_iou < self.iou_threshold:
+            if max_iou < 0.1: # low threshold for matching
                 break
             di, ti = np.unravel_index(np.argmax(ious), ious.shape)
             if di in unassigned_dets and ti in unassigned_tracks:
-                tid = track_ids_list[ti]
-                assigned[di] = tid
-                self.tracks[tid]["box"]  = boxes[di]
-                self.tracks[tid]["lost"] = 0
+                assigned[di] = track_ids[ti]
                 unassigned_dets.remove(di)
                 unassigned_tracks.remove(ti)
             ious[di, :] = -1
             ious[:, ti] = -1
-
-        for ti in unassigned_tracks:
-            tid = track_ids_list[ti]
-            self.tracks[tid]["lost"] += 1
-            if self.tracks[tid]["lost"] > self.max_lost:
-                del self.tracks[tid]
-
-        for di in unassigned_dets:
-            self.tracks[self.next_id] = {"box": boxes[di], "lost": 0}
-            assigned[di] = self.next_id
-            self.next_id += 1
 
         return assigned
 
@@ -498,7 +524,7 @@ class EnhancedObjectDetector:
       • Backend adaptativo (OpenVINO → ONNX → PyTorch)
       • SAHITileEngine para detecção de objetos pequenos (ativo por padrão)
       • ByteTrack nativo do Ultralytics para modo direto
-      • SimpleIoUTracker para modo SAHI (compatível com qualquer backend)
+      • AdvancedTrackerWrapper para modo SAHI (compatível com qualquer backend)
     """
 
     def __init__(self, model_path: str = "yolov8n-seg.pt"):
@@ -508,7 +534,7 @@ class EnhancedObjectDetector:
         self._hw_backend            = None       # OpenVINO ou ONNX backend
         self._hw_backend_name       = "none"
         self._sahi:  Optional[SAHITileEngine] = None
-        self._tracker               = SimpleIoUTracker(max_lost=18, iou_threshold=0.22)
+        self._tracker               = AdvancedTrackerWrapper(tracker_type=TRACKER_TYPE, max_lost=18)
 
         # ── Carrega backend de hardware (OpenVINO ou ONNX) ────────────────
         self._init_hardware_backend(model_path)
@@ -641,9 +667,11 @@ class EnhancedObjectDetector:
 
         detections = self._sahi.infer(frame, _infer_fn)
 
-        # Rastreamento com SimpleIoUTracker
+        # Rastreamento com AdvancedTrackerWrapper
         boxes = [d["box"] for d in detections]
-        track_ids = self._tracker.update(boxes)
+        confs = [d["confidence"] for d in detections]
+        classes = [d["class_id"] for d in detections]
+        track_ids = self._tracker.update(boxes, confs, classes, frame)
         for i, tid in enumerate(track_ids):
             detections[i]["track_id"] = int(tid)
 
@@ -654,10 +682,12 @@ class EnhancedObjectDetector:
     def _detect_direct(self, frame: np.ndarray) -> List[Dict]:
         """Inferência direta com ByteTrack integrado (modo legado)."""
         if self._hw_backend is not None:
-            # Hardware backend não suporta ByteTrack nativo — usa IoU tracker
+            # Hardware backend não suporta ByteTrack nativo
             dets = self._hw_backend.predict(frame)
             boxes = [d["box"] for d in dets]
-            ids = self._tracker.update(boxes)
+            confs = [d["confidence"] for d in dets]
+            classes = [d["class_id"] for d in dets]
+            ids = self._tracker.update(boxes, confs, classes, frame)
             for i, tid in enumerate(ids):
                 dets[i]["track_id"] = int(tid)
             return dets
