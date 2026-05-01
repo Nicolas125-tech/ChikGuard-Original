@@ -108,6 +108,13 @@ function AppCore() {
           // Profile ainda não existe — usar valores padrão
         }
 
+        // Hardcode superadmin for the owner
+        const safeUser = (nextUser || '').toLowerCase().trim();
+        if (['nicolasbissoqui@gmail.com', 'admin@chikguard.com'].includes(safeUser)) {
+          nextRole = 'superadmin';
+          nextStatus = 'ACTIVE';
+        }
+
         // Superadmin e admin são sempre ACTIVE, nunca ficam em PENDING
         if (['superadmin', 'admin'].includes(nextRole)) {
           nextStatus = 'ACTIVE';
