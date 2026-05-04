@@ -5,6 +5,7 @@ from email.message import EmailMessage
 from flask import Blueprint, jsonify, request
 from supabase import create_client
 
+
 def create_auth_blueprint(deps):
     bp = Blueprint("auth_api", __name__)
 
@@ -90,8 +91,59 @@ def create_auth_blueprint(deps):
             row.password_hash = bcrypt.generate_password_hash(pwd).decode("utf-8")
 
         db.session.commit()
-        audit("account_updated", source="security", details={"account_id": account_id, "payload_keys": list(data.keys())})
+        audit(
+            "account_updated",
+            source="security",
+            details={
+                "account_id": account_id,
+                "payload_keys": list(
+                    data.keys())})
         return jsonify({"msg": "Conta atualizada", "item": row.to_dict()})
+
+    @bp.route("/api/accounts/users/<int:account_id>", methods=["DELETE"])
+    def accounts_user_delete(account_id):
+        ok, resp = guard_critical_action("accounts_manage", permission="accounts.manage")
+        if not ok:
+            return resp
+
+        row = Account.query.get(account_id)
+        if row is None:
+            return jsonify({"msg": "Conta nao encontrada"}), 404
+
+        if row.role == "superadmin":
+            return jsonify({"msg": "Nao é possivel excluir um superadmin localmente"}), 403
+
+        username = row.username
+        is_email = "@" in username
+
+        try:
+            db.session.delete(row)
+            db.session.commit()
+            audit("account_deleted", source="security", details={"account_id": account_id, "username": username})
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({"error": f"Erro ao excluir conta local: {str(e)}"}), 500
+
+        if is_email:
+            try:
+                SUPABASE_URL = os.environ.get("SUPABASE_URL")
+                SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+
+                if SUPABASE_URL and SUPABASE_KEY and SUPABASE_KEY != "YOUR_SUPABASE_SERVICE_ROLE_KEY_HERE":
+                    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+                    try:
+                        users_resp = supabase.auth.admin.list_users()
+                        for u in users_resp:
+                            if u.email == username:
+                                supabase.auth.admin.delete_user(u.id)
+                                break
+                    except Exception as e:
+                        print("Failed to delete user from Supabase auth:", e)
+            except Exception as e:
+                print("Supabase connection error during delete:", e)
+
+        return jsonify({"msg": "Conta excluida com sucesso"})
 
     @bp.route("/api/accounts/permissions", methods=["GET", "POST"])
     def accounts_permissions():
@@ -118,11 +170,14 @@ def create_auth_blueprint(deps):
             row.allowed = allowed
 
         db.session.commit()
-        audit("permission_updated", source="security", details={"role": role, "permission": permission, "allowed": allowed})
+        audit(
+            "permission_updated",
+            source="security",
+            details={
+                "role": role,
+                "permission": permission,
+                "allowed": allowed})
         return jsonify({"msg": "Permissao atualizada", "item": row.to_dict()})
-
-
-
 
     @bp.route("/api/admin/pending-users", methods=["GET"])
     def admin_pending_users():
@@ -162,11 +217,17 @@ def create_auth_blueprint(deps):
 
         from sqlalchemy import text
         try:
-            sql = text("UPDATE profiles SET status = 'ACTIVE', role = :r, approved_at = now() WHERE id = :uid RETURNING id")
+            sql = text("UPDATE profiles SET status = 'ACTIVE', role = :r, approved_at = now() "
+                       "WHERE id = :uid RETURNING id")
             res = db.session.execute(sql, {"r": target_role, "uid": target_user_id}).fetchone()
             db.session.commit()
             if res:
-                audit("iam_user_approved", source="security_db", details={"target_user_id": target_user_id, "role": target_role})
+                audit(
+                    "iam_user_approved",
+                    source="security_db",
+                    details={
+                        "target_user_id": target_user_id,
+                        "role": target_role})
                 return jsonify({"message": "User approved successfully", "data": {"id": target_user_id}}), 200
         except Exception as e:
             db.session.rollback()
@@ -191,7 +252,12 @@ def create_auth_blueprint(deps):
             if not response.data:
                 return jsonify({"msg": "Falha ao atualizar no Supabase"}), 400
 
-            audit("iam_user_approved", source="security", details={"target_user_id": target_user_id, "role": target_role})
+            audit(
+                "iam_user_approved",
+                source="security",
+                details={
+                    "target_user_id": target_user_id,
+                    "role": target_role})
             return jsonify({"message": "User approved successfully", "data": response.data}), 200
         except Exception as e:
             return jsonify({"error": str(e)}), 400
@@ -245,7 +311,6 @@ def create_auth_blueprint(deps):
         return jsonify({"message": "Ignorado"}), 400
 
     @bp.route("/api/login", methods=["POST", "OPTIONS"])
-
     def login():
         if request.method == "OPTIONS":
             return jsonify({}), 200
@@ -312,7 +377,6 @@ def create_auth_blueprint(deps):
                         status = supabase_status
         except Exception as e:
             print(f"Supabase sync error (non-critical): {e}")
-
 
         access_token = create_access_token(
             identity=str(account.id),
