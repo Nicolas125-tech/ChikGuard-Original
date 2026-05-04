@@ -34,7 +34,7 @@ export default function AdminPanel({ token, serverIP }) {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.access_token) return session.access_token;
-      } catch (_) { /* fallthrough */ }
+      } catch { /* fallthrough */ }
     }
     return token;
   }, [token]);
@@ -164,6 +164,31 @@ export default function AdminPanel({ token, serverIP }) {
       }
     } catch {
       alert('Erro de rede ao reativar conta.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+// ─── Excluir utilizador ────────────────────────────────────────────────────
+  const handleDelete = async (userId) => {
+    if (!window.confirm('Tem certeza que deseja excluir esta conta permanentemente? Esta ação não pode ser desfeita.')) return;
+    setActionLoading(userId);
+    try {
+      const authToken = await getAuthToken();
+      const res = await fetch(`${getBaseUrl(serverIP)}/api/accounts/users/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+      if (res.ok) {
+        setUsers((prev) => prev.filter((u) => u.id !== userId));
+      } else {
+        const d = await res.json().catch(() => ({}));
+        alert(`Erro ao excluir: ${d.msg || 'Falha desconhecida.'}`);
+      }
+    } catch {
+      alert('Erro de rede ao excluir conta.');
     } finally {
       setActionLoading(null);
     }
@@ -320,7 +345,7 @@ export default function AdminPanel({ token, serverIP }) {
                           </button>
                         ) : (
                           /* ── Suspender ── */
-                          <button
+<button
                             disabled={isActioning || isSuperadmin}
                             onClick={() => handleSuspend(u.id)}
                             title={isSuperadmin ? 'Superadmin não pode ser suspenso' : 'Suspender conta'}
@@ -329,6 +354,16 @@ export default function AdminPanel({ token, serverIP }) {
                             {isSuperadmin ? 'Protegido' : (isActioning ? '...' : 'Suspender')}
                           </button>
                         )}
+
+                        {/* ── Excluir ── */}
+                        <button
+                          disabled={isActioning || isSuperadmin}
+                          onClick={() => handleDelete(u.id)}
+                          title={isSuperadmin ? 'Superadmin não pode ser excluído' : 'Excluir conta'}
+                          className="flex items-center gap-1.5 bg-red-900/40 hover:bg-red-600/60 text-red-300 text-xs font-bold px-3.5 py-1.5 rounded-lg border border-red-700/50 transition-all disabled:opacity-30 whitespace-nowrap ml-2">
+                          <UserX size={13} />
+                          Excluir
+                        </button>
                       </td>
                     </tr>
                   );
