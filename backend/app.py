@@ -1881,63 +1881,79 @@ def detectar_objetos(frame, pre_detections=None):
         selected = detections
 
     now = time.time()
+
+    # Processamento leve: conversão e update de tracking sem segurar o lock do frame global
+    tracked = None
+    if MODO_DETECCAO == "aves" and sv is not None and spy_tracker is not None and behavior_engine is not None:
+        if selected:
+            xyxy = np.array([det["box"] for det in selected])
+            confidence = np.array([det["confidence"] for det in selected])
+            class_id = np.array([det["class_id"] for det in selected])
+            sv_detections = sv.Detections(xyxy=xyxy, confidence=confidence, class_id=class_id)
+        else:
+            sv_detections = sv.Detections.empty()
+
+        # Update ByteTrack Anti-Flicker SOTA
+        tracked = spy_tracker.update(sv_detections)
+
+        # Update Behavior
+        alerts = behavior_engine.update_immobility_and_get_alerts(tracked)
+        if alerts:
+            behavior_state["status"] = "ANOMALIA DETECTADA"
+        elif behavior_state.get("status", "") == "ANOMALIA DETECTADA" and not behavior_engine.dead_or_sick_ids:
+            behavior_state["status"] = "NORMAL"
+
     with lock:
-        if MODO_DETECCAO == "aves":
-            used_uids = set()
+        global object_count
+
+        if MODO_DETECCAO == "aves" and sv is not None and spy_tracker is not None:
+            # Reconstroi live_birds e injeta o stable_bird_uid
+            if tracked is not None and len(tracked) > 0:
+                for i in range(len(tracked)):
+                    if tracked.tracker_id is None:
+                        continue
+                    tid = int(tracked.tracker_id[i])
+                    box = tracked.xyxy[i].tolist()
+                    conf = float(tracked.confidence[i])
+                    cid = int(tracked.class_id[i])
+
+                    # Atualiza o "selected" com o UID estável para as funções de enriquecimento pegarem.
+                    # Relaxando a margem para 30 pixels de centroide (Kalman filter smoothing drift).
+                    tcx = (box[0] + box[2]) / 2.0
+                    tcy = (box[1] + box[3]) / 2.0
+                    for det in selected:
+                        dx1, dy1, dx2, dy2 = det["box"]
+                        dcx = (dx1 + dx2) / 2.0
+                        dcy = (dy1 + dy2) / 2.0
+                        if math.hypot(tcx - dcx, tcy - dcy) < 30.0:
+                            det["stable_bird_uid"] = tid
+                            break
+
+                    live_birds[tid] = {
+                        "box": [int(v) for v in box],
+                        "conf": conf,
+                        "last_seen": now,
+                        "class_name": _class_name_by_id(cid),
+                        "is_carcass": tid in behavior_engine.dead_or_sick_ids if behavior_engine else False,
+                    }
+        else:
             for det in selected:
                 tid = int(det["track_id"])
-                if tid < 0:
-                    continue
-                stable_uid = _resolve_stable_bird_uid(tid, det["box"], now, frame, used_uids)
-                used_uids.add(stable_uid)
-                det["stable_bird_uid"] = stable_uid
+                if tid >= 0:
+                    live_birds[tid] = {
+                        "box": [int(v) for v in det["box"]],
+                        "conf": float(det["confidence"]),
+                        "last_seen": now,
+                        "class_name": _class_name_by_id(det["class_id"]),
+                        "is_carcass": False,
+                    }
 
-                cx, cy, area = _box_center_area(det["box"])
-                prev_state = bird_last_state.get(stable_uid)
-                vx = 0.0
-                vy = 0.0
-                if prev_state is not None:
-                    dt = max(1e-3, now - float(prev_state["last_seen"]))
-                    px, py = prev_state["center"]
-                    vx = (cx - float(px)) / dt
-                    vy = (cy - float(py)) / dt
+        # Cleanup legacy TTL
+        to_del = [uid for uid, data in live_birds.items() if now - float(data["last_seen"]) > BIRD_LIVE_TTL_SEC]
+        for uid in to_del:
+            del live_birds[uid]
 
-                bird_last_state[stable_uid] = {
-                    "center": (cx, cy),
-                    "area": area,
-                    "last_seen": now,
-                    "vx": vx,
-                    "vy": vy,
-                    "appearance": _extract_appearance_signature(frame, det["box"]),
-                }
-
-                live_birds[stable_uid] = {
-                    "box": [int(v) for v in det["box"]],
-                    "conf": float(det["confidence"]),
-                    "last_seen": now,
-                    "track_id": tid,
-                    "mask_area_px": float(det.get("mask_area_px", 0.0)),
-                }
-
-            stale_live = [uid for uid, info in live_birds.items() if (now - float(info["last_seen"])) > BIRD_LIVE_TTL_SEC]
-            for uid in stale_live:
-                live_birds.pop(uid, None)
-
-            stale_tracks = []
-            for tracker_id, uid in track_to_bird_uid.items():
-                last_state = bird_last_state.get(uid)
-                if last_state is None or (now - float(last_state["last_seen"])) > (REID_MAX_GAP_SEC * 2):
-                    stale_tracks.append(tracker_id)
-            for tracker_id in stale_tracks:
-                track_to_bird_uid.pop(tracker_id, None)
-
-            stale_states = [uid for uid, state in bird_last_state.items() if (now - float(state["last_seen"])) > (REID_MAX_GAP_SEC * 4)]
-            for uid in stale_states:
-                bird_last_state.pop(uid, None)
-
-            object_count = sum(1 for info in live_birds.values() if (now - float(info["last_seen"])) <= BIRD_LIVE_TTL_SEC)
-        else:
-            object_count = len(selected)
+        object_count = len(live_birds)
 
     if MODO_DETECCAO == "aves":
         _analyze_behavior(selected, frame.shape)
@@ -1968,12 +1984,26 @@ def detectar_objetos(frame, pre_detections=None):
             now_sc = time.time()
             species_counts = count_by_species(live_birds, selected, now_sc, BIRD_LIVE_TTL_SEC)
 
-            # Desenhar detecções ricas
-            draw_frame = CVOverlay.draw_detections(
-                draw_frame, selected,
-                carcass_uids=carcass_state.get("uids", set()),
-                class_name_fn=_class_name_by_id,
-            )
+            # SOTA Overlay
+            if MODO_DETECCAO == "aves" and sv is not None and box_annotator is not None:
+                if tracked is not None and len(tracked) > 0:
+                    labels = []
+                    for i in range(len(tracked)):
+                        tracker_id = tracked.tracker_id[i] if tracked.tracker_id is not None else -1
+                        conf = tracked.confidence[i]
+                        labels.append(f"#{tracker_id} {conf:.2f}")
+
+                    draw_frame = box_annotator.annotate(scene=draw_frame, detections=tracked)
+                    draw_frame = label_annotator.annotate(scene=draw_frame, detections=tracked, labels=labels)
+                    draw_frame = behavior_engine.annotate_heatmap(draw_frame, tracked)
+            else:
+                # Desenhar detecções ricas legadas se SOTA nao rodou
+                draw_frame = CVOverlay.draw_detections(
+                    draw_frame, selected,
+                    carcass_uids=carcass_state.get("uids", set()),
+                    class_name_fn=_class_name_by_id,
+                )
+
             # HUD de performance
             _metrics_data = _perf_metrics.get() if _perf_metrics else {"fps_camera": 0.0, "fps_inference": 0.0, "latency_ms": 0.0}
             draw_frame = CVOverlay.draw_hud(
@@ -1986,26 +2016,44 @@ def detectar_objetos(frame, pre_detections=None):
         else:
             # ── Fallback legado ───────────────────────────────────────────────
             font = cv2.FONT_HERSHEY_PLAIN
-            for det in selected:
-                x1, y1, x2, y2 = det["box"]
-                class_name = _class_name_by_id(det["class_id"]) or "obj"
-                tid = int(det.get("stable_bird_uid", det["track_id"]))
-                confidence = float(det["confidence"])
-                is_carcass = tid in carcass_state.get("uids", set())
-                color = (0, 0, 0) if is_carcass else (0, 255, 0)
-                cv2.rectangle(draw_frame, (x1, y1), (x2, y2), color, 2)
-                if is_carcass:
-                    label = f"POSSIVEL CARCACA ID:{tid}"
-                else:
-                    label = f"{class_name} ID:{tid} ({confidence:.2f})" if tid >= 0 else f"{class_name} ({confidence:.2f})"
-                cv2.putText(draw_frame, label, (x1, max(20, y1 - 5)), font, 1.2, color, 2)
 
-            if MODO_DETECCAO == "aves":
-                cv2.putText(draw_frame, f"Aves visiveis: {object_count}", (10, 30), cv2.FONT_HERSHEY_PLAIN, 2, (0, 255, 0), 2)
+            # SOTA fallback drawing
+            if MODO_DETECCAO == "aves" and sv is not None and box_annotator is not None:
+                if tracked is not None and len(tracked) > 0:
+                    labels = []
+                    for i in range(len(tracked)):
+                        tracker_id = tracked.tracker_id[i] if tracked.tracker_id is not None else -1
+                        conf = tracked.confidence[i]
+                        labels.append(f"#{tracker_id} {conf:.2f}")
+
+                    draw_frame = box_annotator.annotate(scene=draw_frame, detections=tracked)
+                    draw_frame = label_annotator.annotate(scene=draw_frame, detections=tracked, labels=labels)
+                    draw_frame = behavior_engine.annotate_heatmap(draw_frame, tracked)
+
+                cv2.putText(draw_frame, f"Aves visiveis: {object_count}", (10, 30), font, 2, (0, 255, 0), 2)
                 btxt = f"Comportamento: {behavior_state['status']}"
-                cv2.putText(draw_frame, btxt, (10, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (30, 220, 255), 1)
+                cv2.putText(draw_frame, btxt, (10, 55), font, 1.5, (30, 220, 255), 2)
             else:
-                cv2.putText(draw_frame, f"Objetos: {object_count}", (10, 30), cv2.FONT_HERSHEY_PLAIN, 2, (0, 255, 0), 2)
+                for det in selected:
+                    x1, y1, x2, y2 = det["box"]
+                    class_name = _class_name_by_id(det["class_id"]) or "obj"
+                    tid = int(det.get("stable_bird_uid", det.get("track_id", -1)))
+                    confidence = float(det["confidence"])
+                    is_carcass = tid in carcass_state.get("uids", set())
+                    color = (0, 0, 0) if is_carcass else (0, 255, 0)
+                    cv2.rectangle(draw_frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
+                    if is_carcass:
+                        label = f"POSSIVEL CARCACA ID:{tid}"
+                    else:
+                        label = f"{class_name} ID:{tid} ({confidence:.2f})" if tid >= 0 else f"{class_name} ({confidence:.2f})"
+                    cv2.putText(draw_frame, label, (int(x1), max(20, int(y1) - 5)), font, 1.2, color, 2)
+
+                if MODO_DETECCAO == "aves":
+                    cv2.putText(draw_frame, f"Aves visiveis: {object_count}", (10, 30), font, 2, (0, 255, 0), 2)
+                    btxt = f"Comportamento: {behavior_state['status']}"
+                    cv2.putText(draw_frame, btxt, (10, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (30, 220, 255), 1)
+                else:
+                    cv2.putText(draw_frame, f"Objetos: {object_count}", (10, 30), font, 2, (0, 255, 0), 2)
 
             cfg = f"tracker={TRACKER_CONFIG} conf={DETECTION_CONF:.2f} classe={BIRD_CLASS_NAME}"
             cv2.putText(draw_frame, cfg, (10, 78), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 0), 1)
