@@ -1,4 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import ChickenPhoto from '../components/ChickenPhoto';
+
 import {
   LayoutDashboard, Camera, Wind, History, Settings, Database,
   LogOut, Bird, Bell, Cpu, BarChart3, Shield, Menu, X,
@@ -105,7 +107,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
         items: [
           { id: 'overview',  label: 'Visão Geral',        icon: LayoutDashboard },
           { id: 'camera',    label: 'Câmeras Ao Vivo',    icon: Camera },
-          { id: 'birds',     label: 'Aves & Tracking',    icon: Bird },
+          { id: 'birds',     label: 'Aves & Tracking',    icon: ChickenPhoto },
           { id: 'alerts',    label: 'Alertas',            icon: Bell, badge: alertCount },
         ]
       },
