@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, request, send_file, has_request_context
+from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager, create_access_token, verify_jwt_in_request, get_jwt_identity
@@ -365,6 +366,12 @@ app.config["SQLALCHEMY_DATABASE_URI"] = SETTINGS.database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["JWT_SECRET_KEY"] = SETTINGS.jwt_secret_key
 
+# Trust proxies for standard setup (1 proxy layer by default, adjustable via env vars)
+proxy_depth = int(os.getenv("PROXY_DEPTH", "1"))
+if proxy_depth > 0:
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=proxy_depth, x_proto=proxy_depth, x_host=proxy_depth, x_prefix=0)
+
+
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 db.init_app(app)
@@ -454,7 +461,8 @@ def _request_actor():
 
 def _request_ip():
     try:
-        return str(request.headers.get("X-Forwarded-For", request.remote_addr) or "").split(",")[0].strip()
+        # Secure IP resolution relies on ProxyFix middleware adjusting request.remote_addr
+        return request.remote_addr or ""
     except Exception:
         return ""
 
