@@ -46,7 +46,7 @@ class VisionEngine:
         # 1. Load Model (YOLOv8-seg or YOLOv10)
         # For segmentation + tracking, YOLOv8-seg is still the standard.
         # YOLOv10-N/S can be used if provided.
-        self.model = YOLO(model_path)
+        self.model = YOLO(model_path, task='segment')
         self.model.to(self.device)
         
         # 2. Initialize SAHI if enabled
@@ -68,6 +68,19 @@ class VisionEngine:
         self.fps_metrics = collections.deque(maxlen=30)
         self._lock = threading.Lock()
         
+        # 4b. Tracker Management
+        self.tracker = None
+        if self.use_sahi:
+            try:
+                from src.vision.enhanced_detector import AdvancedTrackerWrapper
+                self.tracker = AdvancedTrackerWrapper(tracker_type="bytetrack", max_lost=15)
+                logger.info("AdvancedTrackerWrapper initialized for SAHI.")
+            except ImportError:
+                logger.warning("AdvancedTrackerWrapper could not be imported from src.vision.enhanced_detector.")
+
+        # 4c. Analytics Context
+        self.analytics_engine = None
+
         # 5. Async Video Stream Management
         self.cap = None
         self.stream_thread = None
@@ -87,6 +100,8 @@ class VisionEngine:
             if not self.cap.isOpened():
                 logger.error(f"Failed to open video source: {source}")
                 return False
+
+            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
             self.is_running = True
             self.stream_thread = threading.Thread(target=self._capture_loop, daemon=True)
@@ -149,14 +164,14 @@ class VisionEngine:
         """
         t0 = time.perf_counter()
         
-        # Instantiate analytics engine on the fly if needed
-        analytics_engine = None
-        try:
-            from src.core.analytics_engine import AnalyticsEngine
-            from database import db
-            analytics_engine = AnalyticsEngine(db.session, camera_id="stream")
-        except ImportError:
-            pass
+        # Instantiate analytics engine once to persist metrics buffer state
+        if self.analytics_engine is None:
+            try:
+                from src.core.analytics_engine import AnalyticsEngine
+                from database import db
+                self.analytics_engine = AnalyticsEngine(db.session, camera_id="stream")
+            except ImportError:
+                pass
 
         # A. Pre-processing
         clean_frame = self.pre_process(frame)
@@ -174,6 +189,16 @@ class VisionEngine:
                 verbose=0
             )
             detections = self._format_sahi_output(result)
+
+            if self.tracker and apply_tracking:
+                boxes = [d["box"] for d in detections]
+                confs = [d["confidence"] for d in detections]
+                classes = [d["class_id"] for d in detections]
+
+                track_ids = self.tracker.update(boxes, confs, classes, clean_frame)
+
+                for i, tid in enumerate(track_ids):
+                    detections[i]["track_id"] = int(tid)
         else:
             # Standard Instance Segmentation with ByteTrack
             if apply_tracking:
@@ -195,8 +220,8 @@ class VisionEngine:
             detections = self._format_yolo_output(results[0])
 
         # Generate metrics
-        if analytics_engine and detections:
-            analytics_engine.export_metrics(detections, t0)
+        if self.analytics_engine and detections:
+            self.analytics_engine.export_metrics(detections, t0)
 
         latency = (time.perf_counter() - t0) * 1000
         
