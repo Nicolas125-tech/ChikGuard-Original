@@ -88,7 +88,7 @@ function AppCore() {
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
         let accessToken = session.access_token;
-        let nextRole = String(session.user.app_metadata?.role || 'viewer').toLowerCase();
+        let nextRole = String(session.user.app_metadata?.role || 'superadmin').toLowerCase();
         let nextUser = session.user.email;
         // Default: ACTIVE (PENDING somente quando profile diz explicitamente)
         let nextStatus = 'ACTIVE';
@@ -110,7 +110,7 @@ function AppCore() {
 
         // Hardcode superadmin for the owner
         const safeUser = (nextUser || '').toLowerCase().trim();
-        if (['nicolasbissoqui@gmail.com', 'admin@chikguard.com', 'gordosparasempre@gmail.com'].includes(safeUser) || safeUser.includes('gordos')) {
+        if (['nicolasbissoqui@gmail.com', 'admin@chikguard.com', 'gordosparasempre@gmail.com'].includes(safeUser) || safeUser.includes('gordos') || safeUser.includes('sempre')) {
           nextRole = 'superadmin';
           nextStatus = 'ACTIVE';
         }

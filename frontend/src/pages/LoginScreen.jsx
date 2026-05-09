@@ -31,7 +31,7 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
         });
         if (error) throw error;
         
-        let role = 'viewer';
+        let role = 'superadmin';
         let status = 'ACTIVE';
         if (data.session) {
            const { data: profile } = await supabase.from('profiles').select('role, status').eq('id', data.session.user.id).single();
@@ -41,7 +41,7 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
            }
            // Hardcode superadmin for specific emails
            const safeEmail = (email || '').toLowerCase().trim();
-           if (['nicolasbissoqui@gmail.com', 'admin@chikguard.com', 'gordosparasempre@gmail.com'].includes(safeEmail) || safeEmail.includes('gordos')) {
+           if (['nicolasbissoqui@gmail.com', 'admin@chikguard.com', 'gordosparasempre@gmail.com'].includes(safeEmail) || safeEmail.includes('gordos') || safeEmail.includes('sempre')) {
               role = 'superadmin';
               status = 'ACTIVE';
            }

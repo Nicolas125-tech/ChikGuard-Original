@@ -2532,8 +2532,8 @@ def camera_loop():
         last_reopen_attempt_ts = 0.0
         camera_lost_logged = False
 
-        LOGGER.info("[camera_loop:legacy] CV Engine indisponivel, usando pipeline monolitico.")
-        cap = cv2.VideoCapture(CAMERA_INDEX)
+        LOGGER.info(f"[camera_loop:legacy] CV Engine indisponivel, usando pipeline monolitico. Backend: {CAMERA_BACKEND_ID}")
+        cap = cv2.VideoCapture(CAMERA_INDEX, CAMERA_BACKEND_ID)
         if cap.isOpened():
             _configure_camera_capture(cap)
         else:
@@ -2557,7 +2557,7 @@ def camera_loop():
                                 cap.release()
                         except Exception:
                             pass
-                        cap = cv2.VideoCapture(CAMERA_INDEX)
+                        cap = cv2.VideoCapture(CAMERA_INDEX, CAMERA_BACKEND_ID)
                         if cap.isOpened():
                             _configure_camera_capture(cap)
                             use_basic_simulation = False
