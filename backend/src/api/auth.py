@@ -40,6 +40,17 @@ def create_auth_blueprint(deps):
         if not ok:
             return resp
         if request.method == "GET":
+            # Try fetching from Supabase first
+            try:
+                SUPABASE_URL = os.environ.get("SUPABASE_URL")
+                SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+                if SUPABASE_URL and SUPABASE_KEY:
+                    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+                    response = supabase.table("profiles").select("*").execute()
+                    if response.data:
+                        return jsonify({"count": len(response.data), "items": response.data})
+            except Exception as e:
+                pass # fallback to local db
             rows = Account.query.order_by(Account.id.asc()).all()
             return jsonify({"count": len(rows), "items": [r.to_dict() for r in rows]})
 
