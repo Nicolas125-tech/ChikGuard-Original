@@ -18,6 +18,12 @@ import collections
 from typing import List, Dict, Any, Optional
 from ultralytics import YOLO
 
+try:
+    from src.vision.enhanced_detector import AdvancedTrackerWrapper
+    _TRACKER_AVAILABLE = True
+except ImportError:
+    _TRACKER_AVAILABLE = False
+
 # External dependencies (required in Linux setup)
 try:
     from sahi import AutoDetectionModel
@@ -46,8 +52,14 @@ class VisionEngine:
         # 1. Load Model (YOLOv8-seg or YOLOv10)
         # For segmentation + tracking, YOLOv8-seg is still the standard.
         # YOLOv10-N/S can be used if provided.
-        self.model = YOLO(model_path)
-        self.model.to(self.device)
+        if model_path.endswith('.engine') or model_path.endswith('.xml'):
+            self.model = YOLO(model_path, task='segment')
+        else:
+            self.model = YOLO(model_path)
+
+        # Don't call .to() on compiled models
+        if not (model_path.endswith('.engine') or model_path.endswith('.xml')):
+            self.model.to(self.device)
         
         # 2. Initialize SAHI if enabled
         if self.use_sahi:
@@ -67,6 +79,9 @@ class VisionEngine:
         self.frame_count = 0
         self.fps_metrics = collections.deque(maxlen=30)
         self._lock = threading.Lock()
+
+        # Tracker for SAHI
+        self.sahi_tracker = AdvancedTrackerWrapper(tracker_type="bytetrack", max_lost=15) if _TRACKER_AVAILABLE and self.use_sahi else None
         
         # 5. Async Video Stream Management
         self.cap = None
@@ -87,6 +102,9 @@ class VisionEngine:
             if not self.cap.isOpened():
                 logger.error(f"Failed to open video source: {source}")
                 return False
+
+            # Prevent frame accumulation to ensure zero-latency streaming
+            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
             self.is_running = True
             self.stream_thread = threading.Thread(target=self._capture_loop, daemon=True)
@@ -174,6 +192,15 @@ class VisionEngine:
                 verbose=0
             )
             detections = self._format_sahi_output(result)
+
+            # Apply tracking to SAHI detections
+            if apply_tracking and self.sahi_tracker:
+                boxes = [d["box"] for d in detections]
+                confs = [d["confidence"] for d in detections]
+                classes = [d["class_id"] for d in detections]
+                track_ids = self.sahi_tracker.update(boxes, confs, classes, clean_frame)
+                for i, tid in enumerate(track_ids):
+                    detections[i]["track_id"] = int(tid)
         else:
             # Standard Instance Segmentation with ByteTrack
             if apply_tracking:
