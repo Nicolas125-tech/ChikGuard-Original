@@ -36,13 +36,8 @@ load_dotenv()
 import json
 import math
 import ipaddress
-import uuid
-import tempfile
 from datetime import datetime, timedelta, timezone
-from ultralytics import YOLO
 from io import BytesIO
-import smtplib
-from email.message import EmailMessage
 import io
 
 from src.alerts.providers import build_alert_provider
