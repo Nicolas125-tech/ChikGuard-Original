@@ -47,7 +47,7 @@ async function registerForPushNotificationsAsync() {
       finalStatus = status;
     }
     if (finalStatus !== 'granted') {
-      console.log('Failed to get push token for push notification!');
+      console.warn('Failed to get push token for push notification!');
       return;
     }
     const projectId = Constants?.expoConfig?.extra?.eas?.projectId || '88d7f081-ad08-425e-ba52-e1a199cb661e';
@@ -55,7 +55,7 @@ async function registerForPushNotificationsAsync() {
       projectId
     })).data;
   } else {
-    console.log('Must use physical device for Push Notifications');
+    console.warn('Must use physical device for Push Notifications');
   }
   return token;
 }
@@ -226,7 +226,7 @@ const HistoryScreen = ({ serverUrl }) => {
         const json = await req.json();
         setHistory(json);
       } catch (e) {
-        console.log(e);
+        console.error(e);
       } finally {
         setLoading(false);
       }
@@ -272,7 +272,7 @@ const BirdsScreen = ({ serverUrl, enviarComandoVoz }) => {
       if (liveReq.ok) setLive(await liveReq.json());
       if (regReq.ok) setRegistry(await regReq.json());
     } catch (e) {
-      console.log(e);
+      console.error(e);
     } finally {
       setLoading(false);
     }
@@ -288,7 +288,7 @@ const BirdsScreen = ({ serverUrl, enviarComandoVoz }) => {
       const json = await req.json();
       setPath(json.items || []);
     } catch (e) {
-      console.log(e);
+      console.error(e);
       setPath([]);
     }
   }, [serverUrl]);
@@ -380,7 +380,7 @@ const AlertsScreen = ({ serverUrl }) => {
         const json = await req.json();
         setAlerts(json);
       } catch (e) {
-        console.log(e);
+        console.error(e);
       } finally {
         setLoading(false);
       }
@@ -424,7 +424,7 @@ const SystemScreen = ({ serverUrl }) => {
         if (summaryReq.ok) setSummary(await summaryReq.json());
         if (infoReq.ok) setSystemInfo(await infoReq.json());
       } catch (e) {
-        console.log(e);
+        console.error(e);
       }
     };
     load();
@@ -485,7 +485,7 @@ const SmartOpsScreen = ({ serverUrl, token }) => {
       if (cReq.ok) setCameras(await cReq.json());
       if (lReq.ok) setLogbook(await lReq.json());
     } catch (e) {
-      console.log(e);
+      console.error(e);
     } finally {
       setLoading(false);
     }
@@ -698,7 +698,7 @@ const ManagementScreen = ({ serverUrl }) => {
       if (au.ok) setAudit(await au.json());
       if (s.ok) setSync(await s.json());
     } catch (e) {
-      console.log(e);
+      console.error(e);
     } finally {
       setLoading(false);
     }
