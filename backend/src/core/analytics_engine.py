@@ -7,23 +7,36 @@ from typing import List, Dict, Any, Optional
 logger = logging.getLogger("chikguard.analytics_engine")
 
 class AnalyticsEngine:
-    def __init__(self, db_session, camera_id: str):
+    def __init__(self, db_session, camera_id: str, export_interval: float = 5.0):
         """
         Initializes the Analytics Engine.
         Requires an active SQLAlchemy db_session to write metrics.
         """
         self.db = db_session
         self.camera_id = camera_id
+        self.export_interval = export_interval
 
         # Local state to calculate metrics between frames
         self.bird_last_state = {} # dict mapping track_id to { "x": float, "y": float, "ts": float }
 
+        import time
+        # Buffer to accumulate metrics for aggregated exports
+        self.metrics_buffer = {
+            "density_birds": [],
+            "density_mask_area_px": [],
+            "activity_px_s": [],
+            "tracked_ratio": []
+        }
+        self.last_export_time = time.time()
+
     def export_metrics(self, detections: List[Dict[str, Any]], frame_timestamp: float) -> Optional[Any]:
         """
-        Calculates density and activity metrics from the detections and exports them to the database.
+        Calculates density and activity metrics from the detections, buffers them,
+        and exports them to the database periodically based on `export_interval`.
         Activity is measured in pixels/second based on tracking IDs.
         """
         from database import EventLog # Local import to avoid circular dependency
+        import time
 
         if not detections:
             return None
@@ -66,35 +79,62 @@ class AnalyticsEngine:
         self.bird_last_state = current_state
 
         avg_activity_px_s = total_velocity / active_tracked_birds if active_tracked_birds > 0 else 0.0
+        tracked_ratio = active_tracked_birds / total_birds if total_birds > 0 else 0.0
 
-        # Format payload for EventLog.metadata_json
-        payload = {
-            "density_birds": total_birds,
-            "density_mask_area_px": total_mask_area,
-            "activity_px_s": round(avg_activity_px_s, 2),
-            "tracked_ratio": round(active_tracked_birds / total_birds if total_birds > 0 else 0.0, 2)
-        }
+        # Add to buffer
+        self.metrics_buffer["density_birds"].append(total_birds)
+        self.metrics_buffer["density_mask_area_px"].append(total_mask_area)
+        self.metrics_buffer["activity_px_s"].append(avg_activity_px_s)
+        self.metrics_buffer["tracked_ratio"].append(tracked_ratio)
 
-        try:
-            # We must use timezone-naive UTC datetime for the timestamp column as per codebase standards
-            now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+        # Check if it's time to export
+        current_time = time.time()
+        if current_time - self.last_export_time >= self.export_interval:
+            try:
+                # Calculate averages for the buffered period
+                avg_density = sum(self.metrics_buffer["density_birds"]) / len(self.metrics_buffer["density_birds"])
+                avg_mask_area = sum(self.metrics_buffer["density_mask_area_px"]) / len(self.metrics_buffer["density_mask_area_px"])
+                avg_activity = sum(self.metrics_buffer["activity_px_s"]) / len(self.metrics_buffer["activity_px_s"])
+                avg_tracked_ratio = sum(self.metrics_buffer["tracked_ratio"]) / len(self.metrics_buffer["tracked_ratio"])
 
-            event = EventLog(
-                camera_id=self.camera_id,
-                event_type="vision_metrics",
-                level="info",
-                message=f"CV Analytics: {total_birds} birds, {avg_activity_px_s:.1f} px/s avg movement",
-                timestamp=now_utc,
-                metadata_json=json.dumps(payload)
-            )
+                # Format payload for EventLog.metadata_json
+                payload = {
+                    "density_birds": round(avg_density, 2),
+                    "density_mask_area_px": round(avg_mask_area, 2),
+                    "activity_px_s": round(avg_activity, 2),
+                    "tracked_ratio": round(avg_tracked_ratio, 2)
+                }
 
-            self.db.add(event)
-            self.db.commit()
+                # We must use timezone-naive UTC datetime for the timestamp column as per codebase standards
+                now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
-            logger.debug(f"Exported CV metrics to DB for camera {self.camera_id}")
-            return event
+                event = EventLog(
+                    camera_id=self.camera_id,
+                    event_type="vision_metrics",
+                    level="info",
+                    message=f"CV Analytics: ~{int(avg_density)} birds, {avg_activity:.1f} px/s avg movement over {self.export_interval}s",
+                    timestamp=now_utc,
+                    metadata_json=json.dumps(payload)
+                )
 
-        except Exception as e:
-            self.db.rollback()
-            logger.error(f"Failed to export metrics to database: {e}")
-            return None
+                self.db.add(event)
+                self.db.commit()
+
+                logger.debug(f"Exported aggregated CV metrics to DB for camera {self.camera_id}")
+                return event
+
+            except Exception as e:
+                self.db.rollback()
+                logger.error(f"Failed to export metrics to database: {e}")
+                return None
+            finally:
+                # Always clear the buffer to prevent memory leaks and reset the timer
+                self.metrics_buffer = {
+                    "density_birds": [],
+                    "density_mask_area_px": [],
+                    "activity_px_s": [],
+                    "tracked_ratio": []
+                }
+                self.last_export_time = current_time
+
+        return None
