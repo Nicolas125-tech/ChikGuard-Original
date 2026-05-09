@@ -5,6 +5,11 @@ import { STORAGE } from '../utils/config';
 
 export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) {
   const [email, setEmail] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [cpf, setCpf] = useState('');
+  const [location, setLocation] = useState('');
+  const [age, setAge] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -51,6 +56,15 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
         const { error } = await supabase.auth.signUp({
           email,
           password,
+          options: {
+            data: {
+              full_name: fullName,
+              phone,
+              cpf,
+              location,
+              age: age ? parseInt(age, 10) : null
+            }
+          }
         });
         if (error) throw error;
         
@@ -123,6 +137,70 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
+          {mode === 'request' && (
+            <>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Nome Completo</label>
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={e => setFullName(e.target.value)}
+                  required
+                  className="w-full bg-slate-950/80 border border-slate-800 text-white rounded-xl focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 px-4 py-3.5 outline-none transition-all placeholder:text-slate-600"
+                  placeholder="Nome Completo"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Telemóvel / Telefone</label>
+                    <input
+                      type="text"
+                      value={phone}
+                      onChange={e => setPhone(e.target.value)}
+                      required
+                      className="w-full bg-slate-950/80 border border-slate-800 text-white rounded-xl focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 px-4 py-3.5 outline-none transition-all placeholder:text-slate-600"
+                      placeholder="Número"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Idade</label>
+                    <input
+                      type="number"
+                      value={age}
+                      onChange={e => setAge(e.target.value)}
+                      required
+                      className="w-full bg-slate-950/80 border border-slate-800 text-white rounded-xl focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 px-4 py-3.5 outline-none transition-all placeholder:text-slate-600"
+                      placeholder="Idade"
+                    />
+                  </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">CPF / NIF</label>
+                    <input
+                      type="text"
+                      value={cpf}
+                      onChange={e => setCpf(e.target.value)}
+                      required
+                      className="w-full bg-slate-950/80 border border-slate-800 text-white rounded-xl focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 px-4 py-3.5 outline-none transition-all placeholder:text-slate-600"
+                      placeholder="Documento"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Localidade</label>
+                    <input
+                      type="text"
+                      value={location}
+                      onChange={e => setLocation(e.target.value)}
+                      required
+                      className="w-full bg-slate-950/80 border border-slate-800 text-white rounded-xl focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 px-4 py-3.5 outline-none transition-all placeholder:text-slate-600"
+                      placeholder="Cidade/Estado"
+                    />
+                  </div>
+              </div>
+            </>
+          )}
+
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Email</label>
             <div className="relative">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />

@@ -15,6 +15,10 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   status      TEXT        NOT NULL DEFAULT 'PENDING'
               CHECK (status IN ('PENDING', 'ACTIVE', 'SUSPENDED')),
   full_name   TEXT,
+  phone       TEXT,
+  cpf         TEXT,
+  location    TEXT,
+  age         INTEGER,
   approved_at TIMESTAMPTZ,
   approved_by UUID        REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -35,12 +39,17 @@ SECURITY DEFINER              -- Roda com permissão de dono da função
 SET search_path = public      -- Evita search_path injection
 AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, role, status)
+  INSERT INTO public.profiles (id, email, role, status, full_name, phone, cpf, location, age)
   VALUES (
     NEW.id,
     COALESCE(NEW.email, ''),
     COALESCE(NEW.raw_user_meta_data->>'role', 'viewer'),
-    'PENDING'
+    'PENDING',
+    NEW.raw_user_meta_data->>'full_name',
+    NEW.raw_user_meta_data->>'phone',
+    NEW.raw_user_meta_data->>'cpf',
+    NEW.raw_user_meta_data->>'location',
+    NULLIF(NEW.raw_user_meta_data->>'age', '')::INTEGER
   )
   ON CONFLICT (id) DO NOTHING; -- Idempotente: não falha se já existe
   RETURN NEW;
@@ -142,7 +151,7 @@ $$;
 -- Se já tiver utilizadores em auth.users sem profile correspondente,
 -- descomente e execute este bloco:
 --
--- INSERT INTO public.profiles (id, email, role, status)
+-- INSERT INTO public.profiles (id, email, role, status, full_name, phone, cpf, location, age)
 -- SELECT
 --   u.id,
 --   COALESCE(u.email, ''),

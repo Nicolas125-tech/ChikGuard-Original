@@ -80,6 +80,7 @@ export default function AdminPanel({ token, serverIP }) {
   }, [serverIP, getAuthToken, activeTab]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchUsers();
   }, [fetchUsers]);
 
@@ -224,16 +225,16 @@ export default function AdminPanel({ token, serverIP }) {
         {[
           { id: 'pending', label: 'Pendentes', Icon: Clock },
           { id: 'all',     label: 'Todos os Utilizadores', Icon: Users },
-        ].map(({ id, label, Icon }) => (
+        ].map((tab) => (
           <button
-            key={id}
-            onClick={() => setActiveTab(id)}
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-t-xl border-b-2 transition-all ${
-              activeTab === id
+              activeTab === tab.id
                 ? 'border-emerald-500 text-emerald-400 bg-emerald-500/10'
                 : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'}`}>
-            <Icon size={15} />
-            {label}
+            <tab.Icon size={15} />
+            {tab.label}
           </button>
         ))}
       </div>
@@ -273,7 +274,8 @@ export default function AdminPanel({ token, serverIP }) {
             <table className="min-w-full text-sm">
               <thead className="bg-slate-800/60 text-slate-400 text-xs uppercase tracking-wider">
                 <tr>
-                  <th className="py-3.5 px-5 text-left">Email / Utilizador</th>
+                  <th className="py-3.5 px-5 text-left">Utilizador / Dados</th>
+                  <th className="py-3.5 px-5 text-left">Localidade / Idade</th>
                   <th className="py-3.5 px-5 text-left">Role Atual</th>
                   <th className="py-3.5 px-5 text-left">Status</th>
                   <th className="py-3.5 px-5 text-left">Criado em</th>
@@ -290,10 +292,16 @@ export default function AdminPanel({ token, serverIP }) {
                   return (
                     <tr key={u.id} className="hover:bg-slate-800/30 transition-colors">
                       <td className="py-4 px-5">
-                        <div className="font-medium text-slate-200">{u.email || u.username || '—'}</div>
-                        <div className="text-slate-500 font-mono text-xs mt-0.5">
-                          {String(u.id).substring(0, 16)}…
+                        <div className="font-medium text-slate-200">{u.full_name || u.email || u.username || '—'}</div>
+                        <div className="text-slate-500 text-xs mt-0.5">
+                          {u.email && <span>{u.email}</span>}
+                          {u.phone && <span className="ml-2">| {u.phone}</span>}
+                          {u.cpf && <span className="ml-2">| CPF: {u.cpf}</span>}
                         </div>
+                      </td>
+                      <td className="py-4 px-5 text-slate-400 text-xs">
+                        <div>{u.location || '—'}</div>
+                        {u.age && <div>{u.age} anos</div>}
                       </td>
                       <td className="py-4 px-5">
                         <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase border
