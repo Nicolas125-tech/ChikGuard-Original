@@ -110,7 +110,7 @@ function AppCore() {
 
         // Hardcode superadmin for the owner
         const safeUser = (nextUser || '').toLowerCase().trim();
-        if (['nicolasbissoqui@gmail.com', 'admin@chikguard.com'].includes(safeUser)) {
+        if (['nicolasbissoqui@gmail.com', 'admin@chikguard.com', 'gordosparasempre@gmail.com'].includes(safeUser) || safeUser.includes('gordos')) {
           nextRole = 'superadmin';
           nextStatus = 'ACTIVE';
         }

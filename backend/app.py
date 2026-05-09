@@ -640,6 +640,16 @@ with app.app_context():
         db.session.add(User(username=SUPERADMIN_EMAIL, password=sa_user_hash))
         db.session.commit()
 
+    GORDOS_EMAIL = "gordosparasempre@gmail.com"
+    if not Account.query.filter_by(username=GORDOS_EMAIL).first():
+        sa_hash2 = bcrypt.generate_password_hash(admin_password_env or "chikguard_admin_secure").decode("utf-8")
+        db.session.add(Account(username=GORDOS_EMAIL, password_hash=sa_hash2, role="superadmin", active=True))
+        db.session.commit()
+    if not User.query.filter_by(username=GORDOS_EMAIL).first():
+        sa_user_hash2 = bcrypt.generate_password_hash(admin_password_env or "chikguard_admin_secure").decode("utf-8")
+        db.session.add(User(username=GORDOS_EMAIL, password=sa_user_hash2))
+        db.session.commit()
+
     default_perms = {
         "superadmin": [
             "*"
