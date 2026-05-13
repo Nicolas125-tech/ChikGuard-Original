@@ -9,7 +9,10 @@ import os
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "") # Service role key ideally, or anon key if RLS allows
-SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "")
+SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET")
+
+if not SUPABASE_JWT_SECRET:
+    raise RuntimeError("SUPABASE_JWT_SECRET environment variable is required for secure authentication.")
 
 if SUPABASE_URL and SUPABASE_KEY:
     supabase_client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
