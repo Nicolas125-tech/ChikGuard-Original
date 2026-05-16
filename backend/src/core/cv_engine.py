@@ -552,24 +552,26 @@ class InferencePipeline:
         return enriched
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Overlay Visual Rico
-# ─────────────────────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────────────────────────────────
+# Overlay Visual Rico -- Premium AI Vision Interface
+# ───────────────────────────────────────────────────────────────────────────────
 
 class CVOverlay:
     """
-    Desenha no frame anotações profissionais:
-    - Bounding box colorida por espécie
-    - Label: espécie + postura + ID + confiança
-    - HUD: FPS câmera | FPS inferência | Latência | Contagens
-    - Indicador de modo (pintinho/galinha)
+    Overlay visual estilo SOTA AI tracking:
+    - Zona de monitoramento: poligono translucido magenta
+    - Bounding boxes neon com cantos marcados, ID tag e sombra
+    - HUD: painel translucido topo-direito com contadores grandes
+    - Tira de FPS/latencia na base
+    - Indicador LIVE piscante
+    - Branding ChikGuard
     """
 
     @staticmethod
     def draw_detections(frame: np.ndarray, detections: list,
                         carcass_uids: set,
                         class_name_fn=None) -> np.ndarray:
-        """Desenha todas as detecções enriquecidas no frame."""
+        """Desenha deteccoes enriquecidas com bounding boxes neon + ID tags."""
         draw = frame
         h, w = draw.shape[:2]
 
@@ -586,20 +588,39 @@ class CVOverlay:
 
             if is_carcass:
                 color       = COLOR_CARCASS
-                species_lbl = "POSSÍVEL CÁRCAÇA"
+                species_lbl = "CARCACA"
                 pose_lbl    = ""
 
-            # Bounding box
-            cv2.rectangle(draw, (x1, y1), (x2, y2), color, LINE_WIDTH)
+            # Neon glow: borda exterior escura + interior brilhante
+            cv2.rectangle(draw, (x1 - 1, y1 - 1), (x2 + 1, y2 + 1), (0, 0, 0), 2)
+            cv2.rectangle(draw, (x1, y1), (x2, y2), color, 2, cv2.LINE_AA)
 
-            # Label principal: espécie + ID
-            id_str   = f"#{uid}" if uid >= 0 else ""
-            main_lbl = f"{species_lbl} {id_str} {conf:.0%}"
-            _put_label(draw, main_lbl, (x1, y1 - 6), color)
+            # Cantos marcados estilo targeting
+            cr = 8
+            tk = 2
+            cv2.line(draw, (x1, y1), (x1 + cr, y1), color, tk, cv2.LINE_AA)
+            cv2.line(draw, (x1, y1), (x1, y1 + cr), color, tk, cv2.LINE_AA)
+            cv2.line(draw, (x2, y1), (x2 - cr, y1), color, tk, cv2.LINE_AA)
+            cv2.line(draw, (x2, y1), (x2, y1 + cr), color, tk, cv2.LINE_AA)
+            cv2.line(draw, (x1, y2), (x1 + cr, y2), color, tk, cv2.LINE_AA)
+            cv2.line(draw, (x1, y2), (x1, y2 - cr), color, tk, cv2.LINE_AA)
+            cv2.line(draw, (x2, y2), (x2 - cr, y2), color, tk, cv2.LINE_AA)
+            cv2.line(draw, (x2, y2), (x2, y2 - cr), color, tk, cv2.LINE_AA)
 
-            # Sub-label: postura (apenas se relevante)
-            if pose_lbl and pose_lbl != "● NORMAL":
-                _put_label(draw, pose_lbl, (x1, y2 + 14), color, scale=0.42)
+            # ID tag com fundo escuro
+            id_str = f"#{uid}" if uid >= 0 else "#?"
+            (tw, th), _ = cv2.getTextSize(id_str, FONT, 0.40, 1)
+            tx, ty = x1, max(y1 - 4, th + 2)
+            cv2.rectangle(draw, (tx - 1, ty - th - 2), (tx + tw + 2, ty + 1), (0, 0, 0), -1)
+            cv2.putText(draw, id_str, (tx, ty), FONT, 0.40, color, 1, cv2.LINE_AA)
+
+            # Rotulo de especie abaixo da caixa
+            sp_tag = f"{species_lbl} {conf:.0%}"
+            _put_text_shadow(draw, sp_tag, (x1, y2 + 12), FONT, 0.38, color, 1)
+
+            # Postura (apenas anomalias)
+            if pose_lbl and "NORMAL" not in pose_lbl:
+                _put_text_shadow(draw, pose_lbl, (x1, y2 + 24), FONT, 0.36, (0, 80, 255), 1)
 
         return draw
 
@@ -607,72 +628,106 @@ class CVOverlay:
     def draw_hud(frame: np.ndarray, metrics: Dict[str, Any],
                  counts: Dict[str, int], behavior_status: str,
                  mode: str = "aves") -> np.ndarray:
-        """Desenha o HUD de performance e contagem no canto do frame."""
+        """HUD premium estilo AI tracking -- poligono de zona + contador grande + FPS strip."""
         h, w = frame.shape[:2]
-        fps_cam    = metrics.get("fps_camera",     0.0)
-        fps_inf    = metrics.get("fps_inference",  0.0)
-        lat_ms     = metrics.get("latency_ms",     0.0)
-        sahi_on    = bool(metrics.get("sahi_enabled", False))
-        n_tiles    = float(metrics.get("sahi_avg_tiles", 0.0))
-        backend    = str(metrics.get("backend_name", "pytorch"))
-        total      = counts.get("total",   0)
-        chicks     = counts.get("chicks",  0)
-        hens       = counts.get("hens",    0)
+        fps_cam = metrics.get("fps_camera",    0.0)
+        fps_inf = metrics.get("fps_inference", 0.0)
+        lat_ms  = metrics.get("latency_ms",    0.0)
+        sahi_on = bool(metrics.get("sahi_enabled", False))
+        backend = str(metrics.get("backend_name", "pytorch"))
+        total   = counts.get("total",  0)
+        chicks  = counts.get("chicks", 0)
+        hens    = counts.get("hens",   0)
 
-        # ── Cor de indicador SAHI / backend ──────────────────────────────
-        sahi_clr   = (0, 255, 180) if sahi_on else (120, 120, 120)  # verde se ativo
-        be_clr_map = {"openvino": (0, 210, 255), "onnx": (255, 165, 0), "pytorch": (160, 160, 160)}
-        be_clr     = be_clr_map.get(backend.lower(), (160, 160, 160))
+        overlay = frame.copy()
 
-        # Painel semi-transparente no topo-esquerdo
-        overlay  = frame.copy()
-        ph, pw   = 122, 380
-        cv2.rectangle(overlay, (0, 0), (pw, ph), (15, 15, 15), -1)
-        cv2.addWeighted(overlay, 0.58, frame, 0.42, 0, frame)
+        # -- 1. Zona de Monitoramento: poligono translucido magenta ----------
+        mx = int(w * 0.04)
+        my = int(h * 0.08)
+        zone_pts = np.array([
+            [mx,     my    ],
+            [w - mx, my    ],
+            [w - mx, h - my],
+            [mx,     h - my],
+        ], dtype=np.int32)
+        cv2.fillPoly(overlay, [zone_pts], (180, 0, 180))
+        cv2.addWeighted(overlay, 0.08, frame, 0.92, 0, frame)
+        cv2.polylines(frame, [zone_pts], isClosed=True,
+                      color=(255, 0, 255), thickness=2, lineType=cv2.LINE_AA)
+        _put_text_shadow(frame, "ZONA DE MONITORAMENTO",
+                         (mx + 6, my - 5), FONT, 0.40, (255, 0, 255), 1)
 
-        sahi_label = f"SAHI {n_tiles:.0f}t" if sahi_on else "DIR"
-        lines = [
-            # Linha 1: FPS câmera | FPS inferência | Latência
-            (f"CAM {fps_cam:.0f} FPS | INF {fps_inf:.0f} FPS | {lat_ms:.0f} ms",
-             (8, 18), 0.46, (180, 255, 100)),
-            # Linha 2: Backend + modo SAHI
-            (f"[{backend.upper()}] [{sahi_label}] | Confianca min: 25%",
-             (8, 36), 0.42, be_clr),
-            # Linha 3: Contagens de espécie
-            (f"Pintinhos: {chicks}   Galinhas: {hens}   TOTAL: {total}",
-             (8, 56), 0.46, (255, 220, 80)),
-            # Linha 4: Comportamento
-            (f"Comportamento: {behavior_status}",
-             (8, 74), 0.42, (80, 200, 255)),
-        ]
+        # -- 2. Painel HUD: topo-direito ------------------------------------
+        pw  = min(260, w - 20)
+        ph  = 120
+        px1 = w - pw - 8
+        py1 = 8
+        px2 = w - 8
+        py2 = py1 + ph
 
-        for text, pos, scale, clr in lines:
-            text_safe = _strip_emoji(text)
-            cv2.putText(frame, text_safe, pos, FONT, scale, clr, 1, cv2.LINE_AA)
+        panel = frame.copy()
+        cv2.rectangle(panel, (px1, py1), (px2, py2), (8, 8, 8), -1)
+        cv2.addWeighted(panel, 0.75, frame, 0.25, 0, frame)
+        cv2.rectangle(frame, (px1, py1), (px2, py2), (0, 255, 100), 1, cv2.LINE_AA)
 
-        # Indicador SAHI (pastilha verde/cinza no canto direito do HUD)
-        ind_x = pw - 12
-        cv2.circle(frame, (ind_x, 56), 6, sahi_clr, -1)
+        _put_text_shadow(frame, "CHIKGUARD AI",
+                         (px1 + 8, py1 + 16), FONT, 0.46, (0, 255, 120), 1)
+        cv2.line(frame, (px1 + 8, py1 + 21), (px2 - 8, py1 + 21), (0, 255, 100), 1)
+
+        total_txt = f"TOTAL: {total:,}"
+        _put_text_shadow(frame, total_txt,
+                         (px1 + 8, py1 + 52), FONT, 0.82, (0, 255, 60), 2)
+
+        _put_text_shadow(frame, f"PINTINHOS: {chicks}",
+                         (px1 + 8, py1 + 74), FONT, 0.45, (0, 220, 255), 1)
+        _put_text_shadow(frame, f"GALINHAS : {hens}",
+                         (px1 + 8, py1 + 91), FONT, 0.45, (0, 200, 100), 1)
+
+        beh_clr = (0, 60, 255) if "ANOMALIA" in behavior_status.upper() else (60, 200, 60)
+        _put_text_shadow(frame, behavior_status,
+                         (px1 + 8, py1 + 110), FONT, 0.38, beh_clr, 1)
+
+        # -- 3. Tira de metricas na parte inferior -------------------------
+        strip_bg = frame.copy()
+        cv2.rectangle(strip_bg, (0, h - 22), (w, h), (0, 0, 0), -1)
+        cv2.addWeighted(strip_bg, 0.60, frame, 0.40, 0, frame)
+        sahi_txt = " (SAHI)" if sahi_on else ""
+        fps_str  = (f"CAM {fps_cam:.0f}fps  INF {fps_inf:.0f}fps  "
+                    f"{lat_ms:.0f}ms  [{backend.upper()}{sahi_txt}]")
+        _put_text_shadow(frame, fps_str, (8, h - 8), FONT, 0.38, (160, 160, 255), 1)
+
+        # -- 4. Indicador LIVE piscante ------------------------------------
+        if int(time.time() * 2) % 2 == 0:
+            cv2.circle(frame, (12, 14), 5, (0, 0, 255), -1, cv2.LINE_AA)
+            _put_text_shadow(frame, "LIVE", (22, 20), FONT, 0.44, (30, 30, 255), 1)
+        else:
+            cv2.circle(frame, (12, 14), 5, (40, 40, 80), -1, cv2.LINE_AA)
+            _put_text_shadow(frame, "LIVE", (22, 20), FONT, 0.44, (80, 80, 120), 1)
 
         return frame
 
 
+
+def _put_text_shadow(img: np.ndarray, text: str, pos: Tuple[int, int],
+                     font, scale: float, color, thickness: int = 1):
+    """Texto com sombra preta para legibilidade em qualquer fundo."""
+    x, y = pos
+    fh, fw = img.shape[:2]
+    x = max(2, min(x, fw - 5))
+    y = max(14, min(y, fh - 2))
+    text = _strip_emoji(text)
+    cv2.putText(img, text, (x + 1, y + 1), font, scale, (0, 0, 0),   thickness + 1, cv2.LINE_AA)
+    cv2.putText(img, text, (x,     y    ), font, scale, color,        thickness,     cv2.LINE_AA)
+
+
 def _put_label(img: np.ndarray, text: str, pos: Tuple[int, int],
                color, scale: float = FONT_SCALE):
-    """Desenha label com sombra para legibilidade em qualquer fundo."""
-    x, y = pos
-    h, w = img.shape[:2]
-    x = max(2, min(x, w - 5))
-    y = max(14, min(y, h - 2))
-    text = _strip_emoji(text)
-    # Sombra preta
-    cv2.putText(img, text, (x + 1, y + 1), FONT, scale, (0, 0, 0),       2, cv2.LINE_AA)
-    # Texto colorido
-    cv2.putText(img, text, (x,     y    ), FONT, scale, color,            1, cv2.LINE_AA)
+    """Alias legado para _put_text_shadow com parametros simplificados."""
+    _put_text_shadow(img, text, pos, FONT, scale, color, 1)
 
 
 def _strip_emoji(text: str) -> str:
-    """Remove emoji e caracteres não-ASCII que o OpenCV não renderiza."""
+    """Remove emoji e caracteres nao-ASCII que o OpenCV nao renderiza."""
     import re
     return re.sub(r'[^\x00-\x7F]+', '', text)
 
