@@ -103,6 +103,10 @@ except Exception:
     canvas = None
     A4 = None
 
+sv = None
+spy_tracker = None
+behavior_engine = None
+
 SETTINGS = load_settings()
 LOGGER = configure_logging(SETTINGS.log_level)
 
