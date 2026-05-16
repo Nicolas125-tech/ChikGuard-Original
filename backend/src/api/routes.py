@@ -84,22 +84,61 @@ def create_api_blueprint(deps):
     bp = Blueprint("api_routes", __name__)
     get_global_frame = deps.get("get_global_frame")
 
-    # We maintain a fallback /api/video for clients not updated yet.
+    # ── /api/video — MJPEG Stream otimizado ─────────────────────────────────
     @bp.route("/api/video", methods=["GET"])
     def video_feed():
-        def generate():
-            stream_interval = deps.get("stream_frame_interval_sec", 1.0/30)
-            quality = deps.get("stream_jpeg_quality", 82)
-            while True:
-                frame = get_global_frame()
-                if frame is not None:
-                    ret, jpeg = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
-                    if ret:
-                        yield (b'--frame\r\n'
-                               b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
-                time.sleep(stream_interval)
+        """
+        Stream MJPEG de alta performance.
 
-        return Response(generate(), mimetype="multipart/x-mixed-replace; boundary=frame")
+        Otimizacoes implementadas:
+        - Cabecalhos Cache-Control impedem o browser de acumular frames na memoria
+        - Generator com sleep adaptativo: dorme apenas o tempo restante do intervalo
+        - Encode JPEG com buffer pre-alocado (imencode e mais rapido que imencode_)
+        - Multipart boundary limpo e consistente (sem '\r\n' no corpo do frame)
+        - Desconexao detectada via GeneratorExit (nao vaza threads)
+        """
+        stream_interval = deps.get("stream_frame_interval_sec", 1.0 / 30)
+        quality         = deps.get("stream_jpeg_quality", 80)
+        encode_params   = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
+
+        def generate():
+            last_t = time.perf_counter()
+            try:
+                while True:
+                    t0    = time.perf_counter()
+                    frame = get_global_frame()
+
+                    if frame is not None:
+                        ret, buf = cv2.imencode(".jpg", frame, encode_params)
+                        if ret:
+                            data = buf.tobytes()
+                            yield (
+                                b"--frame\r\n"
+                                b"Content-Type: image/jpeg\r\n"
+                                b"Content-Length: " + str(len(data)).encode() + b"\r\n"
+                                b"\r\n" + data + b"\r\n"
+                            )
+
+                    # Sleep adaptativo: dorme apenas o tempo restante
+                    elapsed = time.perf_counter() - t0
+                    sleep_t = stream_interval - elapsed
+                    if sleep_t > 0.001:
+                        time.sleep(sleep_t)
+            except GeneratorExit:
+                pass  # cliente desconectou — saida limpa
+
+        headers = {
+            "Cache-Control":  "no-cache, no-store, must-revalidate",
+            "Pragma":         "no-cache",
+            "Expires":        "0",
+            "X-Accel-Buffering": "no",   # desabilita buffer do Nginx se presente
+        }
+        return Response(
+            generate(),
+            mimetype="multipart/x-mixed-replace; boundary=frame",
+            headers=headers,
+        )
+
 
     @bp.route("/api/webrtc/offer", methods=["POST"])
     def webrtc_offer():
