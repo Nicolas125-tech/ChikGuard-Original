@@ -1,8 +1,8 @@
 import os
 import smtplib
 from email.message import EmailMessage
-from datetime import datetime, timedelta
-from database import db, Reading, SensorReading, EventLog, AcousticReading
+from datetime import timedelta
+from database import Reading, SensorReading, EventLog, AcousticReading
 
 try:
     from reportlab.lib.pagesizes import A4
@@ -12,6 +12,7 @@ except Exception:
     A4 = None
 
 REPORTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "reports")
+
 
 def _send_report_email(file_path, recipient):
     smtp_host = os.getenv("SMTP_HOST", "").strip()
@@ -42,6 +43,7 @@ def _send_report_email(file_path, recipient):
         return True, "sent"
     except Exception as exc:
         return False, str(exc)
+
 
 def generate_weekly_report(app_context, camera_id, utcnow_func, week_end=None):
     if canvas is None or A4 is None:
@@ -94,10 +96,10 @@ def generate_weekly_report(app_context, camera_id, utcnow_func, week_end=None):
         f"Temperatura maxima: {temp_max:.1f} C" if temp_max is not None else "Temperatura maxima: sem dados",
         f"Temperatura media: {temp_avg:.1f} C" if temp_avg is not None else "Temperatura media: sem dados",
         f"Alertas/eventos: {len(events)}",
-        f"Umidade media: {sum(hums)/len(hums):.1f}%" if hums else "Umidade media: sem dados",
-        f"Amonia media: {sum(amms)/len(amms):.1f} ppm" if amms else "Amonia media: sem dados",
-        f"Racao media restante: {sum(feed)/len(feed):.1f}%" if feed else "Racao media restante: sem dados",
-        f"Agua media restante: {sum(water)/len(water):.1f}%" if water else "Agua media restante: sem dados",
+        f"Umidade media: {sum(hums) / len(hums):.1f}%" if hums else "Umidade media: sem dados",
+        f"Amonia media: {sum(amms) / len(amms):.1f} ppm" if amms else "Amonia media: sem dados",
+        f"Racao media restante: {sum(feed) / len(feed):.1f}%" if feed else "Racao media restante: sem dados",
+        f"Agua media restante: {sum(water) / len(water):.1f}%" if water else "Agua media restante: sem dados",
     ]
     for line in lines:
         c.drawString(40, y, line)
@@ -155,7 +157,11 @@ def generate_esg_report(app_context, camera_id, utcnow_func, days=30):
     )
     critical_events = len([e for e in events if str(e.level).lower() == "high"])
     esg_score = max(0.0, min(100.0, (low_stress_pct * 0.55) + (avg_resp * 0.35) - (critical_events * 0.8)))
-    market_flag = "APTO para mercados exigentes (Europa/Japao)" if esg_score >= 80 else "Necessita melhorias para mercados premium"
+    market_flag = (
+        "APTO para mercados exigentes (Europa/Japao)"
+        if esg_score >= 80
+        else "Necessita melhorias para mercados premium"
+    )
 
     fname = f"esg_report_{camera_id}_{end_dt.strftime('%Y%m%d_%H%M%S')}.pdf"
     path = os.path.join(REPORTS_DIR, fname)
