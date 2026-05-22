@@ -34,11 +34,8 @@ from __future__ import annotations
 
 import logging
 import os
-import time
-import uuid
-import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -46,27 +43,27 @@ import numpy as np
 # ──────────────────────────────────────────────────────────────────────────────
 # Configurações via ENV
 # ──────────────────────────────────────────────────────────────────────────────
-DETECTION_CONF      = float(os.getenv("DETECTION_CONF",    "0.25"))
-DETECTION_IOU       = float(os.getenv("DETECTION_IOU",     "0.45"))
-INFERENCE_IMGSZ     = int(os.getenv("INFERENCE_IMGSZ",     "640"))
-TRACKER_TYPE        = os.getenv("TRACKER_TYPE",            "bytetrack").strip().lower()
-TRACKER_CONFIG      = "botsort.yaml" if TRACKER_TYPE == "botsort" else "bytetrack.yaml"
+DETECTION_CONF = float(os.getenv("DETECTION_CONF", "0.25"))
+DETECTION_IOU = float(os.getenv("DETECTION_IOU", "0.45"))
+INFERENCE_IMGSZ = int(os.getenv("INFERENCE_IMGSZ", "640"))
+TRACKER_TYPE = os.getenv("TRACKER_TYPE", "bytetrack").strip().lower()
+TRACKER_CONFIG = "botsort.yaml" if TRACKER_TYPE == "botsort" else "bytetrack.yaml"
 
 # SAHI desabilitado por padrão para não quebrar ambientes sem OpenVINO.
 # Ative manualmente no .env: ENABLE_SAHI=true
 # Recomendado apenas com INFERENCE_BACKEND=openvino ou com GPU NVIDIA.
-ENABLE_SAHI         = os.getenv("ENABLE_SAHI",             "false").strip().lower() in ("true", "1", "yes")
-SAHI_SLICE_SIZE     = int(os.getenv("SAHI_SLICE_SIZE",     "640"))
-SAHI_OVERLAP        = float(os.getenv("SAHI_OVERLAP",      "0.20"))
-SAHI_WORKERS        = int(os.getenv("SAHI_WORKERS",        "2"))
-SAHI_NMS_IOU        = float(os.getenv("SAHI_NMS_IOU",      "0.45"))
+ENABLE_SAHI = os.getenv("ENABLE_SAHI", "false").strip().lower() in ("true", "1", "yes")
+SAHI_SLICE_SIZE = int(os.getenv("SAHI_SLICE_SIZE", "640"))
+SAHI_OVERLAP = float(os.getenv("SAHI_OVERLAP", "0.20"))
+SAHI_WORKERS = int(os.getenv("SAHI_WORKERS", "2"))
+SAHI_NMS_IOU = float(os.getenv("SAHI_NMS_IOU", "0.45"))
 # Número máximo de tiles processados por frame.
 # Com PyTorch CPU: use 4 (metade) para manter ~3-5 FPS.
 # Com OpenVINO: pode usar 0 (sem limite = todos os tiles).
-SAHI_MAX_TILES      = int(os.getenv("SAHI_MAX_TILES",      "4"))
+SAHI_MAX_TILES = int(os.getenv("SAHI_MAX_TILES", "4"))
 
-INFERENCE_BACKEND   = os.getenv("INFERENCE_BACKEND",       "pytorch").strip().lower()
-OPENVINO_MODEL_XML  = os.getenv("OPENVINO_MODEL_XML",      "").strip()
+INFERENCE_BACKEND = os.getenv("INFERENCE_BACKEND", "pytorch").strip().lower()
+OPENVINO_MODEL_XML = os.getenv("OPENVINO_MODEL_XML", "").strip()
 
 LOGGER = logging.getLogger("chikguard.cv.enhanced_detector")
 
@@ -210,7 +207,7 @@ class AdvancedTrackerWrapper:
 
         while unassigned_dets and unassigned_tracks:
             max_iou = np.max(ious)
-            if max_iou < 0.1: # low threshold for matching
+            if max_iou < 0.1:  # low threshold for matching
                 break
             di, ti = np.unravel_index(np.argmax(ious), ious.shape)
             if di in unassigned_dets and ti in unassigned_tracks:
@@ -248,13 +245,13 @@ class SAHITileEngine:
         nms_iou: float = 0.45,
         conf_threshold: float = 0.25,
     ):
-        self.slice_size    = slice_size
-        self.overlap       = max(0.0, min(overlap, 0.49))
-        self.n_workers     = max(1, n_workers)
-        self.nms_iou       = nms_iou
+        self.slice_size = slice_size
+        self.overlap = max(0.0, min(overlap, 0.49))
+        self.n_workers = max(1, n_workers)
+        self.nms_iou = nms_iou
         self.conf_threshold = conf_threshold
-        self._executor     = ThreadPoolExecutor(max_workers=self.n_workers,
-                                                thread_name_prefix="sahi-worker")
+        self._executor = ThreadPoolExecutor(max_workers=self.n_workers,
+                                            thread_name_prefix="sahi-worker")
         LOGGER.info(
             "[SAHI] Engine inicializado: slice=%dpx overlap=%.0f%% workers=%d nms_iou=%.2f",
             slice_size, overlap * 100, n_workers, nms_iou
@@ -384,15 +381,15 @@ class _OpenVINOBackend:
 
     def __init__(self, xml_path: str, conf: float = 0.25, imgsz: int = 640):
         from openvino.runtime import Core  # type: ignore
-        self._conf  = conf
+        self._conf = conf
         self._imgsz = imgsz
 
         ie = Core()
         # Tenta GPU integrada primeiro, cai para CPU
         device = "GPU" if "GPU" in ie.available_devices else "CPU"
-        model  = ie.read_model(xml_path)
+        model = ie.read_model(xml_path)
         self._compiled = ie.compile_model(model, device)
-        self._input_key  = self._compiled.input(0)
+        self._input_key = self._compiled.input(0)
         self._output_key = self._compiled.output(0)
         LOGGER.info("[OpenVINO] Modelo carregado em '%s' (device=%s)", xml_path, device)
 
@@ -431,8 +428,8 @@ class _OpenVINOBackend:
             # Filtra por confiança
             mask = confs >= self._conf
             boxes_cxcywh = boxes_cxcywh[mask]
-            class_ids    = class_ids[mask]
-            confs        = confs[mask]
+            class_ids = class_ids[mask]
+            confs = confs[mask]
 
             # Converter cx,cy,w,h → x1,y1,x2,y2 (normalizado → pixels originais)
             dets = []
@@ -445,10 +442,10 @@ class _OpenVINOBackend:
                 x2 = int((cx + bw / 2) * scale_x)
                 y2 = int((cy + bh / 2) * scale_y)
                 dets.append({
-                    "box":         [x1, y1, x2, y2],
-                    "class_id":    int(class_ids[i]),
-                    "confidence":  float(confs[i]),
-                    "track_id":    -1,
+                    "box": [x1, y1, x2, y2],
+                    "class_id": int(class_ids[i]),
+                    "confidence": float(confs[i]),
+                    "track_id": -1,
                     "mask_area_px": 0.0,
                 })
             return dets
@@ -462,7 +459,7 @@ class _ONNXBackend:
 
     def __init__(self, onnx_path: str, conf: float = 0.25, imgsz: int = 640):
         import onnxruntime as ort  # type: ignore
-        self._conf  = conf
+        self._conf = conf
         self._imgsz = imgsz
         providers = ["CPUExecutionProvider"]
         self._session = ort.InferenceSession(onnx_path, providers=providers)
@@ -492,8 +489,8 @@ class _ONNXBackend:
             confs = scores[np.arange(len(scores)), class_ids]
             mask = confs >= self._conf
             boxes_cxcywh = boxes_cxcywh[mask]
-            class_ids    = class_ids[mask]
-            confs        = confs[mask]
+            class_ids = class_ids[mask]
+            confs = confs[mask]
             scale_x = w_orig / self._imgsz
             scale_y = h_orig / self._imgsz
             dets = []
@@ -504,10 +501,10 @@ class _ONNXBackend:
                 x2 = int((cx + bw / 2) * scale_x)
                 y2 = int((cy + bh / 2) * scale_y)
                 dets.append({
-                    "box":         [x1, y1, x2, y2],
-                    "class_id":    int(class_ids[i]),
-                    "confidence":  float(confs[i]),
-                    "track_id":    -1,
+                    "box": [x1, y1, x2, y2],
+                    "class_id": int(class_ids[i]),
+                    "confidence": float(confs[i]),
+                    "track_id": -1,
                     "mask_area_px": 0.0,
                 })
             return dets
@@ -528,13 +525,13 @@ class EnhancedObjectDetector:
     """
 
     def __init__(self, model_path: str = "yolov8n-seg.pt"):
-        self.yolo_loaded            = False
-        self.model                  = None       # Ultralytics YOLO (modo direto)
-        self.supports_segmentation  = False
-        self._hw_backend            = None       # OpenVINO ou ONNX backend
-        self._hw_backend_name       = "none"
-        self._sahi:  Optional[SAHITileEngine] = None
-        self._tracker               = AdvancedTrackerWrapper(tracker_type=TRACKER_TYPE, max_lost=18)
+        self.yolo_loaded = False
+        self.model = None       # Ultralytics YOLO (modo direto)
+        self.supports_segmentation = False
+        self._hw_backend = None       # OpenVINO ou ONNX backend
+        self._hw_backend_name = "none"
+        self._sahi: Optional[SAHITileEngine] = None
+        self._tracker = AdvancedTrackerWrapper(tracker_type=TRACKER_TYPE, max_lost=18)
 
         # ── Carrega backend de hardware (OpenVINO ou ONNX) ────────────────
         self._init_hardware_backend(model_path)
@@ -715,8 +712,8 @@ class EnhancedObjectDetector:
         if boxes is None or len(boxes) == 0:
             return []
 
-        xyxy       = boxes.xyxy.cpu().numpy().astype(int)
-        class_ids  = boxes.cls.cpu().numpy().astype(int)
+        xyxy = boxes.xyxy.cpu().numpy().astype(int)
+        class_ids = boxes.cls.cpu().numpy().astype(int)
         confidences = boxes.conf.cpu().numpy()
 
         if with_track and boxes.id is not None:
@@ -739,10 +736,10 @@ class EnhancedObjectDetector:
         dets = []
         for i in range(len(xyxy)):
             dets.append({
-                "box":          list(xyxy[i]),
-                "class_id":     int(class_ids[i]),
-                "confidence":   float(confidences[i]),
-                "track_id":     int(track_ids[i]) if i < len(track_ids) else -1,
+                "box": list(xyxy[i]),
+                "class_id": int(class_ids[i]),
+                "confidence": float(confidences[i]),
+                "track_id": int(track_ids[i]) if i < len(track_ids) else -1,
                 "mask_area_px": float(mask_areas[i]),
             })
         return dets
