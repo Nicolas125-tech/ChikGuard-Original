@@ -4,3 +4,4 @@ __pycache__/
 *$py.class
 backend/instance/chikguard.db
 venv
+yolov8n.pt
