@@ -3,7 +3,6 @@ import cv2
 import numpy as np
 import albumentations as A
 from pathlib import Path
-import random
 
 def get_augmentation_pipeline():
     """
