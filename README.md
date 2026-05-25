@@ -1,212 +1,189 @@
-# ChikGuard
+# 🐔 ChikGuard
 
-Sistema de monitoramento para criacao de frangos com visao computacional.
+<div align="center">
 
-## Funcionalidades
+**AI-powered poultry monitoring system with real-time computer vision, IoT sensor integration, and edge intelligence.**
 
-- Monitoramento de comportamento das aves.
-- Contagem de aves em tempo real.
-- Deteccao de anomalias.
-- API para frontend web e app mobile.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white)](https://python.org)
+[![React](https://img.shields.io/badge/React-18+-61DAFB?logo=react&logoColor=black)](https://react.dev)
+[![React Native](https://img.shields.io/badge/React%20Native-Expo-000020?logo=expo&logoColor=white)](https://expo.dev)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](./docker-compose.yml)
+[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com)
 
-## Arquitetura Atual
+![ChikGuard Admin Dashboard](docs/screenshots/admin_dashboard.png)
 
-```text
+</div>
+
+---
+
+## 🧠 What is ChikGuard?
+
+ChikGuard is a full-stack intelligent monitoring platform for commercial poultry farms. It combines **YOLOv8-based computer vision**, **real-time WebRTC video streaming**, **IoT sensor fusion** (temperature, humidity, ammonia), and **autonomous FSM-driven actuator control** to reduce flock mortality and improve biosecurity compliance.
+
+| Layer | Stack |
+|---|---|
+| **Backend** | Python 3.12, Flask, Flask-SocketIO, aiortc, SQLAlchemy |
+| **Vision AI** | YOLOv8 (ONNX), OpenCV, custom tracking pipeline |
+| **Frontend** | React 18, Vite, TailwindCSS, Recharts |
+| **Mobile** | React Native (Expo) |
+| **Database** | Supabase (PostgreSQL) + local SQLite fallback |
+| **Infra** | Docker Compose, Cloudflare Tunnel, mTLS |
+
+---
+
+## ✨ Features
+
+- 🎥 **Live video streaming** via WebRTC with per-camera AI inference
+- 🐔 **Bird counting & behavior analysis** in real time
+- 🌡️ **Sensor fusion** — temperature, humidity, ammonia, acoustic anomaly detection
+- 🤖 **Autonomous FSM** — actuator control (ventilation, heating) without human input
+- 📊 **ESG compliance reports** (PDF generation with ReportLab)
+- 🔐 **RBAC + JWT auth** with Supabase Auth and OAuth providers
+- 📱 **Mobile app** for remote farm monitoring
+- 🧩 **Plugin system** — extend with custom AI modules (fire detection, disease detection, etc.)
+- 🌐 **Edge-ready** — runs locally with Cloudflare Tunnel for secure remote access
+
+---
+
+## 🏗️ Architecture
+
+```
 ChikGuard/
-|- backend/
-|  |- app.py (Entrypoint principal)
-|  |- plugins/
-|  |  |- face_recognition/
-|  |  |- weapon_detection/
-|  |  |- fire_detection/
-|  |- src/
-|  |  |- api/
-|  |  |  |- auth.py (Rotas de Contas e Permissoes)
-|  |  |  |- devices.py (Rotas de Atuadores e Automacao)
-|  |  |  |- reports_api.py (Rotas de Relatorios PDF)
-|  |  |  |- routes.py (Rotas de WebRTC)
-|  |  |  |- sensors_api.py (Rotas de Sensores e Anomalias)
-|  |  |- core/
-|  |  |  |- config.py
-|  |  |  |- logger.py
-|  |  |- plugins/
-|  |     |- manager.py
-|  |     |- base.py
-|  |  |- reports/
-|  |     |- generator.py (Geracao de PDF com ReportLab)
-|  |  |- alerts/
-|  |     |- providers.py
-|  |- tests/
-|- frontend/
-|- mobile/
+├── backend/              # Python/Flask API + AI pipeline
+│   ├── app.py            # Main entrypoint
+│   ├── database.py       # ORM models (SQLAlchemy)
+│   ├── src/
+│   │   ├── api/          # REST endpoints (auth, sensors, devices, reports, WebRTC)
+│   │   ├── core/         # Config, logger, state machine (FSM)
+│   │   ├── vision/       # CV inference pipeline
+│   │   ├── cv_master/    # Orchestration layer
+│   │   ├── agents/       # Autonomous AI agents
+│   │   ├── alerts/       # Push notification providers
+│   │   ├── audio/        # Acoustic anomaly detection
+│   │   ├── mlops/        # Model versioning & management
+│   │   ├── reports/      # PDF report generation
+│   │   ├── security/     # Auth middleware, hardening, mTLS
+│   │   └── plugins/      # Plugin base & manager
+│   ├── plugins/          # Pluggable AI modules
+│   ├── scripts/          # Utility & pipeline scripts
+│   ├── models/           # ML model weights (see models/README.md)
+│   └── tests/            # Pytest test suite
+├── frontend/             # React + Vite dashboard
+├── mobile/               # Expo React Native app
+├── docs/                 # Architecture docs & screenshots
+├── scripts/              # DevOps & infra scripts
+│   └── simulators/       # Data & video simulators
+└── supabase/
+    └── migrations/       # Database migrations
 ```
 
-## Pre-requisitos
+---
 
-- Python 3.12 (ou superior)
-- Node.js 18+
-- npm ou yarn
-- Docker e Docker Compose (opcional, recomendado)
+## 🚀 Quick Start
 
-## Backend (execucao local)
+### Prerequisites
 
-1. Entre na pasta:
+- Python 3.12+
+- Node.js 18+ & npm
+- Docker & Docker Compose *(recommended)*
+- A [Supabase](https://supabase.com) project
 
+### 1. Clone & configure
+
+```bash
+git clone https://github.com/your-username/ChikGuard.git
+cd ChikGuard
+cp .env.example .env
+# Edit .env with your credentials
+```
+
+### 2. Download AI Models
+
+See [`backend/models/README.md`](backend/models/README.md) for instructions to download the required YOLOv8 model weights.
+
+### 3. Run with Docker (recommended)
+
+```bash
+docker-compose up --build
+```
+
+- **Backend API:** `http://localhost:5000`
+- **Frontend:** `http://localhost:5173`
+
+### 4. Run locally (development)
+
+**Backend:**
 ```bash
 cd backend
-```
-
-2. Crie e ative um ambiente virtual:
-
-```bash
-# Windows
 python -m venv venv
-venv\Scripts\activate
-
-# Linux/macOS
-python3 -m venv venv
-source venv/bin/activate
-```
-
-3. Instale dependencias:
-
-```bash
+# Windows: venv\Scripts\activate | Linux/macOS: source venv/bin/activate
 pip install -r requirements.txt
+PYTHONPATH=. python app.py
 ```
 
-4. Configure o ambiente:
-
-```bash
-# Windows
-copy .env.example .env
-
-# Linux/macOS
-cp .env.example .env
-```
-
-**Nota de Seguranca:** O backend enforce uma politica estrita de inicializacao para a conta do administrador. Certifique-se que variaveis sensiveis como `ADMIN_PASSWORD` estao preenchidas no seu `.env` antes da primeira inicializacao, ou ele podera falhar.
-
-5. Rode a API (garantindo que o PYTHONPATH enxergue o pacote `src/`):
-
-```bash
-# Windows (PowerShell)
-$env:PYTHONPATH="." ; python app.py
-
-# Linux/macOS
-PYTHONPATH=. python3 app.py
-```
-
-API padrao: `http://localhost:5000`
-
-## Docker (padronizado)
-
-## Configuração do Supabase e Docker
-
-### Configuração do Frontend (Supabase Auth)
-
-Para que o fluxo de criação de contas e login com provedores OAuth (como Google, GitHub, etc.) funcione no Frontend, precisa de configurar as credenciais públicas do Supabase:
-
-1. Entre no diretório `frontend/` e crie um ficheiro `.env` a partir do modelo:
-   ```bash
-   cd frontend
-   cp .env.example .env
-   ```
-
-2. No painel do Supabase, vá a **Project Settings > API**.
-3. Copie o **Project URL** e cole na variável `VITE_SUPABASE_URL`.
-4. Copie a chave **anon public** e cole na variável `VITE_SUPABASE_ANON_KEY`.
-
-Exemplo `frontend/.env`:
-```env
-VITE_SUPABASE_URL=https://<seu-projeto>.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbG...
-```
-
-*(O frontend agora usará o Supabase Auth para gerir registos, login e contas OAuth, definindo o utilizador recém-criado como "PENDING" e aguardando a aprovação do SuperAdmin.)*
-
-### Configuração do Backend e Docker
-
-Se você for rodar o projeto utilizando o Supabase como banco de dados (o que é recomendado em produção), siga os passos abaixo:
-
-1. Crie ou copie o arquivo `.env` na raiz do projeto (como mostrado acima `cp .env.example .env`).
-2. Obtenha a URL de conexão do seu projeto Supabase (Configurações > Database > Connection string > URI).
-3. Cole a URL na variável `DATABASE_URL` no seu arquivo `.env`.
-
-**IMPORTANTE:** Se a sua senha do Supabase contiver caracteres especiais (como `@`, `#`, `$`, `&`), você **deve** realizar o URL-encode desses caracteres, caso contrário a aplicação irá falhar ao tentar conectar ao banco. Por exemplo, se a sua senha for `p@ssword!123`, a sua senha na URL ficará `p%40ssword%21123`:
-```env
-DATABASE_URL="postgresql://postgres:p%40ssword%21123@db.seusupabase.supabase.co:5432/postgres"
-```
-
-4. Você precisará de um túnel da Cloudflare caso deseje expor o Frontend. Preencha o `TUNNEL_TOKEN` no `.env` com o token gerado no seu Dashboard da Cloudflare (em Zero Trust > Networks > Tunnels).
-
-5. Crie a pasta `data` na raiz do repositório para evitar erros de permissão de montagem de volume no Docker:
-```bash
-mkdir -p data
-```
-
-6. Agora, basta rodar o Docker Compose:
-```bash
-docker-compose up --build
-```
-
-Nesta configuração o backend cuidará de inicializar todas as tabelas no Supabase na primeira execução de forma automática.
-
-Na raiz do projeto:
-
-```bash
-docker-compose up --build
-```
-
-Servico backend exposto em `http://localhost:5000`.
-
-## Testes
-
-Na raiz do projeto:
-
-```bash
-python -m pytest backend/tests -q
-```
-
-## Endpoints importantes
-
-- `GET /api/summary` - Resumo em tempo real do sistema (CV + Sensores).
-- `GET /api/system-info` - Status interno e recursos em execucao.
-- `GET /api/sensors/live` - Leitura atual dos sensores (temperatura, umidade, amonia).
-- `POST /api/auto-mode` - Alterar ou consultar automacoes da FSM.
-- `POST /api/reports/esg` - Gera Relatorio de Conformidade ESG em PDF.
-- `GET /api/accounts/me` - Retorna detalhes do usuario logado (sujeito a RBAC).
-- `POST /api/webrtc/offer` - Handshake de transmissao de video ao vivo (aiortc).
-
-## Sistema de plugins
-
-Cada plugin fica em `backend/plugins/<nome>/plugin.py` e expoe uma funcao `register()`.
-
-Exemplo minimo:
-
-```python
-from src.plugins.base import PluginBase, PluginInfo
-
-class MyPlugin(PluginBase):
-    info = PluginInfo(name="my_plugin", version="0.1.0", description="example")
-
-def register():
-    return MyPlugin()
-```
-
-## Frontend e Mobile
-
-### Frontend
-
+**Frontend:**
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-### Mobile
-
+**Mobile:**
 ```bash
 cd mobile
 npm install
 npm start
 ```
+
+---
+
+## 🔌 Plugin System
+
+ChikGuard supports pluggable AI modules. Each plugin lives in `backend/plugins/<name>/plugin.py`:
+
+```python
+from src.plugins.base import PluginBase, PluginInfo
+
+class FireDetectionPlugin(PluginBase):
+    info = PluginInfo(name="fire_detection", version="1.0.0", description="Detects fire in video frames")
+
+def register():
+    return FireDetectionPlugin()
+```
+
+---
+
+## 📡 Key API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/summary` | Real-time system summary (CV + Sensors) |
+| `GET` | `/api/sensors/live` | Live sensor readings |
+| `POST` | `/api/auto-mode` | Update FSM automation rules |
+| `POST` | `/api/webrtc/offer` | WebRTC video stream handshake |
+| `POST` | `/api/reports/esg` | Generate ESG compliance PDF |
+| `GET` | `/api/accounts/me` | Authenticated user details (RBAC) |
+
+---
+
+## 📄 Documentation
+
+| Document | Description |
+|---|---|
+| [Edge Security Architecture](docs/EDGE_SECURITY_ARCHITECTURE.md) | mTLS, Cloudflare Tunnel, edge hardening |
+| [IAM & Supabase Proposal](docs/IAM_SUPABASE_PROPOSAL.md) | Identity & access management design |
+| [Linux Setup (CV)](docs/LINUX_SETUP_CV.md) | Setting up computer vision on Linux |
+| [Windows Setup (CV)](docs/WINDOWS_SETUP_CV.md) | Setting up computer vision on Windows |
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a pull request.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.

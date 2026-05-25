@@ -1,7 +1,111 @@
+# ============================================================
+# ChikGuard — .gitignore
+# ============================================================
+
+# --- Environment & Secrets ---
 .env
+.env.local
+.env.*.local
+!.env.example
+
+# --- Python ---
 __pycache__/
 *.py[cod]
 *$py.class
-backend/instance/chikguard.db
-venv
-yolov8n.pt
+*.so
+*.pyd
+.Python
+venv/
+.venv/
+env/
+ENV/
+dist/
+build/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+nosetests.xml
+pip-log.txt
+pip-delete-this-directory.txt
+
+# --- Machine Learning Models & Large Data ---
+*.pt
+*.pth
+*.onnx
+*.h5
+*.pkl
+*.bin
+*.safetensors
+*.gguf
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# --- Node.js ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+dist/
+.next/
+out/
+.nuxt/
+.cache/
+.parcel-cache/
+
+# --- React Native / Expo ---
+.expo/
+.expo-shared/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+android/
+ios/
+
+# --- Build Artifacts & Binaries ---
+*.exe
+*.dll
+*.so
+*.dylib
+*.app
+
+# --- Docker ---
+*.log
+
+# --- Database ---
+backend/instance/
+*.db
+*.sqlite
+*.sqlite3
+
+# --- IDE & Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# --- Supabase ---
+supabase/.temp/
+
+# --- Misc Dev Artifacts ---
+*.tmp
+scratch/
+backend/scratch/
+backend/data/

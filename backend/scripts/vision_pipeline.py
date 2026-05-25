@@ -1,302 +1,212 @@
-"""
-ChickGuard AI — Vision Pipeline Industrial (Edge & SAHI)
-=========================================================
-Este script independente demonstra a arquitetura estado-da-arte exigida:
-  1. Captura Assíncrona via Threading (Maximizando FPS da Câmera)
-  2. YOLOv8/v9/v10 Segmentação de Instância (OpenVINO Edge Acceleration)
-  3. SAHI (Slicing Aided Hyper Inference) via `get_sliced_prediction`
-  4. Rastreamento Estável (Zero Flickering) via ByteTrack
-
-Dependências necessárias:
-  pip install sahi ultralytics openvino opencv-python numpy
-
-Execução:
-  python vision_pipeline.py --video rtsp://sua_camera --model yolov8n-seg.pt
-"""
-
-import argparse
-import os
-import time
-import queue
-import threading
-import logging
 import cv2
-import numpy as np
+import time
+import threading
+import queue
+import logging
 
-# ── Importação Condicional de Bibliotecas Pesadas ────────────────────────────
 try:
     from sahi import AutoDetectionModel
     from sahi.predict import get_sliced_prediction
-    from ultralytics import YOLO
-except ImportError as exc:
-    print(f"[ERRO BÁSICO] Dependência ausente: {exc}")
-    print("Execute: pip install sahi ultralytics openvino")
-    import sys; sys.exit(1)
+    import supervision as sv
+    # Utilizaremos a biblioteca supervision que implementa um ByteTrack nativo e perfeitamente
+    # integrado aos outputs do SAHI de maneira limpa, mantendo a consistência dos IDs.
+except ImportError:
+    print("ERRO: Bibliotecas críticas ausentes.")
+    print("Instale usando: pip install sahi ultralytics supervision opencv-python")
+    exit(1)
 
+# ==========================================
+# 1. CALIBRAÇÃO DE PARÂMETROS E CONFIGURAÇÕES
+# ==========================================
+# Parâmetros focados em estabilidade e contagem sem Flickering
+CONFIDENCE_THRESHOLD = 0.45  # Confiança mínima para aceitar uma detecção
+IOU_THRESHOLD = 0.50         # Overlap máximo permitido (ajuda a separar frangos aglomerados)
+TRACK_BUFFER = 60            # Tolerância do ByteTrack à oclusão (em frames). Impede que o ID limpe instantaneamente ao se esconder.
 
-# =============================================================================
-# 1. CALIBRAÇÃO DE PARÂMETROS E ESTABILIDADE
-# =============================================================================
-CONFIDENCE_THRESHOLD = 0.45    # Meta de equlíbrio (maximizar detecção sem ruído)
-IOU_THRESHOLD        = 0.50    # Permite separar aves/instâncias fortemente aglomeradas
-SAHI_SLICE_SIZE      = 640     # Tamanho da fatia do SAHI (640 ou 512)
-SAHI_OVERLAP_RATIO   = 0.20    # Nível de overlap (20% garante q a ave ñ seja dividida ao meio)
-TRACK_BUFFER_FRAMES  = 30      # Tamanho do buffer limitador do flickering (oclusões)
+# Parâmetros do SAHI (Slicing) - FUNDAMENTAL para aves pequenas e distantes
+# A lógica de fatiamento corta a resolução 1080p/4K em janelas menores.
+SLICE_HEIGHT = 640
+SLICE_WIDTH = 640
+OVERLAP_RATIO = 0.20         # 20% de transição entre fatias garante que uma ave dividida na borda seja detectada corretamente.
 
-logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
-LOGGER = logging.getLogger("ChickGuard.Pipeline")
+# Configuração Edge (Mini PC Linux / TensorRT / OpenVINO)
+MODEL_PATH = "yolov8n-seg.pt"  # Altere para .engine (TensorRT) ou openvino_model/ (OpenVINO) no ambiente de produção
+MODEL_TYPE = "yolov8"
+MODEL_DEVICE = "cuda:0"      # Use 'cpu' para OpenVINO puro se não usar a GPU, 'cuda:0' para NVIDIA
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-# =============================================================================
-# 2. RASTREAMENTO PROFISSIONAL (BYTETRACK WRAPPER)
-# =============================================================================
-# NOTA: Como a biblioteca SAHI retorna caixas separadas e não utiliza o tracker 
-# interno do Ultralytics model.track(), utilizamos a classe de Tracker standalone.
-# Em produção real, a biblioteca "supervision" (pip install supervision) ofecere 
-# o ByteTrack integrado nativamente, mas aqui adotaremos um Tracker robusto próprio
-# caso não exista bibliotecas externas complexas instaladas.
-class ByteTrackAdapter:
+# ==========================================
+# 2. CAPTURA ASSÍNCRONA (Hardware Constraints)
+# ==========================================
+class VideoCaptureThread:
     """
-    Adaptador simplificado para ByteTrack. Em implantações reais do ChickGuard,
-    integre 'pip install supervision' (sv.ByteTrack()) ou importe os arquivos C++.
+    Thread dedicada para limpar o buffer da câmera, extraindo frames em zero-latency.
+    Isso impede que gargalos de processamento atrasem o fluxo nativo da câmera.
     """
-    def __init__(self, track_buffer=TRACK_BUFFER_FRAMES, match_thresh=0.8):
-        try:
-            # Tenta usar o Tracker nativo do núcleo Ultralytics
-            from ultralytics.trackers.byte_tracker import BYTETracker
-            self.tracker = BYTETracker(
-                track_thresh=CONFIDENCE_THRESHOLD,
-                match_thresh=match_thresh,
-                track_buffer=track_buffer,
-                frame_rate=30
-            )
-            self._has_native = True
-        except ImportError:
-            LOGGER.warning("ByteTrack Ultralytics não exposto, usando Custom Tracker IoU")
-            self._has_native = False
-            self.tracks = {}
-            self.next_id = 0
-
-    def update(self, sahi_results, frame):
-        """Atualiza identificações baseado nas predições da SAHI e evita flickering."""
-        # sahi_results = object_prediction_list do SAHI
-        if self._has_native:
-            # Reformatar predições de SAHI para matriz de formato (N, 6) tensor
-            # formato esperado: [x, y, w, h, conf, class] em ultralytics space
-            import torch
-            dets = []
-            for det in sahi_results:
-                x1, y1, x2, y2 = det.bbox.minx, det.bbox.miny, det.bbox.maxx, det.bbox.maxy
-                w = x2 - x1
-                h = y2 - y1
-                # Format to cx, cy, w, h
-                dets.append([x1 + w/2, y1 + h/2, w, h, det.score.value, det.category.id])
-            
-            if len(dets) == 0:
-                return []
-                
-            tensor_dets = torch.tensor(dets, dtype=torch.float32)
-            # Retorna lista de matches do BYTETracker [x1, y1, x2, y2, track_id, conf, cls, idx]
-            tracked_results = self.tracker.update(tensor_dets, frame)
-            return tracked_results
-        else:
-            # Fallback lógico básico
-            # Retorna estrutura de IDs se Tracker Ultralytics C++ não estiver buildado
-            results = []
-            for det in sahi_results:
-                x1, y1, x2, y2 = det.bbox.minx, det.bbox.miny, det.bbox.maxx, det.bbox.maxy
-                self.next_id += 1 # Fake ID contínuo na simulação
-                results.append((int(x1), int(y1), int(x2), int(y2), self.next_id, det.score.value, det.category.id))
-            return results
-
-
-# =============================================================================
-# 3. ACELERAÇÃO EDGE E CAPTURA DE ARQUITETURA
-# =============================================================================
-class AsyncCameraCapture:
-    """Processamento assíncrono entre a captura da Câmera e o loop SAHI (0 FPS FIX)."""
-    def __init__(self, source):
-        self.cap = cv2.VideoCapture(source)
+    def __init__(self, src=0):
+        self.cap = cv2.VideoCapture(src)
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 2)
         if not self.cap.isOpened():
-            raise ValueError(f"Não foi possível abrir a fonte de imagem: {source}")
+            raise RuntimeError(f"Falha ao abrir a fonte de vídeo: {src}")
             
-        self.q = queue.Queue(maxsize=3)
+        self.q = queue.Queue(maxsize=3) # Limitamos rigidamente o tamanho da fila
         self.running = True
-        self.thread = threading.Thread(target=self._capture_loop, daemon=True)
+        self.thread = threading.Thread(target=self._reader_loop, daemon=True)
         self.thread.start()
-        LOGGER.info(f"Câmera assíncrona conectada ao source {source}.")
-
-    def _capture_loop(self):
+        
+    def _reader_loop(self):
         while self.running:
-            try:
-                ret, frame = self.cap.read()
-                if not ret:
-                    self.running = False
-                    break
-                
-                # Descarte de frame inteligente via Queue Overflow (sem bloqueio de GIL)
-                if self.q.full():
-                    self.q.get_nowait()
-                self.q.put(frame)
-            except Exception as e:
-                LOGGER.error(f"Captura da Câmera interrompida: {e}")
+            ret, frame = self.cap.read()
+            if not ret:
+                logging.warning("Falha na captura do frame da câmera (Stream interrompido ou Fim do Vídeo).")
                 self.running = False
+                break
+            
+            # Se a fila estiver cheia, descarta o frame mais antigo (zero-delay buffer)
+            if not self.q.empty():
+                try:
+                    self.q.get_nowait()
+                except queue.Empty:
+                    pass
+            self.q.put(frame)
 
     def read(self):
-        if not self.q.empty():
-            return True, self.q.get()
-        return False, None
-
+        try:
+            return True, self.q.get(timeout=2)
+        except queue.Empty:
+            return False, None
+            
     def release(self):
         self.running = False
         self.thread.join()
         self.cap.release()
 
-
-# =============================================================================
-# 4. MOTOR DA VISÃO E INTEGRAÇÃO PIPELINE SAHI 
-# =============================================================================
-class VisionEngine:
-    def __init__(self, model_path_or_id: str, device="cpu"):
-        LOGGER.info(f"Carregando Motor SAHI Segmentação em {device.upper()} com formato YOLOv8/OpenVINO...")
+# ==========================================
+# 3. PIPELINE DE INFERÊNCIA COGNITIVA
+# ==========================================
+class VisionPipeline:
+    def __init__(self, src=0):
+        self.video_src = src
+        self.stream = None
         
-        # Converte para OpenVINO caso não seja 
-        if model_path_or_id.endswith('.pt') and device == 'cpu':
-            LOGGER.info("Exportando temporário em Edge OpenVINO FP16 localmente (se não existir)...")
-            from ultralytics import YOLO
-            m = YOLO(model_path_or_id)
-            if not os.path.exists(model_path_or_id.replace('.pt', '_openvino_model')):
-                m.export(format='openvino', imgsz=640, half=True, dynamic=False)
-            model_path_or_id = model_path_or_id.replace('.pt', '_openvino_model')
-        
-        # O Sahi detecta e enquadra adaptadores YOLOv8 perfeitamente
+        logging.info("Carregando modelo segmentador Edge via SAHI...")
         self.detection_model = AutoDetectionModel.from_pretrained(
-            model_type='yolov8',
-            model_path=model_path_or_id,
+            model_type=MODEL_TYPE,
+            model_path=MODEL_PATH,
             confidence_threshold=CONFIDENCE_THRESHOLD,
-            device=device,  # Em devices Intel/Linux utilizar 'cpu' habilitará inferência acel. OpenVINO 
+            device=MODEL_DEVICE,  # OOTB suporta acelerações delegadas pelo backend Ultralytics
         )
-        self.tracker = ByteTrackAdapter(track_buffer=TRACK_BUFFER_FRAMES)
+        # Força o threshold de IOU diretamente nas args que o AutoDetectionModel passará
+        self.detection_model.engine.model.iou = IOU_THRESHOLD
 
-    def process_frame(self, frame_img: np.ndarray):
-        # ── (A) FRAME SLICING (SAHI LIBRARY NATIVA) ──
-        # Processa cada fatia individualmente - Obrigatório por Arquitetura
-        start_time = time.perf_counter()
-        
-        result = get_sliced_prediction(
-            frame_img,
-            self.detection_model,
-            slice_height=SAHI_SLICE_SIZE,
-            slice_width=SAHI_SLICE_SIZE,
-            overlap_height_ratio=SAHI_OVERLAP_RATIO,
-            overlap_width_ratio=SAHI_OVERLAP_RATIO,
-            postprocess_type="NMS",
-            postprocess_match_metric="IOU",
-            postprocess_match_threshold=IOU_THRESHOLD
+        logging.info("Inicializando o rastreador ByteTrack...")
+        # ByteTrack adaptativo: lida muito bem com ruídos de detecção de pequenos objetos.
+        self.tracker = sv.ByteTrack(
+            track_activation_threshold=CONFIDENCE_THRESHOLD,
+            lost_track_buffer=TRACK_BUFFER,
+            minimum_matching_threshold=0.8,
+            frame_rate=30
         )
         
-        inf_latency = time.perf_counter() - start_time
-        
-        # Lista de instâncias SAHI: (masks, bbox, classe)
-        object_predictions = result.object_prediction_list
-        
-        # ── (B) RASTREAMENTO CONTÍNUO (ZERO FLICKERING BYTETRACK) ──
-        # As máscaras e boxes coladas são associadas e persistidas
-        track_outputs = self.tracker.update(object_predictions, frame_img)
-        
-        # Prepara a estrutura final
-        final_objects = []
-        for det in object_predictions:
-            x1, y1, x2, y2 = int(det.bbox.minx), int(det.bbox.miny), int(det.bbox.maxx), int(det.bbox.maxy)
-            conf = det.score.value
-            cls_id = det.category.id
-            name = det.category.name
-            
-            segmentation = det.mask.bool_mask if det.mask else None
-            
-            final_objects.append({
-                "bbox": [x1, y1, x2, y2],
-                "confidence": conf,
-                "class_id": cls_id,
-                "class_name": name,
-                "mask": segmentation,
-                "track_id": -1 # Se nativo for associado, substituir via match track_outputs
-            })
-            
-        return final_objects, inf_latency
+        # Anotadores Visuais (Rostos dos pintinhos)
+        self.box_annotator = sv.BoundingBoxAnnotator(thickness=2)
+        self.mask_annotator = sv.MaskAnnotator(opacity=0.5)
+        self.label_annotator = sv.LabelAnnotator(text_scale=0.5, text_padding=5)
 
-
-# =============================================================================
-# FUNÇÃO RUN DA SIMULAÇÃO OBRIGATÓRIA
-# =============================================================================
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--video", type=str, default="0", help="Vídeo ou fluxo RTSP da Granja")
-    parser.add_argument("--model", type=str, default="yolov8n-seg.pt", help="Modelo Base de Segmentação")
-    args = parser.parse_args()
-
-    # Define Fonte
-    source = int(args.video) if args.video.isdigit() else args.video
-    
-    # Motor de Captura e Visão
-    camera = AsyncCameraCapture(source)
-    vision = VisionEngine(args.model, device="cpu")
-    
-    LOGGER.info("Serviço de análise de massa online. Descompactando frames SAHI.")
-    frames_count = 0
-    start_t = time.time()
-
-    while camera.running:
-        ret, frame = camera.read()
-        if not ret or frame is None:
-            time.sleep(0.01)
-            continue
+    def run(self):
+        logging.info(f"Iniciando thread da câmera na fonte: {self.video_src}")
+        self.stream = VideoCaptureThread(self.video_src)
+        time.sleep(1.0) # Aquece a câmera e enche a fila
         
-        # Loop Analise 
+        frame_counter = 0
+        total_fps_time = 0
+        
         try:
-            detections, lat = vision.process_frame(frame)
-        except Exception as e:
-            LOGGER.error(f"Erro em predição MIPS: {e}")
-            break
+            while True:
+                start_time = time.perf_counter()
+                
+                ret, frame = self.stream.read()
+                if not ret or frame is None:
+                    logging.info("Fim da stream. Encerrando o pipeline.")
+                    break
+                
+                # ==============================================
+                # 3.1. Inferência com Fatiamento SAHI
+                # ==============================================
+                # get_sliced_prediction processa um frame gigante por partes (512x512/640x640)
+                # re-unindo as detecções e os segmentos com Non-Maximum Suppression (NMS)
+                result = get_sliced_prediction(
+                    frame,
+                    self.detection_model,
+                    slice_height=SLICE_HEIGHT,
+                    slice_width=SLICE_WIDTH,
+                    overlap_height_ratio=OVERLAP_RATIO,
+                    overlap_width_ratio=OVERLAP_RATIO,
+                    postprocess_class_agnostic=True, # Evita NMS desnecessário se houver multi-classes coladas
+                    postprocess_match_metric="IOU"
+                )
 
-        frames_count += 1
-        elapsed = time.time() - start_t
-        fps = frames_count / max(0.001, elapsed)
+                # ==============================================
+                # 3.2. Ponte SAHI -> Supervision (Detecções e Máscaras)
+                # ==============================================
+                # O Supervision converte o ObjectPredictionList do SAHI no formato Detections arrayizado,
+                # suportando extração nativa das máscaras preditas do YOLO Seg.
+                detections = sv.Detections.from_sahi(result)
 
-        # -- Rendering para Teste Edge --
-        render_frame = frame.copy()
-        aves_count = len(detections)
-        
-        for det in detections:
-            x1, y1, x2, y2 = det["bbox"]
-            mask = det["mask"]
-            
-            # Rendering Instance Segmentation!
-            if mask is not None:
-                color = (0, 255, 0)
-                mask_slice = mask[y1:y2, x1:x2] if mask.shape[0] > y1 else mask
-                if mask_slice.shape == render_frame[y1:y2, x1:x2, 0].shape:
-                    render_frame[y1:y2, x1:x2][mask_slice] = [0, 200, 0] # Pintando Silhueta
+                # Opcional: Remover detecções anômalas gigantes (ex: tratadores em vez de frangos) usando área
+                # detections = detections[(detections.area < 100000) & (detections.area > 50)]
 
-            cv2.rectangle(render_frame, (x1, y1), (x2, y2), (255, 160, 0), 1)
-            cv2.putText(render_frame, f"Conf: {det['confidence']:.2f}", (x1, y1 - 4), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+                # ==============================================
+                # 3.3. Estabilidade e Contagem com Tracking
+                # ==============================================
+                # O ByteTrack atua nas caixas e confianças, mas o tracker supervision repassa o índice 
+                # mantendo as máscaras linkadas com o tracker ID gerado. Zero flickr. 
+                tracked_detections = self.tracker.update_with_detections(detections=detections)
 
-        # Draw HUD Profissional
-        cv2.rectangle(render_frame, (10, 10), (350, 70), (0, 0, 0), -1)
-        cv2.putText(render_frame, f"FPS: {fps:.1f} | Infra: OpenVINO Edge", (15, 30), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (50, 255, 50), 2)
-        cv2.putText(render_frame, f"SAHI Aves Vivas (Contagem): {aves_count}", (15, 55), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 200, 50), 2)
-        
-        # Display em GUI x11 ou Windows (comentar caso seja purely headless Edge Server)
-        # cv2.imshow("ChickGuard Edge SAHI Pipeline", render_frame)
-        # if cv2.waitKey(1) & 0xFF == ord('q'):
-        #     break
+                # ==============================================
+                # 3.4. Anotações Visuais
+                # ==============================================
+                annotated_frame = frame.copy()
+                labels = []
+                
+                for i in range(len(tracked_detections)):
+                    # tracked_detections armazena conf, class_id e tracker_id
+                    tracker_id = tracked_detections.tracker_id[i]
+                    confidence = tracked_detections.confidence[i]
+                    labels.append(f"#{tracker_id} {confidence:.2f}")
 
-    camera.release()
-    cv2.destroyAllWindows()
-    LOGGER.info("Pipeline Encerrado.")
+                # Aplica as overlays gráficas (Mascaras + Caixas + IDs)
+                annotated_frame = self.mask_annotator.annotate(scene=annotated_frame, detections=tracked_detections)
+                annotated_frame = self.box_annotator.annotate(scene=annotated_frame, detections=tracked_detections)
+                annotated_frame = self.label_annotator.annotate(scene=annotated_frame, detections=tracked_detections, labels=labels)
+
+                # Controle de Desempenho e Log Visual
+                end_time = time.perf_counter()
+                fps = 1.0 / (end_time - start_time)
+                total_fps_time += fps
+                frame_counter += 1
+                
+                # Exibição de Resumo em Tela
+                num_aves = len(tracked_detections)
+                cv2.putText(annotated_frame, f"Aves: {num_aves} | FPS: {fps:.1f}", (20, 50), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 3)
+
+                cv2.imshow("Supervision CV - Industrial Monitor", annotated_frame)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+                    
+        except KeyboardInterrupt:
+            logging.info("Interrupção solicitada pelo usuário.")
+        finally:
+            self.stream.release()
+            cv2.destroyAllWindows()
+            if frame_counter > 0:
+                avg_fps = total_fps_time / frame_counter
+                logging.info(f"Pipeline finalizado. FPS médio: {avg_fps:.2f}")
 
 if __name__ == "__main__":
-    main()
+    # Inicia o pipeline de visão. Em produção, substitua a string pelo ID da stream RTMP ou Câmera.
+    VIDEO_SOURCE = "video_granja.mp4" # ou 0 para USB Webcam Local
+    pipeline = VisionPipeline(src=VIDEO_SOURCE)
+    pipeline.run()

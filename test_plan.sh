@@ -1,1 +1,0 @@
-echo "Tests ok."
