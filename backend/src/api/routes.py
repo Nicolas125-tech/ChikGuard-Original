@@ -9,6 +9,7 @@ from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
 from aiortc.contrib.media import MediaRelay
 from av import VideoFrame
 import numpy as np
+from src.security.auth import require_auth
 
 relay = MediaRelay()
 logger = logging.getLogger(__name__)
@@ -88,15 +89,26 @@ def create_api_blueprint(deps):
     @bp.route("/api/video", methods=["GET"])
     def video_feed():
         """
-        Stream MJPEG de alta performance.
-
-        Otimizacoes implementadas:
-        - Cabecalhos Cache-Control impedem o browser de acumular frames na memoria
-        - Generator com sleep adaptativo: dorme apenas o tempo restante do intervalo
-        - Encode JPEG com buffer pre-alocado (imencode e mais rapido que imencode_)
-        - Multipart boundary limpo e consistente (sem '\r\n' no corpo do frame)
-        - Desconexao detectada via GeneratorExit (nao vaza threads)
+        Stream MJPEG de alta performance protegido por token JWT.
         """
+        # Suporta token via cabeçalho Authorization ou parâmetro query string (para tags <img>)
+        token = None
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header.split(" ")[1]
+        else:
+            token = request.args.get("token")
+
+        if not token:
+            return jsonify({"error": "Token de autenticação ausente"}), 401
+
+        try:
+            import jwt as pyjwt
+            from src.security.auth import SUPABASE_JWT_SECRET
+            pyjwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated")
+        except Exception as e:
+            return jsonify({"error": f"Token inválido ou expirado: {str(e)}"}), 401
+
         stream_interval = deps.get("stream_frame_interval_sec", 1.0 / 30)
         quality         = deps.get("stream_jpeg_quality", 80)
         encode_params   = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
@@ -141,6 +153,7 @@ def create_api_blueprint(deps):
 
 
     @bp.route("/api/webrtc/offer", methods=["POST"])
+    @require_auth()
     def webrtc_offer():
         params = request.json
         if not params or "sdp" not in params or "type" not in params:
@@ -164,6 +177,7 @@ def create_api_blueprint(deps):
             return jsonify({"error": str(e)}), 500
 
     @bp.route("/api/webrtc/pcs", methods=["GET"])
+    @require_auth()
     def webrtc_pcs():
         return jsonify({"count": len(pcs)})
 

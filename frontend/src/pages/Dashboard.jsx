@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import ChickenPhoto from '../components/ChickenPhoto';
 
 import {
-  LayoutDashboard, Camera, Wind, History, Settings, Database,
+  LayoutDashboard, Camera, Layers, Wind, History, Settings, Database,
   LogOut, Bird, Bell, Cpu, BarChart3, Shield, Menu, X,
   Wifi, WifiOff, ChevronRight
 } from 'lucide-react';
@@ -19,6 +19,7 @@ import SmartOpsPanel from '../components/SmartOpsPanel';
 import ManagementPanel from '../components/ManagementPanel';
 import DevicesPanel from '../components/DevicesPanel';
 import SystemPanel from '../components/SystemPanel';
+import DigitalTwinPanel from '../components/DigitalTwinPanel';
 import { getBaseUrl } from '../utils/config';
 
 export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, onSaveServer, onLogout }) {
@@ -107,6 +108,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
         items: [
           { id: 'overview',  label: 'Visão Geral',        icon: LayoutDashboard },
           { id: 'camera',    label: 'Câmeras Ao Vivo',    icon: Camera },
+          { id: 'digitaltwin', label: 'Gêmeo Digital 2D', icon: Layers },
           { id: 'birds',     label: 'Aves & Tracking',    icon: ChickenPhoto },
           { id: 'alerts',    label: 'Alertas',            icon: Bell, badge: alertCount },
         ]
@@ -132,14 +134,14 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
 
     // RBAC filtering
     if (role === 'viewer') {
-      const allow = new Set(['overview', 'camera', 'birds', 'alerts', 'history']);
+      const allow = new Set(['overview', 'camera', 'digitaltwin', 'birds', 'alerts', 'history']);
       return sections.map(s => ({
         ...s,
         items: s.items.filter(t => allow.has(t.id))
       })).filter(s => s.items.length > 0);
     }
     if (role === 'operator') {
-      const allow = new Set(['overview', 'camera', 'birds', 'alerts', 'climate', 'smartops', 'devices', 'history']);
+      const allow = new Set(['overview', 'camera', 'digitaltwin', 'birds', 'alerts', 'climate', 'smartops', 'devices', 'history']);
       return sections.map(s => ({
         ...s,
         items: s.items.filter(t => allow.has(t.id))
@@ -333,6 +335,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
             <div key={tab} className="tab-content-enter">
               {tab === 'overview'    && <OverviewPanel token={token} serverIP={serverIP} prefs={prefs} />}
               {tab === 'camera'      && <CameraPanel token={token} serverIP={serverIP} />}
+              {tab === 'digitaltwin' && <DigitalTwinPanel token={token} serverIP={serverIP} prefs={prefs} />}
               {tab === 'birds'       && <BirdsPanel token={token} serverIP={serverIP} prefs={prefs} />}
               {tab === 'alerts'      && <AlertsPanel serverIP={serverIP} prefs={prefs} />}
               {tab === 'climate'     && <ClimatePanel token={token} serverIP={serverIP} prefs={prefs} canControlDevices={canControlDevices} />}

@@ -14,38 +14,78 @@ if not SUPABASE_URL or not SUPABASE_KEY:
     print("Warning: Supabase credentials not found in environment. Sync will be mocked.")
     supabase: Client = None
 else:
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    try:
+        supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    except Exception as e:
+        print(f"Error initializing Supabase client: {e}")
+        supabase = None
 
 class SupabaseSyncWorker:
-    def __init__(self, log_file="tracking_logs.json", batch_size=50, interval_seconds=5):
+    """Worker de sincronização offline-first para o Supabase.
+
+    Previne a perda de dados durante oscilações de rede (comuns em áreas rurais),
+    só avançando a leitura após confirmação de salvamento e utilizando
+    backoff exponencial para tentativas de reconexão.
+    """
+    def __init__(self, log_file="tracking_logs.json", state_file="sync_state.json", batch_size=50, interval_seconds=5):
         self.log_file = log_file
+        self.state_file = state_file
         self.batch_size = batch_size
-        self.interval_seconds = interval_seconds
+        self.base_interval = interval_seconds
+        self.current_interval = interval_seconds
+        
         self.last_processed_idx = 0
+        self.backlog = []  # Registros pendentes de envio (backlog de falha)
+        
+        self.load_state()
+
+    def load_state(self):
+        """Carrega o estado anterior de sincronização do arquivo persistente."""
+        if os.path.exists(self.state_file):
+            try:
+                with open(self.state_file, "r") as f:
+                    state = json.load(f)
+                    self.last_processed_idx = state.get("last_processed_idx", 0)
+                    self.backlog = state.get("backlog", [])
+                print(f"[Sync] Estado carregado. Index={self.last_processed_idx}, Backlog={len(self.backlog)} itens.")
+            except Exception as e:
+                print(f"[Sync] Erro ao carregar estado: {e}. Iniciando do zero.")
+
+    def save_state(self):
+        """Salva o estado atual de sincronização em arquivo persistente."""
+        try:
+            with open(self.state_file, "w") as f:
+                json.dump({
+                    "last_processed_idx": self.last_processed_idx,
+                    "backlog": self.backlog
+                }, f, indent=2)
+        except Exception as e:
+            print(f"[Sync] Erro ao salvar estado: {e}")
 
     async def fetch_new_logs(self):
-        """Reads new log entries from the JSON file since the last read."""
+        """Lê novas entradas de log do arquivo JSON, sem avançar o índice global ainda."""
         if not os.path.exists(self.log_file):
             return []
 
         try:
             with open(self.log_file, "r") as f:
-                # Assuming the tracking script writes a JSON array.
-                # In a real streaming scenario, JSON lines (.jsonl) would be better.
                 data = json.load(f)
                 
+            if len(data) <= self.last_processed_idx:
+                return []
+                
             new_logs = data[self.last_processed_idx:]
-            self.last_processed_idx = len(data)
-            return new_logs
+            # Retorna logs e o novo índice temporário
+            return new_logs, len(data)
         except json.JSONDecodeError:
-            # File might be mid-write
+            # Arquivo pode estar sendo escrito no mesmo instante
             return []
         except Exception as e:
-            print(f"Error reading logs: {e}")
+            print(f"[Sync] Erro ao ler logs: {e}")
             return []
 
     def transform_for_supabase(self, logs):
-        """Transforms tracking logs into a flat format for Supabase insertion."""
+        """Transforma logs brutos em registros planos formatados para o Supabase."""
         records = []
         for frame_log in logs:
             timestamp = frame_log.get("timestamp", time.time())
@@ -59,51 +99,83 @@ class SupabaseSyncWorker:
                     "pos_x": det["smoothed_centroid"][0],
                     "pos_y": det["smoothed_centroid"][1],
                     "frame_number": frame_num,
-                    # Convert UNIX timestamp to ISO format for Postgres
                     "detected_at": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))
                 })
         return records
 
-    async def batch_upsert(self, records):
-        """Sends records to Supabase in batches."""
+    async def sync_records(self, records) -> bool:
+        """Tenta enviar uma lista de registros para o Supabase. Retorna True se obtiver sucesso."""
         if not records:
-            return
+            return True
 
-        print(f"Preparing to sync {len(records)} records to Supabase...")
-        
-        for i in range(0, len(records), self.batch_size):
-            batch = records[i:i + self.batch_size]
+        if not supabase:
+            # Modo simulado de testes
+            print(f"[Sync Mock] Sincronizados {len(records)} registros com sucesso.")
+            return True
+
+        try:
+            # Insere no Supabase
+            supabase.table("bird_tracking_logs").insert(records).execute()
+            return True
+        except Exception as e:
+            print(f"[Sync] Falha na rede / Supabase: {e}")
+            return False
+
+    async def run_once(self):
+        """Executa um ciclo único de verificação e envio de dados."""
+        # 1. Tenta limpar o backlog pendente primeiro
+        if self.backlog:
+            print(f"[Sync] Tentando enviar backlog pendente: {len(self.backlog)} itens...")
+            success = await self.sync_records(self.backlog[:self.batch_size])
             
-            if supabase:
-                try:
-                    # Assuming table name is 'bird_tracking_logs'
-                    # Upsert based on track_id and detected_at (assuming these form a unique constraint if needed)
-                    response = supabase.table("bird_tracking_logs").insert(batch).execute()
-                    print(f"Synced batch of {len(batch)} records.")
-                except Exception as e:
-                    print(f"Supabase sync error: {e}")
+            if success:
+                # Remove itens enviados do backlog
+                self.backlog = self.backlog[self.batch_size:]
+                self.save_state()
+                # Reseta o intervalo de backoff (sucesso restabelece a rede)
+                self.current_interval = self.base_interval
+                print(f"[Sync] Backlog reduzido. Pendentes: {len(self.backlog)}")
             else:
-                print(f"[Mock Sync] Synced batch of {len(batch)} records to Supabase.")
-            
-            # Small yield to event loop
-            await asyncio.sleep(0.1)
+                # Falhou: aplica backoff exponencial (máximo de 5 minutos)
+                self.current_interval = min(self.current_interval * 2, 300)
+                print(f"[Sync] Erro no backlog. Aumentando intervalo de espera para {self.current_interval}s.")
+                return
+
+        # 2. Busca novos logs apenas se o backlog estiver limpo
+        if not self.backlog:
+            fetch_res = await self.fetch_new_logs()
+            if fetch_res:
+                new_logs, temp_next_idx = fetch_res
+                records = self.transform_for_supabase(new_logs)
+                
+                if records:
+                    success = await self.sync_records(records[:self.batch_size])
+                    
+                    if success:
+                        # Avança o índice e limpa registros enviados
+                        self.last_processed_idx += len(new_logs) # Ajusta index correspondente
+                        self.save_state()
+                        self.current_interval = self.base_interval
+                        print(f"[Sync] Sincronizados {len(records)} registros novos. Próximo index: {self.last_processed_idx}")
+                    else:
+                        # Adiciona registros ao backlog de falha para tentar mais tarde
+                        self.backlog.extend(records)
+                        # Mesmo falhando, consideramos os logs lidos do arquivo de log, mas agora residem no backlog do sync
+                        self.last_processed_idx = temp_next_idx
+                        self.save_state()
+                        self.current_interval = min(self.current_interval * 2, 300)
+                        print(f"[Sync] Erro no envio. Movidos para o backlog. Novo intervalo de espera: {self.current_interval}s.")
 
     async def run(self):
-        print("Starting Supabase Sync Worker...")
-        print(f"Listening for logs in {self.log_file} every {self.interval_seconds} seconds.")
+        print("Starting Supabase Sync Worker (Offline-First mode)...")
+        print(f"Tracking logs: {self.log_file}")
         
         while True:
-            new_logs = await self.fetch_new_logs()
-            if new_logs:
-                records = self.transform_for_supabase(new_logs)
-                await self.batch_upsert(records)
-            else:
-                pass # No new logs
-                
-            await asyncio.sleep(self.interval_seconds)
+            await self.run_once()
+            await asyncio.sleep(self.current_interval)
 
 if __name__ == "__main__":
-    worker = SupabaseSyncWorker(log_file="tracking_logs.json", batch_size=100, interval_seconds=5)
+    worker = SupabaseSyncWorker(log_file="tracking_logs.json", state_file="sync_state.json", batch_size=100, interval_seconds=5)
     
     try:
         asyncio.run(worker.run())
