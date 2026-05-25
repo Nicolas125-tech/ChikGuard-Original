@@ -1,7 +1,7 @@
-🎯 **What:** Removed the unused `datetime` import from `backend/src/reports/generator.py`. Also cleaned up an unused `database.db` import and applied standard formatting using `autopep8` to resolve some long lines.
+🎯 **What:** Optimized the `/api/alerts` endpoint in `backend/app.py`. Filtered out `NORMAL` readings directly in the database query instead of iterating through all results in Python. Replaced string concatenation for sorting with raw datetime object comparisons.
 
-💡 **Why:** `datetime` and `db` were imported but not used in the file, causing unnecessary mental overhead and violating clean code guidelines. Removing unused code improves code readability and maintainability.
+💡 **Why:** Filtering at the database level significantly reduces memory consumption and execution time when there are many `NORMAL` readings, resolving an N+1 style inefficiency. Furthermore, building a string (`f"{x['data']} {x['hora']}"`) to use as a sorting key is much slower than utilizing raw datetime objects which carry chronological accuracy intrinsically.
 
-✅ **Verification:** Verified by checking that no references to the `datetime` object existed in the file (only `timedelta`). Ran `flake8` to ensure there were no other linting issues. Ran backend tests with `pytest` to ensure no regressions.
+✅ **Verification:** Ran backend tests to verify functionality remains stable. Checked endpoints response logic visually via Python AST format updates. Confirmed with standard tests `pytest tests/`.
 
-✨ **Result:** Cleaner code that is easier to maintain with no unused imports.
+✨ **Result:** A more responsive and scalable API endpoint under load, better utilization of the database query planner, and cleaner handling of datetimes for sorting.
