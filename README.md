@@ -2,16 +2,17 @@
 
 <div align="center">
 
+![ChikGuard Banner](docs/screenshots/banner.png)
+
 **AI-powered poultry monitoring system with real-time computer vision, IoT sensor integration, and edge intelligence.**
 
+[![CI](https://github.com/Nicolas125-tech/ChikGuard-Original/actions/workflows/ci.yml/badge.svg)](https://github.com/Nicolas125-tech/ChikGuard-Original/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white)](https://python.org)
 [![React](https://img.shields.io/badge/React-18+-61DAFB?logo=react&logoColor=black)](https://react.dev)
 [![React Native](https://img.shields.io/badge/React%20Native-Expo-000020?logo=expo&logoColor=white)](https://expo.dev)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](./docker-compose.yml)
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com)
-
-![ChikGuard Admin Dashboard](docs/screenshots/admin_dashboard.png)
 
 </div>
 
@@ -92,7 +93,7 @@ ChikGuard/
 ### 1. Clone & configure
 
 ```bash
-git clone https://github.com/your-username/ChikGuard.git
+git clone https://github.com/Nicolas125-tech/ChikGuard-Original.git
 cd ChikGuard
 cp .env.example .env
 # Edit .env with your credentials
@@ -164,6 +165,36 @@ def register():
 | `POST` | `/api/webrtc/offer` | WebRTC video stream handshake |
 | `POST` | `/api/reports/esg` | Generate ESG compliance PDF |
 | `GET` | `/api/accounts/me` | Authenticated user details (RBAC) |
+
+---
+
+## 📸 Screenshots
+
+<details>
+<summary><b>🖥️ Web Dashboard</b> (click to expand)</summary>
+
+| Overview | Birds | History |
+|---|---|---|
+| ![Overview](docs/screenshots/web-overview.jpeg) | ![Birds](docs/screenshots/web-aves.jpeg) | ![History](docs/screenshots/web-historico.jpeg) |
+
+| Devices | Settings | System |
+|---|---|---|
+| ![Devices](docs/screenshots/web-dispositivos.jpeg) | ![Settings](docs/screenshots/web-configuracoes.jpeg) | ![System](docs/screenshots/web-sistema.jpeg) |
+
+</details>
+
+<details>
+<summary><b>📱 Mobile App</b> (click to expand)</summary>
+
+| Monitor | Birds | Alerts |
+|---|---|---|
+| ![Monitor](docs/screenshots/mobile-monitor.jpeg) | ![Birds](docs/screenshots/mobile-aves.jpeg) | ![Alerts](docs/screenshots/mobile-alertas.jpeg) |
+
+| History | Settings | System |
+|---|---|---|
+| ![History](docs/screenshots/mobile-historico.jpeg) | ![Settings](docs/screenshots/mobile-ajustes.jpeg) | ![System](docs/screenshots/mobile-sistema.jpeg) |
+
+</details>
 
 ---
 

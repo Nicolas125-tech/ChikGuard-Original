@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # ── Backend Tests ──────────────────────────────────────────
+  backend-tests:
+    name: 🐍 Backend Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: 📦 Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: 🧪 Run tests
+        run: |
+          PYTHONPATH=. python -m pytest tests/ -q --tb=short
+        env:
+          FLASK_ENV: testing
+          SECRET_KEY: ci-test-secret-key
+          JWT_SECRET_KEY: ci-test-jwt-key
+          DATABASE_URL: sqlite:///test_ci.db
+          ADMIN_USERNAME: admin
+          ADMIN_PASSWORD: TestPassword123!
+          ADMIN_EMAIL: admin@test.com
+
+  # ── Frontend Lint & Build ──────────────────────────────────
+  frontend-build:
+    name: ⚛️ Frontend Build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🟢 Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      - name: 🔍 Lint
+        run: npm run lint --if-present
+
+      - name: 🏗️ Build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY: placeholder-anon-key
+
+  # ── Docker Compose Validation ──────────────────────────────
+  docker-validate:
+    name: 🐳 Docker Compose Validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐳 Validate docker-compose.yml
+        run: docker compose config --quiet

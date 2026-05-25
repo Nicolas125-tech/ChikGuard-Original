@@ -1,0 +1,23 @@
+# CODEOWNERS
+# Each line is a pattern followed by the owner(s) of matching files.
+# GitHub will automatically request reviews from owners when a PR touches these files.
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global fallback — all files
+* @Nicolas125-tech
+
+# Backend core
+/backend/src/core/       @Nicolas125-tech
+/backend/src/security/   @Nicolas125-tech
+/backend/database.py     @Nicolas125-tech
+
+# AI/Vision pipeline (sensitive — always needs review)
+/backend/src/vision/     @Nicolas125-tech
+/backend/src/cv_master/  @Nicolas125-tech
+/backend/src/mlops/      @Nicolas125-tech
+/backend/plugins/        @Nicolas125-tech
+
+# CI/CD & Infrastructure
+/.github/                @Nicolas125-tech
+/docker-compose.yml      @Nicolas125-tech
+/supabase/               @Nicolas125-tech
