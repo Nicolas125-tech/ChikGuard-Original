@@ -13,7 +13,7 @@ Uso:
     frame = cam.read()   # sempre retorna o frame mais novo ou None
     cam.stop()
 """
-from __future__ import annotations
+
 
 import cv2
 import logging
@@ -46,23 +46,23 @@ class AsyncCameraReader:
         reconnect_interval_sec: float = 3.0,
         max_fail_streak: int = 30,
     ):
-        self.index                = index
-        self.width                = width
-        self.height               = height
-        self.target_fps           = max(1.0, target_fps)
-        self.backend              = backend
-        self.reconnect_interval   = reconnect_interval_sec
-        self.max_fail_streak      = max_fail_streak
+        self.index = index
+        self.width = width
+        self.height = height
+        self.target_fps = max(1.0, target_fps)
+        self.backend = backend
+        self.reconnect_interval = reconnect_interval_sec
+        self.max_fail_streak = max_fail_streak
 
         # --- Buffer atomico LIFO (1 slot) ------------------------------------
         self._frame: Optional[np.ndarray] = None
-        self._lock   = threading.Lock()          # protege apenas a troca do slot
+        self._lock = threading.Lock()          # protege apenas a troca do slot
 
         # --- Controle de thread ----------------------------------------------
-        self._running  = False
-        self._thread:  Optional[threading.Thread] = None
-        self._cap:     Optional[cv2.VideoCapture] = None
-        self._is_live  = False                   # False = sem camera real
+        self._running = False
+        self._thread: Optional[threading.Thread] = None
+        self._cap: Optional[cv2.VideoCapture] = None
+        self._is_live = False                   # False = sem camera real
         self._fail_streak = 0
         self._last_reconnect = 0.0
 
@@ -78,7 +78,7 @@ class AsyncCameraReader:
     def start(self) -> "AsyncCameraReader":
         """Inicia a thread de captura. Encadeavel: cam.start()."""
         self._running = True
-        self._thread  = threading.Thread(
+        self._thread = threading.Thread(
             target=self._run,
             daemon=True,
             name="chikguard-cam-reader",
@@ -122,10 +122,10 @@ class AsyncCameraReader:
                     continue
 
                 # Configuracoes de alto desempenho
-                cap.set(cv2.CAP_PROP_FRAME_WIDTH,  self.width)
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
                 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
-                cap.set(cv2.CAP_PROP_FPS,          self.target_fps)
-                cap.set(cv2.CAP_PROP_BUFFERSIZE,   1)          # LIFO na camera
+                cap.set(cv2.CAP_PROP_FPS, self.target_fps)
+                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)          # LIFO na camera
                 cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
 
                 # Verifica leitura real
@@ -136,7 +136,7 @@ class AsyncCameraReader:
 
                 if self._cap:
                     self._cap.release()
-                self._cap     = cap
+                self._cap = cap
                 self._is_live = True
                 self._fail_streak = 0
 
@@ -210,16 +210,16 @@ class SimulatedCameraReader(AsyncCameraReader):
     def __init__(self, video_path: str, fps: float = 25.0):
         # Nao chama super().__init__ — backend diferente
         self._video_path = video_path
-        self.target_fps  = max(1.0, fps)
+        self.target_fps = max(1.0, fps)
         self._frame: Optional[np.ndarray] = None
-        self._lock   = threading.Lock()
-        self._running  = False
-        self._thread:  Optional[threading.Thread] = None
-        self._is_live  = False  # Simulada = nao e "live"
+        self._lock = threading.Lock()
+        self._running = False
+        self._thread: Optional[threading.Thread] = None
+        self._is_live = False  # Simulada = nao e "live"
 
     def start(self) -> "SimulatedCameraReader":
         self._running = True
-        self._thread  = threading.Thread(
+        self._thread = threading.Thread(
             target=self._run_sim,
             daemon=True,
             name="chikguard-sim-reader",
