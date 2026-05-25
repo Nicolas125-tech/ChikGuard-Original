@@ -1,7 +1,5 @@
-🎯 **What:** Removed the unused `datetime` import from `backend/src/reports/generator.py`. Also cleaned up an unused `database.db` import and applied standard formatting using `autopep8` to resolve some long lines.
+🎯 **What:** Replaced the hardcoded fallback password `"chikguard_admin_secure"` with a cryptographically secure randomly generated password using Python's `secrets.token_urlsafe(16)` when the `ADMIN_PASSWORD` environment variable is not provided. This fix applies to both the Flask application startup (`backend/app.py`) and the Supabase Superadmin creation script (`backend/scripts/create_superadmin.py`).
 
-💡 **Why:** `datetime` and `db` were imported but not used in the file, causing unnecessary mental overhead and violating clean code guidelines. Removing unused code improves code readability and maintainability.
+⚠️ **Risk:** Hardcoded administrative passwords constitute a critical security vulnerability. If deployed with the default configuration, an attacker with knowledge of the codebase could trivially escalate privileges and gain full administrative access to the system.
 
-✅ **Verification:** Verified by checking that no references to the `datetime` object existed in the file (only `timedelta`). Ran `flake8` to ensure there were no other linting issues. Ran backend tests with `pytest` to ensure no regressions.
-
-✨ **Result:** Cleaner code that is easier to maintain with no unused imports.
+🛡️ **Solution:** By generating a random 16-byte URL-safe string, the system ensures that every deployment without an explicitly provided administrative password gets a unique, secure credential. This generated password is logged to the standard output during initialization so the administrator can securely retrieve it and log in for the first time.

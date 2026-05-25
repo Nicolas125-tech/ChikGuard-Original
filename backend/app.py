@@ -39,6 +39,7 @@ import ipaddress
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 import io
+import secrets
 
 from src.alerts.providers import build_alert_provider
 from src.api.routes import create_api_blueprint
@@ -578,22 +579,33 @@ with app.app_context():
     # ── Super Admin Account ───────────────────────────────────────────────────
     SUPERADMIN_EMAIL = "nicolasbissoqui@gmail.com"
     if not Account.query.filter_by(username=SUPERADMIN_EMAIL).first():
-        sa_hash = bcrypt.generate_password_hash(admin_password_env or "chikguard_admin_secure").decode("utf-8")
+        sa_password = admin_password_env or secrets.token_urlsafe(16)
+        sa_hash = bcrypt.generate_password_hash(sa_password).decode("utf-8")
         db.session.add(Account(username=SUPERADMIN_EMAIL, password_hash=sa_hash, role="superadmin", active=True))
         db.session.commit()
-        print(f"[INIT] Super Admin account created: {SUPERADMIN_EMAIL}")
+        if not admin_password_env:
+            print(f"[INIT] Super Admin account created: {SUPERADMIN_EMAIL} with generated password: {sa_password}")
+        else:
+            print(f"[INIT] Super Admin account created: {SUPERADMIN_EMAIL}")
     if not User.query.filter_by(username=SUPERADMIN_EMAIL).first():
-        sa_user_hash = bcrypt.generate_password_hash(admin_password_env or "chikguard_admin_secure").decode("utf-8")
+        existing_acc = Account.query.filter_by(username=SUPERADMIN_EMAIL).first()
+        sa_user_hash = existing_acc.password_hash if existing_acc else bcrypt.generate_password_hash(admin_password_env or secrets.token_urlsafe(16)).decode("utf-8")
         db.session.add(User(username=SUPERADMIN_EMAIL, password=sa_user_hash))
         db.session.commit()
 
     GORDOS_EMAIL = "gordosparasempre@gmail.com"
     if not Account.query.filter_by(username=GORDOS_EMAIL).first():
-        sa_hash2 = bcrypt.generate_password_hash(admin_password_env or "chikguard_admin_secure").decode("utf-8")
+        sa2_password = admin_password_env or secrets.token_urlsafe(16)
+        sa_hash2 = bcrypt.generate_password_hash(sa2_password).decode("utf-8")
         db.session.add(Account(username=GORDOS_EMAIL, password_hash=sa_hash2, role="superadmin", active=True))
         db.session.commit()
+        if not admin_password_env:
+            print(f"[INIT] Super Admin account created: {GORDOS_EMAIL} with generated password: {sa2_password}")
+        else:
+            print(f"[INIT] Super Admin account created: {GORDOS_EMAIL}")
     if not User.query.filter_by(username=GORDOS_EMAIL).first():
-        sa_user_hash2 = bcrypt.generate_password_hash(admin_password_env or "chikguard_admin_secure").decode("utf-8")
+        existing_acc2 = Account.query.filter_by(username=GORDOS_EMAIL).first()
+        sa_user_hash2 = existing_acc2.password_hash if existing_acc2 else bcrypt.generate_password_hash(admin_password_env or secrets.token_urlsafe(16)).decode("utf-8")
         db.session.add(User(username=GORDOS_EMAIL, password=sa_user_hash2))
         db.session.commit()
 

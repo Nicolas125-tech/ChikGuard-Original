@@ -5,6 +5,7 @@ Usa a Service Role Key para ter acesso administrativo completo.
 import os
 import sys
 import requests
+import secrets
 from dotenv import load_dotenv
 
 # Load .env from backend directory
@@ -19,7 +20,7 @@ if not SUPABASE_URL or not SERVICE_ROLE_KEY:
     sys.exit(1)
 
 SUPERADMIN_EMAIL = "nicolasbissoqui@gmail.com"
-SUPERADMIN_PASSWORD = "chikguard_admin_secure"
+SUPERADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD") or secrets.token_urlsafe(16)
 
 headers = {
     "apikey": SERVICE_ROLE_KEY,
@@ -139,7 +140,7 @@ def main():
     print("=" * 60)
     print(f"  Email:    {SUPERADMIN_EMAIL}")
     print(f"  Senha:    {SUPERADMIN_PASSWORD}")
-    print(f"  Role:     superadmin")
+    print("  Role:     superadmin")
     print(f"  Supabase: {SUPABASE_URL}")
     print("=" * 60)
 
@@ -155,8 +156,8 @@ def main():
     print("=" * 60)
     print(f"  Login:  {SUPERADMIN_EMAIL}")
     print(f"  Senha:  {SUPERADMIN_PASSWORD}")
-    print(f"  Role:   superadmin")
-    print(f"  Status: ACTIVE (sem necessidade de aprovacao)")
+    print("  Role:   superadmin")
+    print("  Status: ACTIVE (sem necessidade de aprovacao)")
     print("=" * 60)
 
 

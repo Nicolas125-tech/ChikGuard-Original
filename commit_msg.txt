@@ -1,6 +1,7 @@
-🧹 [Code Health Improvement] Remove unused random import
+🔒 [security fix] Remove hardcoded fallback admin passwords
 
-🎯 What: Removed the unused `random` module import from `backend/data_augmentation.py`.
-💡 Why: Improves code cleanliness, removes dead code, and follows PEP-8 best practices.
-✅ Verification: Ran the test suite to ensure the system is stable.
-✨ Result: Cleaner code without impacting any functionality.
+🎯 What: Replaced the hardcoded fallback password `"chikguard_admin_secure"` with a cryptographically secure randomly generated password using Python's `secrets.token_urlsafe(16)` when the `ADMIN_PASSWORD` environment variable is not provided. This fix applies to both the Flask application startup (`backend/app.py`) and the Supabase Superadmin creation script (`backend/scripts/create_superadmin.py`).
+
+⚠️ Risk: Hardcoded administrative passwords constitute a critical security vulnerability. If deployed with the default configuration, an attacker with knowledge of the codebase could trivially escalate privileges and gain full administrative access to the system.
+
+🛡️ Solution: By generating a random 16-byte URL-safe string, the system ensures that every deployment without an explicitly provided administrative password gets a unique, secure credential. This generated password is logged to the standard output during initialization so the administrator can securely retrieve it and log in for the first time.
