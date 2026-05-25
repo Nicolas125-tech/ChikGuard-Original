@@ -200,3 +200,100 @@ class VetWelfareAgent(ChikGuardAgent):
             "logbook_entry_created": log_created,
             "timestamp": datetime.utcnow().isoformat()
         }
+
+
+class ClimateAgent(ChikGuardAgent):
+    """Agente de Climatização Preditiva.
+
+    Lê dados de previsão do tempo (via plugin) e propõe ajustes preditivos
+    nas metas térmicas da FSM.
+    """
+    def __init__(self, weather_plugin=None):
+        super().__init__(
+            name="ClimateAgent",
+            description="Analisa a previsão do tempo externa para ajustar dinamicamente as metas térmicas da FSM."
+        )
+        self.weather_plugin = weather_plugin
+
+    def run(self, context: Dict[str, Any] = None) -> Dict[str, Any]:
+        if context is None:
+            context = {}
+
+        # 1. Obtém as condições climáticas atuais e a previsão de 12 horas
+        plugin = self.weather_plugin
+        if not plugin:
+            plugin = context.get("weather_plugin")
+
+        if not plugin:
+            return {
+                "agent": self.name,
+                "status": "FAILED",
+                "error": "WeatherForecastPlugin não configurado ou disponível.",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+
+        weather = plugin.get_current_weather()
+        forecast = plugin.get_forecast_12h()
+
+        ext_temp = weather.get("temperature_c", 25.0)
+        heatwave = weather.get("heatwave_active", False)
+        cold_snap = weather.get("cold_snap_active", False)
+
+        # 2. Lógica de ajuste térmico preditivo
+        targets = {
+            "fan_on_temp": 32.0,
+            "fan_off_temp": 31.0,
+            "heater_on_temp": 24.0,
+            "heater_off_temp": 25.0,
+            "target_temp": 28.0
+        }
+        adjustments_made = []
+
+        # Analisa a previsão para as próximas 6 horas
+        high_temp_forecasted = any(f["temp_c"] >= 33.0 for f in forecast[:6])
+        low_temp_forecasted = any(f["temp_c"] <= 16.0 for f in forecast[:6])
+
+        if heatwave or high_temp_forecasted:
+            # Caso de calor extremo iminente: ativa resfriamento preventivo (pre-cooling)
+            # Reduz os limites para ligar o ventilador mais cedo e impedir ganho de inércia térmica
+            targets["fan_on_temp"] = 30.0
+            targets["fan_off_temp"] = 29.0
+            targets["heater_on_temp"] = 21.0
+            targets["heater_off_temp"] = 22.0
+            adjustments_made.append("Pré-resfriamento preventivo ativado: limites do ventilador reduzidos para 30.0°C.")
+            
+        elif cold_snap or low_temp_forecasted:
+            # Caso de frio extremo iminente: ativa pré-aquecimento preventivo (pre-heating)
+            targets["heater_on_temp"] = 26.0
+            targets["heater_off_temp"] = 27.0
+            targets["fan_on_temp"] = 33.0
+            targets["fan_off_temp"] = 32.0
+            adjustments_made.append("Pré-aquecimento preventivo ativado: limites do aquecedor elevados para 26.0°C.")
+
+        # Gravar no BatchLogbook se houver alteração
+        if adjustments_made:
+            try:
+                active_batch = Batch.query.filter(Batch.active == True).first()
+                batch_id = active_batch.id if active_batch else None
+                
+                log_entry = BatchLogbook(
+                    camera_id=context.get("camera_id", "galpao-1"),
+                    batch_id=batch_id,
+                    note=f"[Otimização Climática - ClimateAgent]\n" + "\n".join([f"- {adj}" for adj in adjustments_made]),
+                    author="Agent_Climate",
+                    timestamp=datetime.utcnow()
+                )
+                db.session.add(log_entry)
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+
+        return {
+            "agent": self.name,
+            "status": "COMPLETED",
+            "current_external_temp": ext_temp,
+            "adjustments": adjustments_made,
+            "recommended_targets": targets,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+

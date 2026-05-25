@@ -11,12 +11,27 @@ class BusinessStateMachine:
         ventilacao_on = context.get('ventilacao_on', False)
         aquecedor_on = context.get('aquecedor_on', False)
 
-        fan_on_temp = targets.get('fan_on_temp', 32.0)
-        fan_off_temp = targets.get('fan_off_temp', 31.0)
-        heater_on_temp = targets.get('heater_on_temp', 24.0)
-        heater_off_temp = targets.get('heater_off_temp', 25.0)
+        # Limites Físicos Rígidos de Segurança (Hard-Limits Watchdog)
+        MAX_SAFE_FAN_ON = 34.0
+        MIN_SAFE_FAN_ON = 26.0
+        MAX_SAFE_HEATER_ON = 28.0
+        MIN_SAFE_HEATER_ON = 18.0
+
+        raw_fan_on = targets.get('fan_on_temp', 32.0)
+        fan_on_temp = min(max(raw_fan_on, MIN_SAFE_FAN_ON), MAX_SAFE_FAN_ON)
+
+        raw_fan_off = targets.get('fan_off_temp', 31.0)
+        fan_off_temp = min(raw_fan_off, fan_on_temp - 0.5)
+
+        raw_heater_on = targets.get('heater_on_temp', 24.0)
+        heater_on_temp = min(max(raw_heater_on, MIN_SAFE_HEATER_ON), MAX_SAFE_HEATER_ON)
+
+        raw_heater_off = targets.get('heater_off_temp', 25.0)
+        heater_off_temp = max(raw_heater_off, heater_on_temp + 0.5)
+
         target_temp = targets.get('target_temp', 28.0)
         batch_age_day = targets.get('batch_age_day', 21)
+
 
         # Determine state
         if intrusion_active:
