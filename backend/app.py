@@ -377,9 +377,9 @@ def _log_event(event_type, level, message, metadata=None, camera_id=ACTIVE_CAMER
                         try:
                             if "requests" in globals() and requests is not None:
                                 requests.post("https://exp.host/--/api/v2/push/send", json=payload, timeout=5)
-                        except Exception as e:
+                        except Exception:
                             LOGGER.exception("Error sending push to %s: %s", token_obj.token, e)
-            except Exception as e:
+            except Exception:
                 LOGGER.exception("Failed to query PushTokens: %s", e)
         event_payload = {
             "camera_id": camera_id,
@@ -1874,8 +1874,8 @@ def detectar_objetos(frame, pre_detections=None):
         for det in detections:
             class_name = _class_name_by_id(det["class_id"])
             active_learning_pipeline.process_detection(frame, det, class_name)
-    except Exception as e:
-        LOGGER.error(f"Failed to process active learning: {e}")
+    except Exception:
+        LOGGER.error(f"Failed to process active learning: ")
 
     # LGPD / GDPR by Design: Anonimizacao no Edge
     h, w = frame.shape[:2]
@@ -2349,7 +2349,7 @@ def _process_data_lifecycle(now):
                     try:
                         os.remove(filepath)
                         files_deleted += 1
-                    except Exception as e:
+                    except Exception:
                         LOGGER.error("[data-lifecycle] Failed to delete file %s: %s", filepath, e)
 
         if total_deleted > 0 or files_deleted > 0:
@@ -3279,10 +3279,9 @@ def weather_forecast():
 def get_alerts():
     itens = []
 
-    recentes = Reading.query.order_by(Reading.id.desc()).limit(50).all()
+    # ⚡ Bolt Optimization: Filter out NORMAL readings at DB level
+    recentes = Reading.query.filter(Reading.status != "NORMAL").order_by(Reading.id.desc()).limit(50).all()
     for item in recentes:
-        if item.status == "NORMAL":
-            continue
         nivel = "alto" if item.status == "CALOR" else "medio"
         itens.append(
             {
@@ -3293,6 +3292,7 @@ def get_alerts():
                 "temperatura": item.temperatura,
                 "hora": item.timestamp.strftime("%H:%M:%S"),
                 "data": item.timestamp.strftime("%d/%m/%Y"),
+                "_ts": item.timestamp,  # ⚡ Bolt Optimization: Raw datetime for fast sorting
             }
         )
 
@@ -3309,10 +3309,17 @@ def get_alerts():
                 "temperatura": None,
                 "hora": ev.timestamp.strftime("%H:%M:%S"),
                 "data": ev.timestamp.strftime("%d/%m/%Y"),
+                "_ts": ev.timestamp,  # ⚡ Bolt Optimization: Raw datetime for fast sorting
             }
         )
 
-    itens.sort(key=lambda x: f"{x['data']} {x['hora']}", reverse=True)
+    # ⚡ Bolt Optimization: Sort using datetime object instead of string concatenation
+    itens.sort(key=lambda x: x["_ts"], reverse=True)
+
+    # Remove temporary timestamp key
+    for item in itens:
+        item.pop("_ts", None)
+
     return jsonify(itens[:100])
 
 
@@ -3341,7 +3348,6 @@ def get_history():
 
 @app.route("/api/chick_count", methods=["GET"])
 def get_chick_count():
-    now = time.time()
     with lock:
         count = object_count
     return jsonify({"count": count})
@@ -3504,7 +3510,7 @@ if __name__ == "__main__":
             ssl_context.load_cert_chain(certfile=server_cert, keyfile=server_key)
             ssl_context.load_verify_locations(cafile=ca_cert)
             ssl_context.verify_mode = ssl.CERT_REQUIRED
-        except Exception as e:
+        except Exception:
             LOGGER.exception("Failed to configure mTLS context")
             raise
 
