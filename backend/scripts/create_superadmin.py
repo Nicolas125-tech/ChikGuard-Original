@@ -18,8 +18,12 @@ if not SUPABASE_URL or not SERVICE_ROLE_KEY:
     print("[ERRO] SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY nao configurados no .env")
     sys.exit(1)
 
-SUPERADMIN_EMAIL = "nicolasbissoqui@gmail.com"
-SUPERADMIN_PASSWORD = "chikguard_admin_secure"
+SUPERADMIN_EMAIL = os.environ.get("SUPERADMIN_EMAIL", "nicolasbissoqui@gmail.com")
+SUPERADMIN_PASSWORD = os.environ.get("SUPERADMIN_PASSWORD", "")
+
+if not SUPERADMIN_PASSWORD:
+    print("[ERRO] SUPERADMIN_PASSWORD nao configurado no .env ou no ambiente")
+    sys.exit(1)
 
 headers = {
     "apikey": SERVICE_ROLE_KEY,
@@ -138,7 +142,7 @@ def main():
     print("  ChikGuard -- Criacao de Super Admin")
     print("=" * 60)
     print(f"  Email:    {SUPERADMIN_EMAIL}")
-    print(f"  Senha:    {SUPERADMIN_PASSWORD}")
+    print(f"  Senha:    ********")
     print(f"  Role:     superadmin")
     print(f"  Supabase: {SUPABASE_URL}")
     print("=" * 60)
@@ -154,7 +158,7 @@ def main():
     print("  SUPER ADMIN CONFIGURADO COM SUCESSO!")
     print("=" * 60)
     print(f"  Login:  {SUPERADMIN_EMAIL}")
-    print(f"  Senha:  {SUPERADMIN_PASSWORD}")
+    print(f"  Senha:  ********")
     print(f"  Role:   superadmin")
     print(f"  Status: ACTIVE (sem necessidade de aprovacao)")
     print("=" * 60)
