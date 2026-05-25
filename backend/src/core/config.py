@@ -22,5 +22,18 @@ class Settings:
         self.telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN", None)
         self.telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID", None)
 
+        # Twilio settings
+        self.twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID", None)
+        self.twilio_auth_token = os.getenv("TWILIO_AUTH_TOKEN", None)
+        self.twilio_from_number = os.getenv("TWILIO_FROM_NUMBER", None)
+        self.twilio_to_number = os.getenv("TWILIO_TO_NUMBER", None)
+
+        # SMTP settings
+        self.smtp_server = os.getenv("SMTP_SERVER", None)
+        self.smtp_port = int(os.getenv("SMTP_PORT", "587")) if os.getenv("SMTP_PORT") else 587
+        self.smtp_user = os.getenv("SMTP_USER", None)
+        self.smtp_password = os.getenv("SMTP_PASSWORD", None)
+        self.smtp_to = os.getenv("SMTP_TO", None)
+
 def load_settings():
     return Settings()
