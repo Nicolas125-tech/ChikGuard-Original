@@ -1,4 +1,6 @@
 from src.security.auth import require_auth
+from src.security.headers import setup_security_headers, setup_cors
+from src.security.hardening import setup_hardening
 from src.core.state_machine import BusinessStateMachine
 from src.plugins.manager import PluginManager
 from src.core.logger import configure_logging
@@ -323,7 +325,9 @@ if proxy_depth > 0:
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=proxy_depth, x_proto=proxy_depth, x_host=proxy_depth, x_prefix=0)
 
 
-CORS(app)
+setup_cors(app)
+setup_security_headers(app)
+setup_hardening(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 db.init_app(app)
 bcrypt = Bcrypt(app)
