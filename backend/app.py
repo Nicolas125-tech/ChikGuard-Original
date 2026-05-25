@@ -344,8 +344,47 @@ def _utcnow():
     # Python is deprecating naive utcnow(); keep UTC source but store naive UTC in DB.
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
+anomaly_storage_queue = queue.Queue()
 
-def _log_event(event_type, level, message, metadata=None, camera_id=ACTIVE_CAMERA_ID):
+def anomaly_storage_worker():
+    while True:
+        try:
+            item = anomaly_storage_queue.get()
+            if item is None: break
+            event_type, level, message, frame_data, camera_id = item
+            
+            # Salvar frame anômalo de forma assíncrona
+            if frame_data is not None:
+                os.makedirs("reports/anomalies", exist_ok=True)
+                filename = f"reports/anomalies/{event_type}_{int(time.time())}.jpg"
+                cv2.imwrite(filename, frame_data)
+                
+            # Disparo de alertas e relatórios
+            if str(level).lower() in {"high", "critical"}:
+                sent = ALERT_PROVIDER.send(f"[{event_type}] {message}")
+                if not sent:
+                    LOGGER.warning("Alert provider failed for event_type=%s", event_type)
+                
+                try:
+                    with app.app_context():
+                        tokens = PushToken.query.all()
+                        for token_obj in tokens:
+                            payload = {
+                                "to": token_obj.token,
+                                "title": f"Alerta {level.upper()}: {event_type}",
+                                "body": message,
+                                "data": {"event_type": event_type, "level": level, "camera_id": camera_id}
+                            }
+                            if "requests" in globals() and requests is not None:
+                                requests.post("https://exp.host/--/api/v2/push/send", json=payload, timeout=5)
+                except Exception as e:
+                    LOGGER.exception("Failed to send async push: %s", e)
+        except Exception as e:
+            LOGGER.exception("Error in anomaly storage worker: %s", e)
+
+threading.Thread(target=anomaly_storage_worker, daemon=True, name="anomaly-storage").start()
+
+def _log_event(event_type, level="info", message="", metadata=None, camera_id=ACTIVE_CAMERA_ID, frame=None):
     try:
         with app.app_context():
             row = EventLog(
@@ -358,29 +397,12 @@ def _log_event(event_type, level, message, metadata=None, camera_id=ACTIVE_CAMER
             db.session.add(row)
             db.session.commit()
             _enqueue_sync_item("event_log", row.to_dict())
-        if str(level).lower() in {"high", "critical"}:
-            sent = ALERT_PROVIDER.send(f"[{event_type}] {message}")
-            if not sent:
-                LOGGER.warning("Alert provider failed for event_type=%s", event_type)
-
-            # Send Expo Push Notifications
-            try:
-                with app.app_context():
-                    tokens = PushToken.query.all()
-                    for token_obj in tokens:
-                        payload = {
-                            "to": token_obj.token,
-                            "title": f"Alerta {level.upper()}: {event_type}",
-                            "body": message,
-                            "data": {"event_type": event_type, "level": level, "camera_id": camera_id}
-                        }
-                        try:
-                            if "requests" in globals() and requests is not None:
-                                requests.post("https://exp.host/--/api/v2/push/send", json=payload, timeout=5)
-                        except Exception:
-                            LOGGER.exception("Error sending push to %s: %s", token_obj.token, e)
-            except Exception:
-                LOGGER.exception("Failed to query PushTokens: %s", e)
+            
+        if str(level).lower() in {"high", "critical"} or frame is not None:
+            # Enviar para a thread em background para não bloquear o loop de vídeo
+            frame_copy = frame.copy() if frame is not None else None
+            anomaly_storage_queue.put((event_type, level, message, frame_copy, camera_id))
+            
         event_payload = {
             "camera_id": camera_id,
             "event_type": event_type,
@@ -2441,6 +2463,8 @@ def camera_loop():
         video_sim = None
         use_sim = not _camera_capture.is_live
 
+        _bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=100, varThreshold=25, detectShadows=False)
+
         while True:
             try:
                 # ── Sincronizar idade do lote com SpeciesClassifier ────────────
@@ -2487,8 +2511,15 @@ def camera_loop():
                         time.sleep(0.005)
                         continue
 
-                # ── Submeter para inferência ───────────────────────────────────
-                _inference_pipeline.submit_frame(frame)
+                # ── Motion Heuristics (Frame Skipping) ──────────────────────────
+                fg_mask = _bg_subtractor.apply(frame)
+                motion_pixels = cv2.countNonZero(fg_mask)
+                total_pixels = frame.shape[0] * frame.shape[1]
+                motion_ratio = float(motion_pixels) / float(total_pixels)
+
+                if motion_ratio >= 0.005:
+                    # ── Submeter para inferência apenas se houver movimento significativo ──
+                    _inference_pipeline.submit_frame(frame)
 
                 # ── Obter último resultado de inferência ───────────────────────
                 result = _inference_pipeline.get_result(timeout=0.04)

@@ -476,6 +476,8 @@ class InferencePipeline:
 
         self._running   = False
         self._thread: Optional[threading.Thread] = None
+        self._frame_count = 0
+        self.frame_skip = 5  # Roda a inferência pesada apenas a cada 5 frames
 
     def start(self):
         self._running = True
@@ -510,8 +512,12 @@ class InferencePipeline:
             try:
                 frame = self._in_queue.get(timeout=0.1)
                 t0 = time.perf_counter()
+                
+                self._frame_count += 1
+                run_heavy = (self._frame_count % self.frame_skip == 0)
 
-                raw_dets = self._detector.detect(frame)
+                # Chama o detector com a flag para evitar processamento se for um frame intermediário
+                raw_dets = self._detector.detect(frame, run_heavy_inference=run_heavy)
                 detections = self._enrich(frame, raw_dets)
 
                 lat_ms = (time.perf_counter() - t0) * 1000.0

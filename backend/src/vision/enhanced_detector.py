@@ -219,6 +219,28 @@ class AdvancedTrackerWrapper:
 
         return assigned
 
+    def predict_only(self) -> List[Dict]:
+        """
+        Retorna as predições de tracking sem rodar o detector,
+        avançando os filtros de Kalman quando aplicável ou reutilizando as caixas.
+        """
+        dets = []
+        if hasattr(self.tracker, 'tracked_stracks'):
+            active_tracks = self.tracker.tracked_stracks
+            for track in active_tracks:
+                if track.is_activated:
+                    tlwh = track.tlwh
+                    x1, y1 = int(tlwh[0]), int(tlwh[1])
+                    x2, y2 = int(tlwh[0] + tlwh[2]), int(tlwh[1] + tlwh[3])
+                    dets.append({
+                        "box": [x1, y1, x2, y2],
+                        "class_id": int(track.cls) if hasattr(track, 'cls') else 0,
+                        "confidence": float(track.score) if hasattr(track, 'score') else 1.0,
+                        "track_id": int(track.track_id),
+                        "mask_area_px": 0.0
+                    })
+        return dets
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # SAHITileEngine — Motor de Fatiamento Nativo
@@ -532,6 +554,7 @@ class EnhancedObjectDetector:
         self._hw_backend_name = "none"
         self._sahi: Optional[SAHITileEngine] = None
         self._tracker = AdvancedTrackerWrapper(tracker_type=TRACKER_TYPE, max_lost=18)
+        self._last_dets = []
 
         # ── Carrega backend de hardware (OpenVINO ou ONNX) ────────────────
         self._init_hardware_backend(model_path)
@@ -630,7 +653,7 @@ class EnhancedObjectDetector:
     def sahi_enabled(self) -> bool:
         return self._sahi is not None
 
-    def detect(self, frame: np.ndarray) -> List[Dict]:
+    def detect(self, frame: np.ndarray, run_heavy_inference: bool = True) -> List[Dict]:
         """
         Ponto de entrada principal.
         Retorna lista de dicts com: box, class_id, confidence, track_id, mask_area_px.
@@ -638,9 +661,20 @@ class EnhancedObjectDetector:
         if frame is None or frame.size == 0:
             return []
 
+        if not run_heavy_inference:
+            if hasattr(self._tracker, "predict_only") and (self._hw_backend is not None or self._sahi is not None):
+                preds = self._tracker.predict_only()
+                if preds:
+                    self._last_dets = preds
+            return self._last_dets
+
         if self._sahi is not None:
-            return self._detect_sahi(frame)
-        return self._detect_direct(frame)
+            dets = self._detect_sahi(frame)
+        else:
+            dets = self._detect_direct(frame)
+            
+        self._last_dets = dets
+        return dets
 
     # ── Modo SAHI ────────────────────────────────────────────────────────────
 
