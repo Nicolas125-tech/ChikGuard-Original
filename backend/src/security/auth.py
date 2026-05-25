@@ -1,11 +1,8 @@
-import re
-
-auth_middleware_code = """
+import os
 import jwt
 from functools import wraps
 from flask import request, jsonify
 from supabase import create_client, Client
-import os
 
 SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
 SUPABASE_KEY = os.environ.get('SUPABASE_KEY', '') # Service role key ideally, or anon key if RLS allows
@@ -62,33 +59,3 @@ def require_auth(roles=None):
             return f(*args, **kwargs)
         return decorated_function
     return decorator
-"""
-
-with open('c:/nic/ChikGuard-Original/backend/app.py', 'r', encoding='utf-8') as f:
-    code = f.read()
-
-if 'def require_auth' not in code:
-    insert_pos = code.find('app = Flask')
-    if insert_pos == -1:
-        insert_pos = code.find('def ')
-        
-    if insert_pos > 0:
-        code = code[:insert_pos] + auth_middleware_code + "\n" + code[insert_pos:]
-
-# Routes to protect
-routes_to_protect_with_admin = [
-    r'@app\.route\("/api/ventilacao", methods=\["POST"\]\)',
-    r'@app\.route\("/api/aquecedor", methods=\["POST"\]\)',
-    r'@app\.route\("/api/modo_automatico", methods=\["POST"\]\)'
-]
-
-for route_pattern in routes_to_protect_with_admin:
-    if '@require_auth' not in code:
-        code = re.sub(
-            route_pattern,
-            lambda m: "@require_auth(roles=['admin', 'operator'])\n" + m.group(0),
-            code
-        )
-
-with open('c:/nic/ChikGuard-Original/backend/app.py', 'w', encoding='utf-8') as f:
-    f.write(code)
