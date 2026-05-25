@@ -1,6 +1,8 @@
-# 🐔 ChikGuard
-
 <div align="center">
+
+<img src="docs/screenshots/logo.jpeg" alt="ChikGuard Logo" width="120" />
+
+# ChikGuard
 
 ![ChikGuard Banner](docs/screenshots/banner.png)
 
