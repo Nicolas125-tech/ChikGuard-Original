@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, Text, View, TextInput, TouchableOpacity,
-  SafeAreaView, StatusBar, ScrollView, ActivityIndicator, Alert, Linking, Image, Platform, BackHandler
+  SafeAreaView, StatusBar, ScrollView, ActivityIndicator, Alert, Image, Platform, BackHandler
 } from 'react-native';
+import * as Linking from 'expo-linking';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as Device from 'expo-device';
@@ -269,16 +270,50 @@ export default function App() {
     setLoadingLogin(true);
     try {
       if (!supabase.supabaseUrl) throw new Error('Supabase nao configurado');
-      const redirectUrl = Linking.createURL('');
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: redirectUrl,
-        }
+          redirectTo: Linking.createURL('/'),
+          skipBrowserRedirect: true,
+        },
       });
       if (error) throw error;
+
+      if (!data?.url) {
+        throw new Error('Nenhuma URL de OAuth retornada');
+      }
+
+      const result = await WebBrowser.openAuthSessionAsync(
+        data.url,
+        Linking.createURL('/'),
+        { showInRecents: true }
+      );
+
+      if (result.type === 'success') {
+        const urlParams = result.url.split('#')[1] || result.url.split('?')[1];
+        if (urlParams) {
+          const paramsList = urlParams.split('&');
+          let accessToken = null;
+          let refreshToken = null;
+
+          paramsList.forEach(param => {
+            const [key, value] = param.split('=');
+            if (key === 'access_token') accessToken = value;
+            if (key === 'refresh_token') refreshToken = value;
+          });
+
+          if (accessToken && refreshToken) {
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+            if (sessionError) throw sessionError;
+          }
+        }
+      }
     } catch (e) {
-      Alert.alert('Erro', e.message);
+      Alert.alert('Erro', e.message || 'Falha no login com Google');
     } finally {
       setLoadingLogin(false);
     }
