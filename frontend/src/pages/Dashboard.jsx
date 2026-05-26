@@ -245,7 +245,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
               </div>
               <span className="text-lg font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-200">ChickGuard</span>
             </div>
-            <button onClick={() => setMobileMenuOpen(false)} className="p-2 rounded-lg text-slate-400 hover:bg-slate-800 transition-colors">
+            <button aria-label="Close mobile menu" onClick={() => setMobileMenuOpen(false)} className="p-2 rounded-lg text-slate-400 hover:bg-slate-800 transition-colors">
               <X size={20} />
             </button>
           </div>
@@ -259,6 +259,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
     <header className="bg-slate-900/60 border-b border-slate-800/50 px-4 md:px-6 py-3 flex justify-between items-center z-30 sticky top-0 glass shrink-0">
       <div className="flex items-center gap-3">
         <button
+          aria-label="Open mobile menu"
           onClick={() => setMobileMenuOpen(true)}
           className="md:hidden p-2 rounded-lg text-slate-400 hover:bg-slate-800 transition-colors border border-slate-800"
         >
@@ -286,6 +287,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
         </div>
 
         <button
+          aria-label="View alerts"
           onClick={() => handleTabChange('alerts')}
           className="relative p-2 rounded-lg text-slate-400 hover:bg-slate-800 transition-colors border border-slate-800/50 hover:border-slate-700"
         >
@@ -297,7 +299,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
           )}
         </button>
 
-        <button onClick={onLogout} className="md:hidden p-2 border border-slate-800 rounded-lg text-slate-400 hover:bg-slate-800 transition-colors">
+        <button aria-label="Logout" onClick={onLogout} className="md:hidden p-2 border border-slate-800 rounded-lg text-slate-400 hover:bg-slate-800 transition-colors">
           <LogOut size={18} />
         </button>
       </div>
