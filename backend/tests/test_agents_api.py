@@ -22,6 +22,7 @@ os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 from app import app
 from database import db, SensorReading, AcousticReading, Batch, EventLog
+import jwt
 
 @pytest.fixture
 def client():
@@ -42,22 +43,22 @@ def client():
         db.session.remove()
         db.drop_all()
 
-def test_chat_missing_message(client):
+def test_chat_missing_message(client, auth_headers):
     """Garante que requisições de chat sem mensagem recebem erro 400."""
-    res = client.post("/api/agents/chat", json={})
+    res = client.post("/api/agents/chat", json={}, headers=auth_headers)
     assert res.status_code == 400
     assert "error" in res.json
 
-def test_chat_missing_api_key(client, monkeypatch):
+def test_chat_missing_api_key(client, monkeypatch, auth_headers):
     """Valida a mensagem amigável caso a GEMINI_API_KEY não esteja configurada."""
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     
-    res = client.post("/api/agents/chat", json={"message": "Olá, como estão as aves?"})
+    res = client.post("/api/agents/chat", json={"message": "Olá, como estão as aves?"}, headers=auth_headers)
     assert res.status_code == 200
     assert "response" in res.json
     assert "GEMINI_API_KEY" in res.json["response"]
 
-def test_chat_success(client, monkeypatch):
+def test_chat_success(client, monkeypatch, auth_headers):
     """Simula uma conversa com sucesso injetando uma chave de API fictícia e mockando a resposta da nuvem."""
     monkeypatch.setenv("GEMINI_API_KEY", "mock_key_123")
     
@@ -99,7 +100,7 @@ def test_chat_success(client, monkeypatch):
 
     monkeypatch.setattr("requests.post", mock_post)
 
-    res = client.post("/api/agents/chat", json={"message": "Como estão os sensores?"})
+    res = client.post("/api/agents/chat", json={"message": "Como estão os sensores?"}, headers=auth_headers)
     assert res.status_code == 200
     assert "response" in res.json
     assert "26.5°C" in res.json["response"]
@@ -118,3 +119,8 @@ def test_knowledge_base_retrieval():
     assert "temperatura" in res_temp.lower()
     assert "32°C a 34°C" in res_temp
 
+
+@pytest.fixture
+def auth_headers():
+    token = jwt.encode({"sub": "test_user", "app_metadata": {"role": "admin"}}, "dummy", algorithm="HS256")
+    return {"Authorization": f"Bearer {token}"}
