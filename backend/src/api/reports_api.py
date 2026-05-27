@@ -1,6 +1,7 @@
 import os
 from flask import Blueprint, jsonify, request, send_file, current_app
 from src.reports.generator import generate_esg_report, generate_weekly_report, _send_report_email
+from src.security.auth import require_auth
 
 def create_reports_blueprint(deps):
     bp = Blueprint("reports_api", __name__)
@@ -10,6 +11,7 @@ def create_reports_blueprint(deps):
     utcnow_func = deps.get("utcnow")
 
     @bp.route("/api/reports/esg", methods=["POST"])
+    @require_auth()
     def generate_esg():
         data = request.get_json(silent=True) or {}
         days = int(data.get("days", 30))
@@ -33,6 +35,7 @@ def create_reports_blueprint(deps):
         return jsonify({"msg": "Relatorio ESG gerado", "file": path, "email_status": email_status})
 
     @bp.route("/api/reports/esg/download", methods=["GET"])
+    @require_auth()
     def download_esg():
         days = request.args.get("days", default=30, type=int)
         try:
@@ -42,6 +45,7 @@ def create_reports_blueprint(deps):
             return jsonify({"msg": f"Falha ao gerar/exportar PDF ESG: {exc}"}), 500
 
     @bp.route("/api/reports/weekly", methods=["POST"])
+    @require_auth()
     def generate_weekly():
         data = request.get_json(silent=True) or {}
         email = str(data.get("email", "")).strip() or None
@@ -64,6 +68,7 @@ def create_reports_blueprint(deps):
         return jsonify({"msg": "Relatorio gerado", "file": path, "email_status": email_status})
 
     @bp.route("/api/reports/weekly/download", methods=["GET"])
+    @require_auth()
     def download_weekly():
         try:
             path = generate_weekly_report(current_app.app_context, active_camera_id, utcnow_func)
