@@ -231,6 +231,7 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
                 type="button"
                 tabIndex={-1}
                 onClick={() => setShowPassword(v => !v)}
+                aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
