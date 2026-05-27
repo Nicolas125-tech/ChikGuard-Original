@@ -1,6 +1,7 @@
 from src.security.auth import require_auth
 from src.security.headers import setup_security_headers, setup_cors
 from src.security.hardening import setup_hardening
+from src.security.rate_limiter import setup_rate_limiting
 from src.core.state_machine import BusinessStateMachine
 from src.plugins.manager import PluginManager
 from src.core.logger import configure_logging
@@ -329,6 +330,7 @@ if proxy_depth > 0:
 setup_cors(app)
 setup_security_headers(app)
 setup_hardening(app)
+setup_rate_limiting(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 db.init_app(app)
 bcrypt = Bcrypt(app)
