@@ -16,7 +16,7 @@ export default function SystemPanel({ serverIP, prefs }) {
       ]);
       if (infoRes.ok) setInfo(await infoRes.json());
       if (summaryRes.ok) setSummary(await summaryRes.json());
-    } catch (e) {
+    } catch () {
       // Network error - keep previous state, do not crash
     }
   }, [baseUrl]);

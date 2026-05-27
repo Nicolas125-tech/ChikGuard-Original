@@ -8,6 +8,8 @@ from unittest.mock import AsyncMock, patch
 # Ajusta sys.path para enxergar src/ e o backend
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../scripts')))
 from supabase_sync_worker import SupabaseSyncWorker
 
 @pytest.fixture
