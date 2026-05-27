@@ -1,14 +1,17 @@
 from flask import Blueprint, jsonify, request
+from src.security.auth import require_auth
 import requests
-import json
 import os
-from datetime import datetime
+
 
 def _retrieve_knowledge_base(query: str) -> str:
     """Função leve de RAG para recuperar seções do manual de manejo baseado na dúvida do produtor."""
     try:
         # Tenta carregar o arquivo a partir da raiz do backend ou local relativo
-        handbook_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../backend/data/handling_handbook.txt"))
+        handbook_path = os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "../../../backend/data/handling_handbook.txt"))
         if not os.path.exists(handbook_path):
             handbook_path = "data/handling_handbook.txt"
             if not os.path.exists(handbook_path):
@@ -33,17 +36,17 @@ def _retrieve_knowledge_base(query: str) -> str:
     except Exception:
         return ""
 
+
 def create_agents_blueprint(api_deps):
     bp = Blueprint("agents_api", __name__, url_prefix="/api/agents")
-    db = api_deps["db"]
     SensorReading = api_deps["SensorReading"]
     AcousticReading = api_deps["AcousticReading"]
-    
+
     # Imports locais de tabelas adicionais para evitar dependências circulares
     from database import EventLog, Batch
 
     @bp.route("/chat", methods=["POST"])
-
+    @require_auth()
     def chat():
         """Endpoint de chat conversacional com o co-piloto do ChikGuard usando a API do Gemini."""
         data = request.json or {}
@@ -81,10 +84,12 @@ def create_agents_blueprint(api_deps):
             )
 
         # 3. Coleta dados do lote ativo
-        active_batch = Batch.query.filter(Batch.active == True).first()
+        active_batch = Batch.query.filter(Batch.active).first()
         batch_text = "Nenhum lote ativo registrado."
         if active_batch:
-            batch_text = f"Lote Ativo: {active_batch.name} (Iniciado em: {active_batch.start_date.strftime('%d/%m/%Y')})"
+            batch_text = f"Lote Ativo: {
+                active_batch.name} (Iniciado em: {
+                active_batch.start_date.strftime('%d/%m/%Y')})"
 
         # 4. Coleta os alertas e logs de visão mais recentes
         recent_events = EventLog.query.order_by(EventLog.timestamp.desc()).limit(5).all()
@@ -137,7 +142,7 @@ def create_agents_blueprint(api_deps):
                 }
             ],
             "generationConfig": {
-                "temperature": 0.2, # Baixa temperatura para manter respostas determinísticas e precisas nos dados
+                "temperature": 0.2,  # Baixa temperatura para manter respostas determinísticas e precisas nos dados
                 "maxOutputTokens": 800
             }
         }
@@ -148,13 +153,13 @@ def create_agents_blueprint(api_deps):
                 return jsonify({
                     "error": f"Erro na API do Gemini (Código {res.status_code}): {res.text}"
                 }), 500
-                
+
             res_data = res.json()
             candidate = res_data.get("candidates", [{}])[0]
             content = candidate.get("content", {})
             parts = content.get("parts", [{}])
             reply = parts[0].get("text", "Desculpe, não obtive uma resposta válida da inteligência artificial.")
-            
+
             return jsonify({"response": reply})
         except Exception as e:
             return jsonify({"error": f"Erro na requisição externa de IA: {str(e)}"}), 500
