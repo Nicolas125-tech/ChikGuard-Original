@@ -1,3 +1,6 @@
+/* eslint-env jest */
+/* global describe, it, expect, beforeEach, global */
+/* global jest, describe, it, expect, beforeEach */
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { readPrefs, DEFAULT_PREFS, STORAGE } from './config.js';
