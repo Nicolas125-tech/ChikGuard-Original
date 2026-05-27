@@ -70,7 +70,7 @@ export default function OverviewPanel({ token, serverIP, prefs }) {
         setPrevTemp(dados?.temperatura ?? null);
         setDados(d);
       }
-    } catch () { console.error(_e); }
+    } catch (_e) { console.error(_e); }
   }, [baseUrl, token, dados]);
 
   const fetchCount = useCallback(async () => {
@@ -80,14 +80,14 @@ export default function OverviewPanel({ token, serverIP, prefs }) {
         const d = await r.json();
         setContagem(d.count);
       }
-    } catch () { console.error(_e); }
+    } catch (_e) { console.error(_e); }
   }, [baseUrl, token]);
 
   const fetchSummary = useCallback(async () => {
     try {
       const r = await fetch(`${baseUrl}/api/summary`, { headers: { Authorization: `Bearer ${token}` } });
       if (r.ok) setSummary(await r.json());
-    } catch () { console.error(_e); }
+    } catch (_e) { console.error(_e); }
   }, [baseUrl, token]);
 
   useEffect(() => {

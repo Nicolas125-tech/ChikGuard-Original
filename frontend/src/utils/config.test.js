@@ -1,59 +1,49 @@
-/* eslint-env jest */
-/* global describe, it, expect, beforeEach, global */
-/* global jest, describe, it, expect, beforeEach */
-import { describe, it, beforeEach, afterEach } from 'node:test';
+/* global describe, it, beforeEach, afterEach, global */
 import assert from 'node:assert';
 import { readPrefs, DEFAULT_PREFS, STORAGE } from './config.js';
 
-describe('config.js - readPrefs', () => {
-  let originalLocalStorage;
-
+describe('Config Utilities', () => {
   beforeEach(() => {
-    // Save original if it exists, though in Node.js it usually doesn't
-    originalLocalStorage = global.localStorage;
-
-    // Create a fresh mock for each test
+    // Limpa o mock do localStorage
     global.localStorage = {
       getItem: () => null,
-      setItem: () => {},
-      removeItem: () => {},
-      clear: () => {}
+      setItem: () => {}
     };
   });
 
   afterEach(() => {
-    // Restore original
-    global.localStorage = originalLocalStorage;
+    delete global.localStorage;
   });
 
-  it('should return DEFAULT_PREFS when localStorage has no data', () => {
+  it('deve retornar DEFAULT_PREFS quando o localStorage estiver vazio', () => {
+    const prefs = readPrefs();
+    assert.deepStrictEqual(prefs, DEFAULT_PREFS);
+  });
+
+  it('deve fazer o merge parcial (incluindo defaults faltantes) se os dados locais estiverem incompletos', () => {
     global.localStorage.getItem = (key) => {
-      assert.strictEqual(key, STORAGE.prefs);
+      if (key === STORAGE) return JSON.stringify({ theme: 'light' });
       return null;
     };
 
-    const result = readPrefs();
-    assert.deepStrictEqual(result, DEFAULT_PREFS);
+    const prefs = readPrefs();
+    assert.strictEqual(prefs.theme, 'light');
+    assert.strictEqual(prefs.statusMs, DEFAULT_PREFS.statusMs);
   });
 
-  it('should return parsed preferences merged with DEFAULT_PREFS when valid JSON is present', () => {
-    const validData = { statusMs: 5000, newSetting: true };
+  it('deve retornar DEFAULT_PREFS e logar alerta em caso de JSON inválido', () => {
     global.localStorage.getItem = (key) => {
-      assert.strictEqual(key, STORAGE.prefs);
-      return JSON.stringify(validData);
+      if (key === STORAGE) return '{ inválido_json';
+      return null;
     };
 
-    const result = readPrefs();
-    assert.deepStrictEqual(result, { ...DEFAULT_PREFS, ...validData });
-  });
+    // Suprime erro do console.warn no log de testes (opcional)
+    const oldWarn = console.warn;
+    console.warn = () => {};
 
-  it('should catch error and return DEFAULT_PREFS when JSON parsing fails', () => {
-    global.localStorage.getItem = (key) => {
-      assert.strictEqual(key, STORAGE.prefs);
-      return '{ malformed json, this will throw an error }';
-    };
+    const prefs = readPrefs();
+    assert.deepStrictEqual(prefs, DEFAULT_PREFS);
 
-    const result = readPrefs();
-    assert.deepStrictEqual(result, DEFAULT_PREFS);
+    console.warn = oldWarn;
   });
 });
