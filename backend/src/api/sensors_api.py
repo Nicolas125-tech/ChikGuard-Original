@@ -1,4 +1,5 @@
 from flask import Blueprint, jsonify, request
+from src.security.auth import require_auth
 import time
 
 def create_sensors_blueprint(deps):
@@ -25,6 +26,7 @@ def create_sensors_blueprint(deps):
     np = deps.get("np")
 
     @bp.route("/api/sensors/live", methods=["GET"])
+    @require_auth()
     def get_sensors_live():
         return jsonify(
             {
@@ -41,6 +43,7 @@ def create_sensors_blueprint(deps):
         )
 
     @bp.route("/api/sensors/history", methods=["GET"])
+    @require_auth()
     def get_sensors_history():
         limit = request.args.get("limit", default=100, type=int)
         limit = max(1, min(limit, 5000))
@@ -53,6 +56,7 @@ def create_sensors_blueprint(deps):
         return jsonify({"count": len(rows), "items": [r.to_dict() for r in reversed(rows)]})
 
     @bp.route("/api/sensors/ingest", methods=["POST"])
+    @require_auth()
     def ingest_sensor_data():
         payload = request.get_json(silent=True) or {}
         required = ["temperature_c", "humidity_pct", "ammonia_ppm", "feed_level_pct", "water_level_pct"]
@@ -76,6 +80,7 @@ def create_sensors_blueprint(deps):
         return jsonify({"msg": "Leitura de sensores recebida", "state": sensor_state}), 200
 
     @bp.route("/api/thermal-anomalies/live", methods=["GET"])
+    @require_auth()
     def thermal_anomalies_live():
         last_minutes = request.args.get("minutes", default=20, type=int)
         start = utcnow() - timedelta(minutes=max(1, min(last_minutes, 240)))
@@ -90,6 +95,7 @@ def create_sensors_blueprint(deps):
         return jsonify({"count": len(items), "sectors": sectors, "items": items})
 
     @bp.route("/api/acoustic/live", methods=["GET"])
+    @require_auth()
     def acoustic_live():
         return jsonify(
             {
@@ -103,6 +109,7 @@ def create_sensors_blueprint(deps):
         )
 
     @bp.route("/api/acoustic/history", methods=["GET"])
+    @require_auth()
     def acoustic_history():
         limit = request.args.get("limit", default=200, type=int)
         limit = max(1, min(limit, 5000))
@@ -115,6 +122,7 @@ def create_sensors_blueprint(deps):
         return jsonify({"count": len(rows), "items": [r.to_dict() for r in reversed(rows)]})
 
     @bp.route("/api/acoustic/classify", methods=["POST"])
+    @require_auth()
     def acoustic_classify():
         if not audio_classifier.loaded:
             return jsonify({"msg": "Modelo de tosse nao carregado", "model_error": audio_classifier.last_error}), 400
