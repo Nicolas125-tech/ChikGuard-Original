@@ -38,11 +38,8 @@ Supabase: a tabela esperada e:
         registered_at TIMESTAMPTZ DEFAULT NOW()
     );
 """
-from __future__ import annotations
 
 import asyncio
-import base64
-import io
 import logging
 import os
 import time
@@ -55,16 +52,16 @@ import numpy as np
 logger = logging.getLogger("chikguard.async_uploader")
 
 # ── Configuracao via ENV ──────────────────────────────────────────────────────
-SUPABASE_URL       = os.getenv("SUPABASE_URL",        "")
-SUPABASE_KEY       = os.getenv("SUPABASE_KEY",        "")     # service_role key
-STORAGE_BUCKET     = os.getenv("STORAGE_BUCKET",      "chick-crops")
-DB_TABLE           = os.getenv("REGISTRATION_TABLE",  "chick_registrations")
-ACTIVE_CAMERA_ID   = os.getenv("ACTIVE_CAMERA_ID",    "galpao-1")
-BATCH_ID           = os.getenv("BATCH_ID",             "lote-1")
-QUEUE_MAX_SIZE     = int(os.getenv("UPLOAD_QUEUE_SIZE", "200"))  # max crops pendentes
-JPEG_QUALITY       = int(os.getenv("CROP_JPEG_QUALITY", "85"))
-UPLOAD_TIMEOUT_SEC = float(os.getenv("UPLOAD_TIMEOUT",  "10.0"))
-MAX_RETRIES        = int(os.getenv("UPLOAD_MAX_RETRIES", "3"))
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")     # service_role key
+STORAGE_BUCKET = os.getenv("STORAGE_BUCKET", "chick-crops")
+DB_TABLE = os.getenv("REGISTRATION_TABLE", "chick_registrations")
+ACTIVE_CAMERA_ID = os.getenv("ACTIVE_CAMERA_ID", "galpao-1")
+BATCH_ID = os.getenv("BATCH_ID", "lote-1")
+QUEUE_MAX_SIZE = int(os.getenv("UPLOAD_QUEUE_SIZE", "200"))  # max crops pendentes
+JPEG_QUALITY = int(os.getenv("CROP_JPEG_QUALITY", "85"))
+UPLOAD_TIMEOUT_SEC = float(os.getenv("UPLOAD_TIMEOUT", "10.0"))
+MAX_RETRIES = int(os.getenv("UPLOAD_MAX_RETRIES", "3"))
 
 
 # =============================================================================
@@ -72,10 +69,10 @@ MAX_RETRIES        = int(os.getenv("UPLOAD_MAX_RETRIES", "3"))
 # =============================================================================
 
 def extract_crop(
-    frame:    np.ndarray,
-    bbox:     List[float],
-    mask:     Optional[np.ndarray] = None,
-    padding:  int = 8,
+    frame: np.ndarray,
+    bbox: List[float],
+    mask: Optional[np.ndarray] = None,
+    padding: int = 8,
 ) -> Optional[np.ndarray]:
     """
     Recorta o pintinho do frame, opcionalmente usando a mascara de segmentacao.
@@ -140,15 +137,15 @@ def crop_to_jpeg_bytes(crop: np.ndarray, quality: int = JPEG_QUALITY) -> bytes:
 @dataclass
 class UploadPayload:
     """Dados de um pintinho a ser salvo — colocado na fila pelo camera_loop."""
-    track_id:    int
-    centroid:    Tuple[float, float]
-    bbox:        List[float]
-    confidence:  float
-    species:     str
-    class_id:    int
-    crop_jpg:    bytes                    # bytes JPEG do crop
-    timestamp:   float = field(default_factory=time.time)
-    extra:       Dict[str, Any] = field(default_factory=dict)
+    track_id: int
+    centroid: Tuple[float, float]
+    bbox: List[float]
+    confidence: float
+    species: str
+    class_id: int
+    crop_jpg: bytes                    # bytes JPEG do crop
+    timestamp: float = field(default_factory=time.time)
+    extra: Dict[str, Any] = field(default_factory=dict)
 
 
 # =============================================================================
@@ -175,14 +172,14 @@ class AsyncUploader:
         storage_bucket: str = STORAGE_BUCKET,
         table: str = DB_TABLE,
     ):
-        self._url     = supabase_url.rstrip("/")
-        self._key     = supabase_key
-        self._bucket  = storage_bucket
-        self._table   = table
-        self._queue:  Optional[asyncio.Queue] = None
-        self._task:   Optional[asyncio.Task]  = None
-        self._loop:   Optional[asyncio.AbstractEventLoop] = None
-        self._stats   = {"enqueued": 0, "saved": 0, "failed": 0, "dropped": 0}
+        self._url = supabase_url.rstrip("/")
+        self._key = supabase_key
+        self._bucket = storage_bucket
+        self._table = table
+        self._queue: Optional[asyncio.Queue] = None
+        self._task: Optional[asyncio.Task] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._stats = {"enqueued": 0, "saved": 0, "failed": 0, "dropped": 0}
 
     # ── Controle ──────────────────────────────────────────────────────────────
 
@@ -191,9 +188,9 @@ class AsyncUploader:
         Inicia o worker assincrono.
         Deve ser chamado com o event loop da aplicacao.
         """
-        self._loop  = loop
+        self._loop = loop
         self._queue = asyncio.Queue(maxsize=QUEUE_MAX_SIZE)
-        self._task  = loop.create_task(self._worker_loop())
+        self._task = loop.create_task(self._worker_loop())
         logger.info(
             "[Uploader] Worker iniciado. bucket=%s table=%s queue_max=%d",
             self._bucket, self._table, QUEUE_MAX_SIZE,
@@ -215,10 +212,10 @@ class AsyncUploader:
 
     def enqueue_sync(
         self,
-        frame:      np.ndarray,
-        track:      Dict[str, Any],
-        mask:       Optional[np.ndarray] = None,
-        species:    str = "chick",
+        frame: np.ndarray,
+        track: Dict[str, Any],
+        mask: Optional[np.ndarray] = None,
+        species: str = "chick",
     ) -> bool:
         """
         Enfileira um crop para salvamento assincrono.
@@ -342,13 +339,13 @@ class AsyncUploader:
             # Fallback sincrono via requests (menos ideal, mas funciona)
             return await self._upload_storage_requests(payload)
 
-        ts     = int(payload.timestamp)
-        path   = f"{ACTIVE_CAMERA_ID}/{BATCH_ID}/chick_{payload.track_id}_{ts}.jpg"
-        url    = f"{self._url}/storage/v1/object/{self._bucket}/{path}"
+        ts = int(payload.timestamp)
+        path = f"{ACTIVE_CAMERA_ID}/{BATCH_ID}/chick_{payload.track_id}_{ts}.jpg"
+        url = f"{self._url}/storage/v1/object/{self._bucket}/{path}"
         headers = {
             "Authorization": f"Bearer {self._key}",
-            "Content-Type":  "image/jpeg",
-            "x-upsert":      "true",   # sobrescreve se ja existir
+            "Content-Type": "image/jpeg",
+            "x-upsert": "true",   # sobrescreve se ja existir
         }
 
         async with aiohttp.ClientSession() as session:
@@ -369,19 +366,20 @@ class AsyncUploader:
         """Fallback sincrono via requests (sem aiohttp instalado)."""
         import requests
 
-        ts   = int(payload.timestamp)
+        ts = int(payload.timestamp)
         path = f"{ACTIVE_CAMERA_ID}/{BATCH_ID}/chick_{payload.track_id}_{ts}.jpg"
-        url  = f"{self._url}/storage/v1/object/{self._bucket}/{path}"
+        url = f"{self._url}/storage/v1/object/{self._bucket}/{path}"
 
         loop = asyncio.get_event_loop()
+
         def _do_upload():
             resp = requests.post(
                 url,
                 data=payload.crop_jpg,
                 headers={
                     "Authorization": f"Bearer {self._key}",
-                    "Content-Type":  "image/jpeg",
-                    "x-upsert":      "true",
+                    "Content-Type": "image/jpeg",
+                    "x-upsert": "true",
                 },
                 timeout=UPLOAD_TIMEOUT_SEC,
             )
@@ -404,24 +402,24 @@ class AsyncUploader:
             await self._insert_database_requests(payload, image_url)
             return
 
-        url     = f"{self._url}/rest/v1/{self._table}"
+        url = f"{self._url}/rest/v1/{self._table}"
         headers = {
-            "Authorization":  f"Bearer {self._key}",
-            "apikey":         self._key,
-            "Content-Type":   "application/json",
-            "Prefer":         "return=minimal,resolution=ignore-duplicates",
+            "Authorization": f"Bearer {self._key}",
+            "apikey": self._key,
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal,resolution=ignore-duplicates",
         }
         body = {
-            "track_id":     payload.track_id,
-            "camera_id":    ACTIVE_CAMERA_ID,
-            "batch_id":     BATCH_ID,
-            "centroid_x":   round(payload.centroid[0], 2),
-            "centroid_y":   round(payload.centroid[1], 2),
-            "bbox":         {"x1": payload.bbox[0], "y1": payload.bbox[1],
-                             "x2": payload.bbox[2], "y2": payload.bbox[3]},
-            "confidence":   round(float(payload.confidence), 4),
-            "species":      payload.species,
-            "image_url":    image_url,
+            "track_id": payload.track_id,
+            "camera_id": ACTIVE_CAMERA_ID,
+            "batch_id": BATCH_ID,
+            "centroid_x": round(payload.centroid[0], 2),
+            "centroid_y": round(payload.centroid[1], 2),
+            "bbox": {"x1": payload.bbox[0], "y1": payload.bbox[1],
+                     "x2": payload.bbox[2], "y2": payload.bbox[3]},
+            "confidence": round(float(payload.confidence), 4),
+            "species": payload.species,
+            "image_url": image_url,
         }
 
         async with aiohttp.ClientSession() as session:
@@ -437,31 +435,32 @@ class AsyncUploader:
 
     async def _insert_database_requests(self, payload: UploadPayload, image_url: str):
         """Fallback sincrono para insert no banco."""
-        import json, requests
+        import requests
 
-        url  = f"{self._url}/rest/v1/{self._table}"
+        url = f"{self._url}/rest/v1/{self._table}"
         body = {
-            "track_id":   payload.track_id,
-            "camera_id":  ACTIVE_CAMERA_ID,
-            "batch_id":   BATCH_ID,
+            "track_id": payload.track_id,
+            "camera_id": ACTIVE_CAMERA_ID,
+            "batch_id": BATCH_ID,
             "centroid_x": round(payload.centroid[0], 2),
             "centroid_y": round(payload.centroid[1], 2),
-            "bbox":       {"x1": payload.bbox[0], "y1": payload.bbox[1],
-                           "x2": payload.bbox[2], "y2": payload.bbox[3]},
+            "bbox": {"x1": payload.bbox[0], "y1": payload.bbox[1],
+                     "x2": payload.bbox[2], "y2": payload.bbox[3]},
             "confidence": round(float(payload.confidence), 4),
-            "species":    payload.species,
-            "image_url":  image_url,
+            "species": payload.species,
+            "image_url": image_url,
         }
 
         loop = asyncio.get_event_loop()
+
         def _do_insert():
             resp = requests.post(
                 url, json=body,
                 headers={
                     "Authorization": f"Bearer {self._key}",
-                    "apikey":        self._key,
-                    "Content-Type":  "application/json",
-                    "Prefer":        "return=minimal,resolution=ignore-duplicates",
+                    "apikey": self._key,
+                    "Content-Type": "application/json",
+                    "Prefer": "return=minimal,resolution=ignore-duplicates",
                 },
                 timeout=UPLOAD_TIMEOUT_SEC,
             )
