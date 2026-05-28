@@ -2829,6 +2829,7 @@ app.register_blueprint(create_agents_blueprint(api_deps))
 
 
 @app.route("/api/birds/live", methods=["GET"])
+@require_auth()
 def get_live_birds():
     now = time.time()
     with lock:
@@ -2855,6 +2856,7 @@ def get_live_birds():
 
 
 @app.route("/api/vision/metrics", methods=["GET"])
+@require_auth()
 def get_vision_metrics():
     """
     Métricas de performance do pipeline de visão computacional em tempo real.
@@ -2879,6 +2881,7 @@ def get_vision_metrics():
 
 
 @app.route("/api/birds/history", methods=["GET"])
+@require_auth()
 def get_birds_history():
     limit = request.args.get("limit", default=300, type=int)
     limit = max(1, min(limit, 5000))
@@ -2887,6 +2890,7 @@ def get_birds_history():
 
 
 @app.route("/api/birds/registry", methods=["GET"])
+@require_auth()
 def get_birds_registry():
     limit = request.args.get("limit", default=500, type=int)
     limit = max(1, min(limit, 10000))
@@ -2895,6 +2899,7 @@ def get_birds_registry():
 
 
 @app.route("/api/birds/path/<int:bird_uid>", methods=["GET"])
+@require_auth()
 def get_bird_path(bird_uid):
     limit = request.args.get("limit", default=500, type=int)
     limit = max(1, min(limit, 5000))
@@ -2906,6 +2911,7 @@ def get_bird_path(bird_uid):
 
 
 @app.route("/api/behavior/live", methods=["GET"])
+@require_auth()
 def get_behavior_live():
     return jsonify(
         {
@@ -2920,6 +2926,7 @@ def get_behavior_live():
 
 
 @app.route("/api/immobility/live", methods=["GET"])
+@require_auth()
 def get_immobility_live():
     now = time.time()
     items = []
@@ -2939,6 +2946,7 @@ def get_immobility_live():
 
 
 @app.route("/api/carcass/live", methods=["GET"])
+@require_auth()
 def carcass_live():
     items = carcass_state.get("items", [])
     return jsonify(
@@ -2952,6 +2960,7 @@ def carcass_live():
 
 
 @app.route("/api/heatmap/daily", methods=["GET"])
+@require_auth()
 def get_daily_heatmap():
     date_str = request.args.get("date")
     grid_size = request.args.get("grid", default=32, type=int)
@@ -2977,6 +2986,7 @@ def get_daily_heatmap():
 
 
 @app.route("/api/heatmap/daily/image", methods=["GET"])
+@require_auth()
 def get_daily_heatmap_image():
     date_str = request.args.get("date")
     try:
@@ -2997,6 +3007,7 @@ def get_daily_heatmap_image():
 
 
 @app.route("/api/heatmap/rolling24", methods=["GET"])
+@require_auth()
 def get_rolling24_heatmap():
     hours = request.args.get("hours", default=24, type=int)
     grid_size = request.args.get("grid", default=40, type=int)
@@ -3009,6 +3020,7 @@ def get_rolling24_heatmap():
 
 
 @app.route("/api/heatmap/rolling24/image", methods=["GET"])
+@require_auth()
 def get_rolling24_heatmap_image():
     hours = request.args.get("hours", default=24, type=int)
     heat = _heatmap_grid_last_hours(hours=hours, grid_size=40)
@@ -3020,6 +3032,7 @@ def get_rolling24_heatmap_image():
 
 
 @app.route("/api/heatmap/3d", methods=["GET"])
+@require_auth()
 def get_heatmap_3d():
     hours = request.args.get("hours", default=24, type=int)
     grid_size = request.args.get("grid", default=24, type=int)
@@ -3037,6 +3050,7 @@ def get_heatmap_3d():
 
 
 @app.route("/api/security/tamper", methods=["GET"])
+@require_auth()
 def tamper_status():
     age = time.time() - float(sensor_state.get("updated_at", 0.0))
     return jsonify(
@@ -3054,6 +3068,7 @@ def tamper_status():
 
 
 @app.route("/api/weight/live", methods=["GET"])
+@require_auth()
 def weight_live():
     return jsonify(
         {
@@ -3068,6 +3083,7 @@ def weight_live():
 
 
 @app.route("/api/weight/curve", methods=["GET"])
+@require_auth()
 def weight_curve():
     days = request.args.get("days", default=21, type=int)
     days = max(1, min(days, 120))
@@ -3082,6 +3098,7 @@ def weight_curve():
 
 
 @app.route("/api/acoustic/model-info", methods=["GET"])
+@require_auth()
 def acoustic_model_info():
     return jsonify(
         {
@@ -3095,6 +3112,7 @@ def acoustic_model_info():
 
 
 @app.route("/api/energy/summary", methods=["GET"])
+@require_auth()
 def energy_summary():
     now = _utcnow()
     month_start = datetime(now.year, now.month, 1)
@@ -3127,6 +3145,7 @@ def energy_summary():
 
 
 @app.route("/api/energy/forecast", methods=["GET"])
+@require_auth()
 def energy_forecast():
     hours = request.args.get("hours", default=12, type=int)
     with app.app_context():
@@ -3189,6 +3208,7 @@ def voice_command():
 
 
 @app.route("/api/events", methods=["GET"])
+@require_auth()
 def get_events():
     limit = request.args.get("limit", default=100, type=int)
     limit = max(1, min(limit, 2000))
@@ -3320,11 +3340,13 @@ def logbook():
 
 
 @app.route("/api/weather/forecast", methods=["GET"])
+@require_auth()
 def weather_forecast():
     return jsonify(weather_state)
 
 
 @app.route("/api/alerts", methods=["GET"])
+@require_auth()
 def get_alerts():
     itens = []
 
@@ -3373,6 +3395,7 @@ def get_alerts():
 
 
 @app.route("/api/status", methods=["GET"])
+@require_auth()
 def get_status():
     ultima = Reading.query.order_by(Reading.id.desc()).first()
     return jsonify({
@@ -3382,6 +3405,7 @@ def get_status():
 
 
 @app.route("/api/history", methods=["GET"])
+@require_auth()
 def get_history():
     limit = request.args.get("limit", default=20, type=int)
     recentes = Reading.query.order_by(Reading.id.desc()).limit(limit).all()
@@ -3396,6 +3420,7 @@ def get_history():
 
 
 @app.route("/api/chick_count", methods=["GET"])
+@require_auth()
 def get_chick_count():
     with lock:
         count = object_count
@@ -3403,6 +3428,7 @@ def get_chick_count():
 
 
 @app.route("/api/summary", methods=["GET"])
+@require_auth()
 def get_summary():
     ultima = Reading.query.order_by(Reading.id.desc()).first()
     recentes = Reading.query.order_by(Reading.id.desc()).limit(30).all()
@@ -3489,6 +3515,7 @@ def get_summary():
 
 
 @app.route("/api/system-info", methods=["GET"])
+@require_auth()
 def get_system_info():
     uptime_seconds = int(time.time() - APP_START_TIME)
     return jsonify(
@@ -3520,6 +3547,7 @@ def get_system_info():
 
 
 @app.route("/api/plugins", methods=["GET"])
+@require_auth()
 def get_plugins():
     items = PLUGIN_MANAGER.list_plugins()
     return jsonify({"count": len(items), "plugins": items, "plugins_root": PLUGINS_ROOT})
@@ -3573,6 +3601,7 @@ if __name__ == "__main__":
 
 
 @app.route("/api/push-token", methods=["POST"])
+@require_auth()
 def register_push_token():
     try:
         data = request.get_json(silent=True) or {}
