@@ -140,8 +140,9 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
           {mode === 'request' && (
             <>
               <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Nome Completo</label>
+                <label htmlFor="fullName" className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Nome Completo</label>
                 <input
+                  id="fullName"
                   type="text"
                   value={fullName}
                   onChange={e => setFullName(e.target.value)}
@@ -152,8 +153,9 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
               </div>
               <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Telemóvel / Telefone</label>
+                    <label htmlFor="phone" className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Telemóvel / Telefone</label>
                     <input
+                      id="phone"
                       type="text"
                       value={phone}
                       onChange={e => setPhone(e.target.value)}
@@ -163,8 +165,9 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Idade</label>
+                    <label htmlFor="age" className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Idade</label>
                     <input
+                      id="age"
                       type="number"
                       value={age}
                       onChange={e => setAge(e.target.value)}
@@ -176,8 +179,9 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
               </div>
               <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">CPF / NIF</label>
+                    <label htmlFor="cpf" className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">CPF / NIF</label>
                     <input
+                      id="cpf"
                       type="text"
                       value={cpf}
                       onChange={e => setCpf(e.target.value)}
@@ -187,8 +191,9 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Localidade</label>
+                    <label htmlFor="location" className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Localidade</label>
                     <input
+                      id="location"
                       type="text"
                       value={location}
                       onChange={e => setLocation(e.target.value)}
@@ -201,10 +206,11 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
             </>
           )}
 
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Email</label>
+            <label htmlFor="email" className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Email</label>
             <div className="relative">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
               <input
+                id="email"
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
@@ -216,10 +222,11 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Senha</label>
+            <label htmlFor="password" className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Senha</label>
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
               <input
+                id="password"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
@@ -254,6 +261,7 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
               <div className="relative animate-fade-in-down">
                 <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                 <input
+                  aria-label="Endereço do Servidor ou Tunnel"
                   type="text"
                   value={server}
                   onChange={e => {

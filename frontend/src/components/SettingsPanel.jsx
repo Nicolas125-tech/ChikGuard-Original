@@ -31,8 +31,9 @@ export default function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServ
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
         <div className="md:col-span-2">
-          <Field label="Endereço do Servidor Backend" description="URL base da API (ex: http://192.168.1.100:5000 ou domínio).">
+          <Field label="Endereço do Servidor Backend" id="serverAddress" description="URL base da API (ex: http://192.168.1.100:5000 ou domínio).">
             <input
+              id="serverAddress"
               value={serverDraft}
               onChange={(e) => setServerDraft(e.target.value)}
               className="w-full bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-3 font-mono text-sm text-slate-200 focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all placeholder:text-slate-600 shadow-inner"
@@ -41,8 +42,9 @@ export default function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServ
           </Field>
         </div>
 
-        <Field label="Atualização de Status (ms)" description="Intervalo de polling para temperatura, resumo geral, etc.">
+        <Field label="Atualização de Status (ms)" id="statusMs" description="Intervalo de polling para temperatura, resumo geral, etc.">
           <input
+            id="statusMs"
             type="number"
             value={draft.statusMs}
             onChange={(e) => setDraft((p) => ({ ...p, statusMs: e.target.value }))}
@@ -52,8 +54,9 @@ export default function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServ
           />
         </Field>
 
-        <Field label="Atualização do Histórico (ms)" description="Frequência com que o gráfico e a tabela de histórico recarregam.">
+        <Field label="Atualização do Histórico (ms)" id="historyMs" description="Frequência com que o gráfico e a tabela de histórico recarregam.">
           <input
+            id="historyMs"
             type="number"
             value={draft.historyMs}
             onChange={(e) => setDraft((p) => ({ ...p, historyMs: e.target.value }))}
@@ -63,8 +66,9 @@ export default function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServ
           />
         </Field>
 
-        <Field label="Atualização de Dispositivos (ms)" description="Polling para o estado dos relés (exaustores, aquecedores).">
+        <Field label="Atualização de Dispositivos (ms)" id="devicesMs" description="Polling para o estado dos relés (exaustores, aquecedores).">
           <input
+            id="devicesMs"
             type="number"
             value={draft.devicesMs}
             onChange={(e) => setDraft((p) => ({ ...p, devicesMs: e.target.value }))}
@@ -74,8 +78,9 @@ export default function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServ
           />
         </Field>
 
-        <Field label="Atualização de Contagem (ms)" description="Polling para o número de aves detectadas pela IA no quadro.">
+        <Field label="Atualização de Contagem (ms)" id="countMs" description="Polling para o número de aves detectadas pela IA no quadro.">
           <input
+            id="countMs"
             type="number"
             value={draft.countMs}
             onChange={(e) => setDraft((p) => ({ ...p, countMs: e.target.value }))}
@@ -107,10 +112,10 @@ export default function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServ
   );
 }
 
-function Field({ label, description, children }) {
+function Field({ label, id, description, children }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-sm font-bold text-slate-200 tracking-wide">{label}</label>
+      <label htmlFor={id} className="text-sm font-bold text-slate-200 tracking-wide">{label}</label>
       {description && <span className="text-xs text-slate-500 mb-1">{description}</span>}
       {children}
     </div>
