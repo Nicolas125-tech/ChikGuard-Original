@@ -50,7 +50,7 @@ def create_auth_blueprint(deps):
                     if response.data:
                         return jsonify({"count": len(response.data), "items": response.data})
             except Exception as e:
-                pass # fallback to local db
+                pass  # fallback to local db
             rows = Account.query.order_by(Account.id.asc()).all()
             return jsonify({"count": len(rows), "items": [r.to_dict() for r in rows]})
 
@@ -62,8 +62,12 @@ def create_auth_blueprint(deps):
 
         if not username or not password:
             return jsonify({"msg": "username e password sao obrigatorios"}), 400
-        if role not in ("admin", "operator", "viewer"):
+        if role not in ("superadmin", "admin", "operator", "viewer"):
             return jsonify({"msg": "role invalido"}), 400
+        if role == "superadmin":
+            account = get_current_account()
+            if not account or account.role != "superadmin":
+                return jsonify({"msg": "Apenas superadmins podem criar contas superadmin"}), 403
         if Account.query.filter_by(username=username).first() is not None:
             return jsonify({"msg": "usuario ja existe"}), 409
 
@@ -92,6 +96,10 @@ def create_auth_blueprint(deps):
             role = str(data.get("role", "")).strip().lower()
             if role not in ("superadmin", "admin", "operator", "viewer"):
                 return jsonify({"msg": "role invalido"}), 400
+            if role == "superadmin" or row.role == "superadmin":
+                account = get_current_account()
+                if not account or account.role != "superadmin":
+                    return jsonify({"msg": "Apenas superadmins podem alterar ou conceder acesso superadmin"}), 403
             row.role = role
         if "active" in data:
             row.active = bool(data.get("active"))
@@ -221,10 +229,15 @@ def create_auth_blueprint(deps):
 
         data = request.get_json(silent=True) or {}
         target_user_id = data.get("target_user_id")
-        target_role = data.get("target_role", "VIEWER")
+        target_role = data.get("target_role", "VIEWER").upper()
 
         if not target_user_id:
             return jsonify({"msg": "target_user_id é obrigatorio"}), 400
+
+        if target_role == "SUPERADMIN":
+            account = get_current_account()
+            if not account or account.role != "superadmin":
+                return jsonify({"msg": "Apenas superadmins podem aprovar ou elevar usuarios a superadmin"}), 403
 
         from sqlalchemy import text
         try:

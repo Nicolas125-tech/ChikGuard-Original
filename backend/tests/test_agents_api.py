@@ -14,7 +14,7 @@ sys.modules['cv2'] = mock.MagicMock()
 
 # Configuração de variáveis de ambiente para testes do Flask
 os.environ["FLASK_ENV"] = "testing"
-os.environ["SUPABASE_JWT_SECRET"] = "dummy_secret_for_tests"
+os.environ["SUPABASE_JWT_SECRET"] = "dummy_secret"
 os.environ["ADMIN_PASSWORD"] = "testpassword"
 os.environ["ADMIN_EMAIL"] = "test@example.com"
 os.environ["JWT_SECRET_KEY"] = "testsecret"
@@ -117,5 +117,5 @@ def test_knowledge_base_retrieval():
 
 @pytest.fixture
 def auth_headers():
-    token = jwt.encode({"sub": "test_user", "app_metadata": {"role": "admin"}, "aud": "authenticated"}, "dummy_secret_for_tests", algorithm="HS256")
+    token = jwt.encode({"sub": "test_user", "app_metadata": {"role": "admin"}, "aud": "authenticated"}, "dummy_secret", algorithm="HS256")
     return {"Authorization": f"Bearer {token}"}
