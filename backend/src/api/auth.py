@@ -141,7 +141,9 @@ def create_auth_blueprint(deps):
             audit("account_deleted", source="security", details={"account_id": account_id, "username": username})
         except Exception as e:
             db.session.rollback()
-            return jsonify({"error": f"Erro ao excluir conta local: {str(e)}"}), 500
+            import logging
+            logging.error(f"Erro ao excluir conta local: {e}")
+            return jsonify({"error": "Erro interno ao excluir conta local"}), 500
 
         if is_email:
             try:
@@ -219,7 +221,9 @@ def create_auth_blueprint(deps):
             return jsonify({"items": response.data or []}), 200
 
         except Exception as e:
-            return jsonify({"error": str(e)}), 400
+            import logging
+            logging.error(f"Admin pending users error: {e}")
+            return jsonify({"error": "Erro interno no servidor"}), 500
 
     @bp.route("/api/admin/approve-user", methods=["POST"])
     def admin_approve_user():
@@ -284,7 +288,9 @@ def create_auth_blueprint(deps):
                     "role": target_role})
             return jsonify({"message": "User approved successfully", "data": response.data}), 200
         except Exception as e:
-            return jsonify({"error": str(e)}), 400
+            import logging
+            logging.error(f"Admin approve user error: {e}")
+            return jsonify({"error": "Erro interno no servidor"}), 500
 
     @bp.route("/api/admin/notify-new-user", methods=["POST"])
     def webhook_notify_new_user():
