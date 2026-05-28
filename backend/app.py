@@ -3604,6 +3604,11 @@ if __name__ == "__main__":
 @require_auth()
 def register_push_token():
     try:
+        verify_jwt_in_request(optional=False)
+    except Exception:
+        return jsonify({"msg": "Token invalido ou ausente"}), 401
+
+    try:
         data = request.get_json(silent=True) or {}
         token = data.get("token")
         if not token:
