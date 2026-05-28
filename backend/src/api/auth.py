@@ -62,6 +62,8 @@ def create_auth_blueprint(deps):
 
         if not username or not password:
             return jsonify({"msg": "username e password sao obrigatorios"}), 400
+        if len(password) < 8:
+            return jsonify({"msg": "password muito curto (min 8 caracteres)"}), 400
         if role not in ("superadmin", "admin", "operator", "viewer"):
             return jsonify({"msg": "role invalido"}), 400
         if role == "superadmin":
@@ -105,8 +107,8 @@ def create_auth_blueprint(deps):
             row.active = bool(data.get("active"))
         if "password" in data:
             pwd = str(data.get("password", "")).strip()
-            if len(pwd) < 6:
-                return jsonify({"msg": "password muito curto (min 6)"}), 400
+            if len(pwd) < 8:
+                return jsonify({"msg": "password muito curto (min 8 caracteres)"}), 400
             row.password_hash = bcrypt.generate_password_hash(pwd).decode("utf-8")
 
         db.session.commit()
