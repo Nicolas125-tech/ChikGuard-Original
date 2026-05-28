@@ -60,18 +60,30 @@ export default function OverviewPanel({ token, serverIP, prefs }) {
   const [contagem, setContagem] = useState(null);
   const [summary, setSummary] = useState(null);
   const [prevTemp, setPrevTemp] = useState(null);
+  const dadosRef = useRef(null);
   const baseUrl = getBaseUrl(serverIP);
 
-  const fetchStatus = useCallback(async () => {
+  const fetchSummary = useCallback(async () => {
     try {
-      const r = await fetch(`${baseUrl}/api/status`, { headers: { Authorization: `Bearer ${token}` } });
+      const r = await fetch(`${baseUrl}/api/summary`, { headers: { Authorization: `Bearer ${token}` } });
       if (r.ok) {
         const d = await r.json();
-        setPrevTemp(dados?.temperatura ?? null);
-        setDados(d);
+        setSummary(d);
+
+        // Bolt Optimization: Reuse summary data to reduce API calls
+        const newTemp = d.temperatura_atual;
+        const newStatus = d.status_atual;
+
+        const prev = dadosRef.current;
+        // Always update prevTemp to previous temp on every poll to reset trend
+        setPrevTemp(prev?.temperatura ?? null);
+
+        const newDados = { temperatura: newTemp, status: newStatus };
+        setDados(newDados);
+        dadosRef.current = newDados;
       }
     } catch (_e) { console.error(_e); }
-  }, [baseUrl, token, dados]);
+  }, [baseUrl, token]);
 
   const fetchCount = useCallback(async () => {
     try {
@@ -83,20 +95,16 @@ export default function OverviewPanel({ token, serverIP, prefs }) {
     } catch (_e) { console.error(_e); }
   }, [baseUrl, token]);
 
-  const fetchSummary = useCallback(async () => {
-    try {
-      const r = await fetch(`${baseUrl}/api/summary`, { headers: { Authorization: `Bearer ${token}` } });
-      if (r.ok) setSummary(await r.json());
-    } catch (_e) { console.error(_e); }
-  }, [baseUrl, token]);
-
   useEffect(() => {
-    fetchStatus(); fetchCount(); fetchSummary();
-    const a = setInterval(fetchStatus, prefs.statusMs);
-    const b = setInterval(fetchCount, prefs.countMs);
+    fetchSummary();
+    fetchCount();
     const c = setInterval(fetchSummary, prefs.statusMs);
-    return () => { clearInterval(a); clearInterval(b); clearInterval(c); };
-  }, [fetchStatus, fetchCount, fetchSummary, prefs]);
+    const b = setInterval(fetchCount, prefs.countMs);
+    return () => {
+        clearInterval(c);
+        clearInterval(b);
+    };
+  }, [fetchSummary, fetchCount, prefs]);
 
   const temp = dados?.temperatura;
   const tempTrend = prevTemp !== null && temp !== null
