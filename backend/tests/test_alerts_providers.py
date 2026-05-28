@@ -28,7 +28,7 @@ def test_alert_provider_send_default(caplog):
 
     # Should log trigger initiation and final fallback
     log_messages = [record.message for record in caplog.records]
-    assert any("[ALERT-TRIGGER] Initiating active alert" in msg for msg in log_messages)
+    assert any("[ALERT-TRIGGER] Iniciando disparo de alerta ativo" in msg for msg in log_messages)
     assert any(f"[ALERT] {test_message}" in msg for msg in log_messages)
 
 
@@ -57,7 +57,7 @@ def test_alert_provider_send_telegram(mock_post, caplog):
     )
     
     log_messages = [record.message for record in caplog.records]
-    assert any("Message sent successfully via Telegram" in msg for msg in log_messages)
+    assert any("Notificação via Telegram enviada com sucesso." in msg for msg in log_messages)
 
 
 @patch("requests.post")
@@ -88,7 +88,7 @@ def test_alert_provider_send_twilio_sms(mock_post, caplog):
     )
 
     log_messages = [record.message for record in caplog.records]
-    assert any("Message sent successfully via Twilio" in msg for msg in log_messages)
+    assert any("Notificação via Twilio enviada" in msg for msg in log_messages)
 
 
 @patch("smtplib.SMTP")
@@ -116,7 +116,7 @@ def test_alert_provider_send_email(mock_smtp_class, caplog):
     mock_smtp_instance.sendmail.assert_called_once()
 
     log_messages = [record.message for record in caplog.records]
-    assert any("Email alert sent successfully" in msg for msg in log_messages)
+    assert any("E-mail de contingência enviado" in msg for msg in log_messages)
 
 
 def test_build_alert_provider():

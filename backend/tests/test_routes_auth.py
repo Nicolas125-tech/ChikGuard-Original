@@ -46,7 +46,7 @@ def valid_token():
         "exp": datetime.utcnow() + timedelta(hours=1),
         "app_metadata": {"role": "operator"}
     }
-    return pyjwt.encode(payload, "dummy_secret_for_tests", algorithm="HS256")
+    return pyjwt.encode(payload, "dummy_secret", algorithm="HS256")
 
 def test_routes_webrtc_pcs_unauthorized(client):
     """Garante que a rota WebRTC é bloqueada sem autenticação."""

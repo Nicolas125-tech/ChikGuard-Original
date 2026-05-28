@@ -23,7 +23,7 @@ os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 from app import app
 from database import db, Batch, BatchLogbook
 from src.agents.base import ClimateAgent
-from plugins.weather_forecast.plugin import WeatherForecastPlugin
+from weather_forecast.plugin import WeatherForecastPlugin
 from src.core.state_machine import BusinessStateMachine
 
 @pytest.fixture
