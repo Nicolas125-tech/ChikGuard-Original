@@ -1,5 +1,6 @@
 /* global describe, it, beforeEach, afterEach, global */
 import assert from 'node:assert';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import { readPrefs, DEFAULT_PREFS, STORAGE } from './config.js';
 
 describe('Config Utilities', () => {
@@ -22,7 +23,7 @@ describe('Config Utilities', () => {
 
   it('deve fazer o merge parcial (incluindo defaults faltantes) se os dados locais estiverem incompletos', () => {
     global.localStorage.getItem = (key) => {
-      if (key === STORAGE) return JSON.stringify({ theme: 'light' });
+      if (key === STORAGE.prefs || key === STORAGE) return JSON.stringify({ theme: 'light' });
       return null;
     };
 
@@ -33,7 +34,7 @@ describe('Config Utilities', () => {
 
   it('deve retornar DEFAULT_PREFS e logar alerta em caso de JSON inválido', () => {
     global.localStorage.getItem = (key) => {
-      if (key === STORAGE) return '{ inválido_json';
+      if (key === STORAGE.prefs || key === STORAGE) return '{ inválido_json';
       return null;
     };
 
