@@ -103,6 +103,10 @@ def create_auth_blueprint(deps):
                 account = get_current_account()
                 if not account or account.role != "superadmin":
                     return jsonify({"msg": "Apenas superadmins podem alterar ou conceder acesso superadmin"}), 403
+            elif role == "admin" or row.role == "admin":
+                account = get_current_account()
+                if not account or account.role not in ["superadmin", "admin"]:
+                    return jsonify({"msg": "Apenas admins/superadmins podem alterar ou conceder acesso admin"}), 403
             row.role = role
         if "active" in data:
             row.active = bool(data.get("active"))
