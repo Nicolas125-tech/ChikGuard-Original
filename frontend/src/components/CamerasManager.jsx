@@ -117,8 +117,22 @@ export default function CamerasManager({ serverIP, token }) {
               </tr>
             ) : cameras.length === 0 ? (
               <tr>
-                <td colSpan="5" className="p-8 text-center text-slate-400">
-                  Nenhuma câmera conectada.
+                <td colSpan="5" className="p-12">
+                  <div className="flex flex-col items-center justify-center text-center">
+                    <div className="bg-slate-800/50 p-5 rounded-full mb-4 border border-slate-700/50 shadow-inner">
+                      <Camera size={32} className="text-slate-500" />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-200 mb-2 tracking-tight">Nenhuma câmera configurada</h3>
+                    <p className="text-slate-400 max-w-md mx-auto mb-6 text-sm leading-relaxed">
+                      Adicione sua primeira câmera IP (RTSP), link de vídeo ou câmera USB para iniciar o monitoramento inteligente por IA.
+                    </p>
+                    <button 
+                      onClick={() => { setEditingId(null); setFormData({ camera_id: '', name: '', connection_type: 'url', connection_url: '' }); setShowModal(true); }}
+                      className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 px-5 py-2.5 rounded-lg flex items-center gap-2 transition-all font-semibold shadow-sm"
+                    >
+                      <Plus size={18} /> Cadastrar Primeira Câmera
+                    </button>
+                  </div>
                 </td>
               </tr>
             ) : (

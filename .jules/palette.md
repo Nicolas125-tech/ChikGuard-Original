@@ -9,3 +9,7 @@
 ## 2026-05-29 - Missing feedback on async form submissions
 **Learning:** In panels with async operations (like `SmartOpsPanel`), buttons lacked loading/disabled states during API calls. This allows impatient users to click multiple times, potentially creating duplicate database entries (like creating multiple batches simultaneously).
 **Action:** Always wrap `fetch` calls in `try/finally` blocks, introducing `isLoading` state variables. Disable both the button and its associated input fields while loading, and replace the button text with a loading spinner to provide immediate visual feedback.
+
+## 2026-05-29 - Boring Empty States decrease engagement
+**Learning:** In the `CamerasManager`, when there were no cameras, the table simply showed a tiny text row saying "Nenhuma câmera conectada". This is a missed opportunity. Empty states should not just inform, they should guide the user to action.
+**Action:** Replace plain text empty states with rich, centered UI components containing a relevant icon (with low opacity), an explanatory text of *why* it's empty, and a clear Call-To-Action (CTA) button to create the first item. This significantly reduces friction for onboarding new users.
