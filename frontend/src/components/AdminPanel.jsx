@@ -323,6 +323,7 @@ export default function AdminPanel({ token, serverIP }) {
                           /* ── Aprovação ── */
                           <div className="flex items-center gap-2 flex-wrap">
                             <select
+                              aria-label="Selecionar função do usuário"
                               id={`role-select-${u.id}`}
                               defaultValue="viewer"
                               className="bg-slate-950 border border-slate-700 text-slate-300 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-emerald-500 transition-colors cursor-pointer">
