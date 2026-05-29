@@ -162,9 +162,11 @@ def create_auth_blueprint(deps):
                                 supabase.auth.admin.delete_user(u.id)
                                 break
                     except Exception as e:
-                        print("Failed to delete user from Supabase auth:", e)
+                        import logging
+                        logging.getLogger(__name__).error("Failed to delete user from Supabase auth: %s", e)
             except Exception as e:
-                print("Supabase connection error during delete:", e)
+                import logging
+                logging.getLogger(__name__).error("Supabase connection error during delete: %s", e)
 
         return jsonify({"msg": "Conta excluida com sucesso"})
 
@@ -261,7 +263,8 @@ def create_auth_blueprint(deps):
                 return jsonify({"message": "User approved successfully", "data": {"id": target_user_id}}), 200
         except Exception as e:
             db.session.rollback()
-            print("Direct DB Update Failed (trying Supabase REST Admin):", e)
+            import logging
+            logging.getLogger(__name__).error("Direct DB Update Failed (trying Supabase REST Admin): %s", e)
 
         try:
             SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -336,7 +339,8 @@ def create_auth_blueprint(deps):
                                 server.login(SMTP_USER, SMTP_PASS)
                             server.send_message(msg)
                 except Exception as e:
-                    print(f"Erro SMTP webhook: {e}")
+                    import logging
+                    logging.getLogger(__name__).error("Erro SMTP webhook: %s", e)
 
                 return jsonify({"message": "Notificação processada"}), 200
 
@@ -408,7 +412,8 @@ def create_auth_blueprint(deps):
                     else:
                         status = supabase_status
         except Exception as e:
-            print(f"Supabase sync error (non-critical): {e}")
+            import logging
+            logging.getLogger(__name__).error("Supabase sync error (non-critical): %s", e)
 
         access_token = create_access_token(
             identity=str(account.id),
