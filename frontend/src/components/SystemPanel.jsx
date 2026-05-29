@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import SystemCard from './SystemCard';
 import { getBaseUrl } from '../utils/config';
 
-export default function SystemPanel({ serverIP, prefs }) {
+export default function SystemPanel({ serverIP, prefs, token }) {
   const [info, setInfo] = useState(null);
   const [summary, setSummary] = useState(null);
   const baseUrl = getBaseUrl(serverIP);
@@ -10,9 +10,10 @@ export default function SystemPanel({ serverIP, prefs }) {
 
   const loadSystem = useCallback(async () => {
     try {
+      const headers = { Authorization: `Bearer ${token}` };
       const [infoRes, summaryRes] = await Promise.all([
-        fetch(`${baseUrl}/api/system-info`),
-        fetch(`${baseUrl}/api/summary`),
+        fetch(`${baseUrl}/api/system-info`, { headers }),
+        fetch(`${baseUrl}/api/summary`, { headers }),
       ]);
       if (infoRes.ok) setInfo(await infoRes.json());
       if (summaryRes.ok) setSummary(await summaryRes.json());

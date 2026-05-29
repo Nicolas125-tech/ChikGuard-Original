@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getBaseUrl } from '../utils/config';
 
-export default function HeatmapOverlay({ serverIP }) {
+export default function HeatmapOverlay({ serverIP, token }) {
   const [points, setPoints] = useState([]);
   const baseUrl = getBaseUrl(serverIP);
 
   const fetchHeatmapData = useCallback(async () => {
     try {
-      const response = await fetch(`${baseUrl}/api/heatmap/3d?hours=2&grid=32`);
+      const response = await fetch(`${baseUrl}/api/heatmap/3d?hours=2&grid=32`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (response.ok) {
         const data = await response.json();
         setPoints(data.points || []);

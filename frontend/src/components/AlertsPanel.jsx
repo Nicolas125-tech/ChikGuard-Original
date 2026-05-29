@@ -2,14 +2,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { getBaseUrl } from '../utils/config';
 
-export default function AlertsPanel({ serverIP, prefs }) {
+export default function AlertsPanel({ serverIP, prefs, token }) {
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const baseUrl = getBaseUrl(serverIP);
 
   const loadAlerts = useCallback(async () => {
     try {
-      const r = await fetch(`${baseUrl}/api/alerts`);
+      const r = await fetch(`${baseUrl}/api/alerts`, { headers: { Authorization: `Bearer ${token}` } });
       if (!r.ok) throw new Error('Alerts fetch failed');
       setAlerts(await r.json());
     } finally {

@@ -317,17 +317,17 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
       case 'birds':
         return <BirdsPanel token={token} serverIP={serverIP} prefs={prefs} />;
       case 'alerts':
-        return <AlertsPanel serverIP={serverIP} prefs={prefs} />;
+        return <AlertsPanel token={token} serverIP={serverIP} prefs={prefs} />;
       case 'climate':
         return <ClimatePanel token={token} serverIP={serverIP} prefs={prefs} canControlDevices={canControlDevices} />;
       case 'smartops':
         return <SmartOpsPanel serverIP={serverIP} prefs={prefs} token={token} />;
       case 'management':
-        return <ManagementPanel serverIP={serverIP} prefs={prefs} />;
+        return <ManagementPanel token={token} serverIP={serverIP} prefs={prefs} />;
       case 'devices':
         return <DevicesPanel token={token} serverIP={serverIP} prefs={prefs} canControlDevices={canControlDevices} />;
       case 'history':
-        return <HistoryPanel serverIP={serverIP} prefs={prefs} />;
+        return <HistoryPanel token={token} serverIP={serverIP} prefs={prefs} />;
       case 'settings':
         return <SettingsPanel serverIP={serverIP} token={token} prefs={prefs} onSavePrefs={onSavePrefs} onSaveServer={onSaveServer} />;
       case 'admin':

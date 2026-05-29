@@ -19,17 +19,18 @@ export default function ManagementPanel({ serverIP, prefs }) {
   const [weather, setWeather] = useState(null);
 
   const loadManagement = useCallback(async () => {
+    const headers = { Authorization: `Bearer ${token}` };
     const [wLive, wCurve, ac, model, th, en, au, sy, sh, wf] = await Promise.all([
-      fetch(`${baseUrl}/api/weight/live`),
-      fetch(`${baseUrl}/api/weight/curve?days=30`),
-      fetch(`${baseUrl}/api/acoustic/live`),
-      fetch(`${baseUrl}/api/acoustic/model-info`),
-      fetch(`${baseUrl}/api/thermal-anomalies/live?minutes=60`),
-      fetch(`${baseUrl}/api/energy/summary`),
-      fetch(`${baseUrl}/api/audit/logs?limit=80`),
-      fetch(`${baseUrl}/api/sync/status`),
-      fetch(`${baseUrl}/api/sensors/history?limit=120`),
-      fetch(`${baseUrl}/api/weather/forecast`),
+      fetch(`${baseUrl}/api/weight/live`, { headers }),
+      fetch(`${baseUrl}/api/weight/curve?days=30`, { headers }),
+      fetch(`${baseUrl}/api/acoustic/live`, { headers }),
+      fetch(`${baseUrl}/api/acoustic/model-info`, { headers }),
+      fetch(`${baseUrl}/api/thermal-anomalies/live?minutes=60`, { headers }),
+      fetch(`${baseUrl}/api/energy/summary`, { headers }),
+      fetch(`${baseUrl}/api/audit/logs?limit=80`, { headers }),
+      fetch(`${baseUrl}/api/sync/status`, { headers }),
+      fetch(`${baseUrl}/api/sensors/history?limit=120`, { headers }),
+      fetch(`${baseUrl}/api/weather/forecast`, { headers }),
     ]);
     if (wLive.ok) setWeightLive(await wLive.json());
     if (wCurve.ok) setWeightCurve((await wCurve.json()).items || []);

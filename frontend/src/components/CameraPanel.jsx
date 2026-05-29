@@ -55,7 +55,7 @@ export default function CameraPanel({ token, serverIP }) {
                   } 
                 }} 
               />
-              {showHeatmapOverlay && <HeatmapOverlay serverIP={serverIP} />}
+              {showHeatmapOverlay && <HeatmapOverlay serverIP={serverIP} token={token} />}
             </>
           ) : (
             <>
@@ -65,7 +65,7 @@ export default function CameraPanel({ token, serverIP }) {
                 className="absolute inset-0 w-full h-full object-contain z-0"
                 onError={() => setVideoBlocked(true)}
               />
-              {showHeatmapOverlay && <HeatmapOverlay serverIP={serverIP} />}
+              {showHeatmapOverlay && <HeatmapOverlay serverIP={serverIP} token={token} />}
             </>
           )}
         </div>

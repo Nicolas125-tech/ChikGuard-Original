@@ -18,14 +18,15 @@ export default function SmartOpsPanel({ serverIP, prefs, token }) {
   const heatmapUrl = `${baseUrl}/api/heatmap/daily/image`;
 
   const loadData = useCallback(async () => {
+    const headers = { Authorization: `Bearer ${token}` };
     const [b, i, s, a, bt, c, lb] = await Promise.all([
-      fetch(`${baseUrl}/api/behavior/live`),
-      fetch(`${baseUrl}/api/immobility/live`),
-      fetch(`${baseUrl}/api/sensors/live`),
-      fetch(`${baseUrl}/api/auto-mode`),
-      fetch(`${baseUrl}/api/batches`),
-      fetch(`${baseUrl}/api/cameras`),
-      fetch(`${baseUrl}/api/logbook?limit=30`),
+      fetch(`${baseUrl}/api/behavior/live`, { headers }),
+      fetch(`${baseUrl}/api/immobility/live`, { headers }),
+      fetch(`${baseUrl}/api/sensors/live`, { headers }),
+      fetch(`${baseUrl}/api/auto-mode`, { headers }),
+      fetch(`${baseUrl}/api/batches`, { headers }),
+      fetch(`${baseUrl}/api/cameras`, { headers }),
+      fetch(`${baseUrl}/api/logbook?limit=30`, { headers }),
     ]);
     if (b.ok) setBehavior(await b.json());
     if (i.ok) setImmobility(await i.json());
@@ -58,7 +59,7 @@ export default function SmartOpsPanel({ serverIP, prefs, token }) {
     if (!batchForm.name || !batchForm.start_date) return;
     await fetch(`${baseUrl}/api/batches`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ ...batchForm, active: true }),
     });
     setBatchForm({ name: '', start_date: '' });
@@ -66,7 +67,7 @@ export default function SmartOpsPanel({ serverIP, prefs, token }) {
   };
 
   const generateWeeklyReport = async () => {
-    const r = await fetch(`${baseUrl}/api/reports/weekly`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+    const r = await fetch(`${baseUrl}/api/reports/weekly`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({}) });
     const data = await r.json();
     setReportMsg(r.ok ? `Relatorio gerado: ${data.file}` : (data.msg || 'Falha ao gerar relatorio'));
   };
@@ -75,7 +76,7 @@ export default function SmartOpsPanel({ serverIP, prefs, token }) {
     if (!logNote.trim()) return;
     await fetch(`${baseUrl}/api/logbook`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ note: logNote, author: 'tratador' }),
     });
     setLogNote('');

@@ -33,14 +33,18 @@ export default function DigitalTwinPanel({ token, serverIP, prefs }) {
       }
 
       // 3. Heatmap points
-      const rHeatmap = await fetch(`${baseUrl}/api/heatmap/3d?hours=1&grid=24`);
+      const rHeatmap = await fetch(`${baseUrl}/api/heatmap/3d?hours=1&grid=24`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (rHeatmap.ok) {
         const hData = await rHeatmap.json();
         setHeatmapPoints(hData.points || []);
       }
 
       // 4. Thermal anomalies
-      const rAnomalies = await fetch(`${baseUrl}/api/thermal-anomalies/live?minutes=15`);
+      const rAnomalies = await fetch(`${baseUrl}/api/thermal-anomalies/live?minutes=15`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (rAnomalies.ok) {
         const aData = await rAnomalies.json();
         setThermalAnomalies(aData.items || []);
