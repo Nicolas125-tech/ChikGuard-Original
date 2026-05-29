@@ -34,7 +34,7 @@ def require_auth(roles=None):
                 
                 # Fetch profile from DB to get the reliable role and status
                 if supabase_client:
-                    response = supabase_client.table('profiles').select('role, status').eq('id', user_id).single().execute()
+                    response = supabase_client.table('profiles').select('role, status, tenant_id').eq('id', user_id).single().execute()
                     profile = response.data
                     if not profile:
                         return jsonify({'error': 'Profile not found'}), 403
@@ -42,15 +42,18 @@ def require_auth(roles=None):
                         return jsonify({'error': 'User awaiting approval'}), 403
                         
                     user_role = profile.get('role', 'viewer').lower()
+                    tenant_id = profile.get('tenant_id', 1)
                 else:
                     # Fallback if supabase client is not configured
                     user_role = decoded.get('app_metadata', {}).get('role', 'viewer').lower()
+                    tenant_id = decoded.get('app_metadata', {}).get('tenant_id', 1)
 
                 if roles and user_role not in roles and 'admin' not in user_role and 'superadmin' not in user_role:
                     return jsonify({'error': f'Insufficient permissions. Required: {roles}'}), 403
                     
                 request.user_id = user_id
                 request.user_role = user_role
+                request.tenant_id = tenant_id
             except jwt.ExpiredSignatureError:
                 return jsonify({'error': 'Token expired'}), 401
             except Exception as e:

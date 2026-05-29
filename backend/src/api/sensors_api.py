@@ -48,7 +48,7 @@ def create_sensors_blueprint(deps):
         limit = request.args.get("limit", default=100, type=int)
         limit = max(1, min(limit, 5000))
         rows = (
-            SensorReading.query.filter_by(camera_id=active_camera_id)
+            SensorReading.query.filter_by(tenant_id=request.tenant_id, camera_id=active_camera_id)
             .order_by(SensorReading.id.desc())
             .limit(limit)
             .all()
@@ -114,7 +114,7 @@ def create_sensors_blueprint(deps):
         limit = request.args.get("limit", default=200, type=int)
         limit = max(1, min(limit, 5000))
         rows = (
-            AcousticReading.query.filter_by(camera_id=active_camera_id)
+            AcousticReading.query.filter_by(tenant_id=request.tenant_id, camera_id=active_camera_id)
             .order_by(AcousticReading.id.desc())
             .limit(limit)
             .all()
@@ -154,6 +154,7 @@ def create_sensors_blueprint(deps):
             )
 
             row = AcousticReading(
+                tenant_id=request.tenant_id,
                 camera_id=active_camera_id,
                 respiratory_health_index=acoustic_state["respiratory_health_index"],
                 cough_index=acoustic_state["cough_index"],
