@@ -339,8 +339,8 @@ export default function AdminPanel({ token, serverIP }) {
                                 handleApprove(u.id, el?.value || 'viewer');
                               }}
                               className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3.5 py-1.5 rounded-lg transition-all disabled:opacity-50 shadow shadow-emerald-500/20 whitespace-nowrap">
-                              <UserCheck size={13} />
-                              {isActioning ? '...' : 'Aprovar'}
+                              {isActioning ? <RefreshCw size={13} className="animate-spin" /> : <UserCheck size={13} />}
+                              {isActioning ? 'Aprovando...' : 'Aprovar'}
                             </button>
                           </div>
                         ) : isSuspended ? (
@@ -349,8 +349,8 @@ export default function AdminPanel({ token, serverIP }) {
                             disabled={isActioning || isSuperadmin}
                             onClick={() => handleReactivate(u.id)}
                             className="flex items-center gap-1.5 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 text-xs font-bold px-3.5 py-1.5 rounded-lg border border-emerald-500/30 transition-all disabled:opacity-30 whitespace-nowrap">
-                            <ShieldCheck size={13} />
-                            {isActioning ? '...' : 'Reativar'}
+                            {isActioning ? <RefreshCw size={13} className="animate-spin" /> : <ShieldCheck size={13} />}
+                            {isActioning ? 'Reativando...' : 'Reativar'}
                           </button>
                         ) : (
                           /* ── Suspender ── */
@@ -359,8 +359,8 @@ export default function AdminPanel({ token, serverIP }) {
                             onClick={() => handleSuspend(u.id)}
                             title={isSuperadmin ? 'Superadmin não pode ser suspenso' : 'Suspender conta'}
                             className="flex items-center gap-1.5 bg-red-600/20 hover:bg-red-600/40 text-red-400 text-xs font-bold px-3.5 py-1.5 rounded-lg border border-red-500/30 transition-all disabled:opacity-30 whitespace-nowrap">
-                            {isSuperadmin ? <ShieldOff size={13} /> : <UserX size={13} />}
-                            {isSuperadmin ? 'Protegido' : (isActioning ? '...' : 'Suspender')}
+                            {isSuperadmin ? <ShieldOff size={13} /> : (isActioning ? <RefreshCw size={13} className="animate-spin" /> : <UserX size={13} />)}
+                            {isSuperadmin ? 'Protegido' : (isActioning ? 'Suspendendo...' : 'Suspender')}
                           </button>
                         )}
 
@@ -370,8 +370,8 @@ export default function AdminPanel({ token, serverIP }) {
                           onClick={() => handleDelete(u.id)}
                           title={isSuperadmin ? 'Superadmin não pode ser excluído' : 'Excluir conta'}
                           className="flex items-center gap-1.5 bg-red-900/40 hover:bg-red-600/60 text-red-300 text-xs font-bold px-3.5 py-1.5 rounded-lg border border-red-700/50 transition-all disabled:opacity-30 whitespace-nowrap ml-2">
-                          <UserX size={13} />
-                          Excluir
+                          {isActioning ? <RefreshCw size={13} className="animate-spin" /> : <UserX size={13} />}
+                          {isActioning ? 'Excluindo...' : 'Excluir'}
                         </button>
                       </td>
                     </tr>

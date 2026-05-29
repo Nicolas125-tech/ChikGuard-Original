@@ -13,3 +13,7 @@
 ## 2026-05-29 - Boring Empty States decrease engagement
 **Learning:** In the `CamerasManager`, when there were no cameras, the table simply showed a tiny text row saying "Nenhuma câmera conectada". This is a missed opportunity. Empty states should not just inform, they should guide the user to action.
 **Action:** Replace plain text empty states with rich, centered UI components containing a relevant icon (with low opacity), an explanatory text of *why* it's empty, and a clear Call-To-Action (CTA) button to create the first item. This significantly reduces friction for onboarding new users.
+
+## 2026-05-29 - Poor visual feedback with "..." text on buttons
+**Learning:** In the `AdminPanel`, loading states for sensitive actions (Approve, Suspend, Delete) simply replaced the button text with "...". This feels broken or unresponsive, especially if the API takes more than a second, leading to anxiety during destructive actions.
+**Action:** Always use an animated SVG spinner (e.g., `<RefreshCw className="animate-spin" />`) alongside clear progressive text (e.g., "Aprovando...", "Excluindo...") to assure the user that the background process is running smoothly.
