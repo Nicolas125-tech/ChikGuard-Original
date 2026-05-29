@@ -5,3 +5,7 @@
 ## 2024-05-25 - [Batch API Calls]
 **Learning:** Components polling multiple endpoints concurrently (e.g. `/api/status`, `/api/summary`) cause unnecessary frontend renders, network connections, and database load if the data overlaps.
 **Action:** When working on panels that poll multiple endpoints, examine the payloads to determine if a single "summary" endpoint provides a superset of the required data. Consolidate overlapping requests into a single fetch loop using a ref to manage previous state and maintain component stability.
+
+## 2026-05-29 - [SystemCard Unnecessary Re-renders]
+**Learning:** Components that poll APIs (like `SmartOpsPanel` and `ManagementPanel`) trigger full component tree re-renders every 500-1000ms. Child presentational components like `SystemCard` were being re-rendered thousands of times despite their `label` and `value` props remaining completely unchanged.
+**Action:** Always wrap leaf presentational components in `React.memo()` if they are children of heavily polling parent components. This intercepts the React render cycle and prevents virtual DOM diffing for static UI elements.

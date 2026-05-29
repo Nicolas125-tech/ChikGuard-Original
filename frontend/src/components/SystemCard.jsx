@@ -1,7 +1,7 @@
 import React from 'react';
 import { Database } from 'lucide-react';
 
-export default function SystemCard({ label, value }) {
+export default React.memo(function SystemCard({ label, value }) {
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
       <div className="flex items-center justify-between mb-3">
@@ -11,4 +11,4 @@ export default function SystemCard({ label, value }) {
       <div className="text-2xl font-bold">{value}</div>
     </div>
   );
-}
+});
