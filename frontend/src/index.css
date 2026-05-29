@@ -61,6 +61,18 @@ code, .font-mono, [class*="font-mono"] {
   font-family: var(--font-mono);
 }
 
+/* ── Focus Outline for Keyboard Users ── */
+*:focus-visible {
+  outline: 2px solid hsl(var(--cg-emerald-400));
+  outline-offset: 2px;
+  border-radius: 4px; /* fallback radius */
+}
+
+/* Custom focus rounding where tailwind's rounded class is present */
+.rounded-xl:focus-visible { border-radius: 12px; }
+.rounded-lg:focus-visible { border-radius: 8px; }
+.rounded-full:focus-visible { border-radius: 9999px; }
+
 /* ═══════════════════════════════════════════════════════════════
    Scrollbar — Sleek Dark
    ═══════════════════════════════════════════════════════════════ */
