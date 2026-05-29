@@ -8,19 +8,11 @@ logger = logging.getLogger(__name__)
 
 def get_device_id_or_ip():
     """
-    Estrategia de Rate Limiting (Zero Trust):
-    Se a requisicao vier do Edge (Mini PC via API ou Tunnel), tenta obter
-    o Device ID autenticado. Se for login publico, usa o IP de origem.
+    Estrategia de Rate Limiting:
+    Usa o IP de origem resolvido com seguranca (atraves do ProxyFix em app.py).
+    Ignorar X-Forwarded-For manualmente ou cabecalhos como X-Device-ID para
+    evitar spoofing e bypass de Rate Limiting.
     """
-    device_id = request.headers.get("X-Device-ID")
-    if device_id:
-        return f"device:{device_id}"
-
-    # Se o IP real vier de um Proxy Reverso (ex: Cloudflare / Nginx)
-    real_ip = request.headers.get("X-Forwarded-For")
-    if real_ip:
-        return real_ip.split(',')[0].strip()
-
     return get_remote_address()
 
 # Inicializacao do Flask-Limiter usando Redis (ou Memory fallback em Dev)
