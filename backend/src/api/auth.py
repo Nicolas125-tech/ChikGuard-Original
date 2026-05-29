@@ -50,7 +50,7 @@ def create_auth_blueprint(deps):
                     response = supabase.table("profiles").select("*").execute()
                     if response.data:
                         return jsonify({"count": len(response.data), "items": response.data})
-            except Exception as e:
+            except Exception:
                 pass  # fallback to local db
             rows = Account.query.order_by(Account.id.asc()).all()
             return jsonify({"count": len(rows), "items": [r.to_dict() for r in rows]})
@@ -304,7 +304,11 @@ def create_auth_blueprint(deps):
         WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET")
 
         auth_header = request.headers.get("Authorization")
-        if WEBHOOK_SECRET and (not auth_header or not hmac.compare_digest(auth_header.encode('utf-8'), f"Bearer {WEBHOOK_SECRET}".encode('utf-8'))):
+        if WEBHOOK_SECRET and (
+            not auth_header or not hmac.compare_digest(
+                auth_header.encode('utf-8'), f"Bearer {WEBHOOK_SECRET}".encode('utf-8')
+            )
+        ):
             return jsonify({"error": "Unauthorized"}), 401
 
         data = request.get_json(silent=True) or {}

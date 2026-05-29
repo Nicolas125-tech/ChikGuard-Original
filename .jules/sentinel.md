@@ -51,3 +51,9 @@
 **Vulnerability:** The `/api/voice/command` endpoint modified global system state (`estado_dispositivos`) *before* executing the permissions check (`_guard_critical_action`). Even if the request was subsequently denied (403), the IoT hardware state had already been mutated, leading to an authentication bypass/IDOR that could trigger critical facility systems.
 **Learning:** Checking permissions at the end of a function is a classic time-of-check to time-of-use (TOCTOU) logic flaw. Any side effects (state modification, database writes, external requests) must occur *strictly after* all authorization checks have passed.
 **Prevention:** Follow the "Guard Clauses" pattern. Validate authentication, authorization, and payload parameters at the very beginning of the endpoint before any business logic is executed.
+## 2026-05-29 - Refactored Custom Rate Limiting to standard Flask-Limiter **Vulnerability:** Discovered a custom, in-memory implementation for rate-limiting the login endpoint that was redundant, bug-prone, and sidestepped the globally configured rate limiter strategy. **Learning:** Implementing disparate rate-limiting logic per-endpoint defeats the defense-in-depth principles of maintaining standard, robust security configurations. **Prevention:** Ensure uniform security utilities (like ) are always re-used rather than re-invented for critical controls.
+
+## 2024-05-29 - Refactored Custom Rate Limiting to standard Flask-Limiter
+**Vulnerability:** Discovered a custom, in-memory implementation for rate-limiting the login endpoint that was redundant, bug-prone, and sidestepped the globally configured rate limiter strategy.
+**Learning:** Implementing disparate rate-limiting logic per-endpoint defeats the defense-in-depth principles of maintaining standard, robust security configurations.
+**Prevention:** Ensure uniform security utilities (like `flask-limiter`) are always re-used rather than re-invented for critical controls.
