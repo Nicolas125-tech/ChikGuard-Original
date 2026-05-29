@@ -3,15 +3,33 @@ from datetime import datetime
 
 db = SQLAlchemy()
 
+# Tabela de Inquilinos (Empresas/Cooperativas) para Fase 3 (SaaS Multi-Tenant)
+class Tenant(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "active": self.active,
+            "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S")
+        }
+
+
 # Tabela de Usuários (Login)
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(200), nullable=False)
 
 
 class Account(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
     username = db.Column(db.String(80), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(200), nullable=False)
     role = db.Column(db.String(30), nullable=False, default="operator", index=True)
@@ -22,6 +40,7 @@ class Account(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
+            "tenant_id": self.tenant_id,
             "username": self.username,
             "role": self.role,
             "active": self.active,
@@ -51,6 +70,7 @@ class RolePermission(db.Model):
 # NOVA TABELA: Histórico de Leituras
 class Reading(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
     temperatura = db.Column(db.Float, nullable=False)
     status = db.Column(db.String(50), nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow) # Data e hora automática
@@ -58,6 +78,7 @@ class Reading(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
+            "tenant_id": self.tenant_id,
             "temp": self.temperatura,
             "status": self.status,
             "hora": self.timestamp.strftime("%H:%M:%S"),
@@ -67,6 +88,7 @@ class Reading(db.Model):
 
 class BirdSnapshot(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
     bird_uid = db.Column(db.Integer, nullable=False, index=True)
     confidence = db.Column(db.Float, nullable=False)
     x1 = db.Column(db.Integer, nullable=False)
@@ -80,6 +102,7 @@ class BirdSnapshot(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
+            "tenant_id": self.tenant_id,
             "bird_uid": self.bird_uid,
             "confidence": round(self.confidence, 4),
             "bbox": [self.x1, self.y1, self.x2, self.y2],
@@ -91,6 +114,7 @@ class BirdSnapshot(db.Model):
 
 class BirdIdentity(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
     bird_uid = db.Column(db.Integer, unique=True, nullable=False, index=True)
     first_seen = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     last_seen = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
@@ -101,6 +125,7 @@ class BirdIdentity(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
+            "tenant_id": self.tenant_id,
             "bird_uid": self.bird_uid,
             "first_seen": self.first_seen.strftime("%Y-%m-%d %H:%M:%S"),
             "last_seen": self.last_seen.strftime("%Y-%m-%d %H:%M:%S"),
@@ -112,6 +137,7 @@ class BirdIdentity(db.Model):
 
 class BirdTrackPoint(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
     bird_uid = db.Column(db.Integer, nullable=False, index=True)
     x = db.Column(db.Integer, nullable=False)
     y = db.Column(db.Integer, nullable=False)
@@ -120,6 +146,7 @@ class BirdTrackPoint(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
+            "tenant_id": self.tenant_id,
             "bird_uid": self.bird_uid,
             "x": self.x,
             "y": self.y,
@@ -129,6 +156,7 @@ class BirdTrackPoint(db.Model):
 
 class EventLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
     camera_id = db.Column(db.String(64), nullable=False, default="galpao-1", index=True)
     event_type = db.Column(db.String(64), nullable=False, index=True)
     level = db.Column(db.String(20), nullable=False, default="info")
@@ -139,6 +167,7 @@ class EventLog(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
+            "tenant_id": self.tenant_id,
             "camera_id": self.camera_id,
             "event_type": self.event_type,
             "level": self.level,
@@ -150,6 +179,7 @@ class EventLog(db.Model):
 
 class SensorReading(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
     camera_id = db.Column(db.String(64), nullable=False, default="galpao-1", index=True)
     temperature_c = db.Column(db.Float, nullable=True)
     humidity_pct = db.Column(db.Float, nullable=True)
@@ -162,6 +192,7 @@ class SensorReading(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
+            "tenant_id": self.tenant_id,
             "camera_id": self.camera_id,
             "temperature_c": self.temperature_c,
             "humidity_pct": self.humidity_pct,
@@ -175,6 +206,7 @@ class SensorReading(db.Model):
 
 class Batch(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
     camera_id = db.Column(db.String(64), nullable=False, default="galpao-1", index=True)
     name = db.Column(db.String(80), nullable=False)
     start_date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
@@ -185,6 +217,7 @@ class Batch(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
+            "tenant_id": self.tenant_id,
             "camera_id": self.camera_id,
             "name": self.name,
             "start_date": self.start_date.strftime("%Y-%m-%d"),
@@ -196,6 +229,7 @@ class Batch(db.Model):
 
 class WeightEstimate(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
     camera_id = db.Column(db.String(64), nullable=False, default="galpao-1", index=True)
     avg_weight_g = db.Column(db.Float, nullable=False)
     ideal_weight_g = db.Column(db.Float, nullable=True)
@@ -207,6 +241,7 @@ class WeightEstimate(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
+            "tenant_id": self.tenant_id,
             "camera_id": self.camera_id,
             "avg_weight_g": self.avg_weight_g,
             "ideal_weight_g": self.ideal_weight_g,
@@ -219,6 +254,7 @@ class WeightEstimate(db.Model):
 
 class AcousticReading(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
     camera_id = db.Column(db.String(64), nullable=False, default="galpao-1", index=True)
     respiratory_health_index = db.Column(db.Float, nullable=False)
     cough_index = db.Column(db.Float, nullable=False)
@@ -229,6 +265,7 @@ class AcousticReading(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
+            "tenant_id": self.tenant_id,
             "camera_id": self.camera_id,
             "respiratory_health_index": self.respiratory_health_index,
             "cough_index": self.cough_index,
@@ -240,6 +277,7 @@ class AcousticReading(db.Model):
 
 class ThermalAnomaly(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
     camera_id = db.Column(db.String(64), nullable=False, default="galpao-1", index=True)
     bird_uid = db.Column(db.Integer, nullable=True, index=True)
     kind = db.Column(db.String(30), nullable=False)
@@ -253,6 +291,7 @@ class ThermalAnomaly(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
+            "tenant_id": self.tenant_id,
             "camera_id": self.camera_id,
             "bird_uid": self.bird_uid,
             "kind": self.kind,
@@ -267,6 +306,7 @@ class ThermalAnomaly(db.Model):
 
 class EnergyUsageDaily(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
     camera_id = db.Column(db.String(64), nullable=False, default="galpao-1", index=True)
     day = db.Column(db.DateTime, nullable=False, index=True)
     ventilacao_seconds = db.Column(db.Float, nullable=False, default=0.0)
@@ -276,6 +316,7 @@ class EnergyUsageDaily(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
+            "tenant_id": self.tenant_id,
             "camera_id": self.camera_id,
             "day": self.day.strftime("%Y-%m-%d"),
             "ventilacao_seconds": self.ventilacao_seconds,
@@ -286,6 +327,7 @@ class EnergyUsageDaily(db.Model):
 
 class AuditLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
     actor = db.Column(db.String(80), nullable=False, default="system", index=True)
     action = db.Column(db.String(120), nullable=False, index=True)
     source = db.Column(db.String(30), nullable=False, default="backend")
@@ -296,6 +338,7 @@ class AuditLog(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
+            "tenant_id": self.tenant_id,
             "actor": self.actor,
             "action": self.action,
             "source": self.source,
@@ -307,6 +350,7 @@ class AuditLog(db.Model):
 
 class SyncQueueItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
     item_type = db.Column(db.String(60), nullable=False, index=True)
     payload_json = db.Column(db.Text, nullable=False)
     status = db.Column(db.String(20), nullable=False, default="pending", index=True)
@@ -317,6 +361,7 @@ class SyncQueueItem(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
+            "tenant_id": self.tenant_id,
             "item_type": self.item_type,
             "payload": self.payload_json,
             "status": self.status,
@@ -328,6 +373,7 @@ class SyncQueueItem(db.Model):
 
 class BatchLogbook(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
     camera_id = db.Column(db.String(64), nullable=False, default="galpao-1", index=True)
     batch_id = db.Column(db.Integer, nullable=True, index=True)
     note = db.Column(db.Text, nullable=False)
@@ -337,6 +383,7 @@ class BatchLogbook(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
+            "tenant_id": self.tenant_id,
             "camera_id": self.camera_id,
             "batch_id": self.batch_id,
             "note": self.note,
@@ -346,28 +393,36 @@ class BatchLogbook(db.Model):
 
 class PushToken(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
     token = db.Column(db.String(255), unique=True, nullable=False, index=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
     def to_dict(self):
         return {
             "id": self.id,
+            "tenant_id": self.tenant_id,
             "token": self.token,
             "timestamp": self.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
         }
 
 class Camera(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    camera_id = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
+    camera_id = db.Column(db.String(64), nullable=False, index=True)
     name = db.Column(db.String(80), nullable=False)
     connection_type = db.Column(db.String(30), nullable=False, default="usb")
     connection_url = db.Column(db.String(255), nullable=True)
     status = db.Column(db.String(30), nullable=False, default="offline")
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     
+    __table_args__ = (
+        db.UniqueConstraint("tenant_id", "camera_id", name="uq_tenant_camera"),
+    )
+    
     def to_dict(self):
         return {
             "id": self.id,
+            "tenant_id": self.tenant_id,
             "camera_id": self.camera_id,
             "name": self.name,
             "connection_type": self.connection_type,
