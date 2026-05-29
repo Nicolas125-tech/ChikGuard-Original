@@ -107,7 +107,8 @@ def create_api_blueprint(deps):
             from src.security.auth import SUPABASE_JWT_SECRET
             pyjwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated")
         except Exception as e:
-            return jsonify({"error": f"Token inválido ou expirado: {str(e)}"}), 401
+            logger.error("Token decode failed: %s", e)
+            return jsonify({"error": "Token inválido ou expirado"}), 401
 
         stream_interval = deps.get("stream_frame_interval_sec", 1.0 / 30)
         quality         = deps.get("stream_jpeg_quality", 80)
@@ -174,7 +175,7 @@ def create_api_blueprint(deps):
             })
         except Exception as e:
             logger.error("Failed to process offer: %s", e)
-            return jsonify({"error": str(e)}), 500
+            return jsonify({"error": "Ocorreu um erro interno ao processar a oferta WebRTC"}), 500
 
     @bp.route("/api/webrtc/pcs", methods=["GET"])
     @require_auth()

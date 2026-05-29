@@ -17,7 +17,9 @@ def create_sync_blueprint(deps):
             pending = SyncQueueItem.query.filter_by(synced=False).count()
             return jsonify({"status": "online", "pending_items": pending})
         except Exception as e:
-            return jsonify({"status": "error", "message": str(e)}), 500
+            import logging
+            logging.getLogger(__name__).error("Erro na API de sync: %s", e)
+            return jsonify({"status": "error", "message": "Ocorreu um erro interno de sincronizacao."}), 500
 
     @bp.route("/api/sync/pending", methods=["GET"])
     @require_auth()

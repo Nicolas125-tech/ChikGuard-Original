@@ -19,7 +19,9 @@ def create_reports_blueprint(deps):
         try:
             path = generate_esg_report(current_app.app_context, active_camera_id, utcnow_func, days=days)
         except Exception as exc:
-            return jsonify({"msg": f"Falha ao gerar PDF ESG: {exc}"}), 500
+            import logging
+            logging.getLogger(__name__).error("Falha ao gerar PDF ESG: %s", exc)
+            return jsonify({"msg": "Falha interna ao gerar PDF ESG"}), 500
 
         email_status = None
         if email:
@@ -42,7 +44,9 @@ def create_reports_blueprint(deps):
             path = generate_esg_report(current_app.app_context, active_camera_id, utcnow_func, days=days)
             return send_file(path, mimetype="application/pdf", as_attachment=True, download_name=os.path.basename(path))
         except Exception as exc:
-            return jsonify({"msg": f"Falha ao gerar/exportar PDF ESG: {exc}"}), 500
+            import logging
+            logging.getLogger(__name__).error("Falha ao gerar/exportar PDF ESG: %s", exc)
+            return jsonify({"msg": "Falha interna ao gerar/exportar PDF ESG"}), 500
 
     @bp.route("/api/reports/weekly", methods=["POST"])
     @require_auth()
@@ -52,7 +56,9 @@ def create_reports_blueprint(deps):
         try:
             path = generate_weekly_report(current_app.app_context, active_camera_id, utcnow_func)
         except Exception as exc:
-            return jsonify({"msg": f"Falha ao gerar PDF: {exc}"}), 500
+            import logging
+            logging.getLogger(__name__).error("Falha ao gerar PDF: %s", exc)
+            return jsonify({"msg": "Falha interna ao gerar PDF"}), 500
 
         email_status = None
         if email:
@@ -80,6 +86,8 @@ def create_reports_blueprint(deps):
             )
             return send_file(path, mimetype="application/pdf", as_attachment=True, download_name=os.path.basename(path))
         except Exception as exc:
-            return jsonify({"msg": f"Falha ao gerar/exportar PDF: {exc}"}), 500
+            import logging
+            logging.getLogger(__name__).error("Falha ao gerar/exportar PDF: %s", exc)
+            return jsonify({"msg": "Falha interna ao gerar/exportar PDF"}), 500
 
     return bp

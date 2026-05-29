@@ -71,8 +71,11 @@ export default function OverviewPanel({ token, serverIP, prefs }) {
         setSummary(d);
 
         // Bolt Optimization: Reuse summary data to reduce API calls
+        // Consolidates overlapping requests (/api/summary and /api/chick_count),
+        // reducing network connections, database load, and React re-renders.
         const newTemp = d.temperatura_atual;
         const newStatus = d.status_atual;
+        setContagem(d.contagem_aves);
 
         const prev = dadosRef.current;
         // Always update prevTemp to previous temp on every poll to reset trend
@@ -85,26 +88,13 @@ export default function OverviewPanel({ token, serverIP, prefs }) {
     } catch (_e) { console.error(_e); }
   }, [baseUrl, token]);
 
-  const fetchCount = useCallback(async () => {
-    try {
-      const r = await fetch(`${baseUrl}/api/chick_count`, { headers: { Authorization: `Bearer ${token}` } });
-      if (r.ok) {
-        const d = await r.json();
-        setContagem(d.count);
-      }
-    } catch (_e) { console.error(_e); }
-  }, [baseUrl, token]);
-
   useEffect(() => {
     fetchSummary();
-    fetchCount();
     const c = setInterval(fetchSummary, prefs.statusMs);
-    const b = setInterval(fetchCount, prefs.countMs);
     return () => {
         clearInterval(c);
-        clearInterval(b);
     };
-  }, [fetchSummary, fetchCount, prefs]);
+  }, [fetchSummary, prefs]);
 
   const temp = dados?.temperatura;
   const tempTrend = prevTemp !== null && temp !== null

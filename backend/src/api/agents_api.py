@@ -162,6 +162,8 @@ def create_agents_blueprint(api_deps):
 
             return jsonify({"response": reply})
         except Exception as e:
-            return jsonify({"error": f"Erro na requisição externa de IA: {str(e)}"}), 500
+            import logging
+            logging.getLogger(__name__).error("Erro na requisição externa de IA: %s", e)
+            return jsonify({"error": "Falha interna na requisição de IA"}), 500
 
     return bp

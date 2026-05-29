@@ -181,7 +181,9 @@ def create_sensors_blueprint(deps):
             return jsonify({"msg": "Audio classificado com sucesso", "result": acoustic_state})
 
         except Exception as exc:
-            return jsonify({"msg": f"Falha ao processar audio: {exc}"}), 500
+            import logging
+            logging.getLogger(__name__).error("Falha ao processar audio: %s", exc)
+            return jsonify({"msg": "Falha interna ao processar audio"}), 500
 
 
     return bp

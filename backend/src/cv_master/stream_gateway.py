@@ -5,6 +5,8 @@ import logging
 import tempfile
 import time
 from flask import Blueprint, send_from_directory
+from werkzeug.utils import secure_filename
+from src.security.auth import require_auth
 
 class HLSStreamGateway:
     def __init__(self, fps=30, hls_time=2, hls_list_size=5):
@@ -87,11 +89,14 @@ class HLSStreamGateway:
 
     def _register_routes(self):
         @self.blueprint.route('/<path:filename>')
+        @require_auth()
         def stream_hls(filename):
             """
             Rotas expostas para o Frontend React consumir. 
             Ex: /api/stream_sota/stream.m3u8 -> Retorna o manifesto M3U8
             Ex: /api/stream_sota/stream0.ts -> Retorna os bytes de h.264
             """
-            return send_from_directory(self.hls_dir, filename, 
-                                       mimetype="application/vnd.apple.mpegurl" if filename.endswith(".m3u8") else "video/mp2t")
+            # 🛡️ Sentinel: Sanitize filename to prevent Directory Traversal attacks
+            safe_filename = secure_filename(filename)
+            return send_from_directory(self.hls_dir, safe_filename, 
+                                       mimetype="application/vnd.apple.mpegurl" if safe_filename.endswith(".m3u8") else "video/mp2t")

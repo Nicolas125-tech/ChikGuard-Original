@@ -62,6 +62,8 @@ def create_auth_blueprint(deps):
 
         if not username or not password:
             return jsonify({"msg": "username e password sao obrigatorios"}), 400
+        if len(password) < 8:
+            return jsonify({"msg": "password muito curto (min 8 caracteres)"}), 400
         if role not in ("superadmin", "admin", "operator", "viewer"):
             return jsonify({"msg": "role invalido"}), 400
         if role == "superadmin":
@@ -105,8 +107,8 @@ def create_auth_blueprint(deps):
             row.active = bool(data.get("active"))
         if "password" in data:
             pwd = str(data.get("password", "")).strip()
-            if len(pwd) < 6:
-                return jsonify({"msg": "password muito curto (min 6)"}), 400
+            if len(pwd) < 8:
+                return jsonify({"msg": "password muito curto (min 8 caracteres)"}), 400
             row.password_hash = bcrypt.generate_password_hash(pwd).decode("utf-8")
 
         db.session.commit()
@@ -141,7 +143,9 @@ def create_auth_blueprint(deps):
             audit("account_deleted", source="security", details={"account_id": account_id, "username": username})
         except Exception as e:
             db.session.rollback()
-            return jsonify({"error": f"Erro ao excluir conta local: {str(e)}"}), 500
+            import logging
+            logging.error(f"Erro ao excluir conta local: {e}")
+            return jsonify({"error": "Erro interno ao excluir conta local"}), 500
 
         if is_email:
             try:
@@ -158,9 +162,11 @@ def create_auth_blueprint(deps):
                                 supabase.auth.admin.delete_user(u.id)
                                 break
                     except Exception as e:
-                        print("Failed to delete user from Supabase auth:", e)
+                        import logging
+                        logging.getLogger(__name__).error("Failed to delete user from Supabase auth: %s", e)
             except Exception as e:
-                print("Supabase connection error during delete:", e)
+                import logging
+                logging.getLogger(__name__).error("Supabase connection error during delete: %s", e)
 
         return jsonify({"msg": "Conta excluida com sucesso"})
 
@@ -219,7 +225,9 @@ def create_auth_blueprint(deps):
             return jsonify({"items": response.data or []}), 200
 
         except Exception as e:
-            return jsonify({"error": str(e)}), 400
+            import logging
+            logging.error(f"Admin pending users error: {e}")
+            return jsonify({"error": "Erro interno no servidor"}), 500
 
     @bp.route("/api/admin/approve-user", methods=["POST"])
     def admin_approve_user():
@@ -256,7 +264,8 @@ def create_auth_blueprint(deps):
                 return jsonify({"message": "User approved successfully", "data": {"id": target_user_id}}), 200
         except Exception as e:
             db.session.rollback()
-            print("Direct DB Update Failed (trying Supabase REST Admin):", e)
+            import logging
+            logging.getLogger(__name__).error("Direct DB Update Failed (trying Supabase REST Admin): %s", e)
 
         try:
             SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -285,7 +294,9 @@ def create_auth_blueprint(deps):
                     "role": target_role})
             return jsonify({"message": "User approved successfully", "data": response.data}), 200
         except Exception as e:
-            return jsonify({"error": str(e)}), 400
+            import logging
+            logging.error(f"Admin approve user error: {e}")
+            return jsonify({"error": "Erro interno no servidor"}), 500
 
     @bp.route("/api/admin/notify-new-user", methods=["POST"])
     def webhook_notify_new_user():
@@ -329,7 +340,8 @@ def create_auth_blueprint(deps):
                                 server.login(SMTP_USER, SMTP_PASS)
                             server.send_message(msg)
                 except Exception as e:
-                    print(f"Erro SMTP webhook: {e}")
+                    import logging
+                    logging.getLogger(__name__).error("Erro SMTP webhook: %s", e)
 
                 return jsonify({"message": "Notificação processada"}), 200
 
@@ -401,7 +413,8 @@ def create_auth_blueprint(deps):
                     else:
                         status = supabase_status
         except Exception as e:
-            print(f"Supabase sync error (non-critical): {e}")
+            import logging
+            logging.getLogger(__name__).error("Supabase sync error (non-critical): %s", e)
 
         access_token = create_access_token(
             identity=str(account.id),
