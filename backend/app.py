@@ -3170,29 +3170,34 @@ def voice_command():
     command = str(data.get("text", "")).strip().lower()
     if not command:
         return jsonify({"msg": "Comando vazio"}), 400
+    
     action = None
+    target_state = {}
+    
     if "ligar ventil" in command:
-        estado_dispositivos["ventilacao"] = True
+        target_state["ventilacao"] = True
         action = "ventilacao_on"
     elif "desligar ventil" in command:
-        estado_dispositivos["ventilacao"] = False
+        target_state["ventilacao"] = False
         action = "ventilacao_off"
     elif "ligar aquec" in command:
-        estado_dispositivos["aquecedor"] = True
+        target_state["aquecedor"] = True
         action = "aquecedor_on"
     elif "desligar aquec" in command:
-        estado_dispositivos["aquecedor"] = False
+        target_state["aquecedor"] = False
         action = "aquecedor_off"
     elif "luz" in command and "%" in command:
         try:
             pct = int("".join([c for c in command if c.isdigit()]))
             pct = max(0, min(100, pct))
-            estado_dispositivos["luz_intensidade_pct"] = pct
+            target_state["luz_intensidade_pct"] = pct
             action = "luz_dimmer"
         except Exception:
             pass
+            
     if action is None:
         return jsonify({"msg": "Comando nao reconhecido", "text": command}), 400
+        
     action_perm = "voice.command"
     if action in ("ventilacao_off", "aquecedor_off"):
         action_perm = "device.power_off"
@@ -3200,9 +3205,12 @@ def voice_command():
         action_perm = "device.power_on"
     elif action == "luz_dimmer":
         action_perm = "lighting.manage"
+        
     ok, resp = _guard_critical_action("voice_command_control", permission=action_perm)
     if not ok:
         return resp
+        
+    estado_dispositivos.update(target_state)
     _audit("voice_command_executed", source="mobile_voice", details={"command": command, "action": action})
     return jsonify({"msg": "Comando executado", "action": action, "devices": estado_dispositivos})
 
