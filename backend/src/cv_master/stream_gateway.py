@@ -6,6 +6,7 @@ import tempfile
 import time
 from flask import Blueprint, send_from_directory
 from werkzeug.utils import secure_filename
+from src.security.auth import require_auth
 
 class HLSStreamGateway:
     def __init__(self, fps=30, hls_time=2, hls_list_size=5):
@@ -88,6 +89,7 @@ class HLSStreamGateway:
 
     def _register_routes(self):
         @self.blueprint.route('/<path:filename>')
+        @require_auth()
         def stream_hls(filename):
             """
             Rotas expostas para o Frontend React consumir. 

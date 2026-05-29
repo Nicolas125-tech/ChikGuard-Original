@@ -22,3 +22,8 @@
 **Vulnerability:** Several API endpoints (`/api/routes.py` and `/api/reports_api.py`) were exposing internal Python exception strings (`str(e)` or `exc`) directly to the client when a 500 internal server error occurred.
 **Learning:** Detailed error messages can leak sensitive internal implementation details, such as variable names, file paths, or system architecture (stack traces), giving attackers insights into the backend systems.
 **Prevention:** Catch all exceptions globally or per-endpoint, log the detailed `Exception` using a logger for debugging, and return a generic, safe error message to the client.
+
+## 2026-05-29 - [Fix Missing Authentication on HLS Video Stream]
+**Vulnerability:** The HLS video stream endpoint (`/api/stream_sota/<path:filename>`) in `stream_gateway.py` was exposed without the `@require_auth()` decorator. Any unauthenticated user could access the live camera feed of the facility.
+**Learning:** Experimental or backend-specific streaming gateways (like FFMPEG/HLS pipelines) sometimes bypass standard API authentication mechanisms if implemented as independent blueprints without global middleware protection.
+**Prevention:** Always enforce global authentication middlewares or ensure every exposed route (even static file servers for video segments) has explicit access control.
