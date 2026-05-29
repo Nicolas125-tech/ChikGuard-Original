@@ -1,4 +1,5 @@
 from flask import Blueprint, jsonify, request
+from src.security.auth import require_auth
 
 def create_devices_blueprint(deps):
     bp = Blueprint("devices_api", __name__)
@@ -13,6 +14,7 @@ def create_devices_blueprint(deps):
     temperature_targets = deps.get("temperature_targets")
 
     @bp.route("/api/auto-mode", methods=["GET", "POST"])
+    @require_auth()
     def auto_mode():
         if request.method == "GET":
             targets = temperature_targets(active_camera_id)
@@ -53,6 +55,7 @@ def create_devices_blueprint(deps):
 
 
     @bp.route("/api/ventilacao", methods=["POST"])
+    @require_auth()
     def controlar_ventilacao():
         data = request.get_json(silent=True) or {}
         if "ligar" not in data:
@@ -83,6 +86,7 @@ def create_devices_blueprint(deps):
         )
 
     @bp.route("/api/aquecedor", methods=["POST"])
+    @require_auth()
     def controlar_aquecedor():
         data = request.get_json(silent=True) or {}
         if "ligar" not in data:
@@ -113,6 +117,7 @@ def create_devices_blueprint(deps):
         )
 
     @bp.route("/api/luz-dimmer", methods=["GET", "POST"])
+    @require_auth()
     def controlar_luz_dimmer():
         if request.method == "GET":
             return jsonify({"luz_intensidade_pct": int(estado_dispositivos.get("luz_intensidade_pct", 0))})
@@ -131,6 +136,7 @@ def create_devices_blueprint(deps):
         return jsonify({"luz_intensidade_pct": intensidade, "msg": "Dimmer atualizado"})
 
     @bp.route("/api/estado-dispositivos", methods=["GET"])
+    @require_auth()
     def get_estado_dispositivos():
         return jsonify(estado_dispositivos)
 
