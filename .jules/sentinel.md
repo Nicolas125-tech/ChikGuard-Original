@@ -17,3 +17,8 @@
 **Vulnerability:** The `/api/admin/approve-user` and `/api/accounts/users/<id>` endpoints allowed any user with `accounts.manage` permission (e.g. an "operator" or a lower-privileged "admin") to elevate their own privileges or someone else's to `superadmin` by changing the `target_role` / `role` directly in the payload.
 **Learning:** Checking for general permissions (e.g., `accounts.manage`) is not enough. We must explicitly check if the user is authorized to assign or mutate high-privilege roles to prevent privilege escalation.
 **Prevention:** Implement strict role hierarchy checks. Users should never be able to assign roles that have equal or higher privilege levels than their own.
+
+## 2024-05-28 - [CRITICAL] Privilege Escalation / IDOR in Admin Account Management
+**Vulnerability:** The `/api/admin/approve-user` endpoint allowed any user with `accounts.manage` permission (e.g., an "operator" or a lower-privileged "admin") to elevate someone else's privilege to "ADMIN" because the role hierarchy check was incomplete (it only protected the "SUPERADMIN" target role).
+**Learning:** Checking for general permissions (e.g., `accounts.manage`) is not enough. We must explicitly check if the user is authorized to assign or mutate high-privilege roles to prevent privilege escalation.
+**Prevention:** Implement strict role hierarchy checks. Users should never be able to assign roles that have equal or higher privilege levels than their own.
