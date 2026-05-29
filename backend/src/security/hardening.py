@@ -181,9 +181,14 @@ def setup_hardening(app):
 
     @app.after_request
     def mask_technology_fingerprints(response):
-        """Altera os cabeçalhos de resposta para impedir banner grabbing."""
+        """Altera os cabeçalhos de resposta para impedir banner grabbing e fortalece a segurança."""
         response.headers['Server'] = 'Secure-Gateway'
         response.headers.pop('X-Powered-By', None)
+        # Security Headers Improvement
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'DENY'
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+        response.headers['Content-Security-Policy'] = "default-src 'self'"
         return response
 
     logger.info("Filtros ativos do Hardening de Segurança inicializados com sucesso.")
