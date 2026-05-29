@@ -3171,28 +3171,29 @@ def voice_command():
     if not command:
         return jsonify({"msg": "Comando vazio"}), 400
     action = None
+    pct = None
+
+    # 1. Determina a acao pretendida sem alterar o estado global
     if "ligar ventil" in command:
-        estado_dispositivos["ventilacao"] = True
         action = "ventilacao_on"
     elif "desligar ventil" in command:
-        estado_dispositivos["ventilacao"] = False
         action = "ventilacao_off"
     elif "ligar aquec" in command:
-        estado_dispositivos["aquecedor"] = True
         action = "aquecedor_on"
     elif "desligar aquec" in command:
-        estado_dispositivos["aquecedor"] = False
         action = "aquecedor_off"
     elif "luz" in command and "%" in command:
         try:
-            pct = int("".join([c for c in command if c.isdigit()]))
-            pct = max(0, min(100, pct))
-            estado_dispositivos["luz_intensidade_pct"] = pct
+            parsed_pct = int("".join([c for c in command if c.isdigit()]))
+            pct = max(0, min(100, parsed_pct))
             action = "luz_dimmer"
         except Exception:
             pass
+
     if action is None:
         return jsonify({"msg": "Comando nao reconhecido", "text": command}), 400
+
+    # 2. Define a permissao baseada na acao
     action_perm = "voice.command"
     if action in ("ventilacao_off", "aquecedor_off"):
         action_perm = "device.power_off"
@@ -3200,9 +3201,24 @@ def voice_command():
         action_perm = "device.power_on"
     elif action == "luz_dimmer":
         action_perm = "lighting.manage"
+
+    # 3. Guarda a acao (autenticacao e autorizacao)
     ok, resp = _guard_critical_action("voice_command_control", permission=action_perm)
     if not ok:
         return resp
+
+    # 4. Aplica as mudancas de estado caso autorizado
+    if action == "ventilacao_on":
+        estado_dispositivos["ventilacao"] = True
+    elif action == "ventilacao_off":
+        estado_dispositivos["ventilacao"] = False
+    elif action == "aquecedor_on":
+        estado_dispositivos["aquecedor"] = True
+    elif action == "aquecedor_off":
+        estado_dispositivos["aquecedor"] = False
+    elif action == "luz_dimmer" and pct is not None:
+        estado_dispositivos["luz_intensidade_pct"] = pct
+
     _audit("voice_command_executed", source="mobile_voice", details={"command": command, "action": action})
     return jsonify({"msg": "Comando executado", "action": action, "devices": estado_dispositivos})
 

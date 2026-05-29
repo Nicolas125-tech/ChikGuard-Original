@@ -17,3 +17,8 @@
 **Vulnerability:** The `/api/admin/approve-user` and `/api/accounts/users/<id>` endpoints allowed any user with `accounts.manage` permission (e.g. an "operator" or a lower-privileged "admin") to elevate their own privileges or someone else's to `superadmin` by changing the `target_role` / `role` directly in the payload.
 **Learning:** Checking for general permissions (e.g., `accounts.manage`) is not enough. We must explicitly check if the user is authorized to assign or mutate high-privilege roles to prevent privilege escalation.
 **Prevention:** Implement strict role hierarchy checks. Users should never be able to assign roles that have equal or higher privilege levels than their own.
+
+## 2024-05-29 - Authorization Bypass in Voice Command API
+**Vulnerability:** The `/api/voice/command` endpoint modified global application state (`estado_dispositivos`) and processed command logic *before* invoking the internal authorization and authentication guard (`_guard_critical_action()`). This allowed unauthenticated attackers to mutate device states, bypassing security controls.
+**Learning:** Inline authorization guards must strictly be called at the very beginning of the endpoint's execution flow. Any state mutation or side effect preceding the guard completely defeats its purpose.
+**Prevention:** Structure endpoints into discrete phases: 1) Intent extraction/parsing, 2) Authorization/Authentication Guard check based on intent, 3) State mutation/execution. Never mix state mutations into the intent extraction phase.
