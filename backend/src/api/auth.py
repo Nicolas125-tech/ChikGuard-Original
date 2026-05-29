@@ -1,6 +1,7 @@
 import os
 import time
 import smtplib
+import hmac
 from email.message import EmailMessage
 from flask import Blueprint, jsonify, request
 from supabase import create_client
@@ -303,7 +304,7 @@ def create_auth_blueprint(deps):
         WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET")
 
         auth_header = request.headers.get("Authorization")
-        if WEBHOOK_SECRET and (not auth_header or auth_header != f"Bearer {WEBHOOK_SECRET}"):
+        if WEBHOOK_SECRET and (not auth_header or not hmac.compare_digest(auth_header.encode('utf-8'), f"Bearer {WEBHOOK_SECRET}".encode('utf-8'))):
             return jsonify({"error": "Unauthorized"}), 401
 
         data = request.get_json(silent=True) or {}
