@@ -142,8 +142,8 @@ export default function SmartOpsPanel({ serverIP, prefs, token }) {
             Gestão de Lotes
           </h3>
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-4">
-            <input value={batchForm.name} onChange={(e) => setBatchForm((p) => ({ ...p, name: e.target.value }))} placeholder="Nome do lote (ex: Lote B)" className="flex-1 bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-2.5 text-sm sm:text-base focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all placeholder:text-slate-600" />
-            <input type="date" value={batchForm.start_date} onChange={(e) => setBatchForm((p) => ({ ...p, start_date: e.target.value }))} className="flex-1 sm:w-auto bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-2.5 text-sm sm:text-base focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all text-slate-300" />
+            <input aria-label="Nome do lote" value={batchForm.name} onChange={(e) => setBatchForm((p) => ({ ...p, name: e.target.value }))} placeholder="Nome do lote (ex: Lote B)" className="flex-1 bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-2.5 text-sm sm:text-base focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all placeholder:text-slate-600" />
+            <input aria-label="Data de início do lote" type="date" value={batchForm.start_date} onChange={(e) => setBatchForm((p) => ({ ...p, start_date: e.target.value }))} className="flex-1 sm:w-auto bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-2.5 text-sm sm:text-base focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all text-slate-300" />
             <button onClick={createBatch} className="bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-5 py-2.5 font-bold shadow-lg shadow-blue-500/20 transition-all text-sm sm:text-base hover:-translate-y-0.5 whitespace-nowrap">
               + Novo
             </button>
@@ -196,7 +196,7 @@ export default function SmartOpsPanel({ serverIP, prefs, token }) {
           Diário do Lote (Logbook)
         </h3>
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-5">
-          <input value={logNote} onChange={(e) => setLogNote(e.target.value)} placeholder="Descreva eventos importantes (ex: Dia 12: Vacinação Gumboro via água)..." className="flex-1 bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-3 text-sm sm:text-base focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all placeholder:text-slate-600" />
+          <input aria-label="Nota de diário" value={logNote} onChange={(e) => setLogNote(e.target.value)} placeholder="Descreva eventos importantes (ex: Dia 12: Vacinação Gumboro via água)..." className="flex-1 bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-3 text-sm sm:text-base focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all placeholder:text-slate-600" />
           <button onClick={saveLogNote} className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl px-6 py-3 text-sm sm:text-base font-bold shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 whitespace-nowrap">
             Registrar Log
           </button>

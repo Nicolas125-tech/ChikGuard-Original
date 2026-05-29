@@ -137,7 +137,7 @@ export default function ManagementPanel({ serverIP, prefs }) {
               <span className="block text-slate-400 font-medium mb-3 text-sm">Classificação Manual (.wav)</span>
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="relative flex-1">
-                  <input type="file" accept=".wav,audio/wav" onChange={(e) => setAudioFile(e.target.files?.[0] || null)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                  <input aria-label="Upload de arquivo de áudio WAV para classificação manual" type="file" accept=".wav,audio/wav" onChange={(e) => setAudioFile(e.target.files?.[0] || null)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
                   <div className="bg-slate-900 border border-slate-700 border-dashed rounded-lg px-4 py-2.5 text-center text-slate-300 hover:bg-slate-800 hover:border-slate-600 transition-all">
                     {audioFile ? <span className="text-emerald-400 font-medium">{audioFile.name}</span> : 'Selecionar arquivo de áudio'}
                   </div>
