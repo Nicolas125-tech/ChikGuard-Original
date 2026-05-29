@@ -242,10 +242,11 @@ def create_auth_blueprint(deps):
         if not target_user_id:
             return jsonify({"msg": "target_user_id é obrigatorio"}), 400
 
-        if target_role == "SUPERADMIN":
-            account = get_current_account()
-            if not account or account.role != "superadmin":
-                return jsonify({"msg": "Apenas superadmins podem aprovar ou elevar usuarios a superadmin"}), 403
+        account = get_current_account()
+        if target_role == "SUPERADMIN" and (not account or account.role != "superadmin"):
+            return jsonify({"msg": "Apenas superadmins podem aprovar ou elevar usuarios a superadmin"}), 403
+        elif target_role == "ADMIN" and (not account or account.role not in ["superadmin", "admin"]):
+            return jsonify({"msg": "Apenas admins/superadmins podem aprovar usuarios para admin"}), 403
 
         from sqlalchemy import text
         try:
