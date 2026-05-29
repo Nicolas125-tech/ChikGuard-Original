@@ -2768,6 +2768,11 @@ weather_thread.start()
 data_lifecycle_thread = threading.Thread(target=_data_lifecycle_worker, daemon=True)
 data_lifecycle_thread.start()
 
+# Inicia MQTT Client (Fase 2)
+from src.core.mqtt_client import ChikGuardMQTTClient
+mqtt_client = ChikGuardMQTTClient(app_context_fn=app.app_context)
+mqtt_client.start()
+
 api_deps = {
     "time": time,
     "cv2": cv2,
@@ -2792,6 +2797,7 @@ api_deps = {
     "weekly_thread": weekly_thread,
     "sync_thread": sync_thread,
     "weather_thread": weather_thread,
+    "mqtt_client": mqtt_client,
     "settings": SETTINGS,
     "active_camera_id": ACTIVE_CAMERA_ID,
     "camera_index": CAMERA_INDEX,
