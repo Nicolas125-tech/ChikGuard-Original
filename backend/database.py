@@ -355,3 +355,23 @@ class PushToken(db.Model):
             "token": self.token,
             "timestamp": self.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
         }
+
+class Camera(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    camera_id = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    name = db.Column(db.String(80), nullable=False)
+    connection_type = db.Column(db.String(30), nullable=False, default="usb")
+    connection_url = db.Column(db.String(255), nullable=True)
+    status = db.Column(db.String(30), nullable=False, default="offline")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "camera_id": self.camera_id,
+            "name": self.name,
+            "connection_type": self.connection_type,
+            "connection_url": self.connection_url,
+            "status": self.status,
+            "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+        }

@@ -20,6 +20,7 @@ import ManagementPanel from '../components/ManagementPanel';
 import DevicesPanel from '../components/DevicesPanel';
 import SystemPanel from '../components/SystemPanel';
 import DigitalTwinPanel from '../components/DigitalTwinPanel';
+import CamerasManager from '../components/CamerasManager';
 import { getBaseUrl } from '../utils/config';
 
 export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, onSaveServer, onLogout }) {
@@ -129,6 +130,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
         title: 'Administração',
         items: [
           { id: 'settings',  label: 'Configurações',      icon: Settings },
+          { id: 'cameras',   label: 'Gerenciar Câmeras',  icon: Camera },
           { id: 'admin',     label: 'Gerenciar Acessos',  icon: Database },
         ]
       },
@@ -143,7 +145,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
       return sections.map(s => ({ ...s, items: s.items.filter(t => allow.has(t.id)) })).filter(s => s.items.length > 0);
     }
     if (role !== 'superadmin' && role !== 'admin') {
-      return sections.map(s => ({ ...s, items: s.items.filter(t => t.id !== 'admin' && t.id !== 'settings') })).filter(s => s.items.length > 0);
+      return sections.map(s => ({ ...s, items: s.items.filter(t => t.id !== 'admin' && t.id !== 'settings' && t.id !== 'cameras') })).filter(s => s.items.length > 0);
     }
     return sections;
   }, [role, alertCount]);
@@ -330,6 +332,8 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
         return <HistoryPanel token={token} serverIP={serverIP} prefs={prefs} />;
       case 'settings':
         return <SettingsPanel serverIP={serverIP} token={token} prefs={prefs} onSavePrefs={onSavePrefs} onSaveServer={onSaveServer} />;
+      case 'cameras':
+        return <CamerasManager serverIP={serverIP} token={token} />;
       case 'admin':
         return <AdminPanel serverIP={serverIP} token={token} />;
       case 'system':
