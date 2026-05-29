@@ -3,7 +3,7 @@ import {
   StyleSheet, Text, View, ScrollView, ActivityIndicator 
 } from 'react-native';
 
-export default function HistoryScreen({ serverUrl }) {
+export default function HistoryScreen({ serverUrl, token }) {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -15,7 +15,7 @@ export default function HistoryScreen({ serverUrl }) {
         return;
       }
       try {
-        const req = await fetch(`${serverUrl}/api/history`);
+        const req = await fetch(`${serverUrl}/api/history`, { headers: { Authorization: `Bearer ${token}` } });
         const json = await req.json();
         if (active) {
           setHistory(json);

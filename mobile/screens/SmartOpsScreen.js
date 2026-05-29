@@ -29,14 +29,15 @@ export default function SmartOpsScreen({ serverUrl, token }) {
   const loadSmartData = useCallback(async () => {
     if (!serverUrl) return;
     try {
+      const headers = { Authorization: `Bearer ${token}` };
       const [bReq, iReq, sReq, aReq, btReq, cReq, lReq] = await Promise.all([
-        fetch(`${serverUrl}/api/behavior/live`),
-        fetch(`${serverUrl}/api/immobility/live`),
-        fetch(`${serverUrl}/api/sensors/live`),
-        fetch(`${serverUrl}/api/auto-mode`),
-        fetch(`${serverUrl}/api/batches`),
-        fetch(`${serverUrl}/api/cameras`),
-        fetch(`${serverUrl}/api/logbook?limit=20`)
+        fetch(`${serverUrl}/api/behavior/live`, { headers }),
+        fetch(`${serverUrl}/api/immobility/live`, { headers }),
+        fetch(`${serverUrl}/api/sensors/live`, { headers }),
+        fetch(`${serverUrl}/api/auto-mode`, { headers }),
+        fetch(`${serverUrl}/api/batches`, { headers }),
+        fetch(`${serverUrl}/api/cameras`, { headers }),
+        fetch(`${serverUrl}/api/logbook?limit=20`, { headers })
       ]);
 
       if (bReq.ok) setBehavior(await bReq.json());
@@ -87,7 +88,7 @@ export default function SmartOpsScreen({ serverUrl, token }) {
     try {
       const req = await fetch(`${serverUrl}/api/batches`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ name: batchName, start_date: batchStartDate, active: true })
       });
       if (!req.ok) {
@@ -107,7 +108,7 @@ export default function SmartOpsScreen({ serverUrl, token }) {
     try {
       const req = await fetch(`${serverUrl}/api/reports/weekly`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({})
       });
       const json = await req.json();
@@ -123,7 +124,7 @@ export default function SmartOpsScreen({ serverUrl, token }) {
     try {
       const req = await fetch(`${serverUrl}/api/logbook`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ note: logNote, author: 'tratador-mobile' })
       });
       if (req.ok) {

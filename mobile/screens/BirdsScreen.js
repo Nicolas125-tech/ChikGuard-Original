@@ -12,7 +12,7 @@ const MetricCard = ({ label, value }) => (
   </View>
 );
 
-export default function BirdsScreen({ serverUrl, enviarComandoVoz, canControlDevices }) {
+export default function BirdsScreen({ serverUrl, token, enviarComandoVoz, canControlDevices }) {
   const [live, setLive] = useState({ count: 0, items: [] });
   const [registry, setRegistry] = useState({ count: 0, items: [] });
   const [selectedBird, setSelectedBird] = useState(null);
@@ -22,9 +22,10 @@ export default function BirdsScreen({ serverUrl, enviarComandoVoz, canControlDev
   const loadBirds = useCallback(async () => {
     if (!serverUrl) return;
     try {
+      const headers = { Authorization: `Bearer ${token}` };
       const [liveReq, regReq] = await Promise.all([
-        fetch(`${serverUrl}/api/birds/live`),
-        fetch(`${serverUrl}/api/birds/registry?limit=500`),
+        fetch(`${serverUrl}/api/birds/live`, { headers }),
+        fetch(`${serverUrl}/api/birds/registry?limit=500`, { headers }),
       ]);
       if (liveReq.ok) setLive(await liveReq.json());
       if (regReq.ok) setRegistry(await regReq.json());
@@ -38,7 +39,7 @@ export default function BirdsScreen({ serverUrl, enviarComandoVoz, canControlDev
   const loadPath = useCallback(async (birdUid) => {
     if (!serverUrl) return;
     try {
-      const req = await fetch(`${serverUrl}/api/birds/path/${birdUid}?limit=200`);
+      const req = await fetch(`${serverUrl}/api/birds/path/${birdUid}?limit=200`, { headers: { Authorization: `Bearer ${token}` } });
       if (!req.ok) {
         setPath([]);
         return;

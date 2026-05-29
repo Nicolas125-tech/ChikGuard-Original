@@ -3,7 +3,7 @@ import {
   StyleSheet, Text, View, ScrollView, ActivityIndicator 
 } from 'react-native';
 
-export default function AlertsScreen({ serverUrl }) {
+export default function AlertsScreen({ serverUrl, token }) {
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -15,7 +15,7 @@ export default function AlertsScreen({ serverUrl }) {
         return;
       }
       try {
-        const req = await fetch(`${serverUrl}/api/alerts`);
+        const req = await fetch(`${serverUrl}/api/alerts`, { headers: { Authorization: `Bearer ${token}` } });
         const json = await req.json();
         if (active) {
           setAlerts(json);

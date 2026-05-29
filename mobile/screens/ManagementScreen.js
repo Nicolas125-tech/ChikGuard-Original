@@ -10,7 +10,7 @@ const MetricCard = ({ label, value }) => (
   </View>
 );
 
-export default function ManagementScreen({ serverUrl }) {
+export default function ManagementScreen({ serverUrl, token }) {
   const [weightLive, setWeightLive] = useState(null);
   const [acoustic, setAcoustic] = useState(null);
   const [acousticModel, setAcousticModel] = useState(null);
@@ -23,14 +23,15 @@ export default function ManagementScreen({ serverUrl }) {
   const loadManagementData = useCallback(async () => {
     if (!serverUrl) return;
     try {
+      const headers = { Authorization: `Bearer ${token}` };
       const [w, a, m, t, e, au, s] = await Promise.all([
-        fetch(`${serverUrl}/api/weight/live`),
-        fetch(`${serverUrl}/api/acoustic/live`),
-        fetch(`${serverUrl}/api/acoustic/model-info`),
-        fetch(`${serverUrl}/api/thermal-anomalies/live?minutes=60`),
-        fetch(`${serverUrl}/api/energy/summary`),
-        fetch(`${serverUrl}/api/audit/logs?limit=40`),
-        fetch(`${serverUrl}/api/sync/status`)
+        fetch(`${serverUrl}/api/weight/live`, { headers }),
+        fetch(`${serverUrl}/api/acoustic/live`, { headers }),
+        fetch(`${serverUrl}/api/acoustic/model-info`, { headers }),
+        fetch(`${serverUrl}/api/thermal-anomalies/live?minutes=60`, { headers }),
+        fetch(`${serverUrl}/api/energy/summary`, { headers }),
+        fetch(`${serverUrl}/api/audit/logs?limit=40`, { headers }),
+        fetch(`${serverUrl}/api/sync/status`, { headers })
       ]);
       if (w.ok) setWeightLive(await w.json());
       if (a.ok) setAcoustic(await a.json());

@@ -211,7 +211,7 @@ export default function App() {
     if (token && normalizedServerUrl && activeTab === 'monitor') {
       const fetchStatus = async () => {
         try {
-          const res = await fetch(`${normalizedServerUrl}/api/status`);
+          const res = await fetch(`${normalizedServerUrl}/api/status`, { headers: { Authorization: `Bearer ${token}` } });
           const json = await res.json();
           setDados(json);
           setIsOffline(false);
@@ -225,7 +225,7 @@ export default function App() {
 
       const fetchChickCount = async () => {
         try {
-          const res = await fetch(`${normalizedServerUrl}/api/chick_count`);
+          const res = await fetch(`${normalizedServerUrl}/api/chick_count`, { headers: { Authorization: `Bearer ${token}` } });
           const json = await res.json();
           if (res.ok) {
             setChickCount(json.count);
@@ -239,7 +239,7 @@ export default function App() {
 
       const fetchDeviceStatus = async () => {
         try {
-          const res = await fetch(`${normalizedServerUrl}/api/estado-dispositivos`);
+          const res = await fetch(`${normalizedServerUrl}/api/estado-dispositivos`, { headers: { Authorization: `Bearer ${token}` } });
           const json = await res.json();
           if (res.ok) {
             setDispositivos(json);
@@ -357,7 +357,7 @@ export default function App() {
       const url = `${normalizedServerUrl}/api/login`;
       const response = await fetchWithTimeout(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ username: user, password: pass }),
       });
 
@@ -650,6 +650,7 @@ export default function App() {
         {activeTab === 'birds' && allowedTabs.has('birds') && 
           <BirdsScreen 
             serverUrl={normalizedServerUrl} 
+            token={token}
             enviarComandoVoz={enviarComandoVoz} 
             canControlDevices={canControlDevices}
           />}
@@ -661,18 +662,22 @@ export default function App() {
         {activeTab === 'management' && allowedTabs.has('management') && 
           <ManagementScreen 
             serverUrl={normalizedServerUrl} 
+            token={token}
           />}
         {activeTab === 'alerts' && allowedTabs.has('alerts') && 
           <AlertsScreen 
             serverUrl={normalizedServerUrl} 
+            token={token}
           />}
         {activeTab === 'history' && allowedTabs.has('history') && 
           <HistoryScreen 
             serverUrl={normalizedServerUrl} 
+            token={token}
           />}
         {activeTab === 'system' && allowedTabs.has('system') && 
           <SystemScreen 
             serverUrl={normalizedServerUrl} 
+            token={token}
           />}
         {activeTab === 'config' && allowedTabs.has('config') && 
           <ConfigScreen 

@@ -10,7 +10,7 @@ const MetricCard = ({ label, value }) => (
   </View>
 );
 
-export default function SystemScreen({ serverUrl }) {
+export default function SystemScreen({ serverUrl, token }) {
   const [summary, setSummary] = useState(null);
   const [systemInfo, setSystemInfo] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -23,9 +23,10 @@ export default function SystemScreen({ serverUrl }) {
         return;
       }
       try {
+        const headers = { Authorization: `Bearer ${token}` };
         const [summaryReq, infoReq] = await Promise.all([
-          fetch(`${serverUrl}/api/summary`),
-          fetch(`${serverUrl}/api/system-info`)
+          fetch(`${serverUrl}/api/summary`, { headers }),
+          fetch(`${serverUrl}/api/system-info`, { headers })
         ]);
         if (active) {
           if (summaryReq.ok) setSummary(await summaryReq.json());
