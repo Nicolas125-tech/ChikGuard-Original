@@ -3154,6 +3154,7 @@ def energy_forecast():
 
 
 @app.route("/api/audit/logs", methods=["GET"])
+@require_auth()
 def audit_logs():
     ok, resp = _require_permission("audit.read")
     if not ok:
@@ -3165,6 +3166,7 @@ def audit_logs():
 
 
 @app.route("/api/voice/command", methods=["POST"])
+@require_auth()
 def voice_command():
     data = request.get_json(silent=True) or {}
     command = str(data.get("text", "")).strip().lower()
@@ -3230,6 +3232,7 @@ def get_events():
 
 
 @app.route("/api/cameras", methods=["GET", "POST"])
+@require_auth()
 def cameras():
     if request.method == "GET":
         ok, resp = _require_permission("monitor.read")
@@ -3254,6 +3257,7 @@ def cameras():
 
 
 @app.route("/api/batches", methods=["GET", "POST"])
+@require_auth()
 def batches():
     if request.method == "GET":
         ok, resp = _require_permission("monitor.read")
@@ -3294,6 +3298,7 @@ def batches():
 
 
 @app.route("/api/batches/<int:batch_id>/activate", methods=["POST"])
+@require_auth()
 def activate_batch(batch_id):
     ok, resp = _guard_critical_action("batch_activation", permission="batch.manage")
     if not ok:
@@ -3311,6 +3316,7 @@ def activate_batch(batch_id):
 
 
 @app.route("/api/logbook", methods=["GET", "POST"])
+@require_auth()
 def logbook():
     if request.method == "GET":
         ok, resp = _require_permission("monitor.read")
@@ -3562,6 +3568,7 @@ def get_plugins():
 
 
 @app.route("/api/plugins/reload", methods=["POST"])
+@require_auth()
 def reload_plugins():
     ok, resp = _guard_critical_action("plugins_reload")
     if not ok:

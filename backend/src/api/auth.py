@@ -1,9 +1,12 @@
+from src.security.auth import require_auth
 import os
 import time
 import smtplib
 import hmac
 from email.message import EmailMessage
 from flask import Blueprint, jsonify, request
+from src.security.auth import require_auth
+from src.security.rate_limiter import limiter
 from supabase import create_client
 
 
@@ -206,6 +209,7 @@ def create_auth_blueprint(deps):
         return jsonify({"msg": "Permissao atualizada", "item": row.to_dict()})
 
     @bp.route("/api/admin/pending-users", methods=["GET"])
+    @require_auth()
     def admin_pending_users():
         ok, resp = guard_critical_action("admin_pending_users", permission="accounts.manage")
         if not ok:
@@ -231,6 +235,7 @@ def create_auth_blueprint(deps):
             return jsonify({"error": "Erro interno no servidor"}), 500
 
     @bp.route("/api/admin/approve-user", methods=["POST"])
+    @require_auth()
     def admin_approve_user():
         ok, resp = guard_critical_action("admin_approve_user", permission="accounts.manage")
         if not ok:
@@ -349,6 +354,7 @@ def create_auth_blueprint(deps):
         return jsonify({"message": "Ignorado"}), 400
 
     @bp.route("/api/login", methods=["POST", "OPTIONS"])
+    @limiter.limit("5 per minute")
     def login():
         if request.method == "OPTIONS":
             return jsonify({}), 200
