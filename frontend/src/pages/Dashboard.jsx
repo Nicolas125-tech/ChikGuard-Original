@@ -320,9 +320,11 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
       <div className="flex items-center gap-3">
         {cameras.length > 0 && (
           <select 
+            aria-label="Selecionar câmera ativa"
+            title="Selecionar câmera ativa"
             value={activeCamera} 
             onChange={(e) => switchCamera(e.target.value)}
-            className="bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-medium focus:outline-none focus:border-emerald-500 transition-colors"
+            className="bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-medium focus:outline-none focus:border-emerald-500 transition-colors cursor-pointer"
           >
             {cameras.map(c => (
               <option key={c.camera_id} value={c.camera_id}>{c.name}</option>

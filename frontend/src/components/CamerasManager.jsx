@@ -137,8 +137,12 @@ export default function CamerasManager({ serverIP, token }) {
                     </span>
                   </td>
                   <td className="p-4 flex gap-2">
-                    <button onClick={() => openEdit(cam)} className="p-2 text-blue-400 hover:bg-blue-400/10 rounded transition-colors"><Edit2 size={16} /></button>
-                    <button onClick={() => handleDelete(cam.id)} className="p-2 text-rose-400 hover:bg-rose-400/10 rounded transition-colors"><Trash2 size={16} /></button>
+                    <button aria-label="Editar câmera" onClick={() => openEdit(cam)} className="p-2 text-blue-400 hover:bg-blue-400/10 rounded transition-colors" title="Editar">
+                      <Edit2 size={16} aria-hidden="true" />
+                    </button>
+                    <button aria-label="Excluir câmera" onClick={() => handleDelete(cam.id)} className="p-2 text-rose-400 hover:bg-rose-400/10 rounded transition-colors" title="Excluir">
+                      <Trash2 size={16} aria-hidden="true" />
+                    </button>
                   </td>
                 </tr>
               ))
@@ -153,25 +157,25 @@ export default function CamerasManager({ serverIP, token }) {
             <h3 className="text-xl font-bold text-white mb-4">{editingId ? 'Editar Câmera' : 'Adicionar Câmera'}</h3>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-slate-400 text-sm mb-1">ID Único (Ex: galpao-1)</label>
-                <input required type="text" value={formData.camera_id} onChange={e => setFormData({...formData, camera_id: e.target.value})} disabled={!!editingId} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500 disabled:opacity-50" />
+                <label htmlFor="camera_id" className="block text-slate-400 text-sm mb-1">ID Único (Ex: galpao-1) <span className="text-red-500">*</span></label>
+                <input id="camera_id" required type="text" value={formData.camera_id} onChange={e => setFormData({...formData, camera_id: e.target.value})} disabled={!!editingId} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500 disabled:opacity-50" />
               </div>
               <div>
-                <label className="block text-slate-400 text-sm mb-1">Nome de Exibição (Ex: Granja Norte)</label>
-                <input required type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500" />
+                <label htmlFor="name" className="block text-slate-400 text-sm mb-1">Nome de Exibição (Ex: Granja Norte) <span className="text-red-500">*</span></label>
+                <input id="name" required type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-slate-400 text-sm mb-1">Tipo</label>
-                  <select value={formData.connection_type} onChange={e => setFormData({...formData, connection_type: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500">
+                  <label htmlFor="connection_type" className="block text-slate-400 text-sm mb-1">Tipo</label>
+                  <select id="connection_type" value={formData.connection_type} onChange={e => setFormData({...formData, connection_type: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500">
                     <option value="url">URL de Vídeo</option>
                     <option value="rtsp">RTSP (Câmera IP)</option>
                     <option value="usb">USB Local</option>
                   </select>
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-slate-400 text-sm mb-1">Link/URL de Conexão</label>
-                  <input type="text" value={formData.connection_url} onChange={e => setFormData({...formData, connection_url: e.target.value})} placeholder="rtsp://admin:pass@ip:554/stream" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500" />
+                  <label htmlFor="connection_url" className="block text-slate-400 text-sm mb-1">Link/URL de Conexão</label>
+                  <input id="connection_url" type="text" value={formData.connection_url} onChange={e => setFormData({...formData, connection_url: e.target.value})} placeholder="rtsp://admin:pass@ip:554/stream" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500" />
                 </div>
               </div>
               <div className="flex justify-end gap-3 mt-6">
