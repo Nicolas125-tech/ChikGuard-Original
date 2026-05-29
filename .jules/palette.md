@@ -5,3 +5,7 @@
 ## 2026-05-29 - Missing keyboard focus states (focus-visible)
 **Learning:** The application lacked global `:focus-visible` styles, making keyboard navigation (tabbing) impossible for accessibility users since they couldn't see which element was focused. Relying entirely on Tailwind's default reset or missing hover states breaks WCAG compliance for interactive elements.
 **Action:** Add a robust, global `*:focus-visible` outline in `index.css` that inherits the brand color (e.g. emerald-400). This provides an instant accessibility win across all components without needing to add `focus:` classes to every single button manually.
+
+## 2026-05-29 - Missing feedback on async form submissions
+**Learning:** In panels with async operations (like `SmartOpsPanel`), buttons lacked loading/disabled states during API calls. This allows impatient users to click multiple times, potentially creating duplicate database entries (like creating multiple batches simultaneously).
+**Action:** Always wrap `fetch` calls in `try/finally` blocks, introducing `isLoading` state variables. Disable both the button and its associated input fields while loading, and replace the button text with a loading spinner to provide immediate visual feedback.

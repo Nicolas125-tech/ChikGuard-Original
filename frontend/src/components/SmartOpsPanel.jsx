@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import SystemCard from './SystemCard';
 import { getBaseUrl } from '../utils/config';
+import { RefreshCw } from 'lucide-react';
 
 export default function SmartOpsPanel({ serverIP, prefs, token }) {
   const baseUrl = getBaseUrl(serverIP);
@@ -14,6 +15,10 @@ export default function SmartOpsPanel({ serverIP, prefs, token }) {
   const [batchForm, setBatchForm] = useState({ name: '', start_date: '' });
   const [logbook, setLogbook] = useState({ count: 0, items: [] });
   const [logNote, setLogNote] = useState('');
+  
+  const [isCreatingBatch, setIsCreatingBatch] = useState(false);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [isSavingLog, setIsSavingLog] = useState(false);
 
   const heatmapUrl = `${baseUrl}/api/heatmap/daily/image`;
 
@@ -57,30 +62,45 @@ export default function SmartOpsPanel({ serverIP, prefs, token }) {
 
   const createBatch = async () => {
     if (!batchForm.name || !batchForm.start_date) return;
-    await fetch(`${baseUrl}/api/batches`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ ...batchForm, active: true }),
-    });
-    setBatchForm({ name: '', start_date: '' });
-    loadData();
+    setIsCreatingBatch(true);
+    try {
+      await fetch(`${baseUrl}/api/batches`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ...batchForm, active: true }),
+      });
+      setBatchForm({ name: '', start_date: '' });
+      await loadData();
+    } finally {
+      setIsCreatingBatch(false);
+    }
   };
 
   const generateWeeklyReport = async () => {
-    const r = await fetch(`${baseUrl}/api/reports/weekly`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({}) });
-    const data = await r.json();
-    setReportMsg(r.ok ? `Relatorio gerado: ${data.file}` : (data.msg || 'Falha ao gerar relatorio'));
+    setIsGeneratingReport(true);
+    try {
+      const r = await fetch(`${baseUrl}/api/reports/weekly`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({}) });
+      const data = await r.json();
+      setReportMsg(r.ok ? `Relatorio gerado: ${data.file}` : (data.msg || 'Falha ao gerar relatorio'));
+    } finally {
+      setIsGeneratingReport(false);
+    }
   };
 
   const saveLogNote = async () => {
     if (!logNote.trim()) return;
-    await fetch(`${baseUrl}/api/logbook`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ note: logNote, author: 'tratador' }),
-    });
-    setLogNote('');
-    loadData();
+    setIsSavingLog(true);
+    try {
+      await fetch(`${baseUrl}/api/logbook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ note: logNote, author: 'tratador' }),
+      });
+      setLogNote('');
+      await loadData();
+    } finally {
+      setIsSavingLog(false);
+    }
   };
 
   return (
@@ -143,10 +163,10 @@ export default function SmartOpsPanel({ serverIP, prefs, token }) {
             Gestão de Lotes
           </h3>
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-4">
-            <input aria-label="Nome do lote" value={batchForm.name} onChange={(e) => setBatchForm((p) => ({ ...p, name: e.target.value }))} placeholder="Nome do lote (ex: Lote B)" className="flex-1 bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-2.5 text-sm sm:text-base focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all placeholder:text-slate-600" />
-            <input aria-label="Data de início do lote" type="date" value={batchForm.start_date} onChange={(e) => setBatchForm((p) => ({ ...p, start_date: e.target.value }))} className="flex-1 sm:w-auto bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-2.5 text-sm sm:text-base focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all text-slate-300" />
-            <button onClick={createBatch} className="bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-5 py-2.5 font-bold shadow-lg shadow-blue-500/20 transition-all text-sm sm:text-base hover:-translate-y-0.5 whitespace-nowrap">
-              + Novo
+            <input aria-label="Nome do lote" value={batchForm.name} disabled={isCreatingBatch} onChange={(e) => setBatchForm((p) => ({ ...p, name: e.target.value }))} placeholder="Nome do lote (ex: Lote B)" className="flex-1 bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-2.5 text-sm sm:text-base focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all placeholder:text-slate-600 disabled:opacity-50" />
+            <input aria-label="Data de início do lote" type="date" disabled={isCreatingBatch} value={batchForm.start_date} onChange={(e) => setBatchForm((p) => ({ ...p, start_date: e.target.value }))} className="flex-1 sm:w-auto bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-2.5 text-sm sm:text-base focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all text-slate-300 disabled:opacity-50" />
+            <button onClick={createBatch} disabled={isCreatingBatch} className="flex items-center gap-2 justify-center bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-5 py-2.5 font-bold shadow-lg shadow-blue-500/20 transition-all text-sm sm:text-base hover:-translate-y-0.5 whitespace-nowrap disabled:opacity-50 disabled:hover:translate-y-0">
+              {isCreatingBatch ? <RefreshCw size={16} className="animate-spin" /> : '+ Novo'}
             </button>
           </div>
           <div className="max-h-48 overflow-y-auto space-y-2 pr-2 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
@@ -183,8 +203,8 @@ export default function SmartOpsPanel({ serverIP, prefs, token }) {
                 <span className="block font-semibold text-white mb-1">Relatórios Periódicos</span>
                 <span className="text-slate-400 text-xs">Gere um consolidado em PDF com gráficos semanais.</span>
               </div>
-              <button onClick={generateWeeklyReport} className="w-full sm:w-auto bg-amber-600 hover:bg-amber-500 text-white rounded-xl px-5 py-3 font-bold shadow-lg shadow-amber-500/20 transition-all text-sm hover:-translate-y-0.5">
-                Gerar PDF Semanal
+              <button onClick={generateWeeklyReport} disabled={isGeneratingReport} className="flex items-center gap-2 justify-center w-full sm:w-auto bg-amber-600 hover:bg-amber-500 text-white rounded-xl px-5 py-3 font-bold shadow-lg shadow-amber-500/20 transition-all text-sm hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0">
+                {isGeneratingReport ? <RefreshCw size={16} className="animate-spin" /> : 'Gerar PDF Semanal'}
               </button>
             </div>
             {reportMsg && <div className="mt-3 text-sm font-medium text-emerald-400 bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20 text-center">{reportMsg}</div>}
@@ -197,9 +217,9 @@ export default function SmartOpsPanel({ serverIP, prefs, token }) {
           Diário do Lote (Logbook)
         </h3>
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-5">
-          <input aria-label="Nota de diário" value={logNote} onChange={(e) => setLogNote(e.target.value)} placeholder="Descreva eventos importantes (ex: Dia 12: Vacinação Gumboro via água)..." className="flex-1 bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-3 text-sm sm:text-base focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all placeholder:text-slate-600" />
-          <button onClick={saveLogNote} className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl px-6 py-3 text-sm sm:text-base font-bold shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 whitespace-nowrap">
-            Registrar Log
+          <input aria-label="Nota de diário" value={logNote} disabled={isSavingLog} onChange={(e) => setLogNote(e.target.value)} placeholder="Descreva eventos importantes (ex: Dia 12: Vacinação Gumboro via água)..." className="flex-1 bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-3 text-sm sm:text-base focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all placeholder:text-slate-600 disabled:opacity-50" />
+          <button onClick={saveLogNote} disabled={isSavingLog} className="flex items-center gap-2 justify-center bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl px-6 py-3 text-sm sm:text-base font-bold shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 whitespace-nowrap disabled:opacity-50 disabled:hover:translate-y-0">
+            {isSavingLog ? <RefreshCw size={18} className="animate-spin" /> : 'Registrar Log'}
           </button>
         </div>
         <div className="bg-slate-950/40 rounded-xl border border-slate-800 overflow-hidden">
