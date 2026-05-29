@@ -32,6 +32,8 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
   const [backendOnline, setBackendOnline] = useState(null);
   const [alertCount, setAlertCount] = useState(0);
   const [clock, setClock] = useState('');
+  const [cameras, setCameras] = useState([]);
+  const [activeCamera, setActiveCamera] = useState('');
 
   const baseUrl = getBaseUrl(serverIP);
   const canControlDevices = role === 'admin' || role === 'operator' || role === 'superadmin';
@@ -74,11 +76,50 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
         headers: { Authorization: `Bearer ${token}` }
       });
       clearTimeout(timeoutId);
-      setBackendOnline(response.ok);
+      if (response.ok) {
+        const data = await response.json();
+        setBackendOnline(true);
+        if (data.active_camera && data.active_camera !== activeCamera) {
+          setActiveCamera(data.active_camera);
+        }
+      } else {
+        setBackendOnline(false);
+      }
     } catch {
       setBackendOnline(false);
     }
+  }, [baseUrl, token, activeCamera]);
+
+  const fetchCameras = useCallback(async () => {
+    try {
+      const res = await fetch(`${baseUrl}/api/cameras`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCameras(data.items);
+      }
+    } catch (e) {}
   }, [baseUrl, token]);
+
+  useEffect(() => {
+    fetchCameras();
+  }, [fetchCameras]);
+
+  const switchCamera = async (camId) => {
+    try {
+      await fetch(`${baseUrl}/api/cameras/switch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ camera_id: camId })
+      });
+      setActiveCamera(camId);
+      // Reload page to re-fetch all data components
+      window.location.reload();
+    } catch (e) {
+      console.error("Erro ao trocar camera", e);
+    }
+  };
 
   useEffect(() => {
     checkHealth();
@@ -277,6 +318,18 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
       </div>
 
       <div className="flex items-center gap-3">
+        {cameras.length > 0 && (
+          <select 
+            value={activeCamera} 
+            onChange={(e) => switchCamera(e.target.value)}
+            className="bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-medium focus:outline-none focus:border-emerald-500 transition-colors"
+          >
+            {cameras.map(c => (
+              <option key={c.camera_id} value={c.camera_id}>{c.name}</option>
+            ))}
+          </select>
+        )}
+
         <div className="hidden sm:flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-lg border border-slate-700/50 text-xs">
           <div className={`status-dot ${backendOnline ? 'online' : backendOnline === false ? 'offline' : ''}`} />
           <span className={`font-medium ${backendOnline ? 'text-emerald-400' : backendOnline === false ? 'text-red-400' : 'text-slate-500'}`}>

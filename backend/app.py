@@ -3408,7 +3408,8 @@ def get_status():
     ultima = Reading.query.order_by(Reading.id.desc()).first()
     return jsonify({
         "temperatura": ultima.temperatura if ultima else 0,
-        "status": ultima.status if ultima else "INICIANDO"
+        "status": ultima.status if ultima else "INICIANDO",
+        "active_camera": ACTIVE_CAMERA_ID
     })
 
 

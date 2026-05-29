@@ -75,5 +75,48 @@ def create_cameras_blueprint(deps):
         db.session.commit()
         return jsonify({"msg": "Camera deleted"})
 
+    @bp.route("/api/cameras/switch", methods=["POST"])
+    @require_auth()
+    def switch_camera():
+        ok, resp = guard_critical_action("switch_camera", permission="camera.manage")
+        if not ok: return resp
+        
+        data = request.get_json() or {}
+        cid = data.get("camera_id")
+        if not cid:
+            return jsonify({"msg": "Missing camera_id"}), 400
+            
+        c = Camera.query.filter_by(camera_id=cid).first()
+        if not c:
+            return jsonify({"msg": "Camera not found"}), 404
+            
+        # We update the global active camera directly in the app namespace
+        import app as main_app
+        from src.core.cv_engine import CameraCapture
+        
+        main_app.ACTIVE_CAMERA_ID = cid
+        if c.connection_type == "usb":
+            try:
+                main_app.CAMERA_INDEX = int(c.connection_url) if c.connection_url else 0
+            except:
+                main_app.CAMERA_INDEX = 0
+        else:
+            main_app.CAMERA_INDEX = c.connection_url or cid
+            
+        # Restart the capture thread if using v2 engine
+        if getattr(main_app, "_camera_capture", None) is not None:
+            main_app._camera_capture.stop()
+            main_app._camera_capture = CameraCapture(
+                camera_index=main_app.CAMERA_INDEX,
+                target_fps=main_app.CAMERA_TARGET_FPS,
+                width=1280,
+                height=720,
+                backend=main_app.CAMERA_BACKEND_ID,
+                metrics=main_app._perf_metrics
+            )
+            main_app._camera_capture.start()
+            
+        return jsonify({"msg": "Camera switched successfully", "active_camera": cid})
+
     return bp
 
