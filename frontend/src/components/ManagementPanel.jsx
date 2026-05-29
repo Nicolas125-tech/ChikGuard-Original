@@ -2,8 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import SystemCard from './SystemCard';
 import { getBaseUrl } from '../utils/config';
+import { RefreshCw } from 'lucide-react';
 
-export default function ManagementPanel({ serverIP, prefs }) {
+export default function ManagementPanel({ serverIP, prefs, token }) {
   const baseUrl = getBaseUrl(serverIP);
   const [weightLive, setWeightLive] = useState(null);
   const [weightCurve, setWeightCurve] = useState([]);
@@ -15,6 +16,7 @@ export default function ManagementPanel({ serverIP, prefs }) {
   const [sync, setSync] = useState(null);
   const [audioFile, setAudioFile] = useState(null);
   const [audioMsg, setAudioMsg] = useState('');
+  const [isClassifying, setIsClassifying] = useState(false);
   const [sensorHistory, setSensorHistory] = useState([]);
   const [weather, setWeather] = useState(null);
 
@@ -51,8 +53,10 @@ export default function ManagementPanel({ serverIP, prefs }) {
     }
     const form = new FormData();
     form.append('audio', audioFile);
+    setIsClassifying(true);
     try {
-      const r = await fetch(`${baseUrl}/api/acoustic/classify`, { method: 'POST', body: form });
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const r = await fetch(`${baseUrl}/api/acoustic/classify`, { method: 'POST', body: form, headers });
       const data = await r.json();
       if (!r.ok) {
         setAudioMsg(data.msg || 'Falha na classificação');
@@ -60,8 +64,10 @@ export default function ManagementPanel({ serverIP, prefs }) {
         setAudioMsg(`Classificado. Cough index: ${data.result.cough_index}`);
         setAcoustic(data.result);
       }
-    } catch {
-      setAudioMsg('Erro de rede ao classificar áudio');
+    } catch (err) {
+      setAudioMsg('Erro ao classificar o áudio.');
+    } finally {
+      setIsClassifying(false);
     }
   };
 
@@ -138,13 +144,13 @@ export default function ManagementPanel({ serverIP, prefs }) {
               <span className="block text-slate-400 font-medium mb-3 text-sm">Classificação Manual (.wav)</span>
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="relative flex-1">
-                  <input aria-label="Upload de arquivo de áudio WAV para classificação manual" type="file" accept=".wav,audio/wav" onChange={(e) => setAudioFile(e.target.files?.[0] || null)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
-                  <div className="bg-slate-900 border border-slate-700 border-dashed rounded-lg px-4 py-2.5 text-center text-slate-300 hover:bg-slate-800 hover:border-slate-600 transition-all">
+                  <input aria-label="Upload de arquivo de áudio WAV para classificação manual" type="file" accept=".wav,audio/wav" disabled={isClassifying} onChange={(e) => setAudioFile(e.target.files?.[0] || null)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed" />
+                  <div className={`bg-slate-900 border border-slate-700 border-dashed rounded-lg px-4 py-2.5 text-center text-slate-300 hover:bg-slate-800 hover:border-slate-600 transition-all ${isClassifying ? 'opacity-50' : ''}`}>
                     {audioFile ? <span className="text-emerald-400 font-medium">{audioFile.name}</span> : 'Selecionar arquivo de áudio'}
                   </div>
                 </div>
-                <button onClick={classifyAudio} disabled={!audioFile} className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-lg font-bold shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap">
-                  Analisar
+                <button onClick={classifyAudio} disabled={!audioFile || isClassifying} className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-lg font-bold shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap">
+                  {isClassifying ? <RefreshCw size={16} className="animate-spin" /> : 'Analisar'}
                 </button>
               </div>
               {audioMsg && <div className="mt-3 text-sm font-medium text-amber-400 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20 text-center">{audioMsg}</div>}
