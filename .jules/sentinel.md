@@ -17,3 +17,8 @@
 **Vulnerability:** The `/api/admin/approve-user` and `/api/accounts/users/<id>` endpoints allowed any user with `accounts.manage` permission (e.g. an "operator" or a lower-privileged "admin") to elevate their own privileges or someone else's to `superadmin` by changing the `target_role` / `role` directly in the payload.
 **Learning:** Checking for general permissions (e.g., `accounts.manage`) is not enough. We must explicitly check if the user is authorized to assign or mutate high-privilege roles to prevent privilege escalation.
 **Prevention:** Implement strict role hierarchy checks. Users should never be able to assign roles that have equal or higher privilege levels than their own.
+
+## 2026-05-29 - [Fix Exception Stack Trace Leak in API Error Responses]
+**Vulnerability:** Several API endpoints (`/api/routes.py` and `/api/reports_api.py`) were exposing internal Python exception strings (`str(e)` or `exc`) directly to the client when a 500 internal server error occurred.
+**Learning:** Detailed error messages can leak sensitive internal implementation details, such as variable names, file paths, or system architecture (stack traces), giving attackers insights into the backend systems.
+**Prevention:** Catch all exceptions globally or per-endpoint, log the detailed `Exception` using a logger for debugging, and return a generic, safe error message to the client.
