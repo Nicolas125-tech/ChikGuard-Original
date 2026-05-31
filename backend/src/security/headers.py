@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 # Este array deve ser mapeado a partir de variaveis de ambiente em Producao.
 ALLOWED_ORIGINS = os.environ.get(
     "ALLOWED_ORIGINS",
-    "http://localhost:5173,https://app.chikguard.com"
+    os.environ.get("CORS_ORIGINS", "http://localhost:5173,https://app.chikguard.com")
 ).split(",")
 
 def setup_cors(app):

@@ -17,8 +17,9 @@ export const isTunnelHost = (value = '') => /trycloudflare|cfargotunnel/i.test(v
 
 export const getBaseUrl = (ipOrUrl) => {
   if (isTunnelHost(window.location.hostname)) return window.location.origin;
-  if (!ipOrUrl) return 'http://127.0.0.1:5000';
-  const clean = ipOrUrl.replace(/\/$/, '');
+  const target = ipOrUrl || import.meta.env.VITE_API_URL;
+  if (!target) return 'http://127.0.0.1:5000';
+  const clean = target.replace(/\/$/, '');
   
   if (clean.startsWith('http://') || clean.startsWith('https://')) return clean;
   
