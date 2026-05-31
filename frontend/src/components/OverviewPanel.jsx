@@ -12,7 +12,10 @@ function AnimatedNum({ value, decimals = 0 }) {
     const from = prev.current ?? 0;
     const to = Number(value);
     prev.current = to;
-    if (isNaN(to)) { setDisplay(value); return; }
+    if (isNaN(to)) {
+      setTimeout(() => setDisplay(value), 0);
+      return;
+    }
 
     const duration = 600;
     const start = performance.now();
@@ -89,9 +92,10 @@ export default function OverviewPanel({ token, serverIP, prefs }) {
   }, [baseUrl, token]);
 
   useEffect(() => {
-    fetchSummary();
+    const bootstrap = setTimeout(fetchSummary, 0);
     const c = setInterval(fetchSummary, prefs.statusMs);
     return () => {
+        clearTimeout(bootstrap);
         clearInterval(c);
     };
   }, [fetchSummary, prefs]);
