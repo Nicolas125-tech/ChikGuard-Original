@@ -131,7 +131,7 @@ export default function DevicesPanel({ token, serverIP, canControlDevices }) {
         </div>
 
         <div className="relative pt-4 pb-2">
-          <input disabled={!canControlDevices} type="range" min="0" max="100" value={lightPct} onChange={(e) => setLightPct(Number(e.target.value))} onMouseUp={(e) => setDimmer(Number(e.currentTarget.value))} onTouchEnd={(e) => setDimmer(Number(e.currentTarget.value))}
+          <input aria-label="Intensidade de iluminação" disabled={!canControlDevices} type="range" min="0" max="100" value={lightPct} onChange={(e) => setLightPct(Number(e.target.value))} onMouseUp={(e) => setDimmer(Number(e.currentTarget.value))} onTouchEnd={(e) => setDimmer(Number(e.currentTarget.value))}
             className={`w-full h-3 bg-slate-800 rounded-full appearance-none outline-none focus:ring-2 focus:ring-amber-500/50 transition-all ${!canControlDevices ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:bg-amber-400 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg`}
             style={{
               background: `linear-gradient(to right, rgb(251, 191, 36) ${lightPct}%, rgb(30, 41, 59) ${lightPct}%)`
