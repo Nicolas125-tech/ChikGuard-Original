@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import SystemCard from './SystemCard';
 import { getBaseUrl } from '../utils/config';
@@ -6,6 +6,7 @@ import { RefreshCw } from 'lucide-react';
 
 export default function ManagementPanel({ serverIP, prefs, token }) {
   const baseUrl = getBaseUrl(serverIP);
+  const dadosRef = useRef(null);
   const [weightLive, setWeightLive] = useState(null);
   const [weightCurve, setWeightCurve] = useState([]);
   const [acoustic, setAcoustic] = useState(null);
@@ -22,29 +23,34 @@ export default function ManagementPanel({ serverIP, prefs, token }) {
 
   const loadManagement = useCallback(async () => {
     const headers = { Authorization: `Bearer ${token}` };
-    const [wLive, wCurve, ac, model, th, en, au, sy, sh, wf] = await Promise.all([
-      fetch(`${baseUrl}/api/weight/live`, { headers }),
+    const [wCurve, th, en, au, sy, sh, sum] = await Promise.all([
       fetch(`${baseUrl}/api/weight/curve?days=30`, { headers }),
-      fetch(`${baseUrl}/api/acoustic/live`, { headers }),
-      fetch(`${baseUrl}/api/acoustic/model-info`, { headers }),
       fetch(`${baseUrl}/api/thermal-anomalies/live?minutes=60`, { headers }),
       fetch(`${baseUrl}/api/energy/summary`, { headers }),
       fetch(`${baseUrl}/api/audit/logs?limit=80`, { headers }),
       fetch(`${baseUrl}/api/sync/status`, { headers }),
       fetch(`${baseUrl}/api/sensors/history?limit=120`, { headers }),
-      fetch(`${baseUrl}/api/weather/forecast`, { headers }),
+      fetch(`${baseUrl}/api/summary`, { headers }),
     ]);
-    if (wLive.ok) setWeightLive(await wLive.json());
     if (wCurve.ok) setWeightCurve((await wCurve.json()).items || []);
-    if (ac.ok) setAcoustic(await ac.json());
-    if (model.ok) setAcousticModel(await model.json());
     if (th.ok) setThermal(await th.json());
     if (en.ok) setEnergy(await en.json());
     if (au.ok) setAudit(await au.json());
     if (sy.ok) setSync(await sy.json());
     if (sh.ok) setSensorHistory((await sh.json()).items || []);
-    if (wf.ok) setWeather(await wf.json());
-  }, [baseUrl]);
+    if (sum.ok) {
+      const d = await sum.json();
+      const prev = dadosRef.current;
+      const newStr = JSON.stringify(d);
+      if (!prev || JSON.stringify(prev) !== newStr) {
+        setWeightLive(d.weight);
+        setAcoustic(d.acoustic);
+        setAcousticModel({ loaded: d.acoustic.trained_model_loaded });
+        setWeather(d.weather);
+        dadosRef.current = d;
+      }
+    }
+  }, [baseUrl, token]);
 
   const classifyAudio = async () => {
     if (!audioFile) {
@@ -64,7 +70,7 @@ export default function ManagementPanel({ serverIP, prefs, token }) {
         setAudioMsg(`Classificado. Cough index: ${data.result.cough_index}`);
         setAcoustic(data.result);
       }
-    } catch (err) {
+    } catch {
       setAudioMsg('Erro ao classificar o áudio.');
     } finally {
       setIsClassifying(false);

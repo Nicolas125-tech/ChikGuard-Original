@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import SystemCard from './SystemCard';
 import { getBaseUrl } from '../utils/config';
 import { RefreshCw } from 'lucide-react';
 
 export default function SmartOpsPanel({ serverIP, prefs, token }) {
   const baseUrl = getBaseUrl(serverIP);
+  const dadosRef = useRef(null);
   const [behavior, setBehavior] = useState(null);
   const [immobility, setImmobility] = useState({ count: 0, items: [] });
   const [sensors, setSensors] = useState(null);
@@ -24,23 +25,29 @@ export default function SmartOpsPanel({ serverIP, prefs, token }) {
 
   const loadData = useCallback(async () => {
     const headers = { Authorization: `Bearer ${token}` };
-    const [b, i, s, a, bt, c, lb] = await Promise.all([
-      fetch(`${baseUrl}/api/behavior/live`, { headers }),
+    const [i, bt, c, lb, sum] = await Promise.all([
       fetch(`${baseUrl}/api/immobility/live`, { headers }),
-      fetch(`${baseUrl}/api/sensors/live`, { headers }),
-      fetch(`${baseUrl}/api/auto-mode`, { headers }),
       fetch(`${baseUrl}/api/batches`, { headers }),
       fetch(`${baseUrl}/api/cameras`, { headers }),
       fetch(`${baseUrl}/api/logbook?limit=30`, { headers }),
+      fetch(`${baseUrl}/api/summary`, { headers }),
     ]);
-    if (b.ok) setBehavior(await b.json());
     if (i.ok) setImmobility(await i.json());
-    if (s.ok) setSensors(await s.json());
-    if (a.ok) setAutoMode(await a.json());
     if (bt.ok) setBatches(await bt.json());
     if (c.ok) setCameras(await c.json());
     if (lb.ok) setLogbook(await lb.json());
-  }, [baseUrl]);
+    if (sum.ok) {
+      const d = await sum.json();
+      const prev = dadosRef.current;
+      const newStr = JSON.stringify(d);
+      if (!prev || JSON.stringify(prev) !== newStr) {
+        setBehavior(d.behavior);
+        setSensors(d.sensors);
+        setAutoMode(d.automation);
+        dadosRef.current = d;
+      }
+    }
+  }, [baseUrl, token]);
 
   useEffect(() => {
     const bootstrap = setTimeout(loadData, 0);
