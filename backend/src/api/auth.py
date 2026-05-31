@@ -5,6 +5,7 @@ import hmac
 from email.message import EmailMessage
 from flask import Blueprint, jsonify, request
 from supabase import create_client
+from src.security.rate_limiter import limiter
 
 
 def create_auth_blueprint(deps):
@@ -304,6 +305,7 @@ def create_auth_blueprint(deps):
             return jsonify({"error": "Erro interno no servidor"}), 500
 
     @bp.route("/api/admin/notify-new-user", methods=["POST"])
+    @limiter.limit("10 per minute")
     def webhook_notify_new_user():
         WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET")
 
@@ -353,6 +355,7 @@ def create_auth_blueprint(deps):
         return jsonify({"message": "Ignorado"}), 400
 
     @bp.route("/api/login", methods=["POST", "OPTIONS"])
+    @limiter.limit("5 per minute")
     def login():
         if request.method == "OPTIONS":
             return jsonify({}), 200
