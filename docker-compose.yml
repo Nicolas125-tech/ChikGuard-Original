@@ -13,8 +13,9 @@ services:
       - PYTHONPATH=/app
     volumes:
       - ./data:/app/data
-    devices:
-      - "/dev/video0:/dev/video0"
+    # Uncomment the following lines if you need to pass a physical USB webcam to the container
+    # devices:
+    #   - "/dev/video0:/dev/video0"
     restart: unless-stopped
 
   frontend:
