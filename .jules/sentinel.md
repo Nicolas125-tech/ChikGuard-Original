@@ -51,3 +51,8 @@
 **Vulnerability:** The `/api/voice/command` endpoint modified global system state (`estado_dispositivos`) *before* executing the permissions check (`_guard_critical_action`). Even if the request was subsequently denied (403), the IoT hardware state had already been mutated, leading to an authentication bypass/IDOR that could trigger critical facility systems.
 **Learning:** Checking permissions at the end of a function is a classic time-of-check to time-of-use (TOCTOU) logic flaw. Any side effects (state modification, database writes, external requests) must occur *strictly after* all authorization checks have passed.
 **Prevention:** Follow the "Guard Clauses" pattern. Validate authentication, authorization, and payload parameters at the very beginning of the endpoint before any business logic is executed.
+
+## YYYY-MM-DD - [File Path Traversal Fix]
+**Vulnerability:** The `stream_hls` endpoint used `secure_filename` from `werkzeug.utils` on a `<path:filename>` parameter, which stripped slashes and broke nested file serving while incorrectly claiming to protect against path traversal.
+**Learning:** Flask's `send_from_directory` natively protects against directory traversal by using `safe_join` under the hood. Using `secure_filename` is not only redundant but actively harmful for routes designed to serve nested files.
+**Prevention:** Rely on `send_from_directory` natively for traversal protection on path variables and avoid `secure_filename` when slashes are expected and needed for routing logic.
