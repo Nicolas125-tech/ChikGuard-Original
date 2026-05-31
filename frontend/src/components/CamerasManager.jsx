@@ -8,6 +8,17 @@ export default function CamerasManager({ serverIP, token }) {
   const [formData, setFormData] = useState({ camera_id: '', name: '', connection_type: 'url', connection_url: '' });
   const [editingId, setEditingId] = useState(null);
 
+  // Close modal on escape key
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && showModal) {
+        setShowModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showModal]);
+
   const fetchCameras = async () => {
     try {
       setLoading(true);
@@ -91,7 +102,7 @@ export default function CamerasManager({ serverIP, token }) {
         </div>
         <button 
           onClick={() => { setEditingId(null); setFormData({ camera_id: '', name: '', connection_type: 'url', connection_url: '' }); setShowModal(true); }}
-          className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-emerald-500/20"
+          className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-emerald-500/20 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none"
         >
           <Plus size={18} /> Nova Câmera
         </button>
@@ -128,7 +139,7 @@ export default function CamerasManager({ serverIP, token }) {
                     </p>
                     <button 
                       onClick={() => { setEditingId(null); setFormData({ camera_id: '', name: '', connection_type: 'url', connection_url: '' }); setShowModal(true); }}
-                      className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 px-5 py-2.5 rounded-lg flex items-center gap-2 transition-all font-semibold shadow-sm"
+                      className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 px-5 py-2.5 rounded-lg flex items-center gap-2 transition-all font-semibold shadow-sm focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none"
                     >
                       <Plus size={18} /> Cadastrar Primeira Câmera
                     </button>
@@ -151,10 +162,10 @@ export default function CamerasManager({ serverIP, token }) {
                     </span>
                   </td>
                   <td className="p-4 flex gap-2">
-                    <button aria-label="Editar câmera" onClick={() => openEdit(cam)} className="p-2 text-blue-400 hover:bg-blue-400/10 rounded transition-colors" title="Editar">
+                    <button aria-label="Editar câmera" onClick={() => openEdit(cam)} className="p-2 text-blue-400 hover:bg-blue-400/10 rounded transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none" title="Editar">
                       <Edit2 size={16} aria-hidden="true" />
                     </button>
-                    <button aria-label="Excluir câmera" onClick={() => handleDelete(cam.id)} className="p-2 text-rose-400 hover:bg-rose-400/10 rounded transition-colors" title="Excluir">
+                    <button aria-label="Excluir câmera" onClick={() => handleDelete(cam.id)} className="p-2 text-rose-400 hover:bg-rose-400/10 rounded transition-colors focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none" title="Excluir">
                       <Trash2 size={16} aria-hidden="true" />
                     </button>
                   </td>
@@ -166,9 +177,14 @@ export default function CamerasManager({ serverIP, token }) {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div
+          className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-title"
+        >
           <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md border border-slate-700 shadow-2xl">
-            <h3 className="text-xl font-bold text-white mb-4">{editingId ? 'Editar Câmera' : 'Adicionar Câmera'}</h3>
+            <h3 id="modal-title" className="text-xl font-bold text-white mb-4">{editingId ? 'Editar Câmera' : 'Adicionar Câmera'}</h3>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label htmlFor="camera_id" className="block text-slate-400 text-sm mb-1">ID Único (Ex: galpao-1) <span className="text-red-500">*</span></label>
@@ -193,8 +209,8 @@ export default function CamerasManager({ serverIP, token }) {
                 </div>
               </div>
               <div className="flex justify-end gap-3 mt-6">
-                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-slate-400 hover:text-white transition-colors">Cancelar</button>
-                <button type="submit" className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2 rounded-lg font-medium transition-colors">Salvar Câmera</button>
+                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-slate-400 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none">Cancelar</button>
+                <button type="submit" className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2 rounded-lg font-medium transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none">Salvar Câmera</button>
               </div>
             </form>
           </div>
