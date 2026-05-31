@@ -60,3 +60,8 @@
 **Vulnerability:** The backend lacked several industry-standard HTTP security headers (e.g., `Strict-Transport-Security`, `X-Content-Type-Options`, `X-Frame-Options`, `Content-Security-Policy`). This omission could facilitate attacks like Clickjacking, MIME-type sniffing, or Man-in-the-Middle (downgrade to HTTP).
 **Learning:** Returning security headers natively from the backend (via `@app.after_request`) ensures that all REST and Web API traffic is strictly protected, even if the reverse proxy (like Nginx) is misconfigured or bypassed in local/edge deployments.
 **Prevention:** Always implement an automated middleware or `after_request` hook that injects these headers globally, enforcing `nosniff`, `DENY` for frames, and a strong CSP.
+
+## 2026-05-30 - [Missing rate limiting on authentication and webhook endpoints]
+**Vulnerability:** The `/api/login` and `/api/admin/notify-new-user` endpoints in `backend/src/api/auth.py` were missing the `@limiter.limit` decorator from `flask-limiter`. While there was manual application logic for the login, not having `flask-limiter` creates gaps and relies on custom code that can easily have errors. Missing rate limits on webhooks can lead to denial of service or excessive resource consumption.
+**Learning:** Explicitly leveraging the standard initialized `flask-limiter` on sensitive endpoints like authentication routes ensures a unified and standard defense-in-depth security layer against brute force.
+**Prevention:** Always apply `flask-limiter`'s `@limiter.limit` decorator to highly sensitive routes (such as logins and webhooks) to mitigate brute-force and DoS attacks reliably.

@@ -18,6 +18,7 @@ os.environ["FLASK_ENV"] = "testing"
 os.environ["ADMIN_PASSWORD"] = "testpassword"
 os.environ["ADMIN_EMAIL"] = "test@example.com"
 os.environ["JWT_SECRET_KEY"] = "testsecret"
+os.environ["SUPABASE_JWT_SECRET"] = "dummy_secret"
 os.environ["CORS_ALLOWED_ORIGINS"] = "*"
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
