@@ -62,6 +62,7 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
             </h3>
             <div className="grid grid-cols-2 gap-4 h-48">
               <button 
+                aria-label={dispositivos.ventilacao ? "Desativar ventilação" : "Ativar ventilação"}
                 disabled={!canControlDevices} 
                 onClick={() => toggleDevice('ventilacao', !dispositivos.ventilacao)} 
                 className={`border p-5 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all ${dispositivos.ventilacao ? 'border-blue-500/50 bg-blue-500/10 shadow-[0_0_15px_rgba(59,130,246,0.15)]' : 'border-slate-800 bg-slate-950 hover:border-slate-700'} ${!canControlDevices ? 'opacity-50 cursor-not-allowed hidden-disabled' : 'hover:-translate-y-1'}`}
@@ -71,6 +72,7 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
               </button>
               
               <button 
+                aria-label={dispositivos.aquecedor ? "Desativar aquecedor" : "Ativar aquecedor"}
                 disabled={!canControlDevices} 
                 onClick={() => toggleDevice('aquecedor', !dispositivos.aquecedor)} 
                 className={`border p-5 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all ${dispositivos.aquecedor ? 'border-orange-500/50 bg-orange-500/10 shadow-[0_0_15px_rgba(249,115,22,0.15)]' : 'border-slate-800 bg-slate-950 hover:border-slate-700'} ${!canControlDevices ? 'opacity-50 cursor-not-allowed hidden-disabled' : 'hover:-translate-y-1'}`}
