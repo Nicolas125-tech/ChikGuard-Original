@@ -10,9 +10,9 @@ Se você está recebendo erros ao fazer login com o Google, siga os passos abaix
 
 ## 2. No painel do Supabase
 - Acesse `Authentication` -> `URL Configuration`.
-- Defina o **Site URL** como: `https://chik-guard-original.vercel.app`
+- Defina o **Site URL** como: `https://<seu-projeto>.vercel.app`
 - Adicione as **Redirect URLs**:
-  - `https://chik-guard-original.vercel.app`
+  - `https://<seu-projeto>.vercel.app`
   - `http://localhost:5173` (para funcionar quando rodar local)
 
 ## 3. Na Vercel
@@ -20,5 +20,5 @@ Se você está recebendo erros ao fazer login com o Google, siga os passos abaix
 - Certifique-se de que definiu as 3 variáveis:
   - `VITE_SUPABASE_URL` (Sua URL do Supabase)
   - `VITE_SUPABASE_ANON_KEY` (Sua chave pública anon do Supabase)
-  - `VITE_SITE_URL=https://chik-guard-original.vercel.app` (Para forçar o redirecionamento para o Vercel)
+  - `VITE_SITE_URL=https://<seu-projeto>.vercel.app` (Para forçar o redirecionamento para o Vercel)
 - Após alterar as variáveis, você precisará fazer um novo **Deploy** para aplicá-las (ou redeploy do último commit).

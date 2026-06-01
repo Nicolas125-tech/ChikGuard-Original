@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Mail, Lock, ArrowRight, Loader, Eye, EyeOff, Globe, ChevronDown } from 'lucide-react';
-import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
+import { supabase } from '../utils/supabaseClient';
 import { STORAGE } from '../utils/config';
 
 export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) {
@@ -132,8 +132,8 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
           <div className={`p-4 rounded-xl text-sm mb-6 flex items-center gap-2 animate-fade-in-down ${errorMsg.includes('enviada') ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
             {errorMsg}
           </div>
-        )}
 
+        )}
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
@@ -291,7 +291,7 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
         </form>
 
         {/* Google OAuth */}
-        {isSupabaseConfigured && (
+
           <div className="mt-6">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
@@ -316,7 +316,6 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
               Google
             </button>
           </div>
-        )}
 
         {/* Toggle Mode */}
         <div className="mt-8 text-center border-t border-slate-800/60 pt-6">
