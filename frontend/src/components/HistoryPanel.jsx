@@ -14,7 +14,7 @@ export default function HistoryPanel({ serverIP, prefs, token }) {
     } finally {
       setLoading(false);
     }
-  }, [baseUrl]);
+  }, [baseUrl, token]);
 
   useEffect(() => {
     loadHistory();

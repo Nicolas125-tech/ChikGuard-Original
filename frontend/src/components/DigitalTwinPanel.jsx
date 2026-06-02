@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Layers, Thermometer, Bird, Cpu, AlertTriangle, Fan, Flame, Activity } from 'lucide-react';
 import { getBaseUrl } from '../utils/config';
 
-export default function DigitalTwinPanel({ token, serverIP, prefs }) {
+export default function DigitalTwinPanel({ token, serverIP, }) {
   const [activeLayer, setActiveLayer] = useState('sensors'); // 'sensors' | 'birds' | 'devices' | 'alerts'
   const [sensorLive, setSensorLive] = useState(null);
   const [deviceState, setDeviceState] = useState({ ventilacao: false, aquecedor: false });
@@ -57,7 +57,7 @@ export default function DigitalTwinPanel({ token, serverIP, prefs }) {
   }, [baseUrl, token]);
 
   useEffect(() => {
-    fetchData();
+    setTimeout(() => fetchData(), 0);
     const interval = setInterval(fetchData, 6000);
     return () => clearInterval(interval);
   }, [fetchData]);

@@ -15,7 +15,7 @@ export default function AlertsPanel({ serverIP, prefs, token }) {
     } finally {
       setLoading(false);
     }
-  }, [baseUrl]);
+  }, [baseUrl, token]);
 
   useEffect(() => {
     loadAlerts();

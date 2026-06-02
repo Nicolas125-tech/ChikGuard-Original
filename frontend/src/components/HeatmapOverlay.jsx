@@ -17,7 +17,7 @@ export default function HeatmapOverlay({ serverIP, token }) {
     } catch (err) {
       console.error('Heatmap fetch error:', err);
     }
-  }, [baseUrl]);
+  }, [baseUrl, token]);
 
   useEffect(() => {
     const bootstrap = setTimeout(fetchHeatmapData, 0);

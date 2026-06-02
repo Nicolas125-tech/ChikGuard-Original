@@ -1,4 +1,4 @@
-/* global describe, it, beforeEach, afterEach, global */
+/* global global */
 import assert from 'node:assert';
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import { readPrefs, DEFAULT_PREFS, STORAGE } from './config.js';

@@ -6,7 +6,7 @@ import { getBaseUrl } from '../utils/config';
 export default function ClimatePanel({ token, serverIP, prefs, canControlDevices }) {
   const [dispositivos, setDispositivos] = useState({ ventilacao: false, aquecedor: false });
   const [historico, setHistorico] = useState([]);
-  const [erro, setErro] = useState(false);
+  const [Erro_State, setErro] = useState(false);
   const baseUrl = getBaseUrl(serverIP);
 
   const fetchDevices = useCallback(async () => {
@@ -32,8 +32,8 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
   }, [baseUrl, token]);
 
   useEffect(() => {
-    fetchDevices();
-    fetchHistory();
+    setTimeout(() => fetchDevices(), 0);
+    setTimeout(() => fetchHistory(), 0);
     const c = setInterval(fetchDevices, prefs.devicesMs);
     const h = setInterval(fetchHistory, prefs.historyMs);
     return () => { clearInterval(c); clearInterval(h); };
