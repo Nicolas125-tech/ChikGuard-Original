@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Camera, Plus, Trash2, Edit2, PlayCircle, RefreshCw } from 'lucide-react';
 
 export default function CamerasManager({ serverIP, token }) {
@@ -19,7 +19,7 @@ export default function CamerasManager({ serverIP, token }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showModal]);
 
-  const fetchCameras = async () => {
+  const fetchCameras = useCallback(async () => {
     try {
       setLoading(true);
       const res = await fetch(`${serverIP}/api/cameras`, {
@@ -29,16 +29,16 @@ export default function CamerasManager({ serverIP, token }) {
         const data = await res.json();
         setCameras(data.items);
       }
-    } catch (err) {
-      console.error("Failed to load cameras", err);
+    } catch (err) { console.error(err);
+      console.error("Failed", err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [serverIP, token]);
 
   useEffect(() => {
-    fetchCameras();
-  }, [serverIP, token]);
+    setTimeout(() => fetchCameras(), 0);
+  }, [serverIP, token, fetchCameras]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -64,7 +64,7 @@ export default function CamerasManager({ serverIP, token }) {
         const err = await res.json();
         alert(err.msg || "Erro ao salvar");
       }
-    } catch (err) {
+    } catch (err) { console.error(err);
       alert("Erro de conexão");
     }
   };
@@ -79,7 +79,7 @@ export default function CamerasManager({ serverIP, token }) {
       if (res.ok) {
         fetchCameras();
       }
-    } catch (err) {
+    } catch (err) { console.error(err);
       console.error(err);
     }
   };

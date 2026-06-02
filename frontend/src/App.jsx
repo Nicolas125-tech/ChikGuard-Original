@@ -66,8 +66,28 @@ function AppCore() {
   const [showLogin, setShowLogin] = useState(false);
   const [prefs, setPrefs] = useState(readPrefs);
 
+  // Fetch initial session and delay booting
   useEffect(() => {
-    const t = setTimeout(() => setBooting(false), 1600);
+    let t;
+    if (window.location.hash && window.location.hash.includes('access_token')) {
+      t = setTimeout(() => setBooting(false), 4000); // Allow time for authListener to catch it
+    } else {
+      // Normal boot
+      const checkSession = async () => {
+        if (isSupabaseConfigured) {
+          try {
+            const { data } = await supabase.auth.getSession();
+            if (data?.session) {
+              // The auth listener will update the state
+            }
+          } catch (e) {
+            console.error(e);
+          }
+        }
+        t = setTimeout(() => setBooting(false), 1600);
+      };
+      checkSession();
+    }
     return () => clearTimeout(t);
   }, []);
 
@@ -77,7 +97,7 @@ function AppCore() {
     const cachedStatus = localStorage.getItem('cg_status') || '';
     if (['superadmin', 'admin'].includes(cachedRole) && cachedStatus === 'PENDING') {
       localStorage.setItem('cg_status', 'ACTIVE');
-      setStatus('ACTIVE');
+      setTimeout(() => setStatus('ACTIVE'), 0);
     }
   }, []);
 
@@ -129,6 +149,7 @@ function AppCore() {
         setRole(nextRole);
         setStatus(nextStatus);
         setShowLogin(false);
+        setBooting(false); // Stop booting immediately when signed in
       } else if (event === 'SIGNED_OUT') {
         localStorage.removeItem(STORAGE.token);
         localStorage.removeItem(STORAGE.role);

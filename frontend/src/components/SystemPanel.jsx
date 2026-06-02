@@ -17,10 +17,11 @@ export default function SystemPanel({ serverIP, prefs, token }) {
       ]);
       if (infoRes.ok) setInfo(await infoRes.json());
       if (summaryRes.ok) setSummary(await summaryRes.json());
-    } catch (_e) {
+    } catch (err) {
+      console.error('Error fetching system info:', err);
       // Network error - keep previous state, do not crash
     }
-  }, [baseUrl]);
+  }, [baseUrl, token]);
 
   useEffect(() => {
     const bootstrap = setTimeout(loadSystem, 0);
