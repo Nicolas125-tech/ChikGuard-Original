@@ -72,6 +72,10 @@ def create_auth_blueprint(deps):
             account = get_current_account()
             if not account or account.role != "superadmin":
                 return jsonify({"msg": "Apenas superadmins podem criar contas superadmin"}), 403
+        elif role == "admin":
+            account = get_current_account()
+            if not account or account.role not in ["superadmin", "admin"]:
+                return jsonify({"msg": "Apenas admins/superadmins podem criar contas admin"}), 403
         if Account.query.filter_by(username=username).first() is not None:
             return jsonify({"msg": "usuario ja existe"}), 409
 
@@ -95,17 +99,21 @@ def create_auth_blueprint(deps):
         if row is None:
             return jsonify({"msg": "Conta nao encontrada"}), 404
 
+        account = get_current_account()
+        if row.role == "superadmin" and (not account or account.role != "superadmin"):
+            return jsonify({"msg": "Apenas superadmins podem alterar ou conceder acesso superadmin"}), 403
+        elif row.role == "admin" and (not account or account.role not in ["superadmin", "admin"]):
+            return jsonify({"msg": "Apenas admins/superadmins podem alterar ou conceder acesso admin"}), 403
+
         data = request.get_json(silent=True) or {}
         if "role" in data:
             role = str(data.get("role", "")).strip().lower()
             if role not in ("superadmin", "admin", "operator", "viewer"):
                 return jsonify({"msg": "role invalido"}), 400
-            if role == "superadmin" or row.role == "superadmin":
-                account = get_current_account()
+            if role == "superadmin":
                 if not account or account.role != "superadmin":
                     return jsonify({"msg": "Apenas superadmins podem alterar ou conceder acesso superadmin"}), 403
-            elif role == "admin" or row.role == "admin":
-                account = get_current_account()
+            elif role == "admin":
                 if not account or account.role not in ["superadmin", "admin"]:
                     return jsonify({"msg": "Apenas admins/superadmins podem alterar ou conceder acesso admin"}), 403
             row.role = role
@@ -137,8 +145,11 @@ def create_auth_blueprint(deps):
         if row is None:
             return jsonify({"msg": "Conta nao encontrada"}), 404
 
+        account = get_current_account()
         if row.role == "superadmin":
             return jsonify({"msg": "Nao é possivel excluir um superadmin localmente"}), 403
+        elif row.role == "admin" and (not account or account.role not in ["superadmin", "admin"]):
+            return jsonify({"msg": "Apenas admins/superadmins podem excluir contas admin"}), 403
 
         username = row.username
         is_email = "@" in username
