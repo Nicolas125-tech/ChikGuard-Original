@@ -17,3 +17,6 @@
 ## 2026-05-29 - Poor visual feedback with "..." text on buttons
 **Learning:** In the `AdminPanel`, loading states for sensitive actions (Approve, Suspend, Delete) simply replaced the button text with "...". This feels broken or unresponsive, especially if the API takes more than a second, leading to anxiety during destructive actions.
 **Action:** Always use an animated SVG spinner (e.g., `<RefreshCw className="animate-spin" />`) alongside clear progressive text (e.g., "Aprovando...", "Excluindo...") to assure the user that the background process is running smoothly.
+## 2024-06-02 - Prefer aria-pressed for Toggle Buttons with Text
+**Learning:** While dynamic `aria-label`s (e.g., "Ativar X" / "Desativar X") provide clear actionable instructions, they override the visible internal text of a button for screen readers. For toggle buttons that contain descriptive visible text, a more strictly correct pattern is to use `aria-pressed="true|false"`. This preserves the internal description while accurately announcing the button's state to assistive technology.
+**Action:** Default to `aria-pressed` for stateful toggle buttons that have visible text inside them. Reserve dynamic `aria-label`s for icon-only toggle buttons or buttons where the internal text is non-descriptive.

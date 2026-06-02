@@ -66,7 +66,7 @@ export default function DevicesPanel({ token, serverIP, canControlDevices }) {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-      <button disabled={!canControlDevices} onClick={() => toggleAuto(!autoMode.enabled)} className={`rounded-3xl border p-6 sm:p-8 text-left transition-all ${autoMode.enabled ? 'bg-emerald-600/10 border-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 'bg-slate-900 border-slate-800 hover:border-slate-700'} ${!canControlDevices ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-1'}`}>
+      <button aria-label={autoMode.enabled ? "Desativar modo automático" : "Ativar modo automático"} disabled={!canControlDevices} onClick={() => toggleAuto(!autoMode.enabled)} className={`rounded-3xl border p-6 sm:p-8 text-left transition-all ${autoMode.enabled ? 'bg-emerald-600/10 border-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 'bg-slate-900 border-slate-800 hover:border-slate-700'} ${!canControlDevices ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-1'}`}>
         <div className="flex items-center justify-between mb-4">
           <div className={`p-3 rounded-2xl ${autoMode.enabled ? 'bg-emerald-500/20' : 'bg-slate-800/50'}`}>
             <Cpu className={autoMode.enabled ? 'text-emerald-400' : 'text-slate-400'} size={28} />
@@ -88,7 +88,7 @@ export default function DevicesPanel({ token, serverIP, canControlDevices }) {
         )}
       </button>
 
-      <button disabled={!canControlDevices} onClick={() => toggleDevice('ventilacao', !dispositivos.ventilacao)} className={`rounded-3xl border p-6 sm:p-8 text-left transition-all ${dispositivos.ventilacao ? 'bg-blue-600/10 border-blue-500/40 shadow-[0_0_20px_rgba(59,130,246,0.1)]' : 'bg-slate-900 border-slate-800 hover:border-slate-700'} ${!canControlDevices ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-1'}`}>
+      <button aria-label={dispositivos.ventilacao ? "Desativar ventilação" : "Ativar ventilação"} disabled={!canControlDevices} onClick={() => toggleDevice('ventilacao', !dispositivos.ventilacao)} className={`rounded-3xl border p-6 sm:p-8 text-left transition-all ${dispositivos.ventilacao ? 'bg-blue-600/10 border-blue-500/40 shadow-[0_0_20px_rgba(59,130,246,0.1)]' : 'bg-slate-900 border-slate-800 hover:border-slate-700'} ${!canControlDevices ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-1'}`}>
         <div className="flex items-center justify-between mb-4">
           <div className={`p-3 rounded-2xl ${dispositivos.ventilacao ? 'bg-blue-500/20' : 'bg-slate-800/50'}`}>
             <Wind className={dispositivos.ventilacao ? 'text-blue-400' : 'text-slate-400'} size={28} />
@@ -101,7 +101,7 @@ export default function DevicesPanel({ token, serverIP, canControlDevices }) {
         <p className="text-slate-400 text-sm leading-relaxed">Renovação de ar, controle de umidade e resfriamento do galpão.</p>
       </button>
 
-      <button disabled={!canControlDevices} onClick={() => toggleDevice('aquecedor', !dispositivos.aquecedor)} className={`rounded-3xl border p-6 sm:p-8 text-left transition-all ${dispositivos.aquecedor ? 'bg-orange-600/10 border-orange-500/40 shadow-[0_0_20px_rgba(249,115,22,0.1)]' : 'bg-slate-900 border-slate-800 hover:border-slate-700'} ${!canControlDevices ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-1'}`}>
+      <button aria-label={dispositivos.aquecedor ? "Desativar aquecedor" : "Ativar aquecedor"} disabled={!canControlDevices} onClick={() => toggleDevice('aquecedor', !dispositivos.aquecedor)} className={`rounded-3xl border p-6 sm:p-8 text-left transition-all ${dispositivos.aquecedor ? 'bg-orange-600/10 border-orange-500/40 shadow-[0_0_20px_rgba(249,115,22,0.1)]' : 'bg-slate-900 border-slate-800 hover:border-slate-700'} ${!canControlDevices ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-1'}`}>
         <div className="flex items-center justify-between mb-4">
           <div className={`p-3 rounded-2xl ${dispositivos.aquecedor ? 'bg-orange-500/20' : 'bg-slate-800/50'}`}>
             <Zap className={dispositivos.aquecedor ? 'text-orange-400' : 'text-slate-400'} size={28} />
