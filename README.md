@@ -164,6 +164,10 @@ def register():
 | `GET` | `/api/summary` | Real-time system summary (CV + Sensors) |
 | `GET` | `/api/sensors/live` | Live sensor readings |
 | `POST` | `/api/auto-mode` | Update FSM automation rules |
+| `POST` | `/api/ventilacao` | Turn ventilation on/off (Manual Control) |
+| `POST` | `/api/aquecedor` | Turn heater on/off (Manual Control) |
+| `GET` | `/api/estado-dispositivos` | Get current state of devices |
+| `GET` | `/api/history` | Historical sensor data for charts |
 | `POST` | `/api/webrtc/offer` | WebRTC video stream handshake |
 | `POST` | `/api/reports/esg` | Generate ESG compliance PDF |
 | `GET` | `/api/accounts/me` | Authenticated user details (RBAC) |
@@ -174,6 +178,10 @@ def register():
 
 <details>
 <summary><b>🖥️ Web Dashboard</b> (click to expand)</summary>
+
+| Landing | Login | Admin Dashboard |
+|---|---|---|
+| ![Landing](docs/screenshots/web-landing.jpeg) | ![Login](docs/screenshots/web-login.jpeg) | ![Admin Dashboard](docs/screenshots/admin_dashboard.png) |
 
 | Overview | Birds | History |
 |---|---|---|
@@ -188,13 +196,17 @@ def register():
 <details>
 <summary><b>📱 Mobile App</b> (click to expand)</summary>
 
-| Monitor | Birds | Alerts |
+| Login | Monitor | Birds |
 |---|---|---|
-| ![Monitor](docs/screenshots/mobile-monitor.jpeg) | ![Birds](docs/screenshots/mobile-aves.jpeg) | ![Alerts](docs/screenshots/mobile-alertas.jpeg) |
+| ![Login](docs/screenshots/mobile-login.jpeg) | ![Monitor](docs/screenshots/mobile-monitor.jpeg) | ![Birds](docs/screenshots/mobile-aves.jpeg) |
 
-| History | Settings | System |
+| Alerts | History | Settings |
 |---|---|---|
-| ![History](docs/screenshots/mobile-historico.jpeg) | ![Settings](docs/screenshots/mobile-ajustes.jpeg) | ![System](docs/screenshots/mobile-sistema.jpeg) |
+| ![Alerts](docs/screenshots/mobile-alertas.jpeg) | ![History](docs/screenshots/mobile-historico.jpeg) | ![Settings](docs/screenshots/mobile-ajustes.jpeg) |
+
+| System | | |
+|---|---|---|
+| ![System](docs/screenshots/mobile-sistema.jpeg) | | |
 
 </details>
 

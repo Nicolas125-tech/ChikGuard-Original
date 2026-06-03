@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Manual control endpoints for ventilation and heating (`/api/ventilacao`, `/api/aquecedor`).
+- Device state monitoring endpoint (`/api/estado-dispositivos`).
+- Historical sensor data endpoint (`/api/history`).
+- Recharts integration in frontend for historical temperature graphs.
+- New admin dashboard, landing page, and login screen UI updates.
+
 ### Planned
 - MQTT broker integration for IoT sensor ingestion
 - Model fine-tuning pipeline with farm-specific datasets
