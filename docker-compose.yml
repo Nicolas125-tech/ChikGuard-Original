@@ -31,3 +31,18 @@ services:
     image: cloudflare/cloudflared:latest
     command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
     restart: unless-stopped
+
+  sync_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: python scripts/sync_worker.py
+    restart: always
+    depends_on:
+      - backend
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/instance/chikguard.db}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+    volumes:
+      - ./data:/app/instance

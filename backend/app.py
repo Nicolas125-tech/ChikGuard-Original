@@ -13,6 +13,7 @@ from src.api.auth import create_auth_blueprint
 from src.api.reports_api import create_reports_blueprint
 from src.api.routes import create_api_blueprint
 from src.api.agents_api import create_agents_blueprint
+from src.api.batch_api import create_batch_blueprint
 from src.alerts.providers import build_alert_provider
 import io
 from io import BytesIO
@@ -2834,6 +2835,7 @@ app.register_blueprint(create_sensors_blueprint(api_deps))
 app.register_blueprint(create_sync_blueprint(api_deps))
 app.register_blueprint(create_reports_blueprint(api_deps))
 app.register_blueprint(create_agents_blueprint(api_deps))
+app.register_blueprint(create_batch_blueprint(api_deps))
 
 
 

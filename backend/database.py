@@ -1,5 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+from mixins import SyncMixin
 
 db = SQLAlchemy()
 
@@ -86,7 +87,7 @@ class Reading(db.Model):
         }
 
 
-class BirdSnapshot(db.Model):
+class BirdSnapshot(db.Model, SyncMixin):
     id = db.Column(db.Integer, primary_key=True)
     tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
     bird_uid = db.Column(db.Integer, nullable=False, index=True)
@@ -154,7 +155,7 @@ class BirdTrackPoint(db.Model):
         }
 
 
-class EventLog(db.Model):
+class EventLog(db.Model, SyncMixin):
     id = db.Column(db.Integer, primary_key=True)
     tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
     camera_id = db.Column(db.String(64), nullable=False, default="galpao-1", index=True)
@@ -177,7 +178,7 @@ class EventLog(db.Model):
         }
 
 
-class SensorReading(db.Model):
+class SensorReading(db.Model, SyncMixin):
     id = db.Column(db.Integer, primary_key=True)
     tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
     camera_id = db.Column(db.String(64), nullable=False, default="galpao-1", index=True)
