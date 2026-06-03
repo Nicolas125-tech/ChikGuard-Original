@@ -2,6 +2,7 @@ import os
 from flask import Blueprint, jsonify, request, send_file, current_app
 from src.reports.generator import generate_esg_report, generate_weekly_report, _send_report_email
 from src.security.auth import require_auth
+from src.security.rate_limiter import limiter
 
 def create_reports_blueprint(deps):
     bp = Blueprint("reports_api", __name__)
@@ -38,6 +39,7 @@ def create_reports_blueprint(deps):
 
     @bp.route("/api/reports/esg/download", methods=["GET"])
     @require_auth()
+    @limiter.limit("5 per minute")
     def download_esg():
         days = request.args.get("days", default=30, type=int)
         try:
@@ -50,6 +52,7 @@ def create_reports_blueprint(deps):
 
     @bp.route("/api/reports/weekly", methods=["POST"])
     @require_auth()
+    @limiter.limit("5 per minute")
     def generate_weekly():
         data = request.get_json(silent=True) or {}
         email = str(data.get("email", "")).strip() or None
@@ -75,6 +78,7 @@ def create_reports_blueprint(deps):
 
     @bp.route("/api/reports/weekly/download", methods=["GET"])
     @require_auth()
+    @limiter.limit("5 per minute")
     def download_weekly():
         try:
             path = generate_weekly_report(current_app.app_context, active_camera_id, utcnow_func)

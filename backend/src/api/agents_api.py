@@ -44,9 +44,11 @@ def create_agents_blueprint(api_deps):
 
     # Imports locais de tabelas adicionais para evitar dependências circulares
     from database import EventLog, Batch
+    from src.security.rate_limiter import limiter
 
     @bp.route("/chat", methods=["POST"])
     @require_auth()
+    @limiter.limit("10 per minute")
     def chat():
         """Endpoint de chat conversacional com o co-piloto do ChikGuard usando a API do Gemini."""
         data = request.json or {}
