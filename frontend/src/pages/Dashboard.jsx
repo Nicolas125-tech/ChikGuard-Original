@@ -4,7 +4,7 @@ import ChickenPhoto from '../components/ChickenPhoto';
 import {
   LayoutDashboard, Camera, Layers, Wind, History, Settings, Database,
   LogOut, Bird, Bell, Cpu, BarChart3, Shield, Menu, X,
-  Wifi, WifiOff, ChevronRight
+  Wifi, WifiOff, ChevronRight, User
 } from 'lucide-react';
 
 import OverviewPanel from '../components/OverviewPanel';
@@ -21,6 +21,7 @@ import DevicesPanel from '../components/DevicesPanel';
 import SystemPanel from '../components/SystemPanel';
 import DigitalTwinPanel from '../components/DigitalTwinPanel';
 import CamerasManager from '../components/CamerasManager';
+import ProfilePanel from '../components/ProfilePanel';
 import { getBaseUrl } from '../utils/config';
 
 export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, onSaveServer, onLogout }) {
@@ -170,7 +171,8 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
       {
         title: 'Administração',
         items: [
-          { id: 'settings',  label: 'Configurações',      icon: Settings },
+          { id: 'profile',   label: 'Meu Perfil',         icon: User },
+          { id: 'settings',  label: 'Sistema & Conexão',  icon: Settings },
           { id: 'cameras',   label: 'Gerenciar Câmeras',  icon: Camera },
           { id: 'admin',     label: 'Gerenciar Acessos',  icon: Database },
         ]
@@ -387,6 +389,8 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
         return <HistoryPanel token={token} serverIP={serverIP} prefs={prefs} />;
       case 'settings':
         return <SettingsPanel serverIP={serverIP} token={token} prefs={prefs} onSavePrefs={onSavePrefs} onSaveServer={onSaveServer} />;
+      case 'profile':
+        return <ProfilePanel role={role} />;
       case 'cameras':
         return <CamerasManager serverIP={serverIP} token={token} />;
       case 'admin':
