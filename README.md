@@ -140,8 +140,14 @@ npm install
 npm start
 ```
 
-### 5. Running the Edge Lameness Detection Pipeline
-To run the specialized Edge inference pipeline with the advanced Pose Estimation and MQTT integration:
+### 5. Running the Edge Lameness Detection Pipeline (Enterprise Edition)
+To run the specialized Edge inference pipeline with the advanced **Hock Angle Gait Analysis** and MQTT integration:
+
+**How it works (Business Rules):**
+The pipeline calculates the exact Tibiotarsal (Hock) Angle dynamically. An event is triggered and sent to MQTT if:
+- **Average Angle < 60°** (indicates the bird is crouched or refusing to stand).
+- **Angle Variance < 5.0** (indicates a locked or stiff leg over the temporal window).
+
 ```bash
 cd backend
 # Make sure you have a local MQTT broker installed and running (e.g., Mosquitto)
