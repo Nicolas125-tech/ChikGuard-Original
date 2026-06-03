@@ -45,6 +45,7 @@ ChikGuard is a full-stack intelligent monitoring platform for commercial poultry
 - 🔐 **RBAC + JWT auth** with Supabase Auth and OAuth providers
 - 📱 **Mobile app** for remote farm monitoring
 - 🧩 **Plugin system** — extend with custom AI modules (fire detection, disease detection, etc.)
+- 🦆 **Lameness Detection (Pose Estimation)** — advanced geometric and stride analysis for early lameness alerts using YOLOv8-Pose and MQTT.
 - 🌐 **Edge-ready** — runs locally with Cloudflare Tunnel for secure remote access
 
 ---
@@ -137,6 +138,15 @@ npm run dev
 cd mobile
 npm install
 npm start
+```
+
+### 5. Running the Edge Lameness Detection Pipeline
+To run the specialized Edge inference pipeline with the advanced Pose Estimation and MQTT integration:
+```bash
+cd backend
+# Make sure you have a local MQTT broker installed and running (e.g., Mosquitto)
+# Install paho-mqtt if not present: pip install paho-mqtt
+python scripts/run_lameness_edge.py
 ```
 
 ---
