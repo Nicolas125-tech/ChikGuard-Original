@@ -69,17 +69,19 @@ function AppCore() {
   // Fetch initial session and delay booting
   useEffect(() => {
     let t;
-    if (window.location.hash && window.location.hash.includes('access_token')) {
-      t = setTimeout(() => setBooting(false), 4000); // Allow time for authListener to catch it
+    const hasAuthCallback = (window.location.hash && window.location.hash.includes('access_token')) || 
+                            (window.location.search && window.location.search.includes('code='));
+    
+    if (hasAuthCallback) {
+      // Se tivermos na URL de callback do OAuth (Google), damos mais tempo
+      // para o Supabase processar a troca de código/token em background
+      t = setTimeout(() => setBooting(false), 4000); 
     } else {
       // Normal boot
       const checkSession = async () => {
         if (isSupabaseConfigured) {
           try {
-            const { data } = await supabase.auth.getSession();
-            if (data?.session) {
-              // The auth listener will update the state
-            }
+            await supabase.auth.getSession();
           } catch (e) {
             console.error(e);
           }
