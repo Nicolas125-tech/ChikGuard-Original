@@ -392,7 +392,16 @@ def create_auth_blueprint(deps):
             return jsonify({"msg": "Usuario e senha obrigatorios"}), 400
 
         account = Account.query.filter_by(username=username).first()
-        if not account or not account.active or not bcrypt.check_password_hash(account.password_hash, password):
+        
+        # Defense in depth: Prevent timing-based user enumeration.
+        # We always verify a password hash (either the user's or a dummy one) 
+        # to ensure the login endpoint takes roughly the same time.
+        dummy_hash = "$2b$12$aT1/E4n.XqPzG1aL9m.J.OqU3I.H.U8Ww.A2wQ/p.W/mY4.X2wW82" # Random valid bcrypt hash
+        hash_to_check = account.password_hash if account else dummy_hash
+        
+        valid_pwd = bcrypt.check_password_hash(hash_to_check, password)
+
+        if not account or not account.active or not valid_pwd:
             state["count"] += 1
             login_attempt_state[ip] = state
             audit("login_failed", source="security", details={"username": username, "ip": ip}, actor=username)
