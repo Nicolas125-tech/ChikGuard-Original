@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Maximize, WifiOff } from 'lucide-react';
+import { Maximize, WifiOff, Layers, RefreshCw } from 'lucide-react';
 import WebRTCVideo from './WebRTCVideo';
 import HeatmapOverlay from './HeatmapOverlay';
 import { getBaseUrl } from '../utils/config';
@@ -22,8 +22,10 @@ export default function CameraPanel({ token, serverIP }) {
           </h3>
           <button 
             onClick={() => setShowHeatmapOverlay(v => !v)}
-            className="text-xs font-semibold bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 rounded-lg px-3 py-1.5 transition-colors"
+            aria-pressed={showHeatmapOverlay}
+            className="flex items-center gap-1.5 text-xs font-semibold bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 rounded-lg px-3 py-1.5 transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 focus:outline-none"
           >
+            <Layers size={14} aria-hidden="true" className={showHeatmapOverlay ? "text-emerald-400" : "text-slate-400"} />
             {showHeatmapOverlay ? 'Ocultar Heatmap' : 'Mostrar Heatmap AI'}
           </button>
         </div>
@@ -37,8 +39,9 @@ export default function CameraPanel({ token, serverIP }) {
                 <p className="text-slate-500 text-xs mt-2">Sem simuladores disponíveis</p>
                 <button 
                   onClick={() => { setVideoBlocked(false); setUseWebRTC(true); }}
-                  className="mt-4 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg transition-colors"
+                  className="mt-4 flex items-center gap-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none"
                 >
+                  <RefreshCw size={14} aria-hidden="true" />
                   Tentar Novamente
                 </button>
               </div>
