@@ -16,35 +16,27 @@ export default function DigitalTwinPanel({ token, serverIP, }) {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Live sensors
-      const rSensors = await fetch(`${baseUrl}/api/sensors/live`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const headers = { Authorization: `Bearer ${token}` };
+      const [rSensors, rDevices, rHeatmap, rAnomalies] = await Promise.all([
+        fetch(`${baseUrl}/api/sensors/live`, { headers }),
+        fetch(`${baseUrl}/api/estado-dispositivos`, { headers }),
+        fetch(`${baseUrl}/api/heatmap/3d?hours=1&grid=24`, { headers }),
+        fetch(`${baseUrl}/api/thermal-anomalies/live?minutes=15`, { headers }),
+      ]);
+
       if (rSensors.ok) {
-        setSensorLive(await rSensors.ok ? await rSensors.json() : null);
+        setSensorLive(await rSensors.json());
       }
 
-      // 2. Device state
-      const rDevices = await fetch(`${baseUrl}/api/estado-dispositivos`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
       if (rDevices.ok) {
         setDeviceState(await rDevices.json());
       }
 
-      // 3. Heatmap points
-      const rHeatmap = await fetch(`${baseUrl}/api/heatmap/3d?hours=1&grid=24`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
       if (rHeatmap.ok) {
         const hData = await rHeatmap.json();
         setHeatmapPoints(hData.points || []);
       }
 
-      // 4. Thermal anomalies
-      const rAnomalies = await fetch(`${baseUrl}/api/thermal-anomalies/live?minutes=15`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
       if (rAnomalies.ok) {
         const aData = await rAnomalies.json();
         setThermalAnomalies(aData.items || []);
