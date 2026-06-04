@@ -92,7 +92,10 @@ export default function ProfilePanel({ role }) {
               <span className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-br from-emerald-400 to-teal-600">
                 {formData.fullName ? formData.fullName.charAt(0).toUpperCase() : role.charAt(0).toUpperCase()}
               </span>
-              <button className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              <button
+                aria-label="Alterar foto de perfil"
+                className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+              >
                 <Camera className="w-8 h-8 text-white/80" />
               </button>
             </div>
@@ -137,9 +140,10 @@ export default function ProfilePanel({ role }) {
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Nome Completo</label>
+                    <label htmlFor="fullName" className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Nome Completo</label>
                     <div className="relative">
                       <input 
+                        id="fullName"
                         name="fullName"
                         value={formData.fullName}
                         onChange={handleChange}
@@ -151,9 +155,10 @@ export default function ProfilePanel({ role }) {
                   </div>
                   
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Endereço de E-mail</label>
+                    <label htmlFor="email" className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Endereço de E-mail</label>
                     <div className="relative">
                       <input 
+                        id="email"
                         name="email"
                         value={formData.email}
                         onChange={handleChange}
@@ -178,9 +183,10 @@ export default function ProfilePanel({ role }) {
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Nova Senha (Opcional)</label>
+                    <label htmlFor="newPassword" className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Nova Senha (Opcional)</label>
                     <div className="relative">
                       <input 
+                        id="newPassword"
                         name="newPassword"
                         value={formData.newPassword}
                         onChange={handleChange}
@@ -193,9 +199,10 @@ export default function ProfilePanel({ role }) {
                   </div>
                   
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Confirmar Nova Senha</label>
+                    <label htmlFor="confirmPassword" className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Confirmar Nova Senha</label>
                     <div className="relative">
                       <input 
+                        id="confirmPassword"
                         type="password"
                         className="w-full bg-slate-950/50 border border-slate-700/50 rounded-xl pl-11 pr-4 py-3 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all"
                         placeholder="••••••••"
