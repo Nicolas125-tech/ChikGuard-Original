@@ -58,8 +58,9 @@ def require_auth(roles=None):
                 return jsonify({'error': 'Token expired'}), 401
             except Exception as e:
                 import logging
-                logging.getLogger(__name__).error("Erro de autenticacao: %s", e)
-                return jsonify({'error': 'Erro de processamento de token'}), 401
+                logging.getLogger(__name__).error(f"Erro de autenticacao: {str(e)} - Token: {token[:15]}...")
+                print(f"JWT ERROR: {str(e)}")
+                return jsonify({'error': 'Erro de processamento de token', 'details': str(e)}), 401
                 
             return f(*args, **kwargs)
         return decorated_function

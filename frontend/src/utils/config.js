@@ -17,6 +17,13 @@ export const isTunnelHost = (value = '') => /trycloudflare|cfargotunnel/i.test(v
 
 export const getBaseUrl = (ipOrUrl) => {
   if (isTunnelHost(window.location.hostname)) return window.location.origin;
+  
+  // Se estiver rodando localmente no navegador, force o uso do backend local
+  // para evitar que configs velhas apontem para o Vercel.
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://127.0.0.1:5000';
+  }
+
   const target = ipOrUrl || import.meta.env.VITE_API_URL;
   if (!target) return 'http://127.0.0.1:5000';
   const clean = target.replace(/\/$/, '');

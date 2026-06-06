@@ -6,12 +6,11 @@ from flask_cors import CORS
 logger = logging.getLogger(__name__)
 
 # Definir os dominios confiaveis autorizados a acessar a API.
-# Este array deve ser mapeado a partir de variaveis de ambiente em Producao.
-ALLOWED_ORIGINS = os.environ.get(
-    "ALLOWED_ORIGINS",
-    os.environ.get("CORS_ORIGINS", "http://localhost:5173,https://app.chikguard.com")
-).split(",")
-
+# Este array deve ser mapeado a partir de variaveis de ambiente# Origins permitidas
+ALLOWED_ORIGINS = [
+    origin.strip() for origin in 
+    os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://localhost:5174,https://app.chikguard.com,https://chik-guard-original.vercel.app").split(",")
+]
 def setup_cors(app):
     """
     Configura o CORS estrito apenas para dominios listados.
