@@ -81,9 +81,12 @@ function AppCore() {
       const checkSession = async () => {
         if (isSupabaseConfigured) {
           try {
-            await supabase.auth.getSession();
+            await Promise.race([
+              supabase.auth.getSession(),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase Timeout')), 4000))
+            ]);
           } catch (e) {
-            console.error(e);
+            console.error('Erro ao conectar ao Supabase:', e);
           }
         }
         t = setTimeout(() => setBooting(false), 1600);
