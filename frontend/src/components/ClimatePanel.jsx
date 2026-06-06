@@ -62,22 +62,22 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
             </h3>
             <div className="grid grid-cols-2 gap-4 h-48">
               <button 
-                aria-label={dispositivos.ventilacao ? "Desativar ventilação" : "Ativar ventilação"}
+                aria-pressed={dispositivos.ventilacao}
                 disabled={!canControlDevices} 
                 onClick={() => toggleDevice('ventilacao', !dispositivos.ventilacao)} 
                 className={`border p-5 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all ${dispositivos.ventilacao ? 'border-blue-500/50 bg-blue-500/10 shadow-[0_0_15px_rgba(59,130,246,0.15)]' : 'border-slate-800 bg-slate-950 hover:border-slate-700'} ${!canControlDevices ? 'opacity-50 cursor-not-allowed hidden-disabled' : 'hover:-translate-y-1'}`}
               >
-                <Wind size={40} className={dispositivos.ventilacao ? "text-blue-400" : "text-slate-500"} />
+                <Wind aria-hidden="true" size={40} className={dispositivos.ventilacao ? "text-blue-400" : "text-slate-500"} />
                 <span className={`text-sm font-bold tracking-wide uppercase ${dispositivos.ventilacao ? "text-blue-300" : "text-slate-400"}`}>Ventilar</span>
               </button>
               
               <button 
-                aria-label={dispositivos.aquecedor ? "Desativar aquecedor" : "Ativar aquecedor"}
+                aria-pressed={dispositivos.aquecedor}
                 disabled={!canControlDevices} 
                 onClick={() => toggleDevice('aquecedor', !dispositivos.aquecedor)} 
                 className={`border p-5 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all ${dispositivos.aquecedor ? 'border-orange-500/50 bg-orange-500/10 shadow-[0_0_15px_rgba(249,115,22,0.15)]' : 'border-slate-800 bg-slate-950 hover:border-slate-700'} ${!canControlDevices ? 'opacity-50 cursor-not-allowed hidden-disabled' : 'hover:-translate-y-1'}`}
               >
-                <Zap size={40} className={dispositivos.aquecedor ? "text-orange-400" : "text-slate-500"} />
+                <Zap aria-hidden="true" size={40} className={dispositivos.aquecedor ? "text-orange-400" : "text-slate-500"} />
                 <span className={`text-sm font-bold tracking-wide uppercase ${dispositivos.aquecedor ? "text-orange-300" : "text-slate-400"}`}>Aquecer</span>
               </button>
             </div>
