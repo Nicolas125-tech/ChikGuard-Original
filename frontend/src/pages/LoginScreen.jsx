@@ -251,11 +251,12 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
             <button
               type="button"
               onClick={() => setShowServer(v => !v)}
+              aria-expanded={showServer}
               className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2 hover:text-slate-300 transition-colors"
             >
-              <Globe size={13} />
+              <Globe size={13} aria-hidden="true" />
               Servidor / Tunnel
-              <ChevronDown size={13} className={`transition-transform ${showServer ? 'rotate-180' : ''}`} />
+              <ChevronDown size={13} aria-hidden="true" className={`transition-transform ${showServer ? 'rotate-180' : ''}`} />
             </button>
             {showServer && (
               <div className="relative animate-fade-in-down">
