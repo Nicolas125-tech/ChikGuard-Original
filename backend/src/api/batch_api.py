@@ -1,7 +1,8 @@
 from flask import Blueprint, jsonify, request
 from database import db, Batch, BatchLogbook
 from datetime import datetime
-from src.security.auth import require_auth, get_jwt_identity
+from src.security.auth import require_auth
+from flask_jwt_extended import get_jwt_identity
 
 def create_batch_blueprint(deps):
     bp = Blueprint("batch", __name__, url_prefix="/api/batches")
