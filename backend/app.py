@@ -49,6 +49,7 @@ from database import (
     BatchLogbook,
     Account,
     Tenant,
+    Camera,
     RolePermission,
     PushToken,
 )
@@ -708,6 +709,10 @@ with app.app_context():
             if exists is None:
                 db.session.add(RolePermission(role=role, permission=perm, allowed=True))
     db.session.commit()
+
+    if not Camera.query.filter_by(camera_id=ACTIVE_CAMERA_ID).first():
+        db.session.add(Camera(camera_id=ACTIVE_CAMERA_ID, name="Câmera 1", status="online"))
+        db.session.commit()
 
     if not Batch.query.filter_by(camera_id=ACTIVE_CAMERA_ID, active=True).first():
         db.session.add(
