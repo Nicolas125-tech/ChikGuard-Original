@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from src.security.auth import require_auth
 from src.security.headers import setup_security_headers, setup_cors, ALLOWED_ORIGINS
 from src.security.hardening import setup_hardening
@@ -57,8 +60,6 @@ import time
 import os
 import secrets
 import string
-from dotenv import load_dotenv
-load_dotenv()
 
 
 try:
