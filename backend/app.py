@@ -48,6 +48,7 @@ from database import (
     SyncQueueItem,
     BatchLogbook,
     Account,
+    Tenant,
     RolePermission,
     PushToken,
 )
@@ -608,6 +609,12 @@ def _estimate_bird_temp_proxy(gray_frame, box, ambient_temp):
 
 with app.app_context():
     db.create_all()
+    
+    admin_tenant = Tenant.query.filter_by(id=1).first()
+    if not admin_tenant:
+        db.session.add(Tenant(id=1, name="Default Tenant", active=True))
+        db.session.commit()
+        
     admin_password_env = os.getenv("ADMIN_PASSWORD", "").strip()
 
     admin_user = User.query.filter_by(username="admin").first()
