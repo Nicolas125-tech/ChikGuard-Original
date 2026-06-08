@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { getBaseUrl } from '../utils/config';
 
@@ -35,7 +36,12 @@ export default function AlertsPanel({ serverIP, prefs, token }) {
   }, [loadAlerts, prefs.statusMs, baseUrl]);
 
   if (loading) {
-    return <div className="text-slate-400 p-4">Carregando alertas...</div>;
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-slate-500 min-h-[200px]">
+        <RefreshCw size={24} className="animate-spin mb-3 text-emerald-500" />
+        <span className="font-medium text-sm">Carregando alertas...</span>
+      </div>
+    );
   }
 
   return (
