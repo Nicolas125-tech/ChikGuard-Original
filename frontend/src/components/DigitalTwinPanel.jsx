@@ -409,12 +409,7 @@ export default function DigitalTwinPanel({ token, serverIP, }) {
                   return false;
                 });
 
-                // Calculate a simulated average temp for this sector based on closest virtual sensors
                 let secTemp = temp;
-                if (sec.startsWith('A')) secTemp = temp - 0.4;
-                if (sec.startsWith('C')) secTemp = temp + 0.5;
-                if (sec.endsWith('1')) secTemp -= (isVentActive ? 1.5 : 0.4);
-                if (sec.endsWith('3')) secTemp += (isHeatActive ? 2.0 : 0.6);
 
                 return (
                   <div key={sec} className="bg-slate-950/50 border border-slate-800/80 p-3 rounded-xl flex items-center justify-between gap-3">

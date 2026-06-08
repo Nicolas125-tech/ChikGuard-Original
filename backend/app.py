@@ -307,7 +307,7 @@ class RespiratoryAudioClassifier:
                 cough_prob = float(np.asarray(pred).reshape(-1)[0])
             if cough_prob is None:
                 return None
-            stress_prob = min(1.0, max(0.0, (cough_prob * 0.6) + random.uniform(0.05, 0.22)))
+            stress_prob = min(1.0, max(0.0, cough_prob * 0.6))
             respiratory_health = max(0.0, min(100.0, 100.0 - ((cough_prob * 70.0) + (stress_prob * 30.0))))
             return {
                 "respiratory_health_index": round(float(respiratory_health), 2),
@@ -2693,11 +2693,11 @@ def camera_loop():
                         cv2.rectangle(frame, (200, 150), (350, 300), (0, 255, 0), 2)
                         cv2.putText(frame, "TEST_OBJECT", (200, 140), cv2.FONT_HERSHEY_PLAIN, 2, (0, 255, 0), 2)
                         processed_frame = frame
-                        temp_atual = 28 + random.uniform(-5, 5)
+                        temp_atual = 0.0
                     else:
                         processed_frame = detectar_objetos(frame) if MODO_DETECCAO == "aves" else frame
                         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                        temp_atual = 20 + (float(np.mean(gray)) / 255.0) * 20
+                        temp_atual = 0.0
                 else:
                     ret, frame = cap.read()
                     if not ret:
