@@ -96,9 +96,9 @@ export default function CamerasManager({ serverIP, token }) {
         <div>
           <h2 className="text-2xl font-bold text-white flex items-center gap-2">
             <Camera className="text-emerald-400" />
-            Gestão de Câmeras Cloud
+            Gestão de Granjas e Câmeras
           </h2>
-          <p className="text-slate-400 text-sm mt-1">Conecte múltiplas granjas via RTSP/IP.</p>
+          <p className="text-slate-400 text-sm mt-1">Conecte múltiplas granjas via RTSP/IP para gerenciar diferentes lotes.</p>
         </div>
         <button 
           onClick={() => { setEditingId(null); setFormData({ camera_id: '', name: '', connection_type: 'url', connection_url: '' }); setShowModal(true); }}

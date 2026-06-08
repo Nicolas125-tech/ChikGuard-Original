@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import SystemCard from './SystemCard';
 import { getBaseUrl } from '../utils/config';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Download } from 'lucide-react';
 
 export default function ManagementPanel({ serverIP, prefs, token }) {
   const baseUrl = getBaseUrl(serverIP);
@@ -77,6 +77,19 @@ export default function ManagementPanel({ serverIP, prefs, token }) {
     }
   };
 
+  const exportWeightCurveToCSV = () => {
+    if (!weightCurve || weightCurve.length === 0) return;
+    const header = "Data,Peso Estimado (g),Peso Ideal (g)\n";
+    const csvContent = weightCurve.map(row => `${row.timestamp},${row.avg_weight_g},${row.ideal_weight_g}`).join("\n");
+    const blob = new Blob([header + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `curva_crescimento_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   useEffect(() => {
     const bootstrap = setTimeout(loadManagement, 0);
     const timer = setInterval(loadManagement, prefs.historyMs);
@@ -96,12 +109,23 @@ export default function ManagementPanel({ serverIP, prefs, token }) {
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-sm">
-          <h3 className="font-bold text-lg sm:text-xl text-white mb-4 tracking-tight flex items-center gap-2">
-            <span className="bg-emerald-500/20 text-emerald-400 p-2 rounded-xl border border-emerald-500/30">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-            </span>
-            Curva de Crescimento
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-lg sm:text-xl text-white tracking-tight flex items-center gap-2">
+              <span className="bg-emerald-500/20 text-emerald-400 p-2 rounded-xl border border-emerald-500/30">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              </span>
+              Curva de Crescimento
+            </h3>
+            {weightCurve.length > 0 && (
+              <button 
+                onClick={exportWeightCurveToCSV}
+                className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg border border-slate-700 transition-colors"
+                title="Baixar em Excel/CSV"
+              >
+                <Download size={14} /> Exportar
+              </button>
+            )}
+          </div>
           <div className="h-64 sm:h-72 w-full -ml-4 sm:ml-0 bg-slate-950/40 rounded-xl border border-slate-800 p-2 sm:p-4 shadow-inner">
             {weightCurve.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">

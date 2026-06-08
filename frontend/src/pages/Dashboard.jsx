@@ -173,7 +173,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
         items: [
           { id: 'profile',   label: 'Meu Perfil',         icon: User },
           { id: 'settings',  label: 'Sistema & Conexão',  icon: Settings },
-          { id: 'cameras',   label: 'Gerenciar Câmeras',  icon: Camera },
+          { id: 'cameras',   label: 'Gerenciar Granjas',  icon: Camera },
           { id: 'admin',     label: 'Gerenciar Acessos',  icon: Database },
         ]
       },

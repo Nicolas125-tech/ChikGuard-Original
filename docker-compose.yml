@@ -9,7 +9,7 @@ services:
       - FLASK_ENV=production
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
       - CORS_ORIGINS=*
-      - DATABASE_URL=${DATABASE_URL:-sqlite:///chikguard.db}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/chikguard.db}
       - PYTHONPATH=/app
     volumes:
       - ./data:/app/data
@@ -40,8 +40,8 @@ services:
     depends_on:
       - backend
     environment:
-      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/instance/chikguard.db}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/chikguard.db}
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     volumes:
-      - ./data:/app/instance
+      - ./data:/app/data
