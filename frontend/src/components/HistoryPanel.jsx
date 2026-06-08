@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, Database } from 'lucide-react';
 import { getBaseUrl } from '../utils/config';
 
-export default function HistoryPanel({ serverIP, prefs, token }) {
+export default function HistoryPanel({ serverIP, prefs, token, cameras = [], activeCamera }) {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const baseUrl = getBaseUrl(serverIP);
@@ -33,10 +33,12 @@ export default function HistoryPanel({ serverIP, prefs, token }) {
     );
   }
 
+  const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
+
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm h-[calc(100vh-12rem)] min-h-[500px] flex flex-col">
       <div className="p-4 border-b border-slate-800 bg-slate-950/50 flex justify-between items-center z-10 sticky top-0 backdrop-blur-sm">
-        <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">Registro Histórico de Leituras</h2>
+        <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">Histórico de Leituras - <span className="text-emerald-400">{farmName}</span></h2>
         <a href={`${baseUrl}/api/reports/weekly/download`} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold px-4 py-2 sm:py-2.5 rounded-xl shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 whitespace-nowrap flex items-center gap-2">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="hidden sm:inline-block"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
           Exportar PDF

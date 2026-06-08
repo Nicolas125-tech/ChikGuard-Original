@@ -3,7 +3,7 @@ import { RefreshCw } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { getBaseUrl } from '../utils/config';
 
-export default function AlertsPanel({ serverIP, prefs, token }) {
+export default function AlertsPanel({ serverIP, prefs, token, cameras = [], activeCamera }) {
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const baseUrl = getBaseUrl(serverIP);
@@ -45,10 +45,12 @@ export default function AlertsPanel({ serverIP, prefs, token }) {
     );
   }
 
+  const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
+
   return (
     <div className="space-y-3 sm:space-y-4 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-4 px-2">
-        <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Alertas do Sistema</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Alertas do Sistema - <span className="text-emerald-400">{farmName}</span></h2>
         <span className="bg-slate-800 text-slate-300 font-semibold px-3 py-1 rounded-full text-xs sm:text-sm">
           {alerts.length} ativo{alerts.length !== 1 && 's'}
         </span>

@@ -108,6 +108,72 @@ export default function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServ
           Salvar Configurações
         </button>
       </div>
+
+      <div className="mt-12 pt-8 border-t border-slate-800">
+        <h3 className="text-xl font-bold text-white mb-4">Adicionar Nova Granja</h3>
+        <p className="text-slate-400 text-sm mb-6">Registre um novo galpão ou granja na sua conta para alternar facilmente no menu superior.</p>
+        
+        <form onSubmit={async (e) => {
+          e.preventDefault();
+          const nome = e.target.farmName.value;
+          const url = e.target.cameraUrlNew.value;
+          if (!nome) return;
+          
+          try {
+            const baseUrl = serverIP.replace(/\/$/, '');
+            const finalUrl = baseUrl.startsWith('http') ? baseUrl : `http://${baseUrl}`;
+            
+            const payload = {
+              camera_id: `granja-${Math.floor(Math.random() * 10000)}`,
+              name: nome,
+              connection_type: url.startsWith('rtsp') ? 'rtsp' : 'url',
+              connection_url: url || ''
+            };
+
+            const res = await fetch(`${finalUrl}/api/cameras`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${localStorage.getItem('token')}`
+              },
+              body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+              e.target.reset();
+              alert('Nova granja adicionada com sucesso! Atualize a página para vê-la no menu superior.');
+            } else {
+              alert('Falha ao adicionar a granja.');
+            }
+          } catch (err) {
+            console.error(err);
+            alert('Erro de conexão ao adicionar granja.');
+          }
+        }} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Field label="Nome da Nova Granja" id="farmName" description="Ex: Galpão Sul 2">
+            <input
+              id="farmName"
+              name="farmName"
+              required
+              className="w-full bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-3 font-mono text-sm text-slate-200 focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all shadow-inner"
+              placeholder="Digite o nome..."
+            />
+          </Field>
+          <Field label="URL da Câmera (Opcional)" id="cameraUrlNew" description="URL HTTP/MJPEG ou RTSP">
+            <input
+              id="cameraUrlNew"
+              name="cameraUrlNew"
+              className="w-full bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-3 font-mono text-sm text-slate-200 focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all shadow-inner"
+              placeholder="http://..."
+            />
+          </Field>
+          <div className="md:col-span-2 flex justify-end mt-2">
+            <button type="submit" className="bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 px-6 rounded-xl border border-slate-700 transition-all flex items-center gap-2 hover:-translate-y-0.5 shadow-sm">
+              Criar Nova Granja
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

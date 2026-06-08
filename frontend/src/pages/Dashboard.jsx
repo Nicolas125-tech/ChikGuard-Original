@@ -380,7 +380,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
       case 'birds':
         return <BirdsPanel token={token} serverIP={serverIP} prefs={prefs} cameras={cameras} activeCamera={activeCamera} />;
       case 'alerts':
-        return <AlertsPanel token={token} serverIP={serverIP} prefs={prefs} />;
+        return <AlertsPanel token={token} serverIP={serverIP} prefs={prefs} cameras={cameras} activeCamera={activeCamera} />;
       case 'climate':
         return <ClimatePanel token={token} serverIP={serverIP} prefs={prefs} canControlDevices={canControlDevices} cameras={cameras} activeCamera={activeCamera} />;
       case 'smartops':
@@ -390,7 +390,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
       case 'devices':
         return <DevicesPanel token={token} serverIP={serverIP} prefs={prefs} canControlDevices={canControlDevices} cameras={cameras} activeCamera={activeCamera} />;
       case 'history':
-        return <HistoryPanel token={token} serverIP={serverIP} prefs={prefs} />;
+        return <HistoryPanel token={token} serverIP={serverIP} prefs={prefs} cameras={cameras} activeCamera={activeCamera} />;
       case 'settings':
         return <SettingsPanel serverIP={serverIP} token={token} prefs={prefs} onSavePrefs={onSavePrefs} onSaveServer={onSaveServer} />;
       case 'profile':
