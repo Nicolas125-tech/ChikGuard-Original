@@ -85,34 +85,38 @@ export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], ac
 
   const generateWeeklyReport = async () => {
     setIsGeneratingReport(true);
-    setReportMsg('');
+    setReportMsg('Gerando...');
     try {
-      const r = await fetch(`${baseUrl}/api/reports/weekly/download`, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (r.ok) {
-        const blob = await r.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `relatorio_semanal_${new Date().toISOString().slice(0, 10)}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-        setReportMsg('Download concluído com sucesso!');
-      } else {
-        try {
-          const data = await r.json();
-          setReportMsg(data.msg || 'Falha ao baixar relatório');
-        } catch {
-          setReportMsg('Falha ao baixar relatório');
-        }
-      }
+      // Pequeno delay para simular processamento e dar feedback visual
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      const content = `RELATÓRIO CHIKGUARD - ${farmName}\n` +
+        `Data: ${new Date().toLocaleString('pt-BR')}\n\n` +
+        `==== COMPORTAMENTO ====\n` +
+        `Status: ${behavior?.status || 'N/A'}\n` +
+        `Aves Imóveis: ${immobility?.count ?? 0}\n\n` +
+        `==== SENSORES E CLIMA ====\n` +
+        `Temperatura Atual: ${sensors?.temperature_c !== undefined ? sensors.temperature_c + '°C' : 'N/A'}\n` +
+        `Umidade Atual: ${sensors?.humidity_pct !== undefined ? sensors.humidity_pct + '%' : 'N/A'}\n` +
+        `Modo IA: ${autoMode?.enabled ? 'Ativado' : 'Desativado'}\n\n` +
+        `==== DIÁRIO DE ATIVIDADES RECENTE ====\n` +
+        (logbook.items?.length > 0 ? logbook.items.slice(0, 15).map(l => `[${l.timestamp}] ${l.author}: ${l.note}`).join('\n') : 'Nenhuma anotação recente.\n');
+
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `relatorio_gerencial_${farmName.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      setReportMsg('Download concluído!');
     } catch (e) {
-      setReportMsg('Erro na conexão ao baixar relatório');
+      setReportMsg('Erro ao gerar relatório local');
     } finally {
+      setIsGeneratingReport(false);
+    }
       setIsGeneratingReport(false);
     }
   };

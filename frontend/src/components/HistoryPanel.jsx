@@ -35,14 +35,30 @@ export default function HistoryPanel({ serverIP, prefs, token, cameras = [], act
 
   const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
 
+  const exportHistoryCSV = () => {
+    if (!history || history.length === 0) {
+      alert("Nenhum histórico para exportar.");
+      return;
+    }
+    const header = "Data,Hora,Status,Temperatura\n";
+    const csvContent = history.map(row => `${row.data},${row.hora},${row.status},${row.temp}`).join("\n");
+    const blob = new Blob([header + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `historico_leituras_${farmName}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm h-[calc(100vh-12rem)] min-h-[500px] flex flex-col">
       <div className="p-4 border-b border-slate-800 bg-slate-950/50 flex justify-between items-center z-10 sticky top-0 backdrop-blur-sm">
         <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">Histórico de Leituras - <span className="text-emerald-400">{farmName}</span></h2>
-        <a href={`${baseUrl}/api/reports/weekly/download`} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold px-4 py-2 sm:py-2.5 rounded-xl shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 whitespace-nowrap flex items-center gap-2">
+        <button onClick={exportHistoryCSV} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold px-4 py-2 sm:py-2.5 rounded-xl shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 whitespace-nowrap flex items-center gap-2">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="hidden sm:inline-block"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-          Exportar PDF
-        </a>
+          Exportar Excel (CSV)
+        </button>
       </div>
 
       <div className="hidden sm:grid grid-cols-4 gap-4 px-6 py-4 text-xs font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-800/80 bg-slate-900/90 z-10 sticky top-[73px]">
