@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Wind, Zap, Thermometer, LayoutDashboard } from 'lucide-react';
+import { Wind, Zap, Thermometer, LayoutDashboard, Download } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { getBaseUrl } from '../utils/config';
 
@@ -53,6 +53,19 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
     }
   };
 
+  const exportHistoryToCSV = () => {
+    if (!historico || historico.length === 0) return;
+    const header = "Hora,Temperatura (°C)\n";
+    const csvContent = historico.map(row => `${row.hora},${row.temp}`).join("\n");
+    const blob = new Blob([header + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `historico_termico_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
       <div className="space-y-6">
@@ -86,9 +99,20 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
 
       <div className="space-y-6">
         <div className="p-6 rounded-3xl border border-slate-700/50 bg-slate-900/80 shadow-sm backdrop-blur-sm h-full">
-          <h3 className="text-slate-400 text-sm font-semibold uppercase mb-4 flex items-center gap-2 tracking-widest">
-            <LayoutDashboard size={16} className="text-amber-400" /> Histórico Térmico
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-slate-400 text-sm font-semibold uppercase flex items-center gap-2 tracking-widest">
+              <LayoutDashboard size={16} className="text-amber-400" /> Histórico Térmico
+            </h3>
+            {historico.length > 0 && (
+              <button 
+                onClick={exportHistoryToCSV}
+                className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg border border-slate-700 transition-colors"
+                title="Baixar em Excel/CSV"
+              >
+                <Download size={14} /> Exportar CSV
+              </button>
+            )}
+          </div>
           <div className="h-64 w-full -ml-2">
             {historico.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">

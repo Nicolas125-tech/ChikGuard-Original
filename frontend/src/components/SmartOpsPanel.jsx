@@ -85,10 +85,33 @@ export default function SmartOpsPanel({ serverIP, prefs, token }) {
 
   const generateWeeklyReport = async () => {
     setIsGeneratingReport(true);
+    setReportMsg('');
     try {
-      const r = await fetch(`${baseUrl}/api/reports/weekly`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({}) });
-      const data = await r.json();
-      setReportMsg(r.ok ? `Relatorio gerado: ${data.file}` : (data.msg || 'Falha ao gerar relatorio'));
+      const r = await fetch(`${baseUrl}/api/reports/weekly/download`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (r.ok) {
+        const blob = await r.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `relatorio_semanal_${new Date().toISOString().slice(0, 10)}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        setReportMsg('Download concluído com sucesso!');
+      } else {
+        try {
+          const data = await r.json();
+          setReportMsg(data.msg || 'Falha ao baixar relatório');
+        } catch {
+          setReportMsg('Falha ao baixar relatório');
+        }
+      }
+    } catch (e) {
+      setReportMsg('Erro na conexão ao baixar relatório');
     } finally {
       setIsGeneratingReport(false);
     }
@@ -129,23 +152,23 @@ export default function SmartOpsPanel({ serverIP, prefs, token }) {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 text-xs sm:text-sm">
             <div className="bg-slate-950/60 rounded-xl border border-slate-800 p-3 sm:p-4 hover:border-slate-600 transition-colors">
               <span className="text-slate-500 font-medium block mb-1">Temperatura</span>
-              <span className="text-xl sm:text-2xl font-bold text-white">{sensors?.temperature_c ?? '--'} <span className="text-sm text-slate-400">°C</span></span>
+              <span className="text-xl sm:text-2xl font-bold text-white">{sensors?.temperature_c !== undefined ? Number(sensors.temperature_c).toLocaleString('pt-BR') : '--'} <span className="text-sm text-slate-400">°C</span></span>
             </div>
             <div className="bg-slate-950/60 rounded-xl border border-slate-800 p-3 sm:p-4 hover:border-slate-600 transition-colors">
               <span className="text-slate-500 font-medium block mb-1">Umidade</span>
-              <span className="text-xl sm:text-2xl font-bold text-blue-300">{sensors?.humidity_pct ?? '--'} <span className="text-sm text-slate-400">%</span></span>
+              <span className="text-xl sm:text-2xl font-bold text-blue-300">{sensors?.humidity_pct !== undefined ? Number(sensors.humidity_pct).toLocaleString('pt-BR') : '--'} <span className="text-sm text-slate-400">%</span></span>
             </div>
             <div className="bg-slate-950/60 rounded-xl border border-slate-800 p-3 sm:p-4 hover:border-slate-600 transition-colors">
               <span className="text-slate-500 font-medium block mb-1">Amônia</span>
-              <span className="text-xl sm:text-2xl font-bold text-amber-300">{sensors?.ammonia_ppm ?? '--'} <span className="text-sm text-slate-400">ppm</span></span>
+              <span className="text-xl sm:text-2xl font-bold text-amber-300">{sensors?.ammonia_ppm !== undefined ? Number(sensors.ammonia_ppm).toLocaleString('pt-BR') : '--'} <span className="text-sm text-slate-400">ppm</span></span>
             </div>
             <div className="bg-slate-950/60 rounded-xl border border-slate-800 p-3 sm:p-4 hover:border-slate-600 transition-colors">
               <span className="text-slate-500 font-medium block mb-1">Ração</span>
-              <span className="text-xl sm:text-2xl font-bold text-emerald-300">{sensors?.feed_level_pct ?? '--'} <span className="text-sm text-slate-400">%</span></span>
+              <span className="text-xl sm:text-2xl font-bold text-emerald-300">{sensors?.feed_level_pct !== undefined ? Number(sensors.feed_level_pct).toLocaleString('pt-BR') : '--'} <span className="text-sm text-slate-400">%</span></span>
             </div>
             <div className="bg-slate-950/60 rounded-xl border border-slate-800 p-3 sm:p-4 hover:border-slate-600 transition-colors">
               <span className="text-slate-500 font-medium block mb-1">Água</span>
-              <span className="text-xl sm:text-2xl font-bold text-cyan-300">{sensors?.water_level_pct ?? '--'} <span className="text-sm text-slate-400">%</span></span>
+              <span className="text-xl sm:text-2xl font-bold text-cyan-300">{sensors?.water_level_pct !== undefined ? Number(sensors.water_level_pct).toLocaleString('pt-BR') : '--'} <span className="text-sm text-slate-400">%</span></span>
             </div>
             <button onClick={toggleAuto} className={`rounded-xl p-3 sm:p-4 font-bold text-sm sm:text-base flex flex-col items-center justify-center gap-1 sm:gap-2 border transition-all ${autoMode?.enabled ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={autoMode?.enabled ? 'text-white' : 'text-slate-400'}><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
@@ -180,7 +203,7 @@ export default function SmartOpsPanel({ serverIP, prefs, token }) {
             {batches.items?.map((item) => (
               <div key={item.id} className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3 sm:p-4 text-xs sm:text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-slate-800/30 transition-colors">
                 <span className="font-semibold text-slate-200">{item.name}</span>
-                <span className="text-slate-400">Início: <span className="text-slate-300">{item.start_date}</span></span>
+                <span className="text-slate-400">Início: <span className="text-slate-300">{new Date(item.start_date + 'T00:00:00').toLocaleDateString('pt-BR')}</span></span>
                 <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${item.active ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/20' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}>
                   {item.active ? 'Ativo' : 'Concluído'}
                 </span>

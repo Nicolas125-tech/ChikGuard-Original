@@ -24,7 +24,10 @@ function AnimatedNum({ value, decimals = 0 }) {
       const progress = Math.min(elapsed / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
       const current = from + (to - from) * eased;
-      setDisplay(decimals > 0 ? current.toFixed(decimals) : Math.round(current));
+      const displayVal = decimals > 0 
+        ? Number(current).toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) 
+        : Math.round(current).toLocaleString('pt-BR');
+      setDisplay(displayVal);
       if (progress < 1) requestAnimationFrame(animate);
     };
     requestAnimationFrame(animate);
