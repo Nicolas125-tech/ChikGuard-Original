@@ -71,15 +71,59 @@ export default function DevicesPanel({ token, serverIP, canControlDevices, camer
     return <div className="text-slate-400 p-4">Carregando dispositivos...</div>;
   }
 
+  const emergencyCooling = async () => {
+    if (!canControlDevices) return;
+    
+    // 1. Desliga o modo automático
+    if (autoMode.enabled) {
+      await fetch(`${baseUrl}/api/auto-mode`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: false }),
+      });
+    }
+    
+    // 2. Desliga aquecedor se estiver ligado
+    if (dispositivos.aquecedor) {
+      await fetch(`${baseUrl}/api/aquecedor`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ligar: false }),
+      });
+    }
+
+    // 3. Liga ventilação se estiver desligada
+    if (!dispositivos.ventilacao) {
+      await fetch(`${baseUrl}/api/ventilacao`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ligar: true }),
+      });
+    }
+
+    loadDevices();
+    alert('⚠️ MODO EMERGÊNCIA ATIVADO: Ventilação forçada ativada, aquecedor e IA desligados!');
+  };
+
   const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
 
   return (
     <div className="space-y-6">
-      <div className="mb-2">
-        <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-          Controle de Dispositivos - <span className="text-emerald-400">{farmName}</span>
-        </h2>
-        <p className="text-slate-400 text-sm mt-1">Gerencie remotamente a ventilação, aquecimento e iluminação.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
+        <div>
+          <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+            Controle de Dispositivos - <span className="text-emerald-400">{farmName}</span>
+          </h2>
+          <p className="text-slate-400 text-sm mt-1">Gerencie remotamente a ventilação, aquecimento e iluminação.</p>
+        </div>
+        <button 
+          onClick={emergencyCooling}
+          disabled={!canControlDevices}
+          className="bg-rose-600 hover:bg-rose-500 text-white font-bold px-5 py-3 rounded-xl flex items-center gap-2 shadow-[0_0_20px_rgba(225,29,72,0.3)] transition-all hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wider text-sm whitespace-nowrap self-start sm:self-auto"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+          Resfriamento de Emergência
+        </button>
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">

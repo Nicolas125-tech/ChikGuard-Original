@@ -310,6 +310,70 @@ export default function ManagementPanel({ serverIP, prefs, token, cameras = [], 
           </div>
         </div>
       </div>
+      
+      {/* Nova funcionalidade inserida para o cliente final */}
+      <CalculadoraCA />
+      
+    </div>
+  );
+}
+
+function CalculadoraCA() {
+  const [racao, setRacao] = useState('');
+  const [peso, setPeso] = useState('');
+  
+  const ca = (Number(racao) > 0 && Number(peso) > 0) ? (Number(racao) / Number(peso)).toFixed(2) : '--';
+  let avaliacao = "Aguardando dados...";
+  let color = "text-slate-400";
+  
+  if (ca !== '--') {
+    const val = Number(ca);
+    if (val < 1.5) { avaliacao = "Excelente"; color = "text-emerald-400"; }
+    else if (val <= 1.7) { avaliacao = "Bom"; color = "text-blue-400"; }
+    else if (val <= 1.9) { avaliacao = "Atenção"; color = "text-amber-400"; }
+    else { avaliacao = "Ruim - Desperdício"; color = "text-rose-400"; }
+  }
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-sm relative overflow-hidden">
+      <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none"></div>
+      
+      <h3 className="font-bold text-lg sm:text-xl text-white mb-4 tracking-tight flex items-center gap-2">
+        <span className="bg-indigo-500/20 text-indigo-400 p-2 rounded-xl border border-indigo-500/30">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 22h14a2 2 0 0 0 2-2V7.5L14.5 2H6a2 2 0 0 0-2 2v4"/><polyline points="14 2 14 8 20 8"/><path d="m3 15 4 4 4-4"/><path d="M7 11v8"/></svg>
+        </span>
+        Calculadora Rápida: Conversão Alimentar (CA)
+      </h3>
+      <p className="text-slate-400 text-sm mb-4">A conversão alimentar indica quantos quilos de ração são necessários para produzir 1 quilo de frango. Quanto menor o índice, melhor.</p>
+      
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-slate-950/60 p-4 sm:p-5 rounded-xl border border-slate-800 shadow-inner">
+          <label className="text-xs text-slate-400 uppercase tracking-wider font-bold mb-2 block">Ração Consumida (kg)</label>
+          <input 
+            type="number" 
+            value={racao} 
+            onChange={e=>setRacao(e.target.value)} 
+            placeholder="Ex: 5000" 
+            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white font-mono text-lg outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-600" 
+          />
+        </div>
+        <div className="bg-slate-950/60 p-4 sm:p-5 rounded-xl border border-slate-800 shadow-inner">
+          <label className="text-xs text-slate-400 uppercase tracking-wider font-bold mb-2 block">Peso Total do Lote (kg)</label>
+          <input 
+            type="number" 
+            value={peso} 
+            onChange={e=>setPeso(e.target.value)} 
+            placeholder="Ex: 3100" 
+            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white font-mono text-lg outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-600" 
+          />
+        </div>
+        <div className="bg-slate-800 p-4 sm:p-5 rounded-xl border border-slate-700 flex flex-col justify-center items-center shadow-md relative overflow-hidden">
+          <div className={`absolute top-0 right-0 w-full h-full opacity-5 pointer-events-none ${ca !== '--' ? color.replace('text', 'bg') : ''}`}></div>
+          <span className="text-xs text-slate-300 uppercase tracking-wider font-bold mb-1 z-10">Resultado (CA)</span>
+          <span className={`text-4xl sm:text-5xl font-black z-10 ${color}`}>{ca}</span>
+          <span className={`text-sm font-bold mt-2 px-3 py-1 bg-slate-900/50 rounded-full border border-slate-700 z-10 ${color}`}>{avaliacao}</span>
+        </div>
+      </div>
     </div>
   );
 }
