@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { RefreshCw, Database } from 'lucide-react';
 import { getBaseUrl } from '../utils/config';
 
 export default function HistoryPanel({ serverIP, prefs, token }) {
@@ -23,7 +24,12 @@ export default function HistoryPanel({ serverIP, prefs, token }) {
   }, [loadHistory, prefs.historyMs]);
 
   if (loading) {
-    return <div className="text-slate-400 p-4">Carregando historico...</div>;
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-slate-500 h-[500px]">
+        <RefreshCw size={24} className="animate-spin mb-3 text-emerald-500" />
+        <span className="font-medium text-sm">Carregando histórico...</span>
+      </div>
+    );
   }
 
   return (
@@ -44,7 +50,12 @@ export default function HistoryPanel({ serverIP, prefs, token }) {
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent bg-slate-950/20">
-        {history.length === 0 && <div className="p-8 text-slate-500 text-center flex flex-col items-center justify-center h-full">Nenhuma leitura registrada.</div>}
+        {history.length === 0 && (
+          <div className="p-12 text-slate-500 text-center flex flex-col items-center justify-center h-full">
+            <Database size={40} className="mb-3 opacity-30" />
+            <p className="font-semibold text-slate-400">Nenhuma leitura registrada.</p>
+          </div>
+        )}
 
         {history.map((item) => (
           <div key={item.id} className="flex flex-col sm:grid sm:grid-cols-4 gap-2 sm:gap-4 px-4 sm:px-6 py-4 border-b border-slate-800/50 text-sm hover:bg-slate-800/20 transition-colors group">
