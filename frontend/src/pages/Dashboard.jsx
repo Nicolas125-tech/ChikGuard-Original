@@ -443,6 +443,19 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
           </div>
         </div>
       </main>
+      {/* ── Overlay de Conexão Perdida ── */}
+      {backendOnline === false && (
+        <div className="fixed bottom-4 right-4 bg-rose-500/90 backdrop-blur-md text-white px-5 py-4 rounded-2xl shadow-2xl shadow-rose-500/20 flex items-center gap-4 z-50 animate-fade-in-up border border-rose-400">
+          <div className="bg-white/20 p-2 rounded-full">
+            <WifiOff size={24} />
+          </div>
+          <div>
+            <p className="font-bold text-base leading-tight">Servidor Offline</p>
+            <p className="text-sm text-rose-100 mt-0.5">Tentando reconectar automaticamente...</p>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

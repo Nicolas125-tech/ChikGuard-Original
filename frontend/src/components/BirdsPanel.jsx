@@ -53,7 +53,7 @@ export default function BirdsPanel({ token, serverIP, prefs }) {
             {live.items?.map((item) => (
               <div key={item.bird_uid} className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 sm:gap-4 px-4 py-3 border-b border-slate-800/50 hover:bg-slate-800/20 text-sm transition-colors">
                 <span className="font-medium text-slate-200">ID {item.bird_uid}</span>
-                <span className="text-slate-400 text-xs sm:text-sm">Conf: <span className="text-emerald-400">{item.confidence}</span></span>
+                <span className="text-slate-400 text-xs sm:text-sm">Conf: <span className="text-emerald-400">{Math.round((item.confidence || 0) * 100)}%</span></span>
                 <span className="text-slate-500 text-xs sm:text-sm">{item.last_seen_seconds}s atrás</span>
               </div>
             ))}
@@ -70,7 +70,7 @@ export default function BirdsPanel({ token, serverIP, prefs }) {
               <div key={item.bird_uid} className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 sm:gap-4 px-4 py-3 border-b border-slate-800/50 hover:bg-slate-800/20 text-sm transition-colors">
                 <span className="font-medium text-slate-200">ID {item.bird_uid}</span>
                 <span className="text-slate-400 text-xs sm:text-sm">Vezes: <span className="text-blue-400">{item.sightings}</span></span>
-                <span className="text-slate-400 text-xs sm:text-sm">Conf máx: <span className="text-emerald-400">{item.max_confidence}</span></span>
+                <span className="text-slate-400 text-xs sm:text-sm">Conf máx: <span className="text-emerald-400">{Math.round((item.max_confidence || 0) * 100)}%</span></span>
                 <span className="text-slate-500 text-xs sm:text-sm">{item.last_seen}</span>
               </div>
             ))}

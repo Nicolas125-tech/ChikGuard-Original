@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Wind, Zap, Thermometer, LayoutDashboard, Download } from 'lucide-react';
+import { Wind, Zap, Thermometer, LayoutDashboard, Download, CloudLightning } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { getBaseUrl } from '../utils/config';
 
 export default function ClimatePanel({ token, serverIP, prefs, canControlDevices }) {
   const [dispositivos, setDispositivos] = useState({ ventilacao: false, aquecedor: false });
   const [historico, setHistorico] = useState([]);
+  const [weather, setWeather] = useState(null);
   const [Erro_State, setErro] = useState(false);
   const baseUrl = getBaseUrl(serverIP);
 
@@ -31,13 +32,27 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
     }
   }, [baseUrl, token]);
 
+  const fetchWeather = useCallback(async () => {
+    try {
+      const r = await fetch(`${baseUrl}/api/weather/forecast`, { headers: { Authorization: `Bearer ${token}` } });
+      if (r.ok) {
+        const data = await r.json();
+        setWeather(data);
+      }
+    } catch {
+      // ignore
+    }
+  }, [baseUrl, token]);
+
   useEffect(() => {
     setTimeout(() => fetchDevices(), 0);
     setTimeout(() => fetchHistory(), 0);
+    setTimeout(() => fetchWeather(), 0);
     const c = setInterval(fetchDevices, prefs.devicesMs);
     const h = setInterval(fetchHistory, prefs.historyMs);
-    return () => { clearInterval(c); clearInterval(h); };
-  }, [fetchDevices, fetchHistory, prefs]);
+    const w = setInterval(fetchWeather, 300000); // 5 min
+    return () => { clearInterval(c); clearInterval(h); clearInterval(w); };
+  }, [fetchDevices, fetchHistory, fetchWeather, prefs]);
 
   const toggleDevice = async (tipo, ligar) => {
     if (!canControlDevices) return;
@@ -69,6 +84,17 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
   return (
     <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
       <div className="space-y-6">
+        {weather?.preheat_recommended && (
+          <div className="p-5 rounded-3xl border border-blue-500/30 bg-blue-900/20 shadow-sm backdrop-blur-sm animate-fade-in-down">
+            <h3 className="text-blue-400 text-sm font-semibold uppercase mb-2 flex items-center gap-2 tracking-widest">
+              <CloudLightning size={18} /> Alerta Meteorológico Externo
+            </h3>
+            <p className="text-slate-300 text-sm leading-relaxed">
+              {weather.message}
+              {weather.next_night_min_c !== undefined && <span className="block mt-1 font-mono text-xs text-blue-300">Temperatura Mín. Prevista: {weather.next_night_min_c}°C</span>}
+            </p>
+          </div>
+        )}
         <div className="p-6 rounded-3xl border border-slate-700/50 bg-slate-900/80 shadow-sm backdrop-blur-sm">
             <h3 className="text-slate-400 text-sm font-semibold uppercase mb-4 flex items-center gap-2 tracking-widest">
                 <Thermometer size={18} className="text-rose-400" /> Controle de Dispositivos (IoT)
