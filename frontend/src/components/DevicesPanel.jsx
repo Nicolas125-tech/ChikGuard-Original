@@ -13,13 +13,20 @@ export default function DevicesPanel({ token, serverIP, canControlDevices }) {
     try {
       const r = await fetch(`${baseUrl}/api/estado-dispositivos`, { headers: { Authorization: `Bearer ${token}` } });
       if (!r.ok) throw new Error('Device state fetch failed');
-      setDispositivos(await r.json());
+      const dispData = await r.json();
+      setDispositivos(prev => JSON.stringify(prev) === JSON.stringify(dispData) ? prev : dispData);
+
       const auto = await fetch(`${baseUrl}/api/auto-mode`, { headers: { Authorization: `Bearer ${token}` } });
-      if (auto.ok) setAutoMode(await auto.json());
+      if (auto.ok) {
+        const autoData = await auto.json();
+        setAutoMode(prev => JSON.stringify(prev) === JSON.stringify(autoData) ? prev : autoData);
+      }
+
       const l = await fetch(`${baseUrl}/api/luz-dimmer`, { headers: { Authorization: `Bearer ${token}` } });
       if (l.ok) {
         const j = await l.json();
-        setLightPct(Number(j.luz_intensidade_pct || 0));
+        const newLightPct = Number(j.luz_intensidade_pct || 0);
+        setLightPct(prev => prev === newLightPct ? prev : newLightPct);
       }
     } finally {
       setLoading(false);
