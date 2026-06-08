@@ -234,7 +234,7 @@ function AppCore() {
 
   if (token) {
     if (!isSetupComplete) {
-      return <SetupScreen onComplete={() => setIsSetupComplete(true)} />;
+      return <SetupScreen token={token} onComplete={() => setIsSetupComplete(true)} />;
     }
 
     return (

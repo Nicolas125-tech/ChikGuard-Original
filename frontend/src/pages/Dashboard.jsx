@@ -195,6 +195,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
 
   const allItems = tabs.flatMap(s => s.items);
   const currentTab = allItems.find(t => t.id === tab);
+  const activeCameraData = cameras.find(c => c.camera_id === activeCamera) || null;
 
   // ── Sub-componente de Renderização do Conteúdo da Sidebar ──
   const SidebarContent = () => (
@@ -321,9 +322,11 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
 
       <div className="flex items-center gap-3">
         {cameras.length > 0 && (
-          <select 
-            aria-label="Selecionar câmera ativa"
-            title="Selecionar câmera ativa"
+          <div className="flex items-center gap-2">
+            <span className="hidden lg:inline text-xs text-slate-500 font-medium">Granja:</span>
+            <select 
+              aria-label="Selecionar granja/câmera"
+              title="Selecionar granja/câmera"
             value={activeCamera} 
             onChange={(e) => switchCamera(e.target.value)}
             className="bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-medium focus:outline-none focus:border-emerald-500 transition-colors cursor-pointer"
@@ -331,7 +334,8 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
             {cameras.map(c => (
               <option key={c.camera_id} value={c.camera_id}>{c.name}</option>
             ))}
-          </select>
+            </select>
+          </div>
         )}
 
         <div className="hidden sm:flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-lg border border-slate-700/50 text-xs">
@@ -390,7 +394,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
       case 'settings':
         return <SettingsPanel serverIP={serverIP} token={token} prefs={prefs} onSavePrefs={onSavePrefs} onSaveServer={onSaveServer} />;
       case 'profile':
-        return <ProfilePanel role={role} />;
+        return <ProfilePanel role={role} cameras={cameras} />;
       case 'cameras':
         return <CamerasManager serverIP={serverIP} token={token} />;
       case 'admin':
@@ -412,12 +416,25 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto w-full">
-            <div className="mb-6 animate-fade-in-down">
-              <h2 className="text-2xl font-extrabold text-white tracking-tight capitalize flex items-center gap-3">
-                {currentTab && <currentTab.icon size={24} className="text-emerald-400" />}
-                {currentTab?.label || 'Dashboard'}
-              </h2>
-              <p className="text-slate-500 text-sm mt-1">Gerencie a produção em tempo real.</p>
+            <div className="mb-6 animate-fade-in-down flex justify-between items-end">
+              <div>
+                <h2 className="text-2xl font-extrabold text-white tracking-tight capitalize flex items-center gap-3">
+                  {currentTab && <currentTab.icon size={24} className="text-emerald-400" />}
+                  {currentTab?.label || 'Dashboard'}
+                </h2>
+                <p className="text-slate-500 text-sm mt-1">Gerencie a produção em tempo real.</p>
+              </div>
+              {activeCameraData && (
+                <div className="text-right hidden sm:block bg-slate-900/50 p-3 rounded-xl border border-slate-800/60 shadow-inner">
+                  <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-1 flex items-center justify-end gap-1">
+                    <Database size={12} /> Granja Atual
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-emerald-400 font-bold">{activeCameraData.name}</span>
+                    <span className="text-slate-500 text-xs font-mono bg-slate-950 px-2 py-0.5 rounded">ID: {activeCameraData.camera_id}</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div key={tab} className="tab-content-enter">

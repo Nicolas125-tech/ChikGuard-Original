@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { STORAGE } from '../utils/config';
 
-export default function SetupScreen({ onComplete }) {
+export default function SetupScreen({ token, onComplete }) {
   const [step, setStep] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     serverIP: localStorage.getItem(STORAGE.server) || '127.0.0.1',
     cameraUrl: '',
@@ -17,13 +18,41 @@ export default function SetupScreen({ onComplete }) {
   const nextStep = () => setStep(s => s + 1);
   const prevStep = () => setStep(s => s - 1);
 
-  const handleFinish = () => {
-    // Salva as configurações de IP e marca o setup como completo
-    localStorage.setItem(STORAGE.server, formData.serverIP);
-    localStorage.setItem('cg_farm_name', formData.farmName);
-    localStorage.setItem('cg_camera_url', formData.cameraUrl);
-    localStorage.setItem('cg_setup_complete', 'true');
-    onComplete();
+  const handleFinish = async () => {
+    setIsSubmitting(true);
+    try {
+      // Salva as configurações de IP no localStorage
+      const cleanIP = formData.serverIP.replace(/\/$/, '');
+      const baseUrl = cleanIP.startsWith('http') ? cleanIP : `http://${cleanIP}`;
+      localStorage.setItem(STORAGE.server, cleanIP);
+      localStorage.setItem('cg_farm_name', formData.farmName);
+      localStorage.setItem('cg_camera_url', formData.cameraUrl);
+      localStorage.setItem('cg_setup_complete', 'true');
+
+      // Tenta registrar a granja/câmera no backend, se o token e os dados estiverem disponíveis
+      if (token && formData.farmName) {
+        const payload = {
+          camera_id: `granja-${Math.floor(Math.random() * 10000)}`,
+          name: formData.farmName,
+          connection_type: formData.cameraUrl.startsWith('rtsp') ? 'rtsp' : 'url',
+          connection_url: formData.cameraUrl || ''
+        };
+
+        await fetch(`${baseUrl}/api/cameras`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+      }
+    } catch (e) {
+      console.error("Erro ao registrar granja inicial no backend", e);
+    } finally {
+      setIsSubmitting(false);
+      onComplete();
+    }
   };
 
   return (
@@ -154,9 +183,10 @@ export default function SetupScreen({ onComplete }) {
           ) : (
             <button 
               onClick={handleFinish}
-              className="flex-2 w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-medium hover:from-emerald-500 hover:to-teal-400 transition-all shadow-lg shadow-emerald-500/25"
+              disabled={isSubmitting}
+              className="flex-2 w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-medium hover:from-emerald-500 hover:to-teal-400 transition-all shadow-lg shadow-emerald-500/25 disabled:opacity-50"
             >
-              Concluir Configuração
+              {isSubmitting ? 'Salvando...' : 'Concluir Configuração'}
             </button>
           )}
         </div>

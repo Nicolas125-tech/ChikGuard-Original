@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, Lock, Shield, CheckCircle, AlertCircle, Camera } from 'lucide-react';
+import { User, Mail, Lock, Shield, CheckCircle, AlertCircle, Camera, Database } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 
-export default function ProfilePanel({ role }) {
+export default function ProfilePanel({ role, cameras = [] }) {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
@@ -110,6 +110,25 @@ export default function ProfilePanel({ role }) {
                 Ativa
               </span>
             </div>
+
+            <div className="w-full mt-4 bg-slate-950/50 rounded-xl p-4 border border-slate-800/50 text-left">
+              <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <Database size={14} /> Minhas Granjas
+              </h4>
+              {cameras.length > 0 ? (
+                <ul className="space-y-2">
+                  {cameras.map(cam => (
+                    <li key={cam.camera_id} className="flex items-center justify-between text-sm bg-slate-900/50 px-3 py-2 rounded-lg border border-slate-800">
+                      <span className="text-slate-300 font-medium truncate">{cam.name}</span>
+                      <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20">{cam.status}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-slate-500 italic">Nenhuma granja vinculada.</p>
+              )}
+            </div>
+
           </div>
         </div>
 
