@@ -12,7 +12,8 @@ export default function AlertsPanel({ serverIP, prefs, token }) {
     try {
       const r = await fetch(`${baseUrl}/api/alerts`, { headers: { Authorization: `Bearer ${token}` } });
       if (!r.ok) throw new Error('Alerts fetch failed');
-      setAlerts(await r.json());
+      const data = await r.json();
+      setAlerts(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
     } finally {
       setLoading(false);
     }

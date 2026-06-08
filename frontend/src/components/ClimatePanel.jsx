@@ -13,8 +13,8 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
     try {
       const r = await fetch(`${baseUrl}/api/estado-dispositivos`, { headers: { Authorization: `Bearer ${token}` } });
       if (!r.ok) throw new Error('Device state fetch failed');
-      const data = await r.json();
-      setDispositivos(data || { ventilacao: false, aquecedor: false });
+      const data = await r.json() || { ventilacao: false, aquecedor: false };
+      setDispositivos(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
     } catch {
       setErro(true);
     }
@@ -24,8 +24,8 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
     try {
       const r = await fetch(`${baseUrl}/api/history`, { headers: { Authorization: `Bearer ${token}` } });
       if (!r.ok) throw new Error('History fetch failed');
-      const data = await r.json();
-      setHistorico(data || []);
+      const data = await r.json() || [];
+      setHistorico(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
     } catch {
       setErro(true);
     }

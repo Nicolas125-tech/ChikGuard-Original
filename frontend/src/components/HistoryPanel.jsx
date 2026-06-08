@@ -11,7 +11,8 @@ export default function HistoryPanel({ serverIP, prefs, token }) {
     try {
       const r = await fetch(`${baseUrl}/api/history`, { headers: { Authorization: `Bearer ${token}` } });
       if (!r.ok) throw new Error('History fetch failed');
-      setHistory(await r.json());
+      const data = await r.json();
+      setHistory(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
     } finally {
       setLoading(false);
     }
