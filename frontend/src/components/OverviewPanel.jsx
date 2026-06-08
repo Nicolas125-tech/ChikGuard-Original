@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Thermometer, Bird, Activity, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Thermometer, Bird, Activity, TrendingUp, TrendingDown, Minus, Database } from 'lucide-react';
 import { getBaseUrl } from '../utils/config';
 
 /* ── Animated Number ─────────────────────────────────────────── */
@@ -58,7 +58,7 @@ function ScoreRing({ score, size = 100 }) {
   );
 }
 
-export default function OverviewPanel({ token, serverIP, prefs }) {
+export default function OverviewPanel({ token, serverIP, prefs, cameras = [], activeCamera }) {
   const [dados, setDados] = useState(null);
   const [contagem, setContagem] = useState(null);
   const [summary, setSummary] = useState(null);
@@ -105,8 +105,44 @@ export default function OverviewPanel({ token, serverIP, prefs }) {
     ? (temp > prevTemp ? 'up' : temp < prevTemp ? 'down' : 'stable')
     : null;
 
+  const onlineFarms = cameras.filter(c => c.status === 'online').length;
+  const offlineFarms = cameras.length - onlineFarms;
+
   return (
-    <div className="grid gap-5 grid-cols-1 md:grid-cols-3">
+    <div className="space-y-6">
+      {cameras.length > 1 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-fade-in-down mb-6">
+          <div className="bg-slate-900/50 backdrop-blur-md border border-slate-800 rounded-2xl p-4 flex items-center justify-between shadow-lg">
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Total Granjas</p>
+              <p className="text-3xl font-black text-white">{cameras.length}</p>
+            </div>
+            <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/50 shadow-inner">
+              <Database className="text-slate-400" size={20} />
+            </div>
+          </div>
+          <div className="bg-slate-900/50 backdrop-blur-md border border-slate-800 rounded-2xl p-4 flex items-center justify-between shadow-lg">
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Online</p>
+              <p className="text-3xl font-black text-emerald-400">{onlineFarms}</p>
+            </div>
+            <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20 shadow-inner">
+              <Activity className="text-emerald-400" size={20} />
+            </div>
+          </div>
+          <div className="bg-slate-900/50 backdrop-blur-md border border-slate-800 rounded-2xl p-4 flex items-center justify-between shadow-lg">
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Offline</p>
+              <p className={`text-3xl font-black ${offlineFarms > 0 ? 'text-rose-400' : 'text-slate-300'}`}>{offlineFarms}</p>
+            </div>
+            <div className={`${offlineFarms > 0 ? 'bg-rose-500/10 border-rose-500/20' : 'bg-slate-800/80 border-slate-700/50'} p-3 rounded-xl border shadow-inner`}>
+              <Minus className={offlineFarms > 0 ? 'text-rose-400' : 'text-slate-400'} size={20} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="grid gap-5 grid-cols-1 md:grid-cols-3">
       {/* ── Temperatura ── */}
       <div className="card-premium p-6 animate-fade-in-up stagger-1 hover-lift">
         <div className="flex items-center justify-between mb-4">

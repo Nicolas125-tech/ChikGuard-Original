@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { STORAGE } from '../utils/config';
 
 export default function SetupScreen({ token, onComplete }) {
@@ -10,6 +10,33 @@ export default function SetupScreen({ token, onComplete }) {
     farmName: '',
     location: '',
   });
+
+  // Pula automaticamente se a conta já tiver granjas no backend
+  useEffect(() => {
+    const checkExistingFarms = async () => {
+      if (!token) return;
+      try {
+        const cleanIP = formData.serverIP.replace(/\/$/, '');
+        const baseUrl = cleanIP.startsWith('http') ? cleanIP : `http://${cleanIP}`;
+        
+        const res = await fetch(`${baseUrl}/api/cameras`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          if (data.items && data.items.length > 0) {
+            localStorage.setItem('cg_setup_complete', 'true');
+            onComplete();
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao verificar granjas existentes:", err);
+      }
+    };
+    
+    checkExistingFarms();
+  }, [token, formData.serverIP, onComplete]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
