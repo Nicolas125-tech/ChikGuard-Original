@@ -61,7 +61,7 @@ function ScoreRing({ score, size = 100 }) {
   );
 }
 
-export default function OverviewPanel({ token, serverIP, prefs, cameras = [], activeCamera }) {
+export default function OverviewPanel({ token, serverIP, prefs, cameras = [], activeCamera, onTabChange }) {
   const [dados, setDados] = useState(null);
   const [contagem, setContagem] = useState(null);
   const [summary, setSummary] = useState(null);
@@ -113,6 +113,13 @@ export default function OverviewPanel({ token, serverIP, prefs, cameras = [], ac
 
   return (
     <div className="space-y-6">
+      <div className="mb-2">
+        <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+          Visão Geral - <span className="text-emerald-400">{cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal'}</span>
+        </h2>
+        <p className="text-slate-400 text-sm mt-1">Monitoramento de telemetria e visão computacional em tempo real.</p>
+      </div>
+
       {cameras.length > 1 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-fade-in-down mb-6">
           <div className="bg-slate-900/50 backdrop-blur-md border border-slate-800 rounded-2xl p-4 flex items-center justify-between shadow-lg">
@@ -147,7 +154,11 @@ export default function OverviewPanel({ token, serverIP, prefs, cameras = [], ac
 
       <div className="grid gap-5 grid-cols-1 md:grid-cols-3">
       {/* ── Temperatura ── */}
-      <div className="card-premium p-6 animate-fade-in-up stagger-1 hover-lift">
+      <div 
+        onClick={() => onTabChange && onTabChange('climate')}
+        className="card-premium p-6 animate-fade-in-up stagger-1 hover-lift cursor-pointer hover:border-rose-500/40 transition-all"
+        role="button"
+      >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2 text-slate-400 font-semibold text-xs uppercase tracking-widest">
             <div className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/20">
@@ -175,7 +186,11 @@ export default function OverviewPanel({ token, serverIP, prefs, cameras = [], ac
       </div>
 
       {/* ── Detecções ── */}
-      <div className="card-premium p-6 animate-fade-in-up stagger-2 hover-lift">
+      <div 
+        onClick={() => onTabChange && onTabChange('birds')}
+        className="card-premium p-6 animate-fade-in-up stagger-2 hover-lift cursor-pointer hover:border-indigo-500/40 transition-all"
+        role="button"
+      >
         <div className="flex justify-between items-start mb-4">
           <div className="flex items-center gap-2 text-slate-400 font-semibold text-xs uppercase tracking-widest">
             <div className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
@@ -196,7 +211,11 @@ export default function OverviewPanel({ token, serverIP, prefs, cameras = [], ac
       </div>
 
       {/* ── Score de Conforto ── */}
-      <div className="card-premium p-6 animate-fade-in-up stagger-3 hover-lift">
+      <div 
+        onClick={() => onTabChange && onTabChange('digitaltwin')}
+        className="card-premium p-6 animate-fade-in-up stagger-3 hover-lift cursor-pointer hover:border-emerald-500/40 transition-all"
+        role="button"
+      >
         <div className="text-xs uppercase font-semibold tracking-widest text-slate-400 mb-4 flex items-center gap-2">
           <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
             <Activity size={16} className="text-emerald-400"/>

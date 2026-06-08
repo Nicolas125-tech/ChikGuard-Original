@@ -372,7 +372,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
   const renderActivePanel = () => {
     switch (tab) {
       case 'overview':
-        return <OverviewPanel token={token} serverIP={serverIP} prefs={prefs} cameras={cameras} activeCamera={activeCamera} />;
+        return <OverviewPanel token={token} serverIP={serverIP} prefs={prefs} cameras={cameras} activeCamera={activeCamera} onTabChange={handleTabChange} />;
       case 'camera':
         return <CameraPanel token={token} serverIP={serverIP} cameras={cameras} activeCamera={activeCamera} />;
       case 'digitaltwin':

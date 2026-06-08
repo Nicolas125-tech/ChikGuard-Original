@@ -6,6 +6,7 @@ import { getBaseUrl } from '../utils/config';
 export default function AlertsPanel({ serverIP, prefs, token, cameras = [], activeCamera }) {
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [dismissed, setDismissed] = useState(() => JSON.parse(localStorage.getItem('cg_dismissed_alerts')) || []);
   const baseUrl = getBaseUrl(serverIP);
 
   const loadAlerts = useCallback(async () => {
@@ -46,17 +47,38 @@ export default function AlertsPanel({ serverIP, prefs, token, cameras = [], acti
   }
 
   const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
+  
+  const visibleAlerts = alerts.filter(a => !dismissed.includes(a.id));
+
+  const dismissAlert = (id) => {
+    const newDismissed = [...dismissed, id];
+    setDismissed(newDismissed);
+    localStorage.setItem('cg_dismissed_alerts', JSON.stringify(newDismissed));
+  };
+
+  const clearAll = () => {
+    const newDismissed = [...dismissed, ...visibleAlerts.map(a => a.id)];
+    setDismissed(newDismissed);
+    localStorage.setItem('cg_dismissed_alerts', JSON.stringify(newDismissed));
+  };
 
   return (
     <div className="space-y-3 sm:space-y-4 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-4 px-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 px-2 gap-4">
         <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Alertas do Sistema - <span className="text-emerald-400">{farmName}</span></h2>
-        <span className="bg-slate-800 text-slate-300 font-semibold px-3 py-1 rounded-full text-xs sm:text-sm">
-          {alerts.length} ativo{alerts.length !== 1 && 's'}
-        </span>
+        <div className="flex items-center gap-3">
+          {visibleAlerts.length > 0 && (
+            <button onClick={clearAll} className="text-xs font-semibold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-700">
+              Limpar Todos
+            </button>
+          )}
+          <span className="bg-slate-800 text-slate-300 font-semibold px-3 py-1 rounded-full text-xs sm:text-sm shadow-inner border border-slate-700">
+            {visibleAlerts.length} ativo{visibleAlerts.length !== 1 && 's'}
+          </span>
+        </div>
       </div>
 
-      {alerts.length === 0 && (
+      {visibleAlerts.length === 0 && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center flex flex-col items-center justify-center min-h-[200px] shadow-sm">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500 mb-4 opacity-80"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
           <h3 className="text-xl font-bold text-slate-200 mb-2">Tudo tranquilo</h3>
@@ -64,8 +86,8 @@ export default function AlertsPanel({ serverIP, prefs, token, cameras = [], acti
         </div>
       )}
 
-      {alerts.map((alert) => (
-        <div key={alert.id} className={`rounded-2xl border p-4 sm:p-5 shadow-sm transition-all hover:-translate-y-0.5 ${
+      {visibleAlerts.map((alert) => (
+        <div key={alert.id} className={`rounded-2xl border p-4 sm:p-5 shadow-sm transition-all hover:-translate-y-0.5 relative overflow-hidden ${
           alert.nivel === 'alto'
             ? 'bg-rose-500/10 border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.05)]'
             : alert.nivel === 'medio'
@@ -95,6 +117,14 @@ export default function AlertsPanel({ serverIP, prefs, token, cameras = [], acti
               </span>
             </div>
           )}
+
+          <button 
+            onClick={() => dismissAlert(alert.id)}
+            title="Marcar como resolvido"
+            className="absolute top-4 right-4 p-2 bg-slate-950/40 hover:bg-emerald-500/20 text-slate-500 hover:text-emerald-400 rounded-lg transition-all border border-slate-800 hover:border-emerald-500/30 group"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="group-hover:scale-110 transition-transform"><polyline points="20 6 9 17 4 12"/></svg>
+          </button>
         </div>
       ))}
     </div>
