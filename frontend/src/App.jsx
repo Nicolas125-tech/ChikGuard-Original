@@ -4,6 +4,7 @@ import LandingPage from './pages/LandingPage';
 import LoginScreen from './pages/LoginScreen';
 import TVScreen from './pages/TVScreen';
 import Dashboard from './pages/Dashboard';
+import SetupScreen from './pages/SetupScreen';
 import { STORAGE, readPrefs } from './utils/config';
 import { supabase, isSupabaseConfigured } from './utils/supabaseClient';
 
@@ -59,6 +60,7 @@ class ErrorBoundary extends React.Component {
 // ─── App principal ────────────────────────────────────────────────────────────
 function AppCore() {
   const [booting, setBooting] = useState(true);
+  const [isSetupComplete, setIsSetupComplete] = useState(localStorage.getItem('cg_setup_complete') === 'true');
   const [token, setToken] = useState(localStorage.getItem(STORAGE.token));
   const [role, setRole] = useState(localStorage.getItem(STORAGE.role) || 'admin');
   const [status, setStatus] = useState(localStorage.getItem('cg_status') || 'ACTIVE');
@@ -203,6 +205,10 @@ function AppCore() {
   const tvMode = window.location.pathname === '/tv';
 
   if (booting) return <OpeningScreen />;
+
+  if (!isSetupComplete) {
+    return <SetupScreen onComplete={() => setIsSetupComplete(true)} />;
+  }
 
   if (tvMode) return <TVScreen serverIP={serverIP} />;
 

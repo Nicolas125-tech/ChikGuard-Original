@@ -18,14 +18,13 @@ services:
     #   - "/dev/video0:/dev/video0"
     restart: unless-stopped
 
-  # Commented out since the frontend is deployed on Vercel
-  # frontend:
-  #   build:
-  #     context: ./frontend
-  #     dockerfile: Dockerfile
-  #   ports:
-  #     - "80:80"
-  #   restart: unless-stopped
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    restart: unless-stopped
 
   cloudflared:
     image: cloudflare/cloudflared:latest
