@@ -206,10 +206,6 @@ function AppCore() {
 
   if (booting) return <OpeningScreen />;
 
-  if (!isSetupComplete) {
-    return <SetupScreen onComplete={() => setIsSetupComplete(true)} />;
-  }
-
   if (tvMode) return <TVScreen serverIP={serverIP} />;
 
   if (token && status === 'PENDING') {
@@ -237,6 +233,10 @@ function AppCore() {
   }
 
   if (token) {
+    if (!isSetupComplete) {
+      return <SetupScreen onComplete={() => setIsSetupComplete(true)} />;
+    }
+
     return (
       <Dashboard
         token={token}
