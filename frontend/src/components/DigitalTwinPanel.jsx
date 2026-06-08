@@ -92,6 +92,9 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
     return densities;
   }, [heatmapPoints]);
 
+  const isVentActive = deviceState.ventilacao;
+  const isHeatActive = deviceState.aquecedor;
+
   return (
     <div className="space-y-6">
       {/* ── View Selectors ── */}

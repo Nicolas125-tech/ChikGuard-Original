@@ -234,5 +234,6 @@ export default function OverviewPanel({ token, serverIP, prefs, cameras = [], ac
         </div>
       </div>
     </div>
+    </div>
   );
 }

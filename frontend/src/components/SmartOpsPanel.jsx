@@ -11,7 +11,7 @@ export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], ac
   const [sensors, setSensors] = useState(null);
   const [autoMode, setAutoMode] = useState(null);
   const [batches, setBatches] = useState({ count: 0, items: [] });
-  const [cameras, setCameras] = useState({ active_camera_id: '', items: [] });
+  const [apiCameras, setApiCameras] = useState({ active_camera_id: '', items: [] });
   const [reportMsg, setReportMsg] = useState('');
   const [batchForm, setBatchForm] = useState({ name: '', start_date: '' });
   const [logbook, setLogbook] = useState({ count: 0, items: [] });
@@ -34,7 +34,7 @@ export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], ac
     ]);
     if (i.ok) setImmobility(await i.json());
     if (bt.ok) setBatches(await bt.json());
-    if (c.ok) setCameras(await c.json());
+    if (c.ok) setApiCameras(await c.json());
     if (lb.ok) setLogbook(await lb.json());
     if (sum.ok) {
       const d = await sum.json();
@@ -115,8 +115,6 @@ export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], ac
     } catch (e) {
       setReportMsg('Erro ao gerar relatório local');
     } finally {
-      setIsGeneratingReport(false);
-    }
       setIsGeneratingReport(false);
     }
   };
@@ -232,11 +230,11 @@ export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], ac
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
               <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 flex flex-col gap-1">
                 <span className="text-slate-500 text-xs sm:text-sm font-medium">Câmera Ativa</span>
-                <span className="text-slate-200 font-bold truncate">{cameras.active_camera_id || 'Não configurada'}</span>
+                <span className="text-slate-200 font-bold truncate">{apiCameras.active_camera_id || 'Não configurada'}</span>
               </div>
               <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 flex flex-col gap-1">
                 <span className="text-slate-500 text-xs sm:text-sm font-medium">Total de Câmeras</span>
-                <span className="text-slate-200 font-bold">{cameras.items?.length ?? 0}</span>
+                <span className="text-slate-200 font-bold">{apiCameras.items?.length ?? 0}</span>
               </div>
             </div>
           </div>
