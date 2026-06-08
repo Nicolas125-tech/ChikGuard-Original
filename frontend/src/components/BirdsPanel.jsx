@@ -2,12 +2,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import SystemCard from './SystemCard';
 import { getBaseUrl } from '../utils/config';
 
-export default function BirdsPanel({ token, serverIP, prefs }) {
+export default function BirdsPanel({ token, serverIP, prefs, cameras = [], activeCamera }) {
   const [live, setLive] = useState({ count: 0, items: [] });
   const [registry, setRegistry] = useState({ count: 0, items: [] });
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const baseUrl = getBaseUrl(serverIP);
+  const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
 
   const loadBirds = useCallback(async () => {
     try {
@@ -37,6 +38,13 @@ export default function BirdsPanel({ token, serverIP, prefs }) {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <div className="mb-2">
+        <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+          Visão de Lote - <span className="text-emerald-400">{farmName}</span>
+        </h2>
+        <p className="text-slate-400 text-sm mt-1">Detecção e contagem de aves em tempo real.</p>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
         <SystemCard label="Aves visiveis agora" value={live.count ?? 0} />
         <SystemCard label="Aves unicas vistas" value={registry.count ?? 0} />

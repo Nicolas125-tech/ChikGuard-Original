@@ -4,7 +4,7 @@ import WebRTCVideo from './WebRTCVideo';
 import HeatmapOverlay from './HeatmapOverlay';
 import { getBaseUrl } from '../utils/config';
 
-export default function CameraPanel({ token, serverIP }) {
+export default function CameraPanel({ token, serverIP, cameras = [], activeCamera }) {
   const [videoBlocked, setVideoBlocked] = useState(false);
   const [showHeatmapOverlay, setShowHeatmapOverlay] = useState(false);
   const [useWebRTC, setUseWebRTC] = useState(true);
@@ -12,13 +12,14 @@ export default function CameraPanel({ token, serverIP }) {
   const baseUrl = getBaseUrl(serverIP);
   const webrtcUrl = `${baseUrl}/api/webrtc/offer`;
   const mjpegUrl = `${baseUrl}/api/video`;
+  const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Câmera Principal';
 
   return (
     <div className="h-[calc(100vh-120px)] flex flex-col gap-4">
       <div className="bg-slate-900/80 border border-slate-700/50 rounded-3xl overflow-hidden h-full relative flex flex-col shadow-sm backdrop-blur-sm">
         <div className="p-4 border-b border-slate-800/80 flex flex-row justify-between items-center bg-slate-950/80 backdrop-blur-md absolute top-0 left-0 right-0 z-20">
           <h3 className="font-bold text-slate-200 flex items-center gap-2 text-sm uppercase tracking-wider">
-            <Maximize size={16} className="text-emerald-400" /> Câmera Principal
+            <Maximize size={16} className="text-emerald-400" /> {farmName}
           </h3>
           <button 
             onClick={() => setShowHeatmapOverlay(v => !v)}

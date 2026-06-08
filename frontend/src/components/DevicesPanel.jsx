@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Cpu, Wind, Zap, SlidersHorizontal } from 'lucide-react';
 import { getBaseUrl } from '../utils/config';
 
-export default function DevicesPanel({ token, serverIP, canControlDevices }) {
+export default function DevicesPanel({ token, serverIP, canControlDevices, cameras = [], activeCamera }) {
   const [dispositivos, setDispositivos] = useState({ ventilacao: false, aquecedor: false });
   const [autoMode, setAutoMode] = useState({ enabled: false, effective_targets: null });
   const [lightPct, setLightPct] = useState(0);
@@ -71,8 +71,18 @@ export default function DevicesPanel({ token, serverIP, canControlDevices }) {
     return <div className="text-slate-400 p-4">Carregando dispositivos...</div>;
   }
 
+  const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+    <div className="space-y-6">
+      <div className="mb-2">
+        <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+          Controle de Dispositivos - <span className="text-emerald-400">{farmName}</span>
+        </h2>
+        <p className="text-slate-400 text-sm mt-1">Gerencie remotamente a ventilação, aquecimento e iluminação.</p>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
       <button aria-label={autoMode.enabled ? "Desativar modo automático" : "Ativar modo automático"} disabled={!canControlDevices} onClick={() => toggleAuto(!autoMode.enabled)} className={`rounded-3xl border p-6 sm:p-8 text-left transition-all ${autoMode.enabled ? 'bg-emerald-600/10 border-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 'bg-slate-900 border-slate-800 hover:border-slate-700'} ${!canControlDevices ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-1'}`}>
         <div className="flex items-center justify-between mb-4">
           <div className={`p-3 rounded-2xl ${autoMode.enabled ? 'bg-emerald-500/20' : 'bg-slate-800/50'}`}>
@@ -145,6 +155,7 @@ export default function DevicesPanel({ token, serverIP, canControlDevices }) {
             }}
           />
         </div>
+      </div>
       </div>
     </div>
   );

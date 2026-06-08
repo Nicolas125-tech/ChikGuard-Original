@@ -3,12 +3,13 @@ import { Wind, Zap, Thermometer, LayoutDashboard, Download, CloudLightning } fro
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { getBaseUrl } from '../utils/config';
 
-export default function ClimatePanel({ token, serverIP, prefs, canControlDevices }) {
+export default function ClimatePanel({ token, serverIP, prefs, canControlDevices, cameras = [], activeCamera }) {
   const [dispositivos, setDispositivos] = useState({ ventilacao: false, aquecedor: false });
   const [historico, setHistorico] = useState([]);
   const [weather, setWeather] = useState(null);
   const [Erro_State, setErro] = useState(false);
   const baseUrl = getBaseUrl(serverIP);
+  const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
 
   const fetchDevices = useCallback(async () => {
     try {
@@ -82,9 +83,17 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
   };
 
   return (
-    <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
-      <div className="space-y-6">
-        {weather?.preheat_recommended && (
+    <div className="space-y-4 sm:space-y-6">
+      <div className="mb-2">
+        <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+          Clima e Dispositivos - <span className="text-emerald-400">{farmName}</span>
+        </h2>
+        <p className="text-slate-400 text-sm mt-1">Monitore o clima e controle o ambiente.</p>
+      </div>
+
+      <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
+        <div className="space-y-6">
+          {weather?.preheat_recommended && (
           <div className="p-5 rounded-3xl border border-blue-500/30 bg-blue-900/20 shadow-sm backdrop-blur-sm animate-fade-in-down">
             <h3 className="text-blue-400 text-sm font-semibold uppercase mb-2 flex items-center gap-2 tracking-widest">
               <CloudLightning size={18} /> Alerta Meteorológico Externo
@@ -154,6 +163,7 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
           </div>
         </div>
       </div>
+    </div>
     </div>
   );
 }

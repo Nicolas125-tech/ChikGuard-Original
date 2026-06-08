@@ -374,21 +374,21 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
       case 'overview':
         return <OverviewPanel token={token} serverIP={serverIP} prefs={prefs} cameras={cameras} activeCamera={activeCamera} />;
       case 'camera':
-        return <CameraPanel token={token} serverIP={serverIP} />;
+        return <CameraPanel token={token} serverIP={serverIP} cameras={cameras} activeCamera={activeCamera} />;
       case 'digitaltwin':
-        return <DigitalTwinPanel token={token} serverIP={serverIP} prefs={prefs} />;
+        return <DigitalTwinPanel token={token} serverIP={serverIP} prefs={prefs} cameras={cameras} activeCamera={activeCamera} />;
       case 'birds':
-        return <BirdsPanel token={token} serverIP={serverIP} prefs={prefs} />;
+        return <BirdsPanel token={token} serverIP={serverIP} prefs={prefs} cameras={cameras} activeCamera={activeCamera} />;
       case 'alerts':
         return <AlertsPanel token={token} serverIP={serverIP} prefs={prefs} />;
       case 'climate':
-        return <ClimatePanel token={token} serverIP={serverIP} prefs={prefs} canControlDevices={canControlDevices} />;
+        return <ClimatePanel token={token} serverIP={serverIP} prefs={prefs} canControlDevices={canControlDevices} cameras={cameras} activeCamera={activeCamera} />;
       case 'smartops':
-        return <SmartOpsPanel serverIP={serverIP} prefs={prefs} token={token} />;
+        return <SmartOpsPanel serverIP={serverIP} prefs={prefs} token={token} cameras={cameras} activeCamera={activeCamera} />;
       case 'management':
-        return <ManagementPanel token={token} serverIP={serverIP} prefs={prefs} />;
+        return <ManagementPanel token={token} serverIP={serverIP} prefs={prefs} cameras={cameras} activeCamera={activeCamera} />;
       case 'devices':
-        return <DevicesPanel token={token} serverIP={serverIP} prefs={prefs} canControlDevices={canControlDevices} />;
+        return <DevicesPanel token={token} serverIP={serverIP} prefs={prefs} canControlDevices={canControlDevices} cameras={cameras} activeCamera={activeCamera} />;
       case 'history':
         return <HistoryPanel token={token} serverIP={serverIP} prefs={prefs} />;
       case 'settings':

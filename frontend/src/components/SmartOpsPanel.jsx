@@ -3,7 +3,7 @@ import SystemCard from './SystemCard';
 import { getBaseUrl } from '../utils/config';
 import { RefreshCw } from 'lucide-react';
 
-export default function SmartOpsPanel({ serverIP, prefs, token }) {
+export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], activeCamera }) {
   const baseUrl = getBaseUrl(serverIP);
   const dadosRef = useRef(null);
   const [behavior, setBehavior] = useState(null);
@@ -133,8 +133,17 @@ export default function SmartOpsPanel({ serverIP, prefs, token }) {
     }
   };
 
+  const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
+
   return (
     <div className="space-y-4 sm:space-y-6">
+      <div className="mb-2">
+        <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+          Gestão e Inteligência - <span className="text-emerald-400">{farmName}</span>
+        </h2>
+        <p className="text-slate-400 text-sm mt-1">Geração de relatórios e diário de atividades.</p>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
         <SystemCard label="Comportamento" value={behavior?.status || '--'} />
         <SystemCard label="Imobilidade" value={immobility?.count ?? '--'} />

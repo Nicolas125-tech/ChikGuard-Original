@@ -4,7 +4,7 @@ import SystemCard from './SystemCard';
 import { getBaseUrl } from '../utils/config';
 import { RefreshCw, Download } from 'lucide-react';
 
-export default function ManagementPanel({ serverIP, prefs, token }) {
+export default function ManagementPanel({ serverIP, prefs, token, cameras = [], activeCamera }) {
   const baseUrl = getBaseUrl(serverIP);
   const dadosRef = useRef(null);
   const [weightLive, setWeightLive] = useState(null);
@@ -20,6 +20,7 @@ export default function ManagementPanel({ serverIP, prefs, token }) {
   const [isClassifying, setIsClassifying] = useState(false);
   const [sensorHistory, setSensorHistory] = useState([]);
   const [weather, setWeather] = useState(null);
+  const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
 
   const loadManagement = useCallback(async () => {
     const headers = { Authorization: `Bearer ${token}` };
@@ -101,6 +102,12 @@ export default function ManagementPanel({ serverIP, prefs, token }) {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <div className="mb-2">
+        <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+          Gestão Avançada - <span className="text-emerald-400">{farmName}</span>
+        </h2>
+        <p className="text-slate-400 text-sm mt-1">Dados de crescimento, financeiro e saúde avançada.</p>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
         <SystemCard label="Peso medio estimado" value={weightLive ? `${weightLive.avg_weight_g} g` : '--'} />
         <SystemCard label="Indice respiratorio" value={acoustic ? acoustic.respiratory_health_index : '--'} />

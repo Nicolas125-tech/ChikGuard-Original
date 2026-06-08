@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Layers, Thermometer, Bird, Cpu, AlertTriangle, Fan, Flame, Activity } from 'lucide-react';
 import { getBaseUrl } from '../utils/config';
 
-export default function DigitalTwinPanel({ token, serverIP, }) {
+export default function DigitalTwinPanel({ token, serverIP, cameras = [], activeCamera }) {
   const [activeLayer, setActiveLayer] = useState('sensors'); // 'sensors' | 'birds' | 'devices' | 'alerts'
   const [sensorLive, setSensorLive] = useState(null);
   const [deviceState, setDeviceState] = useState({ ventilacao: false, aquecedor: false });
@@ -11,6 +11,7 @@ export default function DigitalTwinPanel({ token, serverIP, }) {
   const [loading, setLoading] = useState(false);
 
   const baseUrl = getBaseUrl(serverIP);
+  const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Galpão Principal 1';
 
   // ── Fetching Data ──
   const fetchData = useCallback(async () => {
@@ -143,7 +144,7 @@ export default function DigitalTwinPanel({ token, serverIP, }) {
           <div className="flex justify-between items-center mb-4">
             <div>
               <h3 className="text-white font-bold text-sm uppercase tracking-wider flex items-center gap-2">
-                <Layers size={16} className="text-emerald-400" /> Galpão Principal 1 - Gêmeo Digital
+                <Layers size={16} className="text-emerald-400" /> {farmName} - Gêmeo Digital
               </h3>
               <p className="text-slate-500 text-xs mt-0.5">Visão espacial em tempo real.</p>
             </div>
