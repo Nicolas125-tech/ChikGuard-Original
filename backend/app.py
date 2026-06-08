@@ -807,13 +807,13 @@ auto_config = {
 }
 
 sensor_state = {
-    "temperature_c": 28.0,
-    "humidity_pct": 60.0,
-    "ammonia_ppm": 8.0,
-    "feed_level_pct": 100.0,
-    "water_level_pct": 100.0,
+    "temperature_c": 0.0,
+    "humidity_pct": 0.0,
+    "ammonia_ppm": 0.0,
+    "feed_level_pct": 0.0,
+    "water_level_pct": 0.0,
     "source": "sensor",
-    "updated_at": time.time(),
+    "updated_at": 0.0,
 }
 
 sensor_thresholds = {
@@ -836,7 +836,7 @@ last_weight_save_ts = 0.0
 last_thermal_alert_ts = 0.0
 
 acoustic_state = {
-    "respiratory_health_index": 100.0,
+    "respiratory_health_index": 0.0,
     "cough_index": 0.0,
     "stress_audio_index": 0.0,
     "source": "sensor",

@@ -37,14 +37,8 @@ class ContinuousAudioMonitor:
     def _generate_mock_audio(self) -> Tuple[np.ndarray, int]:
         """Gera um buffer de áudio simulado de 16kHz com ruídos e espirros eventuais do lote."""
         sample_rate = 16000
-        # Simulação de ruído de fundo da ventilação do galpão
-        audio_buffer = np.random.normal(0, 0.01, sample_rate)
-        
-        # Simula esporadicamente tosse (10% de probabilidade)
-        if random.random() < 0.1:
-            time_space = np.linspace(0, 1, sample_rate)
-            cough_signature = np.sin(2 * np.pi * 400 * time_space) * np.exp(-10 * time_space)
-            audio_buffer += cough_signature * 0.5
+        # Áudio em branco - sem simulação de ruídos ou tosse para evitar falso positivo
+        audio_buffer = np.zeros(sample_rate)
             
         return audio_buffer, sample_rate
 

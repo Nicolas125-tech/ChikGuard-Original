@@ -55,21 +55,18 @@ export default function DigitalTwinPanel({ token, serverIP, }) {
   }, [fetchData]);
 
   // ── Temperature Interpolation ──
-  // We simulate 6 sensor points across the barn to interpolate a gradient
-  const temp = sensorLive?.temperature_c ?? 25.0;
-  const isVentActive = deviceState?.ventilacao;
-  const isHeatActive = deviceState?.aquecedor;
+  const temp = sensorLive?.temperature_c ?? 0.0;
 
   const virtualSensors = useMemo(() => {
     return [
-      { id: 1, name: 'Sensor Entrada Ar (A1)', x: 0.15, y: 0.25, temp: temp - (isVentActive ? 1.8 : 0.8) },
-      { id: 2, name: 'Sensor Central Superior (A3)', x: 0.85, y: 0.25, temp: temp + (isHeatActive ? 2.4 : 0.6) },
-      { id: 3, name: 'Sensor Central Médio (B2)', x: 0.50, y: 0.50, temp: temp + 0.3 },
-      { id: 4, name: 'Sensor Exaustor Lateral (C1)', x: 0.15, y: 0.75, temp: temp - (isVentActive ? 2.2 : 0.4) },
-      { id: 5, name: 'Sensor Central Inferior (C3)', x: 0.85, y: 0.75, temp: temp + (isHeatActive ? 1.8 : 0.5) },
-      { id: 6, name: 'Sensor Lateral Médio (B3)', x: 0.85, y: 0.50, temp: temp + 0.1 },
+      { id: 1, name: 'Sensor Entrada Ar (A1)', x: 0.15, y: 0.25, temp: temp },
+      { id: 2, name: 'Sensor Central Superior (A3)', x: 0.85, y: 0.25, temp: temp },
+      { id: 3, name: 'Sensor Central Médio (B2)', x: 0.50, y: 0.50, temp: temp },
+      { id: 4, name: 'Sensor Exaustor Lateral (C1)', x: 0.15, y: 0.75, temp: temp },
+      { id: 5, name: 'Sensor Central Inferior (C3)', x: 0.85, y: 0.75, temp: temp },
+      { id: 6, name: 'Sensor Lateral Médio (B3)', x: 0.85, y: 0.50, temp: temp },
     ];
-  }, [temp, isVentActive, isHeatActive]);
+  }, [temp]);
 
   // Color mapping function for temperature
   const getTempColor = (t) => {
