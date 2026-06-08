@@ -311,8 +311,12 @@ export default function ManagementPanel({ serverIP, prefs, token, cameras = [], 
         </div>
       </div>
       
-      {/* Nova funcionalidade inserida para o cliente final */}
-      <CalculadoraCA />
+      {/* Calculadoras Inseridas para o cliente final */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
+        <CalculadoraCA />
+        <CalculadoraLucro />
+      </div>
+      
       
     </div>
   );
@@ -373,6 +377,57 @@ function CalculadoraCA() {
           <span className={`text-4xl sm:text-5xl font-black z-10 ${color}`}>{ca}</span>
           <span className={`text-sm font-bold mt-2 px-3 py-1 bg-slate-900/50 rounded-full border border-slate-700 z-10 ${color}`}>{avaliacao}</span>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function CalculadoraLucro() {
+  const [lote, setLote] = useState('');
+  const [mortalidade, setMortalidade] = useState('');
+  const [pesoAbate, setPesoAbate] = useState('');
+  const [precoKg, setPrecoKg] = useState('');
+  
+  const avesFinais = Number(lote) > 0 ? (Number(lote) * (1 - (Number(mortalidade) / 100))) : 0;
+  const pesoTotal = avesFinais * Number(pesoAbate);
+  const receita = pesoTotal * Number(precoKg);
+
+  const formatBRL = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-sm relative overflow-hidden flex flex-col h-full">
+      <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none"></div>
+      
+      <h3 className="font-bold text-lg sm:text-xl text-white mb-4 tracking-tight flex items-center gap-2">
+        <span className="bg-emerald-500/20 text-emerald-400 p-2 rounded-xl border border-emerald-500/30">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+        </span>
+        Simulador de Receita Bruta
+      </h3>
+      <p className="text-slate-400 text-sm mb-4">Projete seus ganhos reais do lote no fechamento.</p>
+      
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+          <label className="text-[10px] text-slate-400 uppercase font-bold mb-1 block">Qtd de Aves</label>
+          <input type="number" value={lote} onChange={e=>setLote(e.target.value)} placeholder="Ex: 30000" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm outline-none focus:border-emerald-500" />
+        </div>
+        <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+          <label className="text-[10px] text-slate-400 uppercase font-bold mb-1 block">Mortalidade (%)</label>
+          <input type="number" value={mortalidade} onChange={e=>setMortalidade(e.target.value)} placeholder="Ex: 3.5" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm outline-none focus:border-emerald-500" />
+        </div>
+        <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+          <label className="text-[10px] text-slate-400 uppercase font-bold mb-1 block">Peso Abate (kg)</label>
+          <input type="number" value={pesoAbate} onChange={e=>setPesoAbate(e.target.value)} placeholder="Ex: 2.9" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm outline-none focus:border-emerald-500" />
+        </div>
+        <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+          <label className="text-[10px] text-slate-400 uppercase font-bold mb-1 block">R$/kg de Carne</label>
+          <input type="number" value={precoKg} onChange={e=>setPrecoKg(e.target.value)} placeholder="Ex: 5.50" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm outline-none focus:border-emerald-500" />
+        </div>
+      </div>
+      
+      <div className="bg-slate-800 mt-auto p-4 rounded-xl border border-emerald-500/30 flex justify-between items-center shadow-md shadow-emerald-500/5">
+        <span className="text-xs text-slate-300 uppercase tracking-wider font-bold">Receita Bruta Est.</span>
+        <span className="text-2xl font-black text-emerald-400">{receita > 0 ? formatBRL(receita) : 'R$ 0,00'}</span>
       </div>
     </div>
   );
