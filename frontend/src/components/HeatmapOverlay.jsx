@@ -12,7 +12,8 @@ export default function HeatmapOverlay({ serverIP, token }) {
       });
       if (response.ok) {
         const data = await response.json();
-        setPoints(data.points || []);
+        const pts = data.points || [];
+        setPoints(prev => JSON.stringify(prev) === JSON.stringify(pts) ? prev : pts);
       }
     } catch (err) {
       console.error('Heatmap fetch error:', err);

@@ -112,7 +112,7 @@ export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], ac
       a.remove();
       window.URL.revokeObjectURL(url);
       setReportMsg('Download concluído!');
-    } catch (e) {
+    } catch {
       setReportMsg('Erro ao gerar relatório local');
     } finally {
       setIsGeneratingReport(false);

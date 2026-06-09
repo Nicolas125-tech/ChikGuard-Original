@@ -26,21 +26,25 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
       ]);
 
       if (rSensors.ok) {
-        setSensorLive(await rSensors.json());
+        const data = await rSensors.json();
+        setSensorLive(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
       }
 
       if (rDevices.ok) {
-        setDeviceState(await rDevices.json());
+        const data = await rDevices.json();
+        setDeviceState(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
       }
 
       if (rHeatmap.ok) {
         const hData = await rHeatmap.json();
-        setHeatmapPoints(hData.points || []);
+        const pts = hData.points || [];
+        setHeatmapPoints(prev => JSON.stringify(prev) === JSON.stringify(pts) ? prev : pts);
       }
 
       if (rAnomalies.ok) {
         const aData = await rAnomalies.json();
-        setThermalAnomalies(aData.items || []);
+        const itms = aData.items || [];
+        setThermalAnomalies(prev => JSON.stringify(prev) === JSON.stringify(itms) ? prev : itms);
       }
     } catch (err) {
       console.error('Error fetching digital twin data:', err);

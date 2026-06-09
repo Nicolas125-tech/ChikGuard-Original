@@ -18,9 +18,18 @@ export default function BirdsPanel({ token, serverIP, prefs, cameras = [], activ
         fetch(`${baseUrl}/api/birds/registry?limit=500`, { headers }),
         fetch(`${baseUrl}/api/birds/history?limit=300`, { headers }),
       ]);
-      if (liveRes.ok) setLive(await liveRes.json());
-      if (regRes.ok) setRegistry(await regRes.json());
-      if (historyRes.ok) setHistory(await historyRes.json());
+      if (liveRes.ok) {
+        const data = await liveRes.json();
+        setLive(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+      }
+      if (regRes.ok) {
+        const data = await regRes.json();
+        setRegistry(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+      }
+      if (historyRes.ok) {
+        const data = await historyRes.json();
+        setHistory(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+      }
     } finally {
       setLoading(false);
     }

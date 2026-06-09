@@ -15,8 +15,14 @@ export default function SystemPanel({ serverIP, prefs, token }) {
         fetch(`${baseUrl}/api/system-info`, { headers }),
         fetch(`${baseUrl}/api/summary`, { headers }),
       ]);
-      if (infoRes.ok) setInfo(await infoRes.json());
-      if (summaryRes.ok) setSummary(await summaryRes.json());
+      if (infoRes.ok) {
+        const data = await infoRes.json();
+        setInfo(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+      }
+      if (summaryRes.ok) {
+        const data = await summaryRes.json();
+        setSummary(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+      }
     } catch (err) {
       console.error('Error fetching system info:', err);
       // Network error - keep previous state, do not crash
