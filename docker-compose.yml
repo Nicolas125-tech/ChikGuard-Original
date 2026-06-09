@@ -13,9 +13,10 @@ services:
       - PYTHONPATH=/app
     volumes:
       - ./data:/app/data
-    # Uncomment the following lines if you need to pass a physical USB webcam to the container
-    # devices:
-    #   - "/dev/video0:/dev/video0"
+    deploy:
+      resources:
+        limits:
+          memory: 4G
     restart: unless-stopped
 
   frontend:
@@ -24,6 +25,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "80:80"
+    depends_on:
+      - backend
     restart: unless-stopped
 
   cloudflared:
