@@ -25,28 +25,39 @@ export default function SmartOpsScreen({ serverUrl, token }) {
   const [loading, setLoading] = useState(true);
   const [logbook, setLogbook] = useState({ count: 0, items: [] });
   const [logNote, setLogNote] = useState('');
+  
+  // AI States
+  const [forecast, setForecast] = useState(null);
+  const [anomaly, setAnomaly] = useState(null);
+  const [huddling, setHuddling] = useState(null);
 
   const loadSmartData = useCallback(async () => {
     if (!serverUrl) return;
     try {
       const headers = { Authorization: `Bearer ${token}` };
-      const [bReq, iReq, sReq, aReq, btReq, cReq, lReq] = await Promise.all([
-        fetch(`${serverUrl}/api/behavior/live`, { headers }),
-        fetch(`${serverUrl}/api/immobility/live`, { headers }),
-        fetch(`${serverUrl}/api/sensors/live`, { headers }),
-        fetch(`${serverUrl}/api/auto-mode`, { headers }),
-        fetch(`${serverUrl}/api/batches`, { headers }),
-        fetch(`${serverUrl}/api/cameras`, { headers }),
-        fetch(`${serverUrl}/api/logbook?limit=20`, { headers })
+      const [bReq, iReq, sReq, aReq, btReq, cReq, lReq, fwReq, anReq, hudReq] = await Promise.all([
+        fetch(`${serverUrl}/api/behavior/live`, { headers }).catch(()=>null),
+        fetch(`${serverUrl}/api/immobility/live`, { headers }).catch(()=>null),
+        fetch(`${serverUrl}/api/sensors/live`, { headers }).catch(()=>null),
+        fetch(`${serverUrl}/api/auto-mode`, { headers }).catch(()=>null),
+        fetch(`${serverUrl}/api/batches`, { headers }).catch(()=>null),
+        fetch(`${serverUrl}/api/cameras`, { headers }).catch(()=>null),
+        fetch(`${serverUrl}/api/logbook?limit=20`, { headers }).catch(()=>null),
+        fetch(`${serverUrl}/api/forecast/weight?target_weight=2800`, { headers }).catch(()=>null),
+        fetch(`${serverUrl}/api/sensors/anomaly`, { headers }).catch(()=>null),
+        fetch(`${serverUrl}/api/ai/spatial/huddling`, { headers }).catch(()=>null)
       ]);
 
-      if (bReq.ok) setBehavior(await bReq.json());
-      if (iReq.ok) setImmobility(await iReq.json());
-      if (sReq.ok) setSensors(await sReq.json());
-      if (aReq.ok) setAutoMode(await aReq.json());
-      if (btReq.ok) setBatches(await btReq.json());
-      if (cReq.ok) setCameras(await cReq.json());
-      if (lReq.ok) setLogbook(await lReq.json());
+      if (bReq?.ok) setBehavior(await bReq.json());
+      if (iReq?.ok) setImmobility(await iReq.json());
+      if (sReq?.ok) setSensors(await sReq.json());
+      if (aReq?.ok) setAutoMode(await aReq.json());
+      if (btReq?.ok) setBatches(await btReq.json());
+      if (cReq?.ok) setCameras(await cReq.json());
+      if (lReq?.ok) setLogbook(await lReq.json());
+      if (fwReq?.ok) setForecast(await fwReq.json());
+      if (anReq?.ok) setAnomaly(await anReq.json());
+      if (hudReq?.ok) setHuddling(await hudReq.json());
     } catch (e) {
       console.warn('Error loading smart data:', e);
     } finally {
@@ -157,6 +168,26 @@ export default function SmartOpsScreen({ serverUrl, token }) {
         <MetricCard label="Imobilidade" value={immobility?.count ?? 0} />
         <MetricCard label="Modo Auto" value={autoMode?.enabled ? 'ATIVO' : 'INATIVO'} />
         <MetricCard label="Câmera ativa" value={cameras?.active_camera_id || '--'} />
+      </View>
+
+      <Text style={styles.sectionTitle}>Análises de Inteligência Artificial</Text>
+      <View style={styles.listCard}>
+        <View style={styles.rowItem}>
+          <Text style={styles.rowTitle}>Previsão de Abate (IA)</Text>
+          <Text style={styles.rowMeta}>{forecast?.forecast?.target_date ? new Date(forecast.forecast.target_date).toLocaleDateString('pt-BR') : 'Aguardando dados (Curva S)'}</Text>
+        </View>
+        <View style={styles.rowItem}>
+          <Text style={styles.rowTitle}>Anomalias (Isolation Forest)</Text>
+          <Text style={[styles.rowMeta, anomaly?.is_anomaly && styles.warningText]}>
+            {anomaly?.is_anomaly ? '⚠️ RISCO MULTIVARIADO' : 'Comportamento Normal'}
+          </Text>
+        </View>
+        <View style={styles.rowItem}>
+          <Text style={styles.rowTitle}>Risco Térmico (DBSCAN)</Text>
+          <Text style={[styles.rowMeta, huddling?.huddling_detected && styles.warningText]}>
+            {huddling?.huddling_detected ? `⚠️ AMONTOAMENTO (${huddling?.density_score}%)` : 'Densidade Uniforme'}
+          </Text>
+        </View>
       </View>
 
       <Text style={styles.sectionTitle}>Sensores</Text>
