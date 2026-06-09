@@ -24,6 +24,9 @@ import numpy as np
 
 logger = logging.getLogger("chikguard.cv_engine")
 
+_track_history = {}
+_MAX_HISTORY = 45
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Constantes de classificação visual
 # ─────────────────────────────────────────────────────────────────────────────
@@ -556,9 +559,20 @@ class InferencePipeline:
                 self._frame_count += 1
                 run_heavy = self._frame_count % self.frame_skip == 0
 
+                # Pré-processamento CV: CLAHE (Melhora contraste em baixa luz e poeira)
+                try:
+                    lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
+                    l, a, b = cv2.split(lab)
+                    clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(8, 8))
+                    l_clahe = clahe.apply(l)
+                    lab_clahe = cv2.merge((l_clahe, a, b))
+                    enhanced_frame = cv2.cvtColor(lab_clahe, cv2.COLOR_LAB2BGR)
+                except Exception:
+                    enhanced_frame = frame
+
                 # Chama o detector com a flag para evitar processamento se for um frame intermediário
-                raw_dets = self._detector.detect(frame, run_heavy_inference=run_heavy)
-                detections = self._enrich(frame, raw_dets)
+                raw_dets = self._detector.detect(enhanced_frame, run_heavy_inference=run_heavy)
+                detections = self._enrich(enhanced_frame, raw_dets)
 
                 lat_ms = (time.perf_counter() - t0) * 1000.0
                 self._metrics.tick_inference(lat_ms)
@@ -644,6 +658,22 @@ class CVOverlay:
             cv2.rectangle(draw, (x1 - 1, y1 - 1), (x2 + 1, y2 + 1), (0, 0, 0), 2)
             cv2.rectangle(draw, (x1, y1), (x2, y2), color, 2, cv2.LINE_AA)
 
+            # Center Crosshair
+            cx, cy = int((x1 + x2) / 2), int((y1 + y2) / 2)
+            cv2.line(draw, (cx - 5, cy), (cx + 5, cy), color, 1, cv2.LINE_AA)
+            cv2.line(draw, (cx, cy - 5), (cx, cy + 5), color, 1, cv2.LINE_AA)
+            
+            # Motion Trail (Rastro de movimento)
+            if uid >= 0:
+                if uid not in _track_history:
+                    _track_history[uid] = deque(maxlen=_MAX_HISTORY)
+                _track_history[uid].append((cx, cy))
+                
+                # Desenha o rastro (fading effect seria ideal, mas polyline eh mais rapido)
+                pts = np.array(_track_history[uid], dtype=np.int32)
+                if len(pts) > 1:
+                    cv2.polylines(draw, [pts], isClosed=False, color=color, thickness=2, lineType=cv2.LINE_AA)
+
             # Cantos marcados estilo targeting
             cr = 8
             tk = 2
@@ -670,6 +700,10 @@ class CVOverlay:
             # Postura (apenas anomalias)
             if pose_lbl and "NORMAL" not in pose_lbl:
                 _put_text_shadow(draw, pose_lbl, (x1, y2 + 24), FONT, 0.36, (0, 80, 255), 1)
+
+        # Cleanup memory guard
+        if len(_track_history) > 3000:
+            _track_history.clear()
 
         return draw
 
