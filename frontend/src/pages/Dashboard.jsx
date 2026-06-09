@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import Joyride, { STATUS } from 'react-joyride';
+import { Joyride, STATUS } from 'react-joyride';
 import ChickenPhoto from '../components/ChickenPhoto';
 
 import {
