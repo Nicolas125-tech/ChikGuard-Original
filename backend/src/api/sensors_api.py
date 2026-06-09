@@ -203,4 +203,49 @@ def create_sensors_blueprint(deps):
             logging.getLogger(__name__).error("Falha ao processar audio: %s", exc)
             return jsonify({"msg": "Falha interna ao processar audio"}), 500
 
+    @bp.route("/api/sensors/anomaly", methods=["GET"])
+    @require_auth()
+    def check_anomaly():
+        # Busca o historico das ultimas 24h para baseline (treino da floresta)
+        start = utcnow() - timedelta(hours=24)
+        sensors = SensorReading.query.filter(
+            SensorReading.camera_id == active_camera_id, 
+            SensorReading.timestamp >= start
+        ).order_by(SensorReading.timestamp.desc()).limit(100).all()
+        
+        from src.ai.anomaly import detect_multivariate_anomaly
+        
+        history = []
+        for s in sensors:
+            history.append({
+                "temp": s.temperature_c or 0,
+                "hum": s.humidity_pct or 0,
+                "amm": s.ammonia_ppm or 0,
+                "cough": 0  # Em producao mesclariamos os timestamps
+            })
+            
+        current = {
+            "temp": sensor_state.get("temperature_c", 0),
+            "hum": sensor_state.get("humidity_pct", 0),
+            "amm": sensor_state.get("ammonia_ppm", 0),
+            "cough": acoustic_state.get("cough_index", 0)
+        }
+        
+        # Fallback de seguranca para evitar crashes em setups novos (bootstrap do dataset)
+        if len(history) < 20:
+            history = [current] * 25
+            
+        result = detect_multivariate_anomaly(history, current)
+        
+        # Dispara alerta global no sistema se detectar uma doenca multivariada invisivel
+        if result.get("is_anomaly"):
+            log_event(
+                event_type="multivariate_anomaly",
+                level="high",
+                message="IA Detectou padrao anomalo multivariado (Isolation Forest)!",
+                metadata=result
+            )
+            
+        return jsonify(result)
+
     return bp
