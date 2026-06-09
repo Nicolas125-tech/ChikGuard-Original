@@ -265,7 +265,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
   // ── Métodos de Renderização Secundários (Clean Code Layout) ──
 
   const renderDesktopSidebar = () => (
-    <aside className="w-60 bg-slate-900/80 border-r border-slate-800/60 flex-col z-40 relative hidden md:flex shrink-0 glass">
+    <aside className="w-60 flex-col z-40 relative hidden md:flex shrink-0 glass-panel shadow-2xl">
       <div className="p-5 border-b border-slate-800/60 flex items-center gap-3">
         <div className="bg-emerald-500/10 p-1.5 rounded-xl border border-emerald-500/20 w-9 h-9 flex items-center justify-center shadow-inner">
           <img src="/logo.jpeg" alt="ChikGuard" className="w-6 h-6 object-contain drop-shadow-md" />
@@ -302,7 +302,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
   };
 
   const renderHeader = () => (
-    <header className="bg-slate-900/60 border-b border-slate-800/50 px-4 md:px-6 py-3 flex justify-between items-center z-30 sticky top-0 glass shrink-0">
+    <header className="glass-header px-4 md:px-6 py-3 flex justify-between items-center z-30 sticky top-0 shrink-0 shadow-lg shadow-black/20">
       <div className="flex items-center gap-3">
         <button
           aria-label="Open mobile menu"
@@ -407,7 +407,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-300 flex overflow-hidden">
+    <div className="min-h-screen bg-premium-glow text-slate-300 flex overflow-hidden">
       {renderDesktopSidebar()}
       {renderMobileSidebar()}
 
