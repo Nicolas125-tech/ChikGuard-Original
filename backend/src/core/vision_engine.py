@@ -20,6 +20,7 @@ from ultralytics import YOLO
 
 try:
     from src.vision.enhanced_detector import AdvancedTrackerWrapper
+
     _TRACKER_AVAILABLE = True
 except ImportError:
     _TRACKER_AVAILABLE = False
@@ -28,19 +29,23 @@ except ImportError:
 try:
     from sahi import AutoDetectionModel
     from sahi.predict import get_sliced_prediction
+
     _SAHI_AVAILABLE = True
 except ImportError:
     _SAHI_AVAILABLE = False
 
 logger = logging.getLogger("chikguard.vision_engine")
 
+
 class VisionEngine:
-    def __init__(self, 
-                 model_path: str = "yolov8n-seg.pt", 
-                 imgsz: int = 640, 
-                 conf: float = 0.25,
-                 use_sahi: bool = True,
-                 device: str = "cpu"):
+    def __init__(
+        self,
+        model_path: str = "yolov8n-seg.pt",
+        imgsz: int = 640,
+        conf: float = 0.25,
+        use_sahi: bool = True,
+        device: str = "cpu",
+    ):
         """
         Initializes the industrial vision engine.
         """
@@ -48,32 +53,32 @@ class VisionEngine:
         self.imgsz = imgsz
         self.conf = conf
         self.use_sahi = use_sahi and _SAHI_AVAILABLE
-        
+
         # 1. Load Model (YOLOv8-seg or YOLOv10)
         # For segmentation + tracking, YOLOv8-seg is still the standard.
         # YOLOv10-N/S can be used if provided.
-        if model_path.endswith('.engine') or model_path.endswith('.xml'):
-            self.model = YOLO(model_path, task='segment')
+        if model_path.endswith(".engine") or model_path.endswith(".xml"):
+            self.model = YOLO(model_path, task="segment")
         else:
             self.model = YOLO(model_path)
 
         # Don't call .to() on compiled models
-        if not (model_path.endswith('.engine') or model_path.endswith('.xml')):
+        if not (model_path.endswith(".engine") or model_path.endswith(".xml")):
             self.model.to(self.device)
-        
+
         # 2. Initialize SAHI if enabled
         if self.use_sahi:
             self.sahi_model = AutoDetectionModel.from_pretrained(
-                model_type='ultralytics',
+                model_type="ultralytics",
                 model_path=model_path,
                 confidence_threshold=conf,
                 device=device,
             )
             logger.info("SAHI initialized for Sliced Inference.")
-        
+
         # 3. CLAHE Processor
         self.clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        
+
         # 4. State Management
         self.last_results = None
         self.frame_count = 0
@@ -81,13 +86,17 @@ class VisionEngine:
         self._lock = threading.Lock()
 
         # Tracker for SAHI
-        self.sahi_tracker = AdvancedTrackerWrapper(tracker_type="bytetrack", max_lost=15) if _TRACKER_AVAILABLE and self.use_sahi else None
-        
+        self.sahi_tracker = (
+            AdvancedTrackerWrapper(tracker_type="bytetrack", max_lost=15)
+            if _TRACKER_AVAILABLE and self.use_sahi
+            else None
+        )
+
         # 5. Async Video Stream Management
         self.cap = None
         self.stream_thread = None
         self.is_running = False
-        self.frame_buffer = collections.deque(maxlen=3) # Small buffer to prevent lag
+        self.frame_buffer = collections.deque(maxlen=3)  # Small buffer to prevent lag
 
         logger.info(f"VisionEngine V3 loaded on {device}. SAHI: {self.use_sahi}")
 
@@ -121,7 +130,7 @@ class VisionEngine:
             ret, frame = self.cap.read()
             if not ret:
                 logger.warning("Failed to read frame from stream.")
-                time.sleep(0.1) # Prevent tight loop on failure
+                time.sleep(0.1)  # Prevent tight loop on failure
                 continue
 
             # Put frame in deque (automatically drops oldest if full)
@@ -136,7 +145,7 @@ class VisionEngine:
             self.frame_buffer.clear()
             return frame
         except IndexError:
-            return None # Buffer is empty
+            return None  # Buffer is empty
 
     def stop_stream(self):
         """Stops the asynchronous video stream."""
@@ -166,19 +175,20 @@ class VisionEngine:
         Main pipeline execution.
         """
         t0 = time.perf_counter()
-        
+
         # Instantiate analytics engine on the fly if needed
         analytics_engine = None
         try:
             from src.core.analytics_engine import AnalyticsEngine
             from database import db
+
             analytics_engine = AnalyticsEngine(db.session, camera_id="stream")
         except ImportError:
             pass
 
         # A. Pre-processing
         clean_frame = self.pre_process(frame)
-        
+
         # B. Inference (SAHI vs standard)
         if self.use_sahi:
             # Sliced Inference for Small Objects
@@ -189,7 +199,7 @@ class VisionEngine:
                 slice_width=320,
                 overlap_height_ratio=0.2,
                 overlap_width_ratio=0.2,
-                verbose=0
+                verbose=0,
             )
             detections = self._format_sahi_output(result)
 
@@ -205,19 +215,16 @@ class VisionEngine:
             # Standard Instance Segmentation with ByteTrack
             if apply_tracking:
                 results = self.model.track(
-                    clean_frame, 
-                    persist=True, 
-                    tracker="bytetrack.yaml", 
+                    clean_frame,
+                    persist=True,
+                    tracker="bytetrack.yaml",
                     conf=self.conf,
                     imgsz=self.imgsz,
-                    verbose=False
+                    verbose=False,
                 )
             else:
                 results = self.model.predict(
-                    clean_frame, 
-                    conf=self.conf, 
-                    imgsz=self.imgsz, 
-                    verbose=False
+                    clean_frame, conf=self.conf, imgsz=self.imgsz, verbose=False
                 )
             detections = self._format_yolo_output(results[0])
 
@@ -226,24 +233,25 @@ class VisionEngine:
             analytics_engine.export_metrics(detections, t0)
 
         latency = (time.perf_counter() - t0) * 1000
-        
+
         return {
             "detections": detections,
             "latency_ms": round(latency, 2),
-            "processed_frame": clean_frame if self.use_sahi else None # usually shared
+            "processed_frame": clean_frame if self.use_sahi else None,  # usually shared
         }
 
     def _format_yolo_output(self, result) -> List[Dict[str, Any]]:
         """Converts Ultralytics Result object to ChikGuard format."""
         formatted = []
-        if result.boxes is None: return formatted
-        
+        if result.boxes is None:
+            return formatted
+
         # Extract Boxes, Masks, IDs
         boxes = result.boxes.xyxy.cpu().numpy()
         confs = result.boxes.conf.cpu().numpy()
         clss = result.boxes.cls.cpu().numpy()
         ids = result.boxes.id.cpu().numpy() if result.boxes.id is not None else [-1] * len(boxes)
-        
+
         masks = None
         if result.masks is not None:
             masks = result.masks.data.cpu().numpy()
@@ -254,12 +262,12 @@ class VisionEngine:
                 "confidence": float(confs[i]),
                 "class_id": int(clss[i]),
                 "track_id": int(ids[i]),
-                "mask_area_px": 0.0
+                "mask_area_px": 0.0,
             }
             if masks is not None:
                 # Calculate exact area from mask for overlap resolution
                 det["mask_area_px"] = float(np.sum(masks[i] > 0.5))
-            
+
             formatted.append(det)
         return formatted
 
@@ -267,13 +275,15 @@ class VisionEngine:
         """Converts SAHI result to ChikGuard format."""
         formatted = []
         for det in sahi_result.object_prediction_list:
-            formatted.append({
-                "box": [det.bbox.minx, det.bbox.miny, det.bbox.maxx, det.bbox.maxy],
-                "confidence": float(det.score.value),
-                "class_id": int(det.category.id),
-                "track_id": -1, # SAHI doesn't track natively between slices
-                "mask_area_px": float(det.mask.area) if det.mask else 0.0
-            })
+            formatted.append(
+                {
+                    "box": [det.bbox.minx, det.bbox.miny, det.bbox.maxx, det.bbox.maxy],
+                    "confidence": float(det.score.value),
+                    "class_id": int(det.category.id),
+                    "track_id": -1,  # SAHI doesn't track natively between slices
+                    "mask_area_px": float(det.mask.area) if det.mask else 0.0,
+                }
+            )
         return formatted
 
     def export_for_edge(self, format="tensorrt"):
@@ -290,8 +300,10 @@ class VisionEngine:
             logger.error(f"Export failed: {e}")
             return None
 
+
 # Helper globally accessible instance
 _engine_instance = None
+
 
 def get_vision_engine(**kwargs):
     global _engine_instance

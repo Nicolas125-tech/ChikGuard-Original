@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request
 from src.security.auth import require_auth
 import time
 
+
 def create_sensors_blueprint(deps):
     bp = Blueprint("sensors_api", __name__)
 
@@ -59,7 +60,13 @@ def create_sensors_blueprint(deps):
     @require_auth()
     def ingest_sensor_data():
         payload = request.get_json(silent=True) or {}
-        required = ["temperature_c", "humidity_pct", "ammonia_ppm", "feed_level_pct", "water_level_pct"]
+        required = [
+            "temperature_c",
+            "humidity_pct",
+            "ammonia_ppm",
+            "feed_level_pct",
+            "water_level_pct",
+        ]
         missing = [k for k in required if k not in payload]
         if missing:
             return jsonify({"msg": f"Campos obrigatorios ausentes: {', '.join(missing)}"}), 400
@@ -85,7 +92,9 @@ def create_sensors_blueprint(deps):
         last_minutes = request.args.get("minutes", default=20, type=int)
         start = utcnow() - timedelta(minutes=max(1, min(last_minutes, 240)))
         rows = (
-            ThermalAnomaly.query.filter(ThermalAnomaly.camera_id == active_camera_id, ThermalAnomaly.timestamp >= start)
+            ThermalAnomaly.query.filter(
+                ThermalAnomaly.camera_id == active_camera_id, ThermalAnomaly.timestamp >= start
+            )
             .order_by(ThermalAnomaly.id.desc())
             .limit(200)
             .all()
@@ -125,7 +134,9 @@ def create_sensors_blueprint(deps):
     @require_auth()
     def acoustic_classify():
         if not audio_classifier.loaded:
-            return jsonify({"msg": "Modelo de tosse nao carregado", "model_error": audio_classifier.last_error}), 400
+            return jsonify(
+                {"msg": "Modelo de tosse nao carregado", "model_error": audio_classifier.last_error}
+            ), 400
         if sf is None:
             return jsonify({"msg": "Dependencia soundfile nao disponivel no backend"}), 500
 
@@ -141,7 +152,9 @@ def create_sensors_blueprint(deps):
 
             result = audio_classifier.classify(y, int(sr))
             if result is None:
-                return jsonify({"msg": "Falha na inferencia de tosse", "error": audio_classifier.last_error}), 500
+                return jsonify(
+                    {"msg": "Falha na inferencia de tosse", "error": audio_classifier.last_error}
+                ), 500
 
             acoustic_state.update(
                 {
@@ -172,7 +185,10 @@ def create_sensors_blueprint(deps):
                     event_type="respiratory_alert",
                     level="high",
                     message="Pico de tosse detectado por modelo acustico treinado",
-                    metadata={"cough_index": acoustic_state["cough_index"], "source": "trained_model"},
+                    metadata={
+                        "cough_index": acoustic_state["cough_index"],
+                        "source": "trained_model",
+                    },
                 )
             audit(
                 "acoustic_file_classified",
@@ -183,8 +199,8 @@ def create_sensors_blueprint(deps):
 
         except Exception as exc:
             import logging
+
             logging.getLogger(__name__).error("Falha ao processar audio: %s", exc)
             return jsonify({"msg": "Falha interna ao processar audio"}), 500
-
 
     return bp

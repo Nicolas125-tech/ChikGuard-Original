@@ -20,21 +20,22 @@ except ImportError:
 # ==========================================
 # Parâmetros focados em estabilidade e contagem sem Flickering
 CONFIDENCE_THRESHOLD = 0.45  # Confiança mínima para aceitar uma detecção
-IOU_THRESHOLD = 0.50         # Overlap máximo permitido (ajuda a separar frangos aglomerados)
-TRACK_BUFFER = 60            # Tolerância do ByteTrack à oclusão (em frames). Impede que o ID limpe instantaneamente ao se esconder.
+IOU_THRESHOLD = 0.50  # Overlap máximo permitido (ajuda a separar frangos aglomerados)
+TRACK_BUFFER = 60  # Tolerância do ByteTrack à oclusão (em frames). Impede que o ID limpe instantaneamente ao se esconder.
 
 # Parâmetros do SAHI (Slicing) - FUNDAMENTAL para aves pequenas e distantes
 # A lógica de fatiamento corta a resolução 1080p/4K em janelas menores.
 SLICE_HEIGHT = 640
 SLICE_WIDTH = 640
-OVERLAP_RATIO = 0.20         # 20% de transição entre fatias garante que uma ave dividida na borda seja detectada corretamente.
+OVERLAP_RATIO = 0.20  # 20% de transição entre fatias garante que uma ave dividida na borda seja detectada corretamente.
 
 # Configuração Edge (Mini PC Linux / TensorRT / OpenVINO)
 MODEL_PATH = "yolov8n-seg.pt"  # Altere para .engine (TensorRT) ou openvino_model/ (OpenVINO) no ambiente de produção
 MODEL_TYPE = "yolov8"
-MODEL_DEVICE = "cuda:0"      # Use 'cpu' para OpenVINO puro se não usar a GPU, 'cuda:0' para NVIDIA
+MODEL_DEVICE = "cuda:0"  # Use 'cpu' para OpenVINO puro se não usar a GPU, 'cuda:0' para NVIDIA
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
 
 # ==========================================
 # 2. CAPTURA ASSÍNCRONA (Hardware Constraints)
@@ -44,25 +45,28 @@ class VideoCaptureThread:
     Thread dedicada para limpar o buffer da câmera, extraindo frames em zero-latency.
     Isso impede que gargalos de processamento atrasem o fluxo nativo da câmera.
     """
+
     def __init__(self, src=0):
         self.cap = cv2.VideoCapture(src)
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 2)
         if not self.cap.isOpened():
             raise RuntimeError(f"Falha ao abrir a fonte de vídeo: {src}")
-            
-        self.q = queue.Queue(maxsize=3) # Limitamos rigidamente o tamanho da fila
+
+        self.q = queue.Queue(maxsize=3)  # Limitamos rigidamente o tamanho da fila
         self.running = True
         self.thread = threading.Thread(target=self._reader_loop, daemon=True)
         self.thread.start()
-        
+
     def _reader_loop(self):
         while self.running:
             ret, frame = self.cap.read()
             if not ret:
-                logging.warning("Falha na captura do frame da câmera (Stream interrompido ou Fim do Vídeo).")
+                logging.warning(
+                    "Falha na captura do frame da câmera (Stream interrompido ou Fim do Vídeo)."
+                )
                 self.running = False
                 break
-            
+
             # Se a fila estiver cheia, descarta o frame mais antigo (zero-delay buffer)
             if not self.q.empty():
                 try:
@@ -76,11 +80,12 @@ class VideoCaptureThread:
             return True, self.q.get(timeout=2)
         except queue.Empty:
             return False, None
-            
+
     def release(self):
         self.running = False
         self.thread.join()
         self.cap.release()
+
 
 # ==========================================
 # 3. PIPELINE DE INFERÊNCIA COGNITIVA
@@ -89,7 +94,7 @@ class VisionPipeline:
     def __init__(self, src=0):
         self.video_src = src
         self.stream = None
-        
+
         logging.info("Carregando modelo segmentador Edge via SAHI...")
         self.detection_model = AutoDetectionModel.from_pretrained(
             model_type=MODEL_TYPE,
@@ -106,9 +111,9 @@ class VisionPipeline:
             track_activation_threshold=CONFIDENCE_THRESHOLD,
             lost_track_buffer=TRACK_BUFFER,
             minimum_matching_threshold=0.8,
-            frame_rate=30
+            frame_rate=30,
         )
-        
+
         # Anotadores Visuais (Rostos dos pintinhos)
         self.box_annotator = sv.BoundingBoxAnnotator(thickness=2)
         self.mask_annotator = sv.MaskAnnotator(opacity=0.5)
@@ -117,20 +122,20 @@ class VisionPipeline:
     def run(self):
         logging.info(f"Iniciando thread da câmera na fonte: {self.video_src}")
         self.stream = VideoCaptureThread(self.video_src)
-        time.sleep(1.0) # Aquece a câmera e enche a fila
-        
+        time.sleep(1.0)  # Aquece a câmera e enche a fila
+
         frame_counter = 0
         total_fps_time = 0
-        
+
         try:
             while True:
                 start_time = time.perf_counter()
-                
+
                 ret, frame = self.stream.read()
                 if not ret or frame is None:
                     logging.info("Fim da stream. Encerrando o pipeline.")
                     break
-                
+
                 # ==============================================
                 # 3.1. Inferência com Fatiamento SAHI
                 # ==============================================
@@ -143,8 +148,8 @@ class VisionPipeline:
                     slice_width=SLICE_WIDTH,
                     overlap_height_ratio=OVERLAP_RATIO,
                     overlap_width_ratio=OVERLAP_RATIO,
-                    postprocess_class_agnostic=True, # Evita NMS desnecessário se houver multi-classes coladas
-                    postprocess_match_metric="IOU"
+                    postprocess_class_agnostic=True,  # Evita NMS desnecessário se houver multi-classes coladas
+                    postprocess_match_metric="IOU",
                 )
 
                 # ==============================================
@@ -160,8 +165,8 @@ class VisionPipeline:
                 # ==============================================
                 # 3.3. Estabilidade e Contagem com Tracking
                 # ==============================================
-                # O ByteTrack atua nas caixas e confianças, mas o tracker supervision repassa o índice 
-                # mantendo as máscaras linkadas com o tracker ID gerado. Zero flickr. 
+                # O ByteTrack atua nas caixas e confianças, mas o tracker supervision repassa o índice
+                # mantendo as máscaras linkadas com o tracker ID gerado. Zero flickr.
                 tracked_detections = self.tracker.update_with_detections(detections=detections)
 
                 # ==============================================
@@ -169,7 +174,7 @@ class VisionPipeline:
                 # ==============================================
                 annotated_frame = frame.copy()
                 labels = []
-                
+
                 for i in range(len(tracked_detections)):
                     # tracked_detections armazena conf, class_id e tracker_id
                     tracker_id = tracked_detections.tracker_id[i]
@@ -177,25 +182,38 @@ class VisionPipeline:
                     labels.append(f"#{tracker_id} {confidence:.2f}")
 
                 # Aplica as overlays gráficas (Mascaras + Caixas + IDs)
-                annotated_frame = self.mask_annotator.annotate(scene=annotated_frame, detections=tracked_detections)
-                annotated_frame = self.box_annotator.annotate(scene=annotated_frame, detections=tracked_detections)
-                annotated_frame = self.label_annotator.annotate(scene=annotated_frame, detections=tracked_detections, labels=labels)
+                annotated_frame = self.mask_annotator.annotate(
+                    scene=annotated_frame, detections=tracked_detections
+                )
+                annotated_frame = self.box_annotator.annotate(
+                    scene=annotated_frame, detections=tracked_detections
+                )
+                annotated_frame = self.label_annotator.annotate(
+                    scene=annotated_frame, detections=tracked_detections, labels=labels
+                )
 
                 # Controle de Desempenho e Log Visual
                 end_time = time.perf_counter()
                 fps = 1.0 / (end_time - start_time)
                 total_fps_time += fps
                 frame_counter += 1
-                
+
                 # Exibição de Resumo em Tela
                 num_aves = len(tracked_detections)
-                cv2.putText(annotated_frame, f"Aves: {num_aves} | FPS: {fps:.1f}", (20, 50), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 3)
+                cv2.putText(
+                    annotated_frame,
+                    f"Aves: {num_aves} | FPS: {fps:.1f}",
+                    (20, 50),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1.2,
+                    (0, 255, 255),
+                    3,
+                )
 
                 cv2.imshow("Supervision CV - Industrial Monitor", annotated_frame)
-                if cv2.waitKey(1) & 0xFF == ord('q'):
+                if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
-                    
+
         except KeyboardInterrupt:
             logging.info("Interrupção solicitada pelo usuário.")
         finally:
@@ -205,8 +223,9 @@ class VisionPipeline:
                 avg_fps = total_fps_time / frame_counter
                 logging.info(f"Pipeline finalizado. FPS médio: {avg_fps:.2f}")
 
+
 if __name__ == "__main__":
     # Inicia o pipeline de visão. Em produção, substitua a string pelo ID da stream RTMP ou Câmera.
-    VIDEO_SOURCE = "video_granja.mp4" # ou 0 para USB Webcam Local
+    VIDEO_SOURCE = "video_granja.mp4"  # ou 0 para USB Webcam Local
     pipeline = VisionPipeline(src=VIDEO_SOURCE)
     pipeline.run()

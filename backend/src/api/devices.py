@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, request
 from src.security.auth import require_auth
 
+
 def create_devices_blueprint(deps):
     bp = Blueprint("devices_api", __name__)
 
@@ -53,7 +54,6 @@ def create_devices_blueprint(deps):
         )
         return jsonify({"enabled": estado_dispositivos["modo_automatico"], "config": auto_config})
 
-
     @bp.route("/api/ventilacao", methods=["POST"])
     @require_auth()
     def controlar_ventilacao():
@@ -81,7 +81,9 @@ def create_devices_blueprint(deps):
         return jsonify(
             {
                 "ventilacao": estado_dispositivos["ventilacao"],
-                "msg": "Ventilacao ligada" if estado_dispositivos["ventilacao"] else "Ventilacao desligada",
+                "msg": "Ventilacao ligada"
+                if estado_dispositivos["ventilacao"]
+                else "Ventilacao desligada",
             }
         )
 
@@ -112,7 +114,9 @@ def create_devices_blueprint(deps):
         return jsonify(
             {
                 "aquecedor": estado_dispositivos["aquecedor"],
-                "msg": "Aquecedor ligado" if estado_dispositivos["aquecedor"] else "Aquecedor desligado",
+                "msg": "Aquecedor ligado"
+                if estado_dispositivos["aquecedor"]
+                else "Aquecedor desligado",
             }
         )
 
@@ -120,7 +124,9 @@ def create_devices_blueprint(deps):
     @require_auth()
     def controlar_luz_dimmer():
         if request.method == "GET":
-            return jsonify({"luz_intensidade_pct": int(estado_dispositivos.get("luz_intensidade_pct", 0))})
+            return jsonify(
+                {"luz_intensidade_pct": int(estado_dispositivos.get("luz_intensidade_pct", 0))}
+            )
 
         ok, resp = guard_critical_action("light_dimmer_change", permission="lighting.manage")
         if not ok:
@@ -131,7 +137,9 @@ def create_devices_blueprint(deps):
         intensidade = max(0, min(100, intensidade))
         estado_dispositivos["luz_intensidade_pct"] = intensidade
 
-        log_event("light_dimmer_changed", "info", f"Intensidade da luz ajustada para {intensidade}%")
+        log_event(
+            "light_dimmer_changed", "info", f"Intensidade da luz ajustada para {intensidade}%"
+        )
         audit("light_dimmer_changed", source="manual", details={"intensidade_pct": intensidade})
         return jsonify({"luz_intensidade_pct": intensidade, "msg": "Dimmer atualizado"})
 

@@ -18,6 +18,7 @@ Parametros via ENV:
   MATCH_THRESH        = 0.85   (limiar de IoU para associacao)
   MAX_TIME_LOST       = 45     (frames antes de remover track definitivamente)
 """
+
 from __future__ import annotations
 
 import logging
@@ -31,11 +32,11 @@ logger = logging.getLogger("chikguard.dense_tracker")
 
 # ── Configuracao via ENV ──────────────────────────────────────────────────────
 TRACK_HIGH_THRESH = float(os.getenv("TRACK_HIGH_THRESH", "0.50"))
-TRACK_LOW_THRESH  = float(os.getenv("TRACK_LOW_THRESH",  "0.10"))
-NEW_TRACK_THRESH  = float(os.getenv("NEW_TRACK_THRESH",  "0.60"))
-TRACK_BUFFER      = int(os.getenv("TRACK_BUFFER",        "30"))
-MATCH_THRESH      = float(os.getenv("MATCH_THRESH",      "0.85"))
-MAX_TIME_LOST     = int(os.getenv("MAX_TIME_LOST",        "45"))
+TRACK_LOW_THRESH = float(os.getenv("TRACK_LOW_THRESH", "0.10"))
+NEW_TRACK_THRESH = float(os.getenv("NEW_TRACK_THRESH", "0.60"))
+TRACK_BUFFER = int(os.getenv("TRACK_BUFFER", "30"))
+MATCH_THRESH = float(os.getenv("MATCH_THRESH", "0.85"))
+MAX_TIME_LOST = int(os.getenv("MAX_TIME_LOST", "45"))
 
 
 # =============================================================================
@@ -43,6 +44,7 @@ MAX_TIME_LOST     = int(os.getenv("MAX_TIME_LOST",        "45"))
 # Estado: [cx, cy, w, h, vx, vy, vw, vh]
 # Medida: [cx, cy, w, h]
 # =============================================================================
+
 
 class KalmanBoxTracker:
     """
@@ -77,32 +79,48 @@ class KalmanBoxTracker:
         self.H = np.eye(4, 8, dtype=np.float64)
 
         # Ruido do processo Q (incerteza do modelo de movimento)
-        self.Q = np.diag([
-            1e-2, 1e-2, 1e-2, 1e-2,   # posicao
-            5e-3, 5e-3, 1e-3, 1e-3,   # velocidade (mais incerta)
-        ]).astype(np.float64)
+        self.Q = np.diag(
+            [
+                1e-2,
+                1e-2,
+                1e-2,
+                1e-2,  # posicao
+                5e-3,
+                5e-3,
+                1e-3,
+                1e-3,  # velocidade (mais incerta)
+            ]
+        ).astype(np.float64)
 
         # Ruido de medicao R (incerteza da deteccao)
         self.R = np.diag([1e-1, 1e-1, 1e-1, 1e-1]).astype(np.float64)
 
         # Covariancia do estado inicial P
-        self.P = np.diag([
-            10.0, 10.0, 10.0, 10.0,   # posicao: alta incerteza inicial
-            1000.0, 1000.0, 1000.0, 1000.0,  # velocidade: muito incerta
-        ]).astype(np.float64)
+        self.P = np.diag(
+            [
+                10.0,
+                10.0,
+                10.0,
+                10.0,  # posicao: alta incerteza inicial
+                1000.0,
+                1000.0,
+                1000.0,
+                1000.0,  # velocidade: muito incerta
+            ]
+        ).astype(np.float64)
 
         # Estado inicial a partir da deteccao
         cx, cy, w, h = self._xyxy_to_cxcywh(bbox)
-        self.x = np.array([[cx], [cy], [w], [h], [0.], [0.], [0.], [0.]], dtype=np.float64)
+        self.x = np.array([[cx], [cy], [w], [h], [0.0], [0.0], [0.0], [0.0]], dtype=np.float64)
 
         # Metadados do track
-        self.time_since_update = 0   # frames sem atualizacao
-        self.hit_streak        = 0   # frames consecutivos com atualizacao
-        self.age               = 0   # frames de vida total
-        self.state             = "TENTATIVE"   # TENTATIVE | CONFIRMED | LOST
-        self.last_bbox         = list(bbox)
-        self.confidence        = 0.0
-        self.class_id          = 0
+        self.time_since_update = 0  # frames sem atualizacao
+        self.hit_streak = 0  # frames consecutivos com atualizacao
+        self.age = 0  # frames de vida total
+        self.state = "TENTATIVE"  # TENTATIVE | CONFIRMED | LOST
+        self.last_bbox = list(bbox)
+        self.confidence = 0.0
+        self.class_id = 0
 
     # ── Kalman: Predict ───────────────────────────────────────────────────────
 
@@ -110,7 +128,7 @@ class KalmanBoxTracker:
         """Avanca o estado do filtro um passo no tempo (sem medicao)."""
         self.x = self.F @ self.x
         self.P = self.F @ self.P @ self.F.T + self.Q
-        self.age               += 1
+        self.age += 1
         self.time_since_update += 1
         if self.time_since_update > 0:
             self.hit_streak = 0
@@ -134,10 +152,10 @@ class KalmanBoxTracker:
         self.P = (np.eye(8) - K @ self.H) @ self.P
 
         self.time_since_update = 0
-        self.hit_streak       += 1
-        self.confidence        = confidence
-        self.class_id          = class_id
-        self.last_bbox         = list(bbox)
+        self.hit_streak += 1
+        self.confidence = confidence
+        self.class_id = class_id
+        self.last_bbox = list(bbox)
 
         # Promove para CONFIRMED apos N atualizacoes consecutivas
         if self.state == "TENTATIVE" and self.hit_streak >= 3:
@@ -172,6 +190,7 @@ class KalmanBoxTracker:
 # Algoritmo de Associacao (Hungarian / Greedy IoU)
 # =============================================================================
 
+
 def _iou_matrix(bboxes_a: List[List[float]], bboxes_b: List[List[float]]) -> np.ndarray:
     """
     Calcula a matriz de IoU entre dois conjuntos de bounding boxes.
@@ -198,7 +217,9 @@ def _iou_matrix(bboxes_a: List[List[float]], bboxes_b: List[List[float]]) -> np.
     return inter / np.maximum(union, 1e-6)
 
 
-def _greedy_match(iou_mat: np.ndarray, thresh: float) -> Tuple[List[Tuple[int, int]], List[int], List[int]]:
+def _greedy_match(
+    iou_mat: np.ndarray, thresh: float
+) -> Tuple[List[Tuple[int, int]], List[int], List[int]]:
     """
     Associacao gulosa: ordena pares por IoU decrescente e aceita o melhor.
     Mais rapido que Hungarian para alta densidade (O(N*M log(N*M)) vs O(N^3)).
@@ -211,9 +232,9 @@ def _greedy_match(iou_mat: np.ndarray, thresh: float) -> Tuple[List[Tuple[int, i
     # Pares ordenados por IoU decrescente
     pairs = np.dstack(np.unravel_index(np.argsort(-iou_mat.ravel()), iou_mat.shape))[0]
 
-    matched_det   = set()
+    matched_det = set()
     matched_track = set()
-    matches       = []
+    matches = []
 
     for det_idx, trk_idx in pairs:
         if iou_mat[det_idx, trk_idx] < thresh:
@@ -223,10 +244,10 @@ def _greedy_match(iou_mat: np.ndarray, thresh: float) -> Tuple[List[Tuple[int, i
             matched_det.add(det_idx)
             matched_track.add(trk_idx)
 
-    n_det  = iou_mat.shape[0]
-    n_trk  = iou_mat.shape[1]
-    unmatched_dets   = [i for i in range(n_det)  if i not in matched_det]
-    unmatched_tracks = [j for j in range(n_trk)  if j not in matched_track]
+    n_det = iou_mat.shape[0]
+    n_trk = iou_mat.shape[1]
+    unmatched_dets = [i for i in range(n_det) if i not in matched_det]
+    unmatched_tracks = [j for j in range(n_trk) if j not in matched_track]
 
     return matches, unmatched_dets, unmatched_tracks
 
@@ -234,6 +255,7 @@ def _greedy_match(iou_mat: np.ndarray, thresh: float) -> Tuple[List[Tuple[int, i
 # =============================================================================
 # DenseTracker — Orquestrador principal
 # =============================================================================
+
 
 class DenseTracker:
     """
@@ -255,13 +277,13 @@ class DenseTracker:
     """
 
     def __init__(self):
-        self._tracks:       List[KalmanBoxTracker] = []
-        self._frame_count   = 0
+        self._tracks: List[KalmanBoxTracker] = []
+        self._frame_count = 0
         KalmanBoxTracker._count = 0  # Reinicia IDs
 
     def reset(self):
         """Reinicia o tracker (novo lote, nova camara, etc.)."""
-        self._tracks  = []
+        self._tracks = []
         self._frame_count = 0
         KalmanBoxTracker._count = 0
         logger.info("[Tracker] Reiniciado.")
@@ -296,15 +318,17 @@ class DenseTracker:
 
         # ── Passo 2: Separar deteccoes por nivel de confianca ─────────────────
         high_dets = [d for d in detections if d.get("confidence", 0) >= TRACK_HIGH_THRESH]
-        low_dets  = [d for d in detections if TRACK_LOW_THRESH <= d.get("confidence", 0) < TRACK_HIGH_THRESH]
+        low_dets = [
+            d for d in detections if TRACK_LOW_THRESH <= d.get("confidence", 0) < TRACK_HIGH_THRESH
+        ]
 
         active_tracks = [t for t in self._tracks if t.time_since_update <= 1]
-        lost_tracks   = [t for t in self._tracks if t.time_since_update >  1]
+        lost_tracks = [t for t in self._tracks if t.time_since_update > 1]
 
         # ── Passo 3a: Associacao de ALTA confianca com tracks ativos ──────────
-        trk_bboxes  = [t.get_predicted_bbox() for t in active_tracks]
-        det_bboxes  = [d["bbox"]              for d in high_dets]
-        iou_mat     = _iou_matrix(det_bboxes, trk_bboxes)
+        trk_bboxes = [t.get_predicted_bbox() for t in active_tracks]
+        det_bboxes = [d["bbox"] for d in high_dets]
+        iou_mat = _iou_matrix(det_bboxes, trk_bboxes)
         matches_h, unmatched_det_h, unmatched_trk_h = _greedy_match(iou_mat, 1.0 - MATCH_THRESH)
 
         for det_idx, trk_idx in matches_h:
@@ -314,13 +338,15 @@ class DenseTracker:
         # ── Passo 3b: Associacao de BAIXA confianca com tracks perdidos ───────
         remaining_lost = lost_tracks + [active_tracks[i] for i in unmatched_trk_h]
         low_det_bboxes = [d["bbox"] for d in low_dets]
-        lost_bboxes    = [t.get_predicted_bbox() for t in remaining_lost]
-        iou_mat_low    = _iou_matrix(low_det_bboxes, lost_bboxes)
+        lost_bboxes = [t.get_predicted_bbox() for t in remaining_lost]
+        iou_mat_low = _iou_matrix(low_det_bboxes, lost_bboxes)
         matches_l, unmatched_det_l, _ = _greedy_match(iou_mat_low, 1.0 - MATCH_THRESH)
 
         for det_idx, trk_idx in matches_l:
             d = low_dets[det_idx]
-            remaining_lost[trk_idx].update(d["bbox"], d.get("confidence", 1.0), d.get("class_id", 0))
+            remaining_lost[trk_idx].update(
+                d["bbox"], d.get("confidence", 1.0), d.get("class_id", 0)
+            )
 
         # ── Passo 4: Criar novas tracks para deteccoes nao associadas ─────────
         for det_idx in unmatched_det_h:
@@ -328,7 +354,7 @@ class DenseTracker:
             if d.get("confidence", 0) >= NEW_TRACK_THRESH:
                 trk = KalmanBoxTracker(d["bbox"])
                 trk.confidence = d.get("confidence", 1.0)
-                trk.class_id   = d.get("class_id", 0)
+                trk.class_id = d.get("class_id", 0)
                 self._tracks.append(trk)
 
         # ── Passo 5: Marcar tracks como LOST ou remover definitivamente ────────
@@ -347,17 +373,19 @@ class DenseTracker:
         for trk in self._tracks:
             if trk.state in ("CONFIRMED", "TENTATIVE") and trk.time_since_update <= TRACK_BUFFER:
                 bbox = trk.get_predicted_bbox()
-                output.append({
-                    "track_id":    trk.track_id,
-                    "bbox":        bbox,
-                    "centroid":    trk.get_centroid(),
-                    "confidence":  trk.confidence,
-                    "class_id":    trk.class_id,
-                    "state":       trk.state,
-                    "age":         trk.age,
-                    "hit_streak":  trk.hit_streak,
-                    "mask_area_px": 0.0,
-                })
+                output.append(
+                    {
+                        "track_id": trk.track_id,
+                        "bbox": bbox,
+                        "centroid": trk.get_centroid(),
+                        "confidence": trk.confidence,
+                        "class_id": trk.class_id,
+                        "state": trk.state,
+                        "age": trk.age,
+                        "hit_streak": trk.hit_streak,
+                        "mask_area_px": 0.0,
+                    }
+                )
 
         return output
 

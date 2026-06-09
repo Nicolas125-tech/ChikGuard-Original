@@ -13,10 +13,12 @@ os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 from app import _safe_json
 
+
 def test_safe_json_happy_path():
     data = {"key": "value", "number": 123}
     result = _safe_json(data)
     assert result == json.dumps(data, ensure_ascii=False)
+
 
 def test_safe_json_error_path():
     # A complex number is not JSON serializable

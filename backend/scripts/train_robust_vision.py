@@ -24,6 +24,7 @@ Fluxo:
   4. Exporta automaticamente: .pt → .onnx → OpenVINO FP16
   5. Copia o modelo otimizado para o diretório correto do backend
 """
+
 from __future__ import annotations
 
 import argparse
@@ -51,63 +52,50 @@ except ImportError:
 
 FARM_TRAIN_ARGS = {
     # ── Resolução e batch ──────────────────────────────────────────────────
-    "imgsz":   640,    # Tamanho padrão — compatível com SAHI (tiles de 640x640)
-    "batch":   16,     # Ajuste para -1 se quiser auto-batch
-
+    "imgsz": 640,  # Tamanho padrão — compatível com SAHI (tiles de 640x640)
+    "batch": 16,  # Ajuste para -1 se quiser auto-batch
     # ── Otimizador ────────────────────────────────────────────────────────
     "optimizer": "AdamW",
-    "lr0":    0.001,   # LR inicial (menor que default — mais estável no fine-tune)
-    "lrf":    0.01,    # LR final como fração do LR inicial
+    "lr0": 0.001,  # LR inicial (menor que default — mais estável no fine-tune)
+    "lrf": 0.01,  # LR final como fração do LR inicial
     "warmup_epochs": 3,
-
     # ── Regularização ──────────────────────────────────────────────────────
-    "dropout": 0.0,    # YOLO-seg não usa dropout, mas mantido para compatibilidade
+    "dropout": 0.0,  # YOLO-seg não usa dropout, mas mantido para compatibilidade
     "weight_decay": 0.0005,
-
     # ── AUGMENTAÇÕES ESPECÍFICAS PARA GRANJA ──────────────────────────────
-
     # Escala de zoom: simula câmera variando altura (0.5m a 3m do chão)
-    "scale":   0.6,
-
+    "scale": 0.6,
     # Mosaico 4x1: combina 4 cenas de granja numa imagem → pintinhos ficam
     # menores → treina detecção de objetos minúsculos diretamente
-    "mosaic":  1.0,
-
+    "mosaic": 1.0,
     # Mixup: transparência entre aves simula oclusão densa (amontoadas)
-    "mixup":   0.15,
-
+    "mixup": 0.15,
     # Copy-Paste: recorta aves de um lado e cola em outra imagem →
     # fundamental para segmentação de instâncias densamente sobrepostas
     "copy_paste": 0.3,
-
     # ── SIMULAÇÃO DE CONDIÇÕES ADVERSAS DA GRANJA ─────────────────────────
-
     # Variação de iluminação: manhã (fria) → tarde (quente) → halógena
-    "hsv_h":  0.020,   # Matiz: simula mudança de temperatura de cor do ambiente
-    "hsv_s":  0.80,    # Saturação: poeira no ar dessatura a cena
-    "hsv_v":  0.50,    # Valor/brilho: zonas de sombra dos comedouros e bebedouros
-
+    "hsv_h": 0.020,  # Matiz: simula mudança de temperatura de cor do ambiente
+    "hsv_s": 0.80,  # Saturação: poeira no ar dessatura a cena
+    "hsv_v": 0.50,  # Valor/brilho: zonas de sombra dos comedouros e bebedouros
     # Perspectiva: câmera mal fixada ou vibração do galpão
-    "degrees":    18.0,
-    "translate":  0.12,
-    "shear":      2.0,
+    "degrees": 18.0,
+    "translate": 0.12,
+    "shear": 2.0,
     "perspective": 0.0005,
-
     # Espelhamento horizontal: aves andam nos dois sentidos
-    "fliplr":  0.5,
-    "flipud":  0.0,    # Câmera não fica de cabeça para baixo
-
+    "fliplr": 0.5,
+    "flipud": 0.0,  # Câmera não fica de cabeça para baixo
     # Não inverter canais BGR: amarelo dos pintinhos é uma feature crítica
-    "bgr":     0.0,
-
+    "bgr": 0.0,
     # ── CONFIGURAÇÕES DE SAÍDA ─────────────────────────────────────────────
     "project": "runs/train",
-    "name":    "chikguard_robust_seg",
+    "name": "chikguard_robust_seg",
     "exist_ok": True,
-    "save":     True,
-    "save_period": 10,   # Salva checkpoint a cada 10 épocas
-    "plots":    True,    # Gera gráficos de métricas
-    "verbose":  True,
+    "save": True,
+    "save_period": 10,  # Salva checkpoint a cada 10 épocas
+    "plots": True,  # Gera gráficos de métricas
+    "verbose": True,
 }
 
 
@@ -115,6 +103,7 @@ def detect_device() -> str:
     """Detecta o melhor device disponível para treinamento."""
     try:
         import torch
+
         if torch.cuda.is_available():
             gpu_name = torch.cuda.get_device_name(0)
             print(f"  🎮 GPU detectada: {gpu_name}")
@@ -138,15 +127,16 @@ def validate_dataset(data_yaml: str) -> bool:
         cfg = yaml.safe_load(f)
 
     dataset_root = cfg.get("path", os.path.dirname(data_yaml))
-    train_path   = os.path.join(dataset_root, cfg.get("train", "train/images"))
-    val_path     = os.path.join(dataset_root, cfg.get("val",   "valid/images"))
+    train_path = os.path.join(dataset_root, cfg.get("train", "train/images"))
+    val_path = os.path.join(dataset_root, cfg.get("val", "valid/images"))
 
     issues = []
     if not os.path.exists(train_path):
         issues.append(f"Diretório train não encontrado: {train_path}")
     else:
-        n_train = len([f for f in os.listdir(train_path)
-                       if f.lower().endswith(('.jpg', '.png', '.jpeg'))])
+        n_train = len(
+            [f for f in os.listdir(train_path) if f.lower().endswith((".jpg", ".png", ".jpeg"))]
+        )
         if n_train < 50:
             issues.append(f"Muito poucos frames de treino: {n_train} (mínimo: 50)")
         else:
@@ -155,8 +145,9 @@ def validate_dataset(data_yaml: str) -> bool:
     if not os.path.exists(val_path):
         issues.append(f"Diretório val não encontrado: {val_path}")
     else:
-        n_val = len([f for f in os.listdir(val_path)
-                     if f.lower().endswith(('.jpg', '.png', '.jpeg'))])
+        n_val = len(
+            [f for f in os.listdir(val_path) if f.lower().endswith((".jpg", ".png", ".jpeg"))]
+        )
         if n_val < 10:
             issues.append(f"Muito poucos frames de validação: {n_val} (mínimo: 10)")
         else:
@@ -184,15 +175,15 @@ def train_robust_model(
     epochs: int = 200,
     device: str = "auto",
     export_after: bool = True,
-    min_map50: float = 0.60,   # mínimo aceitável após fine-tuning
+    min_map50: float = 0.60,  # mínimo aceitável após fine-tuning
 ) -> dict:
-    print(f"\n{'='*65}")
+    print(f"\n{'=' * 65}")
     print(f"  🐓 ChikGuard — Treinamento YOLOv8-Seg (Fine-Tuning Robusto)")
-    print(f"{'='*65}")
+    print(f"{'=' * 65}")
     print(f"  Modelo base  : {base_model}")
     print(f"  Dataset      : {data_yaml}")
     print(f"  Épocas       : {epochs}")
-    print(f"{'='*65}\n")
+    print(f"{'=' * 65}\n")
 
     # Validação do dataset
     print("[PRÉ-VALIDAÇÃO] Verificando dataset...\n")
@@ -209,13 +200,22 @@ def train_robust_model(
 
     # Monta args de treinamento
     train_args = dict(FARM_TRAIN_ARGS)
-    train_args["data"]   = data_yaml
+    train_args["data"] = data_yaml
     train_args["epochs"] = epochs
     train_args["device"] = device
 
     print(f"\n[AUGMENTAÇÕES ATIVAS]")
-    aug_keys = ["mosaic", "mixup", "copy_paste", "scale",
-                "hsv_h", "hsv_s", "hsv_v", "degrees", "shear"]
+    aug_keys = [
+        "mosaic",
+        "mixup",
+        "copy_paste",
+        "scale",
+        "hsv_h",
+        "hsv_s",
+        "hsv_v",
+        "degrees",
+        "shear",
+    ]
     for k in aug_keys:
         print(f"  {k:15s} = {train_args[k]}")
 
@@ -226,20 +226,23 @@ def train_robust_model(
         results = model.train(**train_args)
     except Exception as exc:
         print(f"\n[ERRO] Falha no treinamento: {exc}")
-        import traceback; traceback.print_exc()
+        import traceback
+
+        traceback.print_exc()
         return {"success": False, "reason": str(exc)}
 
     elapsed = time.time() - t0
-    print(f"\n[TREINAMENTO] Concluído em {elapsed/3600:.1f}h")
+    print(f"\n[TREINAMENTO] Concluído em {elapsed / 3600:.1f}h")
 
     # Lê métricas finais
-    save_dir  = str(results.save_dir)
-    best_pt   = os.path.join(save_dir, "weights", "best.pt")
+    save_dir = str(results.save_dir)
+    best_pt = os.path.join(save_dir, "weights", "best.pt")
     metrics_f = os.path.join(save_dir, "results.csv")
 
     map50 = 0.0
     if os.path.exists(metrics_f):
         import csv
+
         with open(metrics_f) as f:
             rows = list(csv.DictReader(f))
         if rows:
@@ -254,7 +257,9 @@ def train_robust_model(
                         pass
 
     print(f"\n[MÉTRICAS FINAIS]")
-    print(f"  mAP@50      : {map50:.3f} ({'✅' if map50 >= min_map50 else '⚠️ abaixo do mínimo'} — mín={min_map50:.2f})")
+    print(
+        f"  mAP@50      : {map50:.3f} ({'✅' if map50 >= min_map50 else '⚠️ abaixo do mínimo'} — mín={min_map50:.2f})"
+    )
     print(f"  Melhor peso : {best_pt}")
 
     if map50 < min_map50:
@@ -266,10 +271,10 @@ def train_robust_model(
         print(f"       • Usar modelo maior: --model yolov8s-seg.pt")
 
     result_info = {
-        "success":  True,
-        "map50":    map50,
+        "success": True,
+        "map50": map50,
         "save_dir": save_dir,
-        "best_pt":  best_pt,
+        "best_pt": best_pt,
         "elapsed_s": round(elapsed, 1),
     }
 
@@ -283,9 +288,9 @@ def train_robust_model(
 
 def auto_export(best_pt: str) -> dict:
     """Exporta best.pt → ONNX → OpenVINO FP16 automaticamente."""
-    print(f"\n{'='*65}")
+    print(f"\n{'=' * 65}")
     print(f"  📦 Exportação automática: {best_pt}")
-    print(f"{'='*65}")
+    print(f"{'=' * 65}")
 
     out = {}
     model = YOLO(best_pt)
@@ -304,8 +309,8 @@ def auto_export(best_pt: str) -> dict:
     print("\n[EXPORT 2/2] OpenVINO FP16...")
     try:
         model.export(format="openvino", imgsz=640, half=True, dynamic=False)
-        ov_dir  = best_pt.replace(".pt", "_openvino_model")
-        xml_f   = os.path.join(ov_dir, "model.xml")
+        ov_dir = best_pt.replace(".pt", "_openvino_model")
+        xml_f = os.path.join(ov_dir, "model.xml")
         out["openvino_xml"] = xml_f
         print(f"  ✅ OpenVINO: {xml_f}")
     except Exception as exc:
@@ -313,8 +318,8 @@ def auto_export(best_pt: str) -> dict:
         print(f"     Instale com: pip install openvino")
 
     # 3. Copia melhor modelo para o diretório do backend
-    backend_dir  = os.path.join(os.path.dirname(__file__), "..")
-    models_dir   = os.path.join(backend_dir, "models")
+    backend_dir = os.path.join(os.path.dirname(__file__), "..")
+    models_dir = os.path.join(backend_dir, "models")
     os.makedirs(models_dir, exist_ok=True)
 
     print(f"\n[DEPLOY] Copiando modelo para {models_dir}...")
@@ -337,7 +342,7 @@ def auto_export(best_pt: str) -> dict:
             print(f"  ❌ Falha ao copiar OpenVINO: {exc}")
 
     # Instruções finais
-    print(f"\n{'='*65}")
+    print(f"\n{'=' * 65}")
     print(f"  📋 CONFIGURAÇÃO DO BACKEND:")
     print(f"")
     if "openvino_deploy" in out:
@@ -351,7 +356,7 @@ def auto_export(best_pt: str) -> dict:
     print(f"    ENABLE_SAHI=true")
     print(f"    DETECTION_CONF=0.25")
     print(f"  Reinicie: python app.py")
-    print(f"{'='*65}\n")
+    print(f"{'=' * 65}\n")
 
     return out
 
@@ -363,44 +368,40 @@ def main():
     parser.add_argument(
         "--data",
         default=os.path.join(os.path.dirname(__file__), "..", "data", "dataset", "data.yaml"),
-        help="Caminho para o data.yaml do dataset"
+        help="Caminho para o data.yaml do dataset",
     )
     parser.add_argument(
         "--model",
         default="yolov8n-seg.pt",
-        help="Modelo base. Opções: yolov8n-seg.pt | yolov8s-seg.pt | yolov8m-seg.pt"
+        help="Modelo base. Opções: yolov8n-seg.pt | yolov8s-seg.pt | yolov8m-seg.pt",
     )
     parser.add_argument(
         "--epochs",
         type=int,
         default=200,
-        help="Número de épocas (padrão: 200). Use 10–20 para teste rápido."
+        help="Número de épocas (padrão: 200). Use 10–20 para teste rápido.",
     )
     parser.add_argument(
-        "--device",
-        default="auto",
-        help="Device: auto | cpu | 0 (GPU). Padrão: auto"
+        "--device", default="auto", help="Device: auto | cpu | 0 (GPU). Padrão: auto"
     )
     parser.add_argument(
-        "--no-export",
-        action="store_true",
-        help="Não exportar para ONNX/OpenVINO após treino"
+        "--no-export", action="store_true", help="Não exportar para ONNX/OpenVINO após treino"
     )
     parser.add_argument(
         "--min-map50",
         type=float,
         default=0.60,
-        help="mAP@50 mínimo aceitável (padrão: 0.60). Meta de produção: 0.80"
+        help="mAP@50 mínimo aceitável (padrão: 0.60). Meta de produção: 0.80",
     )
     args = parser.parse_args()
 
     result = train_robust_model(
-        data_yaml    = args.data,
-        base_model   = args.model,
-        epochs       = args.epochs,
-        device       = args.device,
-        export_after = not args.no_export,
-        min_map50    = args.min_map50,
+        data_yaml=args.data,
+        base_model=args.model,
+        epochs=args.epochs,
+        device=args.device,
+        export_after=not args.no_export,
+        min_map50=args.min_map50,
     )
 
     if result.get("success"):

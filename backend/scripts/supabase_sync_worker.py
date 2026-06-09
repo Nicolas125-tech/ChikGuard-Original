@@ -20,6 +20,7 @@ else:
         print(f"Error initializing Supabase client: {e}")
         supabase = None
 
+
 class SupabaseSyncWorker:
     """Worker de sincronização offline-first para o Supabase.
 
@@ -27,16 +28,23 @@ class SupabaseSyncWorker:
     só avançando a leitura após confirmação de salvamento e utilizando
     backoff exponencial para tentativas de reconexão.
     """
-    def __init__(self, log_file="tracking_logs.json", state_file="sync_state.json", batch_size=50, interval_seconds=5):
+
+    def __init__(
+        self,
+        log_file="tracking_logs.json",
+        state_file="sync_state.json",
+        batch_size=50,
+        interval_seconds=5,
+    ):
         self.log_file = log_file
         self.state_file = state_file
         self.batch_size = batch_size
         self.base_interval = interval_seconds
         self.current_interval = interval_seconds
-        
+
         self.last_processed_idx = 0
         self.backlog = []  # Registros pendentes de envio (backlog de falha)
-        
+
         self.load_state()
 
     def load_state(self):
@@ -47,7 +55,9 @@ class SupabaseSyncWorker:
                     state = json.load(f)
                     self.last_processed_idx = state.get("last_processed_idx", 0)
                     self.backlog = state.get("backlog", [])
-                print(f"[Sync] Estado carregado. Index={self.last_processed_idx}, Backlog={len(self.backlog)} itens.")
+                print(
+                    f"[Sync] Estado carregado. Index={self.last_processed_idx}, Backlog={len(self.backlog)} itens."
+                )
             except Exception as e:
                 print(f"[Sync] Erro ao carregar estado: {e}. Iniciando do zero.")
 
@@ -55,10 +65,11 @@ class SupabaseSyncWorker:
         """Salva o estado atual de sincronização em arquivo persistente."""
         try:
             with open(self.state_file, "w") as f:
-                json.dump({
-                    "last_processed_idx": self.last_processed_idx,
-                    "backlog": self.backlog
-                }, f, indent=2)
+                json.dump(
+                    {"last_processed_idx": self.last_processed_idx, "backlog": self.backlog},
+                    f,
+                    indent=2,
+                )
         except Exception as e:
             print(f"[Sync] Erro ao salvar estado: {e}")
 
@@ -70,11 +81,11 @@ class SupabaseSyncWorker:
         try:
             with open(self.log_file, "r") as f:
                 data = json.load(f)
-                
+
             if len(data) <= self.last_processed_idx:
                 return []
-                
-            new_logs = data[self.last_processed_idx:]
+
+            new_logs = data[self.last_processed_idx :]
             # Retorna logs e o novo índice temporário
             return new_logs, len(data)
         except json.JSONDecodeError:
@@ -90,17 +101,21 @@ class SupabaseSyncWorker:
         for frame_log in logs:
             timestamp = frame_log.get("timestamp", time.time())
             frame_num = frame_log.get("frame")
-            
+
             for det in frame_log.get("detections", []):
-                records.append({
-                    "track_id": det["id"],
-                    "class_id": det["class"],
-                    "confidence": det["confidence"],
-                    "pos_x": det["smoothed_centroid"][0],
-                    "pos_y": det["smoothed_centroid"][1],
-                    "frame_number": frame_num,
-                    "detected_at": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))
-                })
+                records.append(
+                    {
+                        "track_id": det["id"],
+                        "class_id": det["class"],
+                        "confidence": det["confidence"],
+                        "pos_x": det["smoothed_centroid"][0],
+                        "pos_y": det["smoothed_centroid"][1],
+                        "frame_number": frame_num,
+                        "detected_at": time.strftime(
+                            "%Y-%m-%d %H:%M:%S", time.localtime(timestamp)
+                        ),
+                    }
+                )
         return records
 
     async def sync_records(self, records) -> bool:
@@ -126,11 +141,11 @@ class SupabaseSyncWorker:
         # 1. Tenta limpar o backlog pendente primeiro
         if self.backlog:
             print(f"[Sync] Tentando enviar backlog pendente: {len(self.backlog)} itens...")
-            success = await self.sync_records(self.backlog[:self.batch_size])
-            
+            success = await self.sync_records(self.backlog[: self.batch_size])
+
             if success:
                 # Remove itens enviados do backlog
-                self.backlog = self.backlog[self.batch_size:]
+                self.backlog = self.backlog[self.batch_size :]
                 self.save_state()
                 # Reseta o intervalo de backoff (sucesso restabelece a rede)
                 self.current_interval = self.base_interval
@@ -138,7 +153,9 @@ class SupabaseSyncWorker:
             else:
                 # Falhou: aplica backoff exponencial (máximo de 5 minutos)
                 self.current_interval = min(self.current_interval * 2, 300)
-                print(f"[Sync] Erro no backlog. Aumentando intervalo de espera para {self.current_interval}s.")
+                print(
+                    f"[Sync] Erro no backlog. Aumentando intervalo de espera para {self.current_interval}s."
+                )
                 return
 
         # 2. Busca novos logs apenas se o backlog estiver limpo
@@ -147,16 +164,18 @@ class SupabaseSyncWorker:
             if fetch_res:
                 new_logs, temp_next_idx = fetch_res
                 records = self.transform_for_supabase(new_logs)
-                
+
                 if records:
-                    success = await self.sync_records(records[:self.batch_size])
-                    
+                    success = await self.sync_records(records[: self.batch_size])
+
                     if success:
                         # Avança o índice e limpa registros enviados
-                        self.last_processed_idx += len(new_logs) # Ajusta index correspondente
+                        self.last_processed_idx += len(new_logs)  # Ajusta index correspondente
                         self.save_state()
                         self.current_interval = self.base_interval
-                        print(f"[Sync] Sincronizados {len(records)} registros novos. Próximo index: {self.last_processed_idx}")
+                        print(
+                            f"[Sync] Sincronizados {len(records)} registros novos. Próximo index: {self.last_processed_idx}"
+                        )
                     else:
                         # Adiciona registros ao backlog de falha para tentar mais tarde
                         self.backlog.extend(records)
@@ -164,19 +183,27 @@ class SupabaseSyncWorker:
                         self.last_processed_idx = temp_next_idx
                         self.save_state()
                         self.current_interval = min(self.current_interval * 2, 300)
-                        print(f"[Sync] Erro no envio. Movidos para o backlog. Novo intervalo de espera: {self.current_interval}s.")
+                        print(
+                            f"[Sync] Erro no envio. Movidos para o backlog. Novo intervalo de espera: {self.current_interval}s."
+                        )
 
     async def run(self):
         print("Starting Supabase Sync Worker (Offline-First mode)...")
         print(f"Tracking logs: {self.log_file}")
-        
+
         while True:
             await self.run_once()
             await asyncio.sleep(self.current_interval)
 
+
 if __name__ == "__main__":
-    worker = SupabaseSyncWorker(log_file="tracking_logs.json", state_file="sync_state.json", batch_size=100, interval_seconds=5)
-    
+    worker = SupabaseSyncWorker(
+        log_file="tracking_logs.json",
+        state_file="sync_state.json",
+        batch_size=100,
+        interval_seconds=5,
+    )
+
     try:
         asyncio.run(worker.run())
     except KeyboardInterrupt:

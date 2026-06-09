@@ -32,6 +32,7 @@ import time
 import glob
 import shutil
 
+
 # ── Validação de dependências ──────────────────────────────────────────────────
 def _check_deps():
     missing = []
@@ -47,6 +48,7 @@ def _check_deps():
         print(f"[ERRO] Dependências em falta: {', '.join(missing)}")
         print("Instale com: pip install " + " ".join(missing))
         sys.exit(1)
+
 
 _check_deps()
 
@@ -64,9 +66,9 @@ def export_to_openvino(
     Etapa 1: Exporta o modelo .pt para OpenVINO via Ultralytics.
     Retorna o caminho para o diretório OpenVINO gerado.
     """
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  ChikGuard — Exportação para OpenVINO {precision}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"  Modelo fonte : {model_path}")
     print(f"  Precisão     : {precision}")
     print(f"  Tamanho img  : {imgsz}px")
@@ -82,8 +84,8 @@ def export_to_openvino(
     model.export(
         format="openvino",
         imgsz=imgsz,
-        half=(precision.upper() == "FP16"),   # FP16 se half=True
-        dynamic=False,                          # Static shapes = mais rápido no edge
+        half=(precision.upper() == "FP16"),  # FP16 se half=True
+        dynamic=False,  # Static shapes = mais rápido no edge
     )
     elapsed = time.time() - t0
 
@@ -107,9 +109,9 @@ def quantize_int8(openvino_dir: str, calibration_dir: str, imgsz: int = 640) -> 
 
     try:
         import openvino as ov
-        import nncf                                                   # type: ignore
-        from nncf.parameters import ModelType                         # type: ignore
-        from openvino.runtime import Core                             # type: ignore
+        import nncf  # type: ignore
+        from nncf.parameters import ModelType  # type: ignore
+        from openvino.runtime import Core  # type: ignore
     except ImportError as e:
         print(f"\n[AVISO] NNCF não instalado ({e}). Pulando quantização INT8.")
         print("        Instale com: pip install nncf")
@@ -124,7 +126,7 @@ def quantize_int8(openvino_dir: str, calibration_dir: str, imgsz: int = 640) -> 
     import numpy as np
 
     # Carrega imagens de calibração
-    patterns   = ["*.jpg", "*.jpeg", "*.png", "*.bmp"]
+    patterns = ["*.jpg", "*.jpeg", "*.png", "*.bmp"]
     image_paths = []
     for pat in patterns:
         image_paths.extend(glob.glob(os.path.join(calibration_dir, pat)))
@@ -136,7 +138,7 @@ def quantize_int8(openvino_dir: str, calibration_dir: str, imgsz: int = 640) -> 
     print(f"      Imagens de calibração: {len(image_paths)}")
 
     def _calibration_dataset():
-        for img_path in image_paths[:200]:   # máx 200 imagens
+        for img_path in image_paths[:200]:  # máx 200 imagens
             img = cv2.imread(img_path)
             if img is None:
                 continue
@@ -145,7 +147,7 @@ def quantize_int8(openvino_dir: str, calibration_dir: str, imgsz: int = 640) -> 
             img = np.transpose(img, (2, 0, 1))
             yield {"images": np.expand_dims(img, 0)}
 
-    core  = Core()
+    core = Core()
     model = core.read_model(xml_path)
 
     int8_model = nncf.quantize(
@@ -180,21 +182,21 @@ def copy_and_generate_metadata(
 
     # Gera metadata.yaml para o detector carregar automaticamente
     metadata = {
-        "model_source":  model_path,
-        "precision":     precision,
-        "imgsz":         imgsz,
-        "class_names":   class_names,
-        "framework":     "OpenVINO",
-        "sahi_slice":    640,
-        "sahi_overlap":  0.20,
+        "model_source": model_path,
+        "precision": precision,
+        "imgsz": imgsz,
+        "class_names": class_names,
+        "framework": "OpenVINO",
+        "sahi_slice": 640,
+        "sahi_overlap": 0.20,
         "conf_threshold": 0.25,
-        "export_time":   time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "export_time": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
     with open(os.path.join(output_dir, "metadata.yaml"), "w", encoding="utf-8") as f:
         yaml.dump(metadata, f, allow_unicode=True)
 
     print(f"[3/3] ✅ Modelo pronto em: {output_dir}")
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  📋 PRÓXIMOS PASSOS:")
     print(f"")
     print(f"  1. Abra o arquivo .env e configure:")
@@ -207,7 +209,7 @@ def copy_and_generate_metadata(
     print(f"     DETECTION_CONF=0.25")
     print(f"")
     print(f"  2. Reinicie o servidor: python app.py")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
 
 def benchmark_model(xml_path: str, imgsz: int = 640, n_runs: int = 50):
@@ -220,9 +222,9 @@ def benchmark_model(xml_path: str, imgsz: int = 640, n_runs: int = 50):
         return
 
     print(f"\n[BENCHMARK] Testando {n_runs} inferências @ {imgsz}px...")
-    core   = Core()
+    core = Core()
     device = "GPU" if "GPU" in core.available_devices else "CPU"
-    model  = core.compile_model(core.read_model(xml_path), device)
+    model = core.compile_model(core.read_model(xml_path), device)
 
     dummy = np.random.rand(1, 3, imgsz, imgsz).astype(np.float32)
     input_key = model.input(0)
@@ -236,14 +238,14 @@ def benchmark_model(xml_path: str, imgsz: int = 640, n_runs: int = 50):
         model({input_key: dummy})
     elapsed = time.perf_counter() - t0
 
-    fps     = n_runs / elapsed
-    lat_ms  = (elapsed / n_runs) * 1000
+    fps = n_runs / elapsed
+    lat_ms = (elapsed / n_runs) * 1000
 
     print(f"\n  ┌─────────────────────────────────────┐")
     print(f"  │  BENCHMARK OpenVINO ({device:6s})        │")
     print(f"  │  Latência : {lat_ms:6.1f} ms / frame      │")
     print(f"  │  FPS      : {fps:6.1f} FPS              │")
-    print(f"  │  Throughput SAHI (8 tiles) : {fps/8:5.1f} fps  │")
+    print(f"  │  Throughput SAHI (8 tiles) : {fps / 8:5.1f} fps  │")
     print(f"  └─────────────────────────────────────┘\n")
 
 
@@ -254,43 +256,33 @@ def main():
     parser.add_argument(
         "--model",
         default="yolov8n-seg.pt",
-        help="Caminho para o modelo .pt (padrão: yolov8n-seg.pt)"
+        help="Caminho para o modelo .pt (padrão: yolov8n-seg.pt)",
     )
     parser.add_argument(
-        "--output",
-        default="",
-        help="Diretório de saída (padrão: models/<nome>_openvino_fp16/)"
+        "--output", default="", help="Diretório de saída (padrão: models/<nome>_openvino_fp16/)"
     )
     parser.add_argument(
         "--precision",
         choices=["FP16", "INT8"],
         default="FP16",
-        help="Precisão de quantização (padrão: FP16)"
+        help="Precisão de quantização (padrão: FP16)",
     )
     parser.add_argument(
-        "--imgsz",
-        type=int,
-        default=640,
-        help="Tamanho da imagem de entrada (padrão: 640)"
+        "--imgsz", type=int, default=640, help="Tamanho da imagem de entrada (padrão: 640)"
     )
     parser.add_argument(
         "--calibration-dir",
         default="data/calibration/",
-        help="Diretório com imagens de calibração para INT8 (padrão: data/calibration/)"
+        help="Diretório com imagens de calibração para INT8 (padrão: data/calibration/)",
     )
     parser.add_argument(
-        "--benchmark",
-        action="store_true",
-        help="Executa benchmark de FPS após conversão"
+        "--benchmark", action="store_true", help="Executa benchmark de FPS após conversão"
     )
     args = parser.parse_args()
 
     model_name = os.path.splitext(os.path.basename(args.model))[0]
     if not args.output:
-        args.output = os.path.join(
-            "models",
-            f"{model_name}_openvino_{args.precision.lower()}"
-        )
+        args.output = os.path.join("models", f"{model_name}_openvino_{args.precision.lower()}")
 
     # Exportação
     ov_dir = export_to_openvino(args.model, args.output, args.precision, args.imgsz)
@@ -303,6 +295,7 @@ def main():
     # Classes do modelo (para metadata)
     try:
         from ultralytics import YOLO
+
         m = YOLO(args.model)
         class_names = list(m.names.values()) if hasattr(m, "names") else ["pintinho", "galinha"]
     except Exception:

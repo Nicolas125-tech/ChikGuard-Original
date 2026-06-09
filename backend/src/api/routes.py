@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 pcs = set()
 
+
 class GlobalFrameTrack(VideoStreamTrack):
     def __init__(self, get_global_frame, fps=30):
         super().__init__()
@@ -44,13 +45,16 @@ class GlobalFrameTrack(VideoStreamTrack):
 
         return video_frame
 
+
 def _start_async_loop(loop):
     asyncio.set_event_loop(loop)
     loop.run_forever()
 
+
 webrtc_loop = asyncio.new_event_loop()
 webrtc_thread = Thread(target=_start_async_loop, args=(webrtc_loop,), daemon=True)
 webrtc_thread.start()
+
 
 async def _process_offer(offer_sdp, offer_type, pc_id, get_global_frame):
     offer = RTCSessionDescription(sdp=offer_sdp, type=offer_type)
@@ -81,6 +85,7 @@ async def _process_offer(offer_sdp, offer_type, pc_id, get_global_frame):
     await pc.setLocalDescription(answer)
     return answer
 
+
 def create_api_blueprint(deps):
     bp = Blueprint("api_routes", __name__)
     get_global_frame = deps.get("get_global_frame")
@@ -105,20 +110,21 @@ def create_api_blueprint(deps):
         try:
             import jwt as pyjwt
             from src.security.auth import SUPABASE_JWT_SECRET
+
             pyjwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated")
         except Exception as e:
             logger.error("Token decode failed: %s", e)
             return jsonify({"error": "Token inválido ou expirado"}), 401
 
         stream_interval = deps.get("stream_frame_interval_sec", 1.0 / 30)
-        quality         = deps.get("stream_jpeg_quality", 80)
-        encode_params   = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
+        quality = deps.get("stream_jpeg_quality", 80)
+        encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
 
         def generate():
             last_t = time.perf_counter()
             try:
                 while True:
-                    t0    = time.perf_counter()
+                    t0 = time.perf_counter()
                     frame = get_global_frame()
 
                     if frame is not None:
@@ -141,17 +147,16 @@ def create_api_blueprint(deps):
                 pass  # cliente desconectou — saida limpa
 
         headers = {
-            "Cache-Control":  "no-cache, no-store, must-revalidate",
-            "Pragma":         "no-cache",
-            "Expires":        "0",
-            "X-Accel-Buffering": "no",   # desabilita buffer do Nginx se presente
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "X-Accel-Buffering": "no",  # desabilita buffer do Nginx se presente
         }
         return Response(
             generate(),
             mimetype="multipart/x-mixed-replace; boundary=frame",
             headers=headers,
         )
-
 
     @bp.route("/api/webrtc/offer", methods=["POST"])
     @require_auth()
@@ -163,16 +168,12 @@ def create_api_blueprint(deps):
         pc_id = "PeerConnection(%s)" % uuid.uuid4()
 
         future = asyncio.run_coroutine_threadsafe(
-            _process_offer(params["sdp"], params["type"], pc_id, get_global_frame),
-            webrtc_loop
+            _process_offer(params["sdp"], params["type"], pc_id, get_global_frame), webrtc_loop
         )
 
         try:
             answer = future.result(timeout=10)
-            return jsonify({
-                "sdp": answer.sdp,
-                "type": answer.type
-            })
+            return jsonify({"sdp": answer.sdp, "type": answer.type})
         except Exception as e:
             logger.error("Failed to process offer: %s", e)
             return jsonify({"error": "Ocorreu um erro interno ao processar a oferta WebRTC"}), 500

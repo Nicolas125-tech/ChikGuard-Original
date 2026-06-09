@@ -6,21 +6,23 @@ import paho.mqtt.client as mqtt
 
 logger = logging.getLogger("chikguard.mqtt")
 
+
 class ChikGuardMQTTClient:
     """
     Cliente MQTT para integração com IoT e Sensores da Granja (Fase 2).
     Conecta a um Broker, escuta tópicos de telemetria e aciona atuadores.
     """
+
     def __init__(self, broker_url="mqtt.eclipseprojects.io", port=1883, app_context_fn=None):
         self.broker_url = broker_url
         self.port = port
         self.app_context_fn = app_context_fn
         self.client = mqtt.Client(client_id="chikguard_backend", protocol=mqtt.MQTTv311)
-        
+
         self.client.on_connect = self._on_connect
         self.client.on_message = self._on_message
         self.client.on_disconnect = self._on_disconnect
-        
+
         self._running = False
 
     def start(self):
@@ -69,7 +71,7 @@ class ChikGuardMQTTClient:
             if len(topic_parts) >= 3 and topic_parts[2] == "sensors":
                 camera_id = topic_parts[1]
                 payload = json.loads(msg.payload.decode("utf-8"))
-                
+
                 # Executa no contexto do Flask para salvar no banco de dados
                 if self.app_context_fn:
                     with self.app_context_fn():
@@ -80,13 +82,13 @@ class ChikGuardMQTTClient:
     def _process_telemetry(self, camera_id: str, payload: dict):
         """Salva a leitura de temperatura/umidade real vinda do IoT."""
         from database import db, SensorReading
-        
+
         reading = SensorReading(
             camera_id=camera_id,
             temperature_c=payload.get("temperature"),
             humidity_pct=payload.get("humidity"),
             ammonia_ppm=payload.get("ammonia"),
-            source="mqtt_iot"
+            source="mqtt_iot",
         )
         db.session.add(reading)
         db.session.commit()

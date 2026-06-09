@@ -1,7 +1,9 @@
 import os
 from dotenv import load_dotenv
+
 load_dotenv()
 import secrets
+
 
 class Settings:
     def __init__(self):
@@ -34,6 +36,7 @@ class Settings:
         self.smtp_user = os.getenv("SMTP_USER", None)
         self.smtp_password = os.getenv("SMTP_PASSWORD", None)
         self.smtp_to = os.getenv("SMTP_TO", None)
+
 
 def load_settings():
     return Settings()

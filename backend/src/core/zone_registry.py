@@ -28,6 +28,7 @@ Integracao no camera_loop:
             # event.track_id e novo -- salvar no banco
             await uploader.enqueue(frame, track, mask)
 """
+
 from __future__ import annotations
 
 import logging
@@ -57,16 +58,18 @@ ZONE_RECT = tuple(float(v) for v in os.getenv("REGISTRY_ZONE_RECT", "0.1,0.1,0.9
 @dataclass
 class RegistrationEvent:
     """Emitido quando um track_id cruza a linha ou entra na zona pela primeira vez."""
-    track_id:     int
-    centroid:     Tuple[float, float]
-    timestamp:    float = field(default_factory=time.time)
-    strategy:     str   = "zone"
-    frame_index:  int   = 0
+
+    track_id: int
+    centroid: Tuple[float, float]
+    timestamp: float = field(default_factory=time.time)
+    strategy: str = "zone"
+    frame_index: int = 0
 
 
 # =============================================================================
 # Geometria 2D
 # =============================================================================
+
 
 def _cross_2d(ax: float, ay: float, bx: float, by: float) -> float:
     """Produto vetorial 2D: ax*by - ay*bx."""
@@ -101,7 +104,7 @@ def _point_in_polygon(
     Funciona para poligonos convexos e concavos.
     """
     px, py = point
-    n      = len(polygon)
+    n = len(polygon)
     inside = False
 
     j = n - 1
@@ -127,6 +130,7 @@ def _scale_point(
 # =============================================================================
 # ZoneRegistry — Nucleo de anti-duplicata
 # =============================================================================
+
 
 class ZoneRegistry:
     """
@@ -176,16 +180,20 @@ class ZoneRegistry:
             x1n, y1n, x2n, y2n = rect
             # Sera escalonado no momento do processo (multiplos frames podem ter res. diferente)
             self._zone_norm: Tuple[float, float, float, float] = (x1n, y1n, x2n, y2n)
-            self._zone = []   # calculado dinamicamente
+            self._zone = []  # calculado dinamicamente
 
         # ── Linha virtual ───────────────────────────────────────────────────
-        self._line_p1_norm = line_p1 or tuple(float(v) for v in os.getenv("REGISTRY_LINE_P1", "0.0,0.5").split(","))
-        self._line_p2_norm = line_p2 or tuple(float(v) for v in os.getenv("REGISTRY_LINE_P2", "1.0,0.5").split(","))
+        self._line_p1_norm = line_p1 or tuple(
+            float(v) for v in os.getenv("REGISTRY_LINE_P1", "0.0,0.5").split(",")
+        )
+        self._line_p2_norm = line_p2 or tuple(
+            float(v) for v in os.getenv("REGISTRY_LINE_P2", "1.0,0.5").split(",")
+        )
 
         # ── Estado interno ──────────────────────────────────────────────────
-        self._registered:    Set[int]            = set()     # track_ids ja registrados
-        self._last_side:     Dict[int, float]    = {}        # lado anterior (line strategy)
-        self._frame_index:   int                  = 0
+        self._registered: Set[int] = set()  # track_ids ja registrados
+        self._last_side: Dict[int, float] = {}  # lado anterior (line strategy)
+        self._frame_index: int = 0
 
         logger.info("[ZoneRegistry] Estrategia: %s", self.strategy)
 
@@ -194,9 +202,9 @@ class ZoneRegistry:
     def process(
         self,
         track_id: int,
-        centroid:  Tuple[float, float],
-        frame_w:   int = 1280,
-        frame_h:   int = 720,
+        centroid: Tuple[float, float],
+        frame_w: int = 1280,
+        frame_h: int = 720,
     ) -> Optional[RegistrationEvent]:
         """
         Processa um track e retorna um RegistrationEvent se for o PRIMEIRO
@@ -223,7 +231,9 @@ class ZoneRegistry:
             self._registered.add(track_id)
             logger.info(
                 "[ZoneRegistry] NOVO registro: track_id=%d centroid=(%.0f, %.0f)",
-                track_id, centroid[0], centroid[1],
+                track_id,
+                centroid[0],
+                centroid[1],
             )
             return RegistrationEvent(
                 track_id=track_id,
@@ -322,27 +332,48 @@ class ZoneRegistry:
         import cv2
 
         draw = frame.copy()
-        color_active = (0, 255, 255)    # ciano
-        color_text   = (255, 255, 255)  # branco
+        color_active = (0, 255, 255)  # ciano
+        color_text = (255, 255, 255)  # branco
 
         if self.strategy == "line":
             p1 = (int(self._line_p1_norm[0] * frame_w), int(self._line_p1_norm[1] * frame_h))
             p2 = (int(self._line_p2_norm[0] * frame_w), int(self._line_p2_norm[1] * frame_h))
             cv2.line(draw, p1, p2, color_active, 2, cv2.LINE_AA)
-            cv2.putText(draw, f"LINHA CONTAGEM | REG: {self.total_registered()}",
-                        (p1[0] + 5, p1[1] - 8), cv2.FONT_HERSHEY_SIMPLEX,
-                        0.45, color_text, 1, cv2.LINE_AA)
+            cv2.putText(
+                draw,
+                f"LINHA CONTAGEM | REG: {self.total_registered()}",
+                (p1[0] + 5, p1[1] - 8),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.45,
+                color_text,
+                1,
+                cv2.LINE_AA,
+            )
         else:
             if self._zone:
                 pts = np.array([(int(x), int(y)) for x, y in self._zone], dtype=np.int32)
                 overlay = draw.copy()
                 cv2.fillPoly(overlay, [pts], (0, 200, 200))
                 cv2.addWeighted(overlay, 0.12, draw, 0.88, 0, draw)
-                cv2.polylines(draw, [pts], isClosed=True, color=color_active, thickness=2, lineType=cv2.LINE_AA)
+                cv2.polylines(
+                    draw,
+                    [pts],
+                    isClosed=True,
+                    color=color_active,
+                    thickness=2,
+                    lineType=cv2.LINE_AA,
+                )
                 cx = int(np.mean(pts[:, 0]))
                 cy = int(np.mean(pts[:, 1]))
-                cv2.putText(draw, f"ZONA REG | {self.total_registered()} salvos",
-                            (cx - 70, cy), cv2.FONT_HERSHEY_SIMPLEX,
-                            0.50, color_text, 1, cv2.LINE_AA)
+                cv2.putText(
+                    draw,
+                    f"ZONA REG | {self.total_registered()} salvos",
+                    (cx - 70, cy),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.50,
+                    color_text,
+                    1,
+                    cv2.LINE_AA,
+                )
 
         return draw

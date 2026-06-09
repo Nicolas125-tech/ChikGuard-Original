@@ -6,6 +6,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 logger = logging.getLogger(__name__)
 
+
 class TPMModelLoader:
     """
     Classe responsavel por carregar e decriptar o modelo de IA (ONNX)
@@ -24,7 +25,7 @@ class TPMModelLoader:
         # Verifica se estamos em modo DEV (mock)
         if os.environ.get("DEV_MODE") == "true":
             logger.warning("DEV_MODE ativado: Usando chave MOCK para decriptacao do modelo.")
-            return b"0123456789abcdef0123456789abcdef" # Chave Mock de 32 bytes (256 bit)
+            return b"0123456789abcdef0123456789abcdef"  # Chave Mock de 32 bytes (256 bit)
 
         logger.info(f"Iniciando deselamento da chave do TPM no handle {self.tpm_handle_address}...")
         try:
@@ -36,14 +37,16 @@ class TPMModelLoader:
             key = result.stdout
 
             if len(key) not in [16, 24, 32]:
-                 raise ValueError("Tamanho de chave invalido extraido do TPM.")
+                raise ValueError("Tamanho de chave invalido extraido do TPM.")
 
             logger.info("Chave decriptada do TPM com sucesso.")
             return key
 
         except subprocess.CalledProcessError as e:
             logger.error(f"Erro ao acessar o TPM 2.0: {e.stderr.decode('utf-8')}")
-            raise RuntimeError("Falha na autenticacao de hardware (TPM). O sistema nao pode inicializar a IA offline.")
+            raise RuntimeError(
+                "Falha na autenticacao de hardware (TPM). O sistema nao pode inicializar a IA offline."
+            )
         except Exception as e:
             logger.error(f"Erro inesperado no TPM: {e}")
             raise
@@ -73,22 +76,24 @@ class TPMModelLoader:
 
         logger.info("Decriptando o modelo (AES-GCM) diretamente na RAM...")
         try:
-             # 3. Decriptacao em RAM
-             aesgcm = AESGCM(self._key)
-             # plaintext bytes (o binario real do .onnx)
-             onnx_bytes = aesgcm.decrypt(iv, ciphertext, None)
+            # 3. Decriptacao em RAM
+            aesgcm = AESGCM(self._key)
+            # plaintext bytes (o binario real do .onnx)
+            onnx_bytes = aesgcm.decrypt(iv, ciphertext, None)
 
-             # 4. Carregar o modelo no ONNX Runtime usando exclusivamente a RAM
-             logger.info("Carregando modelo ONNX do buffer de memoria...")
-             session = ort.InferenceSession(onnx_bytes, providers=['CPUExecutionProvider'])
-             logger.info("Modelo ONNX carregado na memoria com sucesso e pronto para inferencia.")
+            # 4. Carregar o modelo no ONNX Runtime usando exclusivamente a RAM
+            logger.info("Carregando modelo ONNX do buffer de memoria...")
+            session = ort.InferenceSession(onnx_bytes, providers=["CPUExecutionProvider"])
+            logger.info("Modelo ONNX carregado na memoria com sucesso e pronto para inferencia.")
 
-             # Opcional: Para maior seguranca, limpar onnx_bytes da RAM apos carregar,
-             # porem o garbage collector do Python fara isso eventualmente.
-             del onnx_bytes
+            # Opcional: Para maior seguranca, limpar onnx_bytes da RAM apos carregar,
+            # porem o garbage collector do Python fara isso eventualmente.
+            del onnx_bytes
 
-             return session
+            return session
 
         except Exception as e:
-             logger.error("Falha ao decriptar ou carregar o modelo ONNX. Chave incorreta ou arquivo corrompido.")
-             raise ValueError("Corrupcao ou violacao de seguranca detectada no modelo de IA.") from e
+            logger.error(
+                "Falha ao decriptar ou carregar o modelo ONNX. Chave incorreta ou arquivo corrompido."
+            )
+            raise ValueError("Corrupcao ou violacao de seguranca detectada no modelo de IA.") from e

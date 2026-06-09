@@ -2,12 +2,13 @@ from typing import Dict, Any, List, Tuple
 import numpy as np
 from datetime import datetime
 
+
 class GaitAnalyzer:
     """
     Analisador de marcha e mobilidade individual de aves a partir de keypoints (YOLOv8-Pose).
     Identifica claudicação (asimetria de passo), apatia e letargia com base na trajetória temporal.
     """
-    
+
     # Índices dos Keypoints do esqueleto YOLOv8-Pose para aves
     KP_BEAK = 0
     KP_EYE_L = 1
@@ -27,7 +28,9 @@ class GaitAnalyzer:
         # Histórico estruturado: track_id -> [ {"timestamp": datetime, "keypoints": [[x, y, conf], ...]} ]
         self._history: Dict[int, List[Dict[str, Any]]] = {}
 
-    def update_track(self, track_id: int, keypoints: List[List[float]], timestamp: datetime = None) -> Dict[str, Any]:
+    def update_track(
+        self, track_id: int, keypoints: List[List[float]], timestamp: datetime = None
+    ) -> Dict[str, Any]:
         """Adiciona uma leitura de keypoints ao histórico do ID rastreado e executa a análise."""
         if timestamp is None:
             timestamp = datetime.utcnow()
@@ -50,7 +53,9 @@ class GaitAnalyzer:
 
     # ── Funções de Cálculo Biomecânico (SRP - Single Responsibility) ──
 
-    def _extract_positions_by_index(self, history: List[Dict[str, Any]], kp_index: int, min_conf: float = 0.4) -> List[np.ndarray]:
+    def _extract_positions_by_index(
+        self, history: List[Dict[str, Any]], kp_index: int, min_conf: float = 0.4
+    ) -> List[np.ndarray]:
         """Extrai as coordenadas (x, y) válidas ao longo do histórico para um determinado keypoint."""
         positions = []
         for frame in history:
@@ -66,7 +71,9 @@ class GaitAnalyzer:
         diffs = [positions[i] - positions[i - 1] for i in range(1, len(positions))]
         return sum(np.linalg.norm(d) for d in diffs)
 
-    def _calculate_gait_score_and_claudication(self, history: List[Dict[str, Any]]) -> Tuple[float, bool]:
+    def _calculate_gait_score_and_claudication(
+        self, history: List[Dict[str, Any]]
+    ) -> Tuple[float, bool]:
         """Calcula a assimetria da amplitude do passo e indica a presença de claudicação."""
         left_extensions = []
         right_extensions = []
@@ -80,8 +87,12 @@ class GaitAnalyzer:
             # Confiança mínima recomendada para os três pontos simultaneamente
             if kp_hip[2] > 0.4 and kp_lfoot[2] > 0.4 and kp_rfoot[2] > 0.4:
                 hip_pos = np.array([kp_hip[0], kp_hip[1]])
-                left_extensions.append(np.linalg.norm(np.array([kp_lfoot[0], kp_lfoot[1]]) - hip_pos))
-                right_extensions.append(np.linalg.norm(np.array([kp_rfoot[0], kp_rfoot[1]]) - hip_pos))
+                left_extensions.append(
+                    np.linalg.norm(np.array([kp_lfoot[0], kp_lfoot[1]]) - hip_pos)
+                )
+                right_extensions.append(
+                    np.linalg.norm(np.array([kp_rfoot[0], kp_rfoot[1]]) - hip_pos)
+                )
 
         if len(left_extensions) < 5:
             return 0.0, False
@@ -113,13 +124,13 @@ class GaitAnalyzer:
         if len(history) < 10:
             return {
                 "status": "CALIBRATING",
-                "message": f"Acumulando frames para calibração: {len(history)}/10"
+                "message": f"Acumulando frames para calibração: {len(history)}/10",
             }
 
         # 1. Análise de Mobilidade Geral
         hip_positions = self._extract_positions_by_index(history, self.KP_HIP)
         total_distance = self._calculate_total_distance(hip_positions)
-        
+
         time_delta = (history[-1]["timestamp"] - history[0]["timestamp"]).total_seconds()
         avg_velocity = total_distance / time_delta if time_delta > 0 else 0.0
 
@@ -138,5 +149,5 @@ class GaitAnalyzer:
             "avg_velocity_px_s": round(avg_velocity, 1),
             "claudication_detected": claudication_detected,
             "is_lethargic": is_lethargic,
-            "timestamp": history[-1]["timestamp"].isoformat()
+            "timestamp": history[-1]["timestamp"].isoformat(),
         }

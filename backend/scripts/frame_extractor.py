@@ -3,8 +3,14 @@ import os
 from ultralytics import YOLO
 
 
-def extract_critical_frames(video_path, model_path, output_dir, conf_threshold_critical=0.5,
-                            conf_threshold_min=0.1, skip_frames=5):
+def extract_critical_frames(
+    video_path,
+    model_path,
+    output_dir,
+    conf_threshold_critical=0.5,
+    conf_threshold_min=0.1,
+    skip_frames=5,
+):
     """
     Extracts frames from a video where detection confidence is critical (between min and critical thresholds).
     This helps in identifying hard examples for fine-tuning.

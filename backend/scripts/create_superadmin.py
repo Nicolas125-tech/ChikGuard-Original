@@ -2,6 +2,7 @@
 Script para criar a conta de Super Admin no Supabase Auth + profiles.
 Usa a Service Role Key para ter acesso administrativo completo.
 """
+
 import os
 import sys
 import requests

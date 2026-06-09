@@ -2,11 +2,13 @@ import os
 from flask import Blueprint, jsonify, request
 from src.security.auth import require_auth
 
+
 def create_cameras_blueprint(deps):
     bp = Blueprint("cameras_api", __name__)
-    
+
     db = deps.get("db")
     from database import Camera
+
     guard_critical_action = deps.get("guard_critical_action")
 
     @bp.route("/api/cameras", methods=["GET"])
@@ -19,24 +21,25 @@ def create_cameras_blueprint(deps):
     @require_auth()
     def create_camera():
         ok, resp = guard_critical_action("create_camera", permission="camera.manage")
-        if not ok: return resp
-        
+        if not ok:
+            return resp
+
         data = request.get_json() or {}
         camera_id = data.get("camera_id")
         name = data.get("name")
-        
+
         if not camera_id or not name:
             return jsonify({"msg": "camera_id and name are required"}), 400
-            
+
         if Camera.query.filter_by(camera_id=camera_id).first():
             return jsonify({"msg": "camera_id already exists"}), 400
-            
+
         c = Camera(
             camera_id=camera_id,
             name=name,
             connection_type=data.get("connection_type", "url"),
             connection_url=data.get("connection_url", ""),
-            status="offline"
+            status="offline",
         )
         db.session.add(c)
         db.session.commit()
@@ -46,18 +49,23 @@ def create_cameras_blueprint(deps):
     @require_auth()
     def update_camera(id):
         ok, resp = guard_critical_action("update_camera", permission="camera.manage")
-        if not ok: return resp
-        
+        if not ok:
+            return resp
+
         c = Camera.query.get(id)
         if not c:
             return jsonify({"msg": "Camera not found"}), 404
-            
+
         data = request.get_json() or {}
-        if "name" in data: c.name = data["name"]
-        if "connection_type" in data: c.connection_type = data["connection_type"]
-        if "connection_url" in data: c.connection_url = data["connection_url"]
-        if "status" in data: c.status = data["status"]
-        
+        if "name" in data:
+            c.name = data["name"]
+        if "connection_type" in data:
+            c.connection_type = data["connection_type"]
+        if "connection_url" in data:
+            c.connection_url = data["connection_url"]
+        if "status" in data:
+            c.status = data["status"]
+
         db.session.commit()
         return jsonify(c.to_dict())
 
@@ -65,12 +73,13 @@ def create_cameras_blueprint(deps):
     @require_auth()
     def delete_camera(id):
         ok, resp = guard_critical_action("delete_camera", permission="camera.manage")
-        if not ok: return resp
-        
+        if not ok:
+            return resp
+
         c = Camera.query.get(id)
         if not c:
             return jsonify({"msg": "Camera not found"}), 404
-            
+
         db.session.delete(c)
         db.session.commit()
         return jsonify({"msg": "Camera deleted"})
@@ -79,21 +88,22 @@ def create_cameras_blueprint(deps):
     @require_auth()
     def switch_camera():
         ok, resp = guard_critical_action("switch_camera", permission="camera.manage")
-        if not ok: return resp
-        
+        if not ok:
+            return resp
+
         data = request.get_json() or {}
         cid = data.get("camera_id")
         if not cid:
             return jsonify({"msg": "Missing camera_id"}), 400
-            
+
         c = Camera.query.filter_by(camera_id=cid).first()
         if not c:
             return jsonify({"msg": "Camera not found"}), 404
-            
+
         # We update the global active camera directly in the app namespace
         import app as main_app
         from src.core.cv_engine import CameraCapture
-        
+
         main_app.ACTIVE_CAMERA_ID = cid
         if c.connection_type == "usb":
             try:
@@ -102,7 +112,7 @@ def create_cameras_blueprint(deps):
                 main_app.CAMERA_INDEX = 0
         else:
             main_app.CAMERA_INDEX = c.connection_url or cid
-            
+
         # Restart the capture thread if using v2 engine
         if getattr(main_app, "_camera_capture", None) is not None:
             main_app._camera_capture.stop()
@@ -112,11 +122,10 @@ def create_cameras_blueprint(deps):
                 width=1280,
                 height=720,
                 backend=main_app.CAMERA_BACKEND_ID,
-                metrics=main_app._perf_metrics
+                metrics=main_app._perf_metrics,
             )
             main_app._camera_capture.start()
-            
+
         return jsonify({"msg": "Camera switched successfully", "active_camera": cid})
 
     return bp
-

@@ -1,6 +1,7 @@
 import logging
 import sys
 
+
 def configure_logging(level_name: str = "INFO"):
     logger = logging.getLogger("chikguard")
 
@@ -12,9 +13,7 @@ def configure_logging(level_name: str = "INFO"):
         handler = logging.StreamHandler(sys.stdout)
         handler.setLevel(level)
 
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
+        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         handler.setFormatter(formatter)
 
         logger.addHandler(handler)

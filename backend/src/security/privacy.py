@@ -5,8 +5,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Constantes para Anonimizacao (LGPD / GDPR)
-BLUR_KERNEL_SIZE = (55, 55) # Kernel forte para ofuscar tracos faciais
-BLUR_SIGMA_X = 30           # Desvio padrao gaussiano alto para desfocar
+BLUR_KERNEL_SIZE = (55, 55)  # Kernel forte para ofuscar tracos faciais
+BLUR_SIGMA_X = 30  # Desvio padrao gaussiano alto para desfocar
+
 
 def anonymize_human_detections(frame: np.ndarray, detections: list) -> np.ndarray:
     """

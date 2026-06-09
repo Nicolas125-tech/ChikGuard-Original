@@ -8,16 +8,18 @@ from database import db, AcousticReading, EventLog, Batch
 
 logger = logging.getLogger("chikguard.audio")
 
+
 class ContinuousAudioMonitor:
     """
     Monitor de Bioacústica Contínua em Tempo Real.
     Roda em segundo plano capturando o áudio ambiente, analisando estresse/tosse e disparando alarmes.
     """
+
     def __init__(self, classifier, app_context_fn, interval_seconds: float = 10.0):
         self.classifier = classifier
         self.app_context_fn = app_context_fn
         self.interval_seconds = interval_seconds
-        
+
         self._running = False
         self._thread: Optional[threading.Thread] = None
 
@@ -26,7 +28,9 @@ class ContinuousAudioMonitor:
         if self._running:
             return
         self._running = True
-        self._thread = threading.Thread(target=self._run, daemon=True, name="chikguard-audio-monitor")
+        self._thread = threading.Thread(
+            target=self._run, daemon=True, name="chikguard-audio-monitor"
+        )
         self._thread.start()
         logger.info("[AudioMonitor] Thread de bioacústica contínua iniciada.")
 
@@ -39,7 +43,7 @@ class ContinuousAudioMonitor:
         sample_rate = 16000
         # Áudio em branco - sem simulação de ruídos ou tosse para evitar falso positivo
         audio_buffer = np.zeros(sample_rate)
-            
+
         return audio_buffer, sample_rate
 
     # ── Métodos de Processamento e Persistência (SRP) ──
@@ -51,15 +55,15 @@ class ContinuousAudioMonitor:
 
         active_batch = Batch.query.filter(Batch.active == True).first()
         batch_id = active_batch.id if active_batch else None
-        
+
         severity_level = "high" if cough_idx > 70.0 else "warning"
-        
+
         event = EventLog(
             camera_id="galpao-1",
             event_type="acoustic_alert",
             level=severity_level,
             message=f"Pico acústico detectado: Tosse={cough_idx:.1f}%, Estresse={stress_idx:.1f}%",
-            metadata_json=f'{{"cough_index": {cough_idx}, "stress_index": {stress_idx}, "batch_id": {batch_id}}}'
+            metadata_json=f'{{"cough_index": {cough_idx}, "stress_index": {stress_idx}, "batch_id": {batch_id}}}',
         )
         db.session.add(event)
 
@@ -72,20 +76,22 @@ class ContinuousAudioMonitor:
         resp_health = classification["respiratory_health_index"]
         cough_idx = classification["cough_index"]
         stress_idx = classification["stress_audio_index"]
-        
+
         # Converte percentual em escala de float 0.0 - 1.0 para o banco
         reading = AcousticReading(
             camera_id="galpao-1",
             respiratory_health_index=resp_health / 100.0,
             cough_index=cough_idx / 100.0,
             stress_audio_index=stress_idx / 100.0,
-            source="continuous_monitor"
+            source="continuous_monitor",
         )
         db.session.add(reading)
-        
+
         self._log_critical_acoustic_event(cough_idx, stress_idx)
         db.session.commit()
-        logger.debug(f"[AudioMonitor] Telemetria acústica salva: Tosse={cough_idx:.1f}%, Resp={resp_health:.1f}%")
+        logger.debug(
+            f"[AudioMonitor] Telemetria acústica salva: Tosse={cough_idx:.1f}%, Resp={resp_health:.1f}%"
+        )
 
     def _run(self):
         """Loop de monitoramento executado de forma assíncrona na thread."""
@@ -96,5 +102,5 @@ class ContinuousAudioMonitor:
                     self._process_audio_frame(audio_data, sample_rate)
             except Exception as exc:
                 logger.error(f"[AudioMonitor] Erro inesperado na thread de áudio: {exc}")
-                
+
             time.sleep(self.interval_seconds)

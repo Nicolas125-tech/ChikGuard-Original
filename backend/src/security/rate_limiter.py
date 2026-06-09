@@ -6,6 +6,7 @@ from flask_limiter.util import get_remote_address
 
 logger = logging.getLogger(__name__)
 
+
 def get_device_id_or_ip():
     """
     Estrategia de Rate Limiting:
@@ -14,6 +15,7 @@ def get_device_id_or_ip():
     evitar spoofing e bypass de Rate Limiting.
     """
     return get_remote_address()
+
 
 # Inicializacao do Flask-Limiter usando Redis (ou Memory fallback em Dev)
 redis_url = os.environ.get("REDIS_URL", "memory://")
@@ -26,6 +28,7 @@ limiter = Limiter(
     default_limits=["1000 per day", "200 per hour"],
     strategy="fixed-window",
 )
+
 
 def setup_rate_limiting(app):
     """
@@ -43,8 +46,9 @@ def setup_rate_limiting(app):
         return jsonify(
             error="Too Many Requests",
             message="Limite de requisicoes excedido. Aguarde antes de tentar novamente.",
-            description=str(e.description)
+            description=str(e.description),
         ), 429
+
 
 # Decorators especificos para proteger rotas criticas
 # Exemplo de uso nas rotas (no Blueprint/View):

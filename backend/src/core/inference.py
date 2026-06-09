@@ -28,6 +28,7 @@ Exportar modelo YOLO para ONNX com FP16:
   # TensorRT (maximo desempenho NVIDIA):
   yolo export model=yolov8n.pt format=engine imgsz=640 half=True device=0
 """
+
 from __future__ import annotations
 
 import logging
@@ -43,19 +44,20 @@ logger = logging.getLogger("chikguard.inference")
 # ─────────────────────────────────────────────────────────────────────────────
 # Configuracao via ENV
 # ─────────────────────────────────────────────────────────────────────────────
-DETECTION_CONF    = float(os.getenv("DETECTION_CONF",    "0.25"))
-DETECTION_IOU     = float(os.getenv("DETECTION_IOU",     "0.45"))
-INFERENCE_IMGSZ   = int(os.getenv("INFERENCE_IMGSZ",     "640"))
-INFERENCE_FPS     = float(os.getenv("INFERENCE_FPS",     "15.0"))   # max FPS de inferencia
-INFERENCE_BACKEND = os.getenv("INFERENCE_BACKEND",       "onnx").strip().lower()
-OPENVINO_XML      = os.getenv("OPENVINO_MODEL_XML",      "").strip()
-TRACKER_TYPE      = os.getenv("TRACKER_TYPE",            "bytetrack").strip().lower()
-TRACKER_CONFIG    = "botsort.yaml" if TRACKER_TYPE == "botsort" else "bytetrack.yaml"
+DETECTION_CONF = float(os.getenv("DETECTION_CONF", "0.25"))
+DETECTION_IOU = float(os.getenv("DETECTION_IOU", "0.45"))
+INFERENCE_IMGSZ = int(os.getenv("INFERENCE_IMGSZ", "640"))
+INFERENCE_FPS = float(os.getenv("INFERENCE_FPS", "15.0"))  # max FPS de inferencia
+INFERENCE_BACKEND = os.getenv("INFERENCE_BACKEND", "onnx").strip().lower()
+OPENVINO_XML = os.getenv("OPENVINO_MODEL_XML", "").strip()
+TRACKER_TYPE = os.getenv("TRACKER_TYPE", "bytetrack").strip().lower()
+TRACKER_CONFIG = "botsort.yaml" if TRACKER_TYPE == "botsort" else "bytetrack.yaml"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # NMS vetorizado (NumPy puro, sem loops Python internos)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _nms_numpy(boxes: np.ndarray, scores: np.ndarray, iou_thresh: float) -> np.ndarray:
     """
@@ -83,7 +85,7 @@ def _nms_numpy(boxes: np.ndarray, scores: np.ndarray, iou_thresh: float) -> np.n
         ix2 = np.minimum(x2[i], x2[rest])
         iy2 = np.minimum(y2[i], y2[rest])
         inter = np.maximum(0.0, ix2 - ix1) * np.maximum(0.0, iy2 - iy1)
-        iou   = inter / np.maximum(areas[i] + areas[rest] - inter, 1e-6)
+        iou = inter / np.maximum(areas[i] + areas[rest] - inter, 1e-6)
         order = rest[iou < iou_thresh]
 
     return np.array(keep, dtype=np.int32)
@@ -92,6 +94,7 @@ def _nms_numpy(boxes: np.ndarray, scores: np.ndarray, iou_thresh: float) -> np.n
 # ─────────────────────────────────────────────────────────────────────────────
 # Pre-processamento otimizado
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _preprocess(frame: np.ndarray, imgsz: int) -> Tuple[np.ndarray, float, float]:
     """
@@ -106,9 +109,9 @@ def _preprocess(frame: np.ndarray, imgsz: int) -> Tuple[np.ndarray, float, float
     # INTER_LINEAR e o mais rapido com boa qualidade
     resized = cv2.resize(frame, (imgsz, imgsz), interpolation=cv2.INTER_LINEAR)
     # BGR->RGB sem copia extra (slice reverso no eixo do canal)
-    rgb     = resized[:, :, ::-1]
+    rgb = resized[:, :, ::-1]
     # CHW, float32, normalizado -- astype faz copia, mas e necessaria
-    blob    = (rgb.astype(np.float32) / 255.0).transpose(2, 0, 1)[np.newaxis]
+    blob = (rgb.astype(np.float32) / 255.0).transpose(2, 0, 1)[np.newaxis]
     return blob, w / imgsz, h / imgsz
 
 
@@ -123,16 +126,16 @@ def _postprocess(
     Pos-processamento vetorizado para saida YOLO ONNX.
     Suporta shape (1, 4+nc, 8400) — padrao YOLOv8/v10.
     """
-    out = np.squeeze(output)           # (4+nc, 8400) ou (8400, 4+nc)
+    out = np.squeeze(output)  # (4+nc, 8400) ou (8400, 4+nc)
     if out.ndim != 2:
         return []
     if out.shape[0] < out.shape[1]:
-        out = out.T                    # normaliza para (8400, 4+nc)
+        out = out.T  # normaliza para (8400, 4+nc)
 
     boxes_cxcywh = out[:, :4]
-    scores_mat   = out[:, 4:]         # (8400, nc)
-    class_ids    = np.argmax(scores_mat, axis=1)
-    confs        = scores_mat[np.arange(len(scores_mat)), class_ids]
+    scores_mat = out[:, 4:]  # (8400, nc)
+    class_ids = np.argmax(scores_mat, axis=1)
+    confs = scores_mat[np.arange(len(scores_mat)), class_ids]
 
     # Filtragem por confianca (vetorizada)
     mask = confs >= conf_thresh
@@ -140,8 +143,8 @@ def _postprocess(
         return []
 
     boxes_cxcywh = boxes_cxcywh[mask]
-    class_ids    = class_ids[mask]
-    confs        = confs[mask]
+    class_ids = class_ids[mask]
+    confs = confs[mask]
 
     # cx,cy,w,h -> x1,y1,x2,y2
     cx, cy, bw, bh = boxes_cxcywh.T
@@ -161,19 +164,22 @@ def _postprocess(
 
     dets = []
     for i in keep_indices:
-        dets.append({
-            "box":          [int(x1[i]), int(y1[i]), int(x2[i]), int(y2[i])],
-            "class_id":     int(class_ids[i]),
-            "confidence":   float(confs[i]),
-            "track_id":     -1,
-            "mask_area_px": 0.0,
-        })
+        dets.append(
+            {
+                "box": [int(x1[i]), int(y1[i]), int(x2[i]), int(y2[i])],
+                "class_id": int(class_ids[i]),
+                "confidence": float(confs[i]),
+                "track_id": -1,
+                "mask_area_px": 0.0,
+            }
+        )
     return dets
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Backends
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class _ONNXBackend:
     """
@@ -182,9 +188,9 @@ class _ONNXBackend:
     """
 
     def __init__(self, onnx_path: str, conf: float, imgsz: int):
-        import onnxruntime as ort     # type: ignore
+        import onnxruntime as ort  # type: ignore
 
-        self._conf  = conf
+        self._conf = conf
         self._imgsz = imgsz
 
         # Tenta CUDA primeiro, cai para CPU
@@ -200,7 +206,7 @@ class _ONNXBackend:
         sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         sess_opts.intra_op_num_threads = max(1, (os.cpu_count() or 4) // 2)
 
-        self._session    = ort.InferenceSession(onnx_path, sess_opts, providers=providers)
+        self._session = ort.InferenceSession(onnx_path, sess_opts, providers=providers)
         self._input_name = self._session.get_inputs()[0].name
 
         # Warm-up (compila kernels)
@@ -220,14 +226,14 @@ class _OpenVINOBackend:
     def __init__(self, xml_path: str, conf: float, imgsz: int):
         from openvino.runtime import Core  # type: ignore
 
-        self._conf  = conf
+        self._conf = conf
         self._imgsz = imgsz
 
-        ie     = Core()
+        ie = Core()
         device = "GPU" if "GPU" in ie.available_devices else "CPU"
-        model  = ie.read_model(xml_path)
-        self._compiled   = ie.compile_model(model, device)
-        self._input_key  = self._compiled.input(0)
+        model = ie.read_model(xml_path)
+        self._compiled = ie.compile_model(model, device)
+        self._input_key = self._compiled.input(0)
         self._output_key = self._compiled.output(0)
 
         # Warm-up
@@ -247,18 +253,14 @@ class _UltralyticsBackend:
     def __init__(self, model_path: str, conf: float, imgsz: int):
         from ultralytics import YOLO  # type: ignore
 
-        self._conf  = conf
+        self._conf = conf
         self._imgsz = imgsz
         self._model = YOLO(model_path)
         # Warm-up
-        self._model.predict(
-            np.zeros((64, 64, 3), dtype=np.uint8), verbose=False
-        )
+        self._model.predict(np.zeros((64, 64, 3), dtype=np.uint8), verbose=False)
         self._supports_seg = False
         try:
-            res = self._model.predict(
-                np.zeros((128, 128, 3), dtype=np.uint8), verbose=False
-            )
+            res = self._model.predict(np.zeros((128, 128, 3), dtype=np.uint8), verbose=False)
             self._supports_seg = getattr(res[0], "masks", None) is not None
         except Exception:
             pass
@@ -282,9 +284,9 @@ def _parse_ultralytics(result) -> List[Dict[str, Any]]:
     if boxes is None or len(boxes) == 0:
         return []
 
-    xyxy      = boxes.xyxy.cpu().numpy().astype(int)
+    xyxy = boxes.xyxy.cpu().numpy().astype(int)
     class_ids = boxes.cls.cpu().numpy().astype(int)
-    confs     = boxes.conf.cpu().numpy()
+    confs = boxes.conf.cpu().numpy()
     track_ids = (
         boxes.id.cpu().numpy().astype(int)
         if boxes.id is not None
@@ -292,7 +294,7 @@ def _parse_ultralytics(result) -> List[Dict[str, Any]]:
     )
 
     mask_areas = np.zeros(len(xyxy), dtype=np.float32)
-    masks_obj  = getattr(result, "masks", None)
+    masks_obj = getattr(result, "masks", None)
     if masks_obj is not None:
         data = getattr(masks_obj, "data", None)
         if data is not None:
@@ -305,19 +307,22 @@ def _parse_ultralytics(result) -> List[Dict[str, Any]]:
 
     dets = []
     for i in range(len(xyxy)):
-        dets.append({
-            "box":          list(xyxy[i]),
-            "class_id":     int(class_ids[i]),
-            "confidence":   float(confs[i]),
-            "track_id":     int(track_ids[i]),
-            "mask_area_px": float(mask_areas[i]),
-        })
+        dets.append(
+            {
+                "box": list(xyxy[i]),
+                "class_id": int(class_ids[i]),
+                "confidence": float(confs[i]),
+                "track_id": int(track_ids[i]),
+                "mask_area_px": float(mask_areas[i]),
+            }
+        )
     return dets
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # InferenceEngine — fachada com frame-skipping
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class InferenceEngine:
     """
@@ -342,11 +347,11 @@ class InferenceEngine:
     """
 
     def __init__(self, model_path: str):
-        self._backend:       Any  = None
-        self._backend_name:  str  = "none"
+        self._backend: Any = None
+        self._backend_name: str = "none"
         self.last_detections: List[Dict] = []
-        self._last_infer_t:  float = 0.0
-        self._min_interval:  float = 1.0 / max(1.0, INFERENCE_FPS)
+        self._last_infer_t: float = 0.0
+        self._min_interval: float = 1.0 / max(1.0, INFERENCE_FPS)
 
         self._load_backend(model_path)
 
@@ -360,7 +365,7 @@ class InferenceEngine:
             onnx_path = model_path.replace(".pt", ".onnx")
             if os.path.exists(onnx_path):
                 try:
-                    self._backend      = _ONNXBackend(onnx_path, DETECTION_CONF, INFERENCE_IMGSZ)
+                    self._backend = _ONNXBackend(onnx_path, DETECTION_CONF, INFERENCE_IMGSZ)
                     self._backend_name = "onnx"
                     logger.info("[Engine] Backend ativo: ONNX Runtime (%s)", onnx_path)
                     return
@@ -377,7 +382,7 @@ class InferenceEngine:
 
             if xml_path and os.path.exists(xml_path):
                 try:
-                    self._backend      = _OpenVINOBackend(xml_path, DETECTION_CONF, INFERENCE_IMGSZ)
+                    self._backend = _OpenVINOBackend(xml_path, DETECTION_CONF, INFERENCE_IMGSZ)
                     self._backend_name = "openvino"
                     logger.info("[Engine] Backend ativo: OpenVINO (%s)", xml_path)
                     return
@@ -386,7 +391,7 @@ class InferenceEngine:
 
         # 3. PyTorch/Ultralytics (fallback)
         try:
-            self._backend      = _UltralyticsBackend(model_path, DETECTION_CONF, INFERENCE_IMGSZ)
+            self._backend = _UltralyticsBackend(model_path, DETECTION_CONF, INFERENCE_IMGSZ)
             self._backend_name = "pytorch"
             logger.info("[Engine] Backend ativo: PyTorch/Ultralytics")
         except Exception as e:
@@ -417,11 +422,11 @@ class InferenceEngine:
         if not self.is_ready or frame is None or frame.size == 0:
             return self.last_detections
 
-        t0   = time.perf_counter()
+        t0 = time.perf_counter()
         dets = self._backend.infer(frame)
-        lat  = (time.perf_counter() - t0) * 1000.0
+        lat = (time.perf_counter() - t0) * 1000.0
 
-        self._last_infer_t  = time.perf_counter()
+        self._last_infer_t = time.perf_counter()
         self.last_detections = dets
 
         logger.debug("[Engine] %d deteccoes em %.1f ms", len(dets), lat)
@@ -429,5 +434,5 @@ class InferenceEngine:
 
     def force_infer(self, frame: np.ndarray) -> List[Dict[str, Any]]:
         """Inferencia sem checagem de frame-skip (para warmup / debug)."""
-        self._last_infer_t = 0.0      # reseta o timer
+        self._last_infer_t = 0.0  # reseta o timer
         return self.infer(frame)

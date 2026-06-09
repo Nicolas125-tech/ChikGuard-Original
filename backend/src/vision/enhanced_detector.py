@@ -30,6 +30,7 @@ Variáveis de ambiente:
   INFERENCE_IMGSZ    = 640
   TRACKER_TYPE       = bytetrack     (bytetrack | botsort)
 """
+
 from __future__ import annotations
 
 import logging
@@ -71,6 +72,7 @@ LOGGER = logging.getLogger("chikguard.cv.enhanced_detector")
 # ──────────────────────────────────────────────────────────────────────────────
 # Funções auxiliares de NMS
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def _box_area(box: List) -> float:
     x1, y1, x2, y2 = box[0], box[1], box[2], box[3]
@@ -125,6 +127,7 @@ def _nms_detections(detections: List[Dict], iou_thresh: float = 0.45) -> List[Di
 # AdvancedTrackerWrapper — Integrates Ultralytics' ByteTrack and BoT-SORT
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 class AdvancedTrackerWrapper:
     """Wrapper for advanced tracking algorithms (ByteTrack/BoT-SORT)."""
 
@@ -156,7 +159,9 @@ class AdvancedTrackerWrapper:
         else:
             self.tracker = BYTETracker(args=args)
 
-    def update(self, boxes: List, confs: List, classes: List, img: Optional[np.ndarray] = None) -> List[int]:
+    def update(
+        self, boxes: List, confs: List, classes: List, img: Optional[np.ndarray] = None
+    ) -> List[int]:
         """
         Recebe boxes, confs, classes e retorna lista de track_ids correspondentes.
         """
@@ -225,26 +230,29 @@ class AdvancedTrackerWrapper:
         avançando os filtros de Kalman quando aplicável ou reutilizando as caixas.
         """
         dets = []
-        if hasattr(self.tracker, 'tracked_stracks'):
+        if hasattr(self.tracker, "tracked_stracks"):
             active_tracks = self.tracker.tracked_stracks
             for track in active_tracks:
                 if track.is_activated:
                     tlwh = track.tlwh
                     x1, y1 = int(tlwh[0]), int(tlwh[1])
                     x2, y2 = int(tlwh[0] + tlwh[2]), int(tlwh[1] + tlwh[3])
-                    dets.append({
-                        "box": [x1, y1, x2, y2],
-                        "class_id": int(track.cls) if hasattr(track, 'cls') else 0,
-                        "confidence": float(track.score) if hasattr(track, 'score') else 1.0,
-                        "track_id": int(track.track_id),
-                        "mask_area_px": 0.0
-                    })
+                    dets.append(
+                        {
+                            "box": [x1, y1, x2, y2],
+                            "class_id": int(track.cls) if hasattr(track, "cls") else 0,
+                            "confidence": float(track.score) if hasattr(track, "score") else 1.0,
+                            "track_id": int(track.track_id),
+                            "mask_area_px": 0.0,
+                        }
+                    )
         return dets
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # SAHITileEngine — Motor de Fatiamento Nativo
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 class SAHITileEngine:
     """
@@ -272,11 +280,15 @@ class SAHITileEngine:
         self.n_workers = max(1, n_workers)
         self.nms_iou = nms_iou
         self.conf_threshold = conf_threshold
-        self._executor = ThreadPoolExecutor(max_workers=self.n_workers,
-                                            thread_name_prefix="sahi-worker")
+        self._executor = ThreadPoolExecutor(
+            max_workers=self.n_workers, thread_name_prefix="sahi-worker"
+        )
         LOGGER.info(
             "[SAHI] Engine inicializado: slice=%dpx overlap=%.0f%% workers=%d nms_iou=%.2f",
-            slice_size, overlap * 100, n_workers, nms_iou
+            slice_size,
+            overlap * 100,
+            n_workers,
+            nms_iou,
         )
 
     def _compute_tiles(self, h: int, w: int) -> List[Tuple[int, int, int, int]]:
@@ -313,7 +325,7 @@ class SAHITileEngine:
         tile_img: np.ndarray,
         offset_x: int,
         offset_y: int,
-        infer_fn,          # callable: (frame_np) → list[dict]
+        infer_fn,  # callable: (frame_np) → list[dict]
     ) -> List[Dict]:
         """Executa inferência em um único tile e translada as coordenadas."""
         try:
@@ -353,8 +365,12 @@ class SAHITileEngine:
         if SAHI_MAX_TILES > 0 and len(all_tiles) > SAHI_MAX_TILES:
             step = len(all_tiles) / SAHI_MAX_TILES
             tiles = [all_tiles[int(i * step)] for i in range(SAHI_MAX_TILES)]
-            LOGGER.debug("[SAHI] Limitado a %d/%d tiles (SAHI_MAX_TILES=%d)",
-                         len(tiles), len(all_tiles), SAHI_MAX_TILES)
+            LOGGER.debug(
+                "[SAHI] Limitado a %d/%d tiles (SAHI_MAX_TILES=%d)",
+                len(tiles),
+                len(all_tiles),
+                SAHI_MAX_TILES,
+            )
         else:
             tiles = all_tiles
 
@@ -362,11 +378,9 @@ class SAHITileEngine:
         LOGGER.debug("[SAHI] Frame %dx%d → %d tiles ativos", w, h, n_tiles)
 
         futures = {}
-        for (x1, y1, x2, y2) in tiles:
+        for x1, y1, x2, y2 in tiles:
             tile_crop = frame[y1:y2, x1:x2]
-            future = self._executor.submit(
-                self._infer_tile, tile_crop, x1, y1, infer_fn
-            )
+            future = self._executor.submit(self._infer_tile, tile_crop, x1, y1, infer_fn)
             futures[future] = (x1, y1)
 
         all_dets: List[Dict] = []
@@ -380,10 +394,7 @@ class SAHITileEngine:
         # NMS global para eliminar duplicatas nas bordas sobrepostas
         final = _nms_detections(all_dets, iou_thresh=self.nms_iou)
 
-        LOGGER.debug(
-            "[SAHI] %d detecções brutas → %d após NMS global",
-            len(all_dets), len(final)
-        )
+        LOGGER.debug("[SAHI] %d detecções brutas → %d após NMS global", len(all_dets), len(final))
         return final
 
     def shutdown(self):
@@ -395,6 +406,7 @@ class SAHITileEngine:
 # Backend Adaptativo: OpenVINO → ONNX Runtime → PyTorch
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 class _OpenVINOBackend:
     """
     Executa inferência via OpenVINO Runtime (Intel CPU/iGPU).
@@ -403,6 +415,7 @@ class _OpenVINOBackend:
 
     def __init__(self, xml_path: str, conf: float = 0.25, imgsz: int = 640):
         from openvino.runtime import Core  # type: ignore
+
         self._conf = conf
         self._imgsz = imgsz
 
@@ -425,8 +438,8 @@ class _OpenVINOBackend:
     def _preprocess(self, frame: np.ndarray) -> np.ndarray:
         img = cv2.resize(frame, (self._imgsz, self._imgsz))
         img = img[:, :, ::-1].astype(np.float32) / 255.0  # BGR→RGB, normalize
-        img = np.transpose(img, (2, 0, 1))                 # HWC → CHW
-        return np.expand_dims(img, 0)                       # add batch dim
+        img = np.transpose(img, (2, 0, 1))  # HWC → CHW
+        return np.expand_dims(img, 0)  # add batch dim
 
     def _postprocess(self, output: np.ndarray, w_orig: int, h_orig: int) -> List[Dict]:
         """
@@ -463,13 +476,15 @@ class _OpenVINOBackend:
                 y1 = int((cy - bh / 2) * scale_y)
                 x2 = int((cx + bw / 2) * scale_x)
                 y2 = int((cy + bh / 2) * scale_y)
-                dets.append({
-                    "box": [x1, y1, x2, y2],
-                    "class_id": int(class_ids[i]),
-                    "confidence": float(confs[i]),
-                    "track_id": -1,
-                    "mask_area_px": 0.0,
-                })
+                dets.append(
+                    {
+                        "box": [x1, y1, x2, y2],
+                        "class_id": int(class_ids[i]),
+                        "confidence": float(confs[i]),
+                        "track_id": -1,
+                        "mask_area_px": 0.0,
+                    }
+                )
             return dets
 
         LOGGER.warning("[OpenVINO] Formato de saída inesperado: %s", out.shape)
@@ -481,6 +496,7 @@ class _ONNXBackend:
 
     def __init__(self, onnx_path: str, conf: float = 0.25, imgsz: int = 640):
         import onnxruntime as ort  # type: ignore
+
         self._conf = conf
         self._imgsz = imgsz
         providers = ["CPUExecutionProvider"]
@@ -522,13 +538,15 @@ class _ONNXBackend:
                 y1 = int((cy - bh / 2) * scale_y)
                 x2 = int((cx + bw / 2) * scale_x)
                 y2 = int((cy + bh / 2) * scale_y)
-                dets.append({
-                    "box": [x1, y1, x2, y2],
-                    "class_id": int(class_ids[i]),
-                    "confidence": float(confs[i]),
-                    "track_id": -1,
-                    "mask_area_px": 0.0,
-                })
+                dets.append(
+                    {
+                        "box": [x1, y1, x2, y2],
+                        "class_id": int(class_ids[i]),
+                        "confidence": float(confs[i]),
+                        "track_id": -1,
+                        "mask_area_px": 0.0,
+                    }
+                )
             return dets
         return []
 
@@ -536,6 +554,7 @@ class _ONNXBackend:
 # ──────────────────────────────────────────────────────────────────────────────
 # EnhancedObjectDetector — Fachada principal
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 class EnhancedObjectDetector:
     """
@@ -548,9 +567,9 @@ class EnhancedObjectDetector:
 
     def __init__(self, model_path: str = "yolov8n-seg.pt"):
         self.yolo_loaded = False
-        self.model = None       # Ultralytics YOLO (modo direto)
+        self.model = None  # Ultralytics YOLO (modo direto)
         self.supports_segmentation = False
-        self._hw_backend = None       # OpenVINO ou ONNX backend
+        self._hw_backend = None  # OpenVINO ou ONNX backend
         self._hw_backend_name = "none"
         self._sahi: Optional[SAHITileEngine] = None
         self._tracker = AdvancedTrackerWrapper(tracker_type=TRACKER_TYPE, max_lost=18)
@@ -574,7 +593,9 @@ class EnhancedObjectDetector:
             )
             LOGGER.info(
                 "[Detector] SAHI ativado — slice=%dpx overlap=%.0f%% workers=%d",
-                SAHI_SLICE_SIZE, SAHI_OVERLAP * 100, SAHI_WORKERS
+                SAHI_SLICE_SIZE,
+                SAHI_OVERLAP * 100,
+                SAHI_WORKERS,
             )
         else:
             LOGGER.info("[Detector] Modo direto (SAHI desabilitado)")
@@ -611,8 +632,10 @@ class EnhancedObjectDetector:
         if requested in ("onnx", "openvino", "auto"):
             onnx_path = model_path.replace(".pt", ".onnx")
             if not os.path.exists(onnx_path):
-                onnx_path = os.path.join(os.path.dirname(model_path),
-                                         os.path.basename(model_path).replace(".pt", ".onnx"))
+                onnx_path = os.path.join(
+                    os.path.dirname(model_path),
+                    os.path.basename(model_path).replace(".pt", ".onnx"),
+                )
             if os.path.exists(onnx_path):
                 try:
                     self._hw_backend = _ONNXBackend(
@@ -628,6 +651,7 @@ class EnhancedObjectDetector:
         """Carrega o modelo via Ultralytics YOLO (PyTorch)."""
         try:
             from ultralytics import YOLO
+
             self.model = YOLO(model_path)
             self.yolo_loaded = True
             LOGGER.info("[Detector] Backend: PyTorch/Ultralytics ✓ (%s)", model_path)
@@ -645,8 +669,10 @@ class EnhancedObjectDetector:
 
     @property
     def backend_name(self) -> str:
-        return self._hw_backend_name if self._hw_backend else (
-            "pytorch" if self.yolo_loaded else "none"
+        return (
+            self._hw_backend_name
+            if self._hw_backend
+            else ("pytorch" if self.yolo_loaded else "none")
         )
 
     @property
@@ -662,7 +688,9 @@ class EnhancedObjectDetector:
             return []
 
         if not run_heavy_inference:
-            if hasattr(self._tracker, "predict_only") and (self._hw_backend is not None or self._sahi is not None):
+            if hasattr(self._tracker, "predict_only") and (
+                self._hw_backend is not None or self._sahi is not None
+            ):
                 preds = self._tracker.predict_only()
                 if preds:
                     self._last_dets = preds
@@ -672,7 +700,7 @@ class EnhancedObjectDetector:
             dets = self._detect_sahi(frame)
         else:
             dets = self._detect_direct(frame)
-            
+
         self._last_dets = dets
         return dets
 
@@ -769,13 +797,15 @@ class EnhancedObjectDetector:
 
         dets = []
         for i in range(len(xyxy)):
-            dets.append({
-                "box": list(xyxy[i]),
-                "class_id": int(class_ids[i]),
-                "confidence": float(confidences[i]),
-                "track_id": int(track_ids[i]) if i < len(track_ids) else -1,
-                "mask_area_px": float(mask_areas[i]),
-            })
+            dets.append(
+                {
+                    "box": list(xyxy[i]),
+                    "class_id": int(class_ids[i]),
+                    "confidence": float(confidences[i]),
+                    "track_id": int(track_ids[i]) if i < len(track_ids) else -1,
+                    "mask_area_px": float(mask_areas[i]),
+                }
+            )
         return dets
 
     def __del__(self):

@@ -2,4 +2,3 @@
 from .base import ChikGuardAgent, VetWelfareAgent, ClimateAgent
 
 __all__ = ["ChikGuardAgent", "VetWelfareAgent", "ClimateAgent"]
-

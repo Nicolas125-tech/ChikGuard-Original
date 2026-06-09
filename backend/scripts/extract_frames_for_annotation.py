@@ -37,6 +37,7 @@ import numpy as np
 
 # ── Utilitários de qualidade ──────────────────────────────────────────────────
 
+
 def _blur_score(frame: np.ndarray) -> float:
     """Retorna a variância do Laplaciano (0 = muito borrado, >100 = nítido)."""
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -56,9 +57,9 @@ def _perceptual_hash(frame: np.ndarray, size: int = 16) -> str:
     para verificar diversidade.
     """
     small = cv2.resize(frame, (size, size), interpolation=cv2.INTER_AREA)
-    gray  = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
-    mean  = np.mean(gray)
-    bits  = (gray > mean).flatten()
+    gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+    mean = np.mean(gray)
+    bits = (gray > mean).flatten()
     return "".join("1" if b else "0" for b in bits)
 
 
@@ -80,6 +81,7 @@ def _quality_label(blur: float, brightness: float) -> str:
 
 # ── Seleção inteligente de frames ────────────────────────────────────────────
 
+
 def extract_frames(
     video_path: str,
     output_dir: str,
@@ -87,7 +89,7 @@ def extract_frames(
     min_blur_score: float = 80.0,
     min_brightness: float = 0.12,
     max_brightness: float = 0.92,
-    min_hamming_dist: int = 15,      # Diversidade mínima entre frames selecionados
+    min_hamming_dist: int = 15,  # Diversidade mínima entre frames selecionados
     verbose: bool = True,
 ) -> dict:
     """
@@ -103,20 +105,20 @@ def extract_frames(
         print(f"[ERRO] Não foi possível abrir o vídeo: {video_path}")
         sys.exit(1)
 
-    total_frames  = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    fps_video     = cap.get(cv2.CAP_PROP_FPS) or 10.0
-    duration_sec  = total_frames / fps_video
-    width         = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height        = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps_video = cap.get(cv2.CAP_PROP_FPS) or 10.0
+    duration_sec = total_frames / fps_video
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  ChikGuard — Extração de Frames para Anotação")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"  Vídeo    : {video_path}")
     print(f"  Duração  : {duration_sec:.1f}s  ({total_frames} frames @ {fps_video:.1f} FPS)")
     print(f"  Resolução: {width}×{height}px")
     print(f"  Meta     : {target_count} frames diversificados")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     # Distribui timestamps uniformemente pelo vídeo para cobertura máxima
     # Adiciona margem de 5% no início e no fim
@@ -129,11 +131,11 @@ def extract_frames(
     )
 
     saved = 0
-    skipped_blur    = 0
-    skipped_bright  = 0
+    skipped_blur = 0
+    skipped_bright = 0
     skipped_similar = 0
-    hashes_saved    = []
-    metadata_rows   = []
+    hashes_saved = []
+    metadata_rows = []
 
     for pos in candidate_positions:
         if saved >= target_count:
@@ -145,7 +147,7 @@ def extract_frames(
             continue
 
         # Verificação de qualidade
-        blur   = _blur_score(frame)
+        blur = _blur_score(frame)
         bright = _brightness_score(frame)
 
         if blur < min_blur_score:
@@ -157,65 +159,74 @@ def extract_frames(
 
         # Verificação de diversidade (hash perceptual)
         ph = _perceptual_hash(frame)
-        too_similar = any(
-            _hamming_distance(ph, h) < min_hamming_dist for h in hashes_saved
-        )
+        too_similar = any(_hamming_distance(ph, h) < min_hamming_dist for h in hashes_saved)
         if too_similar:
             skipped_similar += 1
             continue
 
         # Salva o frame
-        ts_sec    = pos / fps_video
-        filename  = f"frame_{saved:04d}_t{ts_sec:.1f}s.jpg"
-        out_path  = os.path.join(output_dir, filename)
+        ts_sec = pos / fps_video
+        filename = f"frame_{saved:04d}_t{ts_sec:.1f}s.jpg"
+        out_path = os.path.join(output_dir, filename)
         cv2.imwrite(out_path, frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
 
         hashes_saved.append(ph)
-        metadata_rows.append({
-            "index":        saved,
-            "filename":     filename,
-            "frame_pos":    int(pos),
-            "timestamp_s":  round(ts_sec, 2),
-            "blur_score":   round(blur, 1),
-            "brightness":   round(bright, 3),
-        })
+        metadata_rows.append(
+            {
+                "index": saved,
+                "filename": filename,
+                "frame_pos": int(pos),
+                "timestamp_s": round(ts_sec, 2),
+                "blur_score": round(blur, 1),
+                "brightness": round(bright, 3),
+            }
+        )
         saved += 1
 
         if verbose and saved % 20 == 0:
-            print(f"  [{saved:3d}/{target_count}] frame {pos:5d} | "
-                  f"blur={blur:.0f} bright={bright:.2f} → salvo: {filename}")
+            print(
+                f"  [{saved:3d}/{target_count}] frame {pos:5d} | "
+                f"blur={blur:.0f} bright={bright:.2f} → salvo: {filename}"
+            )
 
     cap.release()
 
     # Salva metadata.json para rastreabilidade
     meta_path = os.path.join(output_dir, "extraction_metadata.json")
     with open(meta_path, "w", encoding="utf-8") as f:
-        json.dump({
-            "source_video":    video_path,
-            "total_extracted": saved,
-            "skipped_blur":    skipped_blur,
-            "skipped_bright":  skipped_bright,
-            "skipped_similar": skipped_similar,
-            "frames":          metadata_rows,
-        }, f, ensure_ascii=False, indent=2)
+        json.dump(
+            {
+                "source_video": video_path,
+                "total_extracted": saved,
+                "skipped_blur": skipped_blur,
+                "skipped_bright": skipped_bright,
+                "skipped_similar": skipped_similar,
+                "frames": metadata_rows,
+            },
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
 
     # Relatório final
     stats = {
-        "saved":            saved,
-        "skipped_blur":     skipped_blur,
-        "skipped_bright":   skipped_bright,
-        "skipped_similar":  skipped_similar,
-        "output_dir":       output_dir,
+        "saved": saved,
+        "skipped_blur": skipped_blur,
+        "skipped_bright": skipped_bright,
+        "skipped_similar": skipped_similar,
+        "output_dir": output_dir,
     }
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  ✅ Extração concluída!")
     print(f"  Frames salvos    : {saved}")
-    print(f"  Descartados      : {skipped_blur} (borrado) + "
-          f"{skipped_bright} (brilho) + {skipped_similar} (similares)")
+    print(
+        f"  Descartados      : {skipped_blur} (borrado) + "
+        f"{skipped_bright} (brilho) + {skipped_similar} (similares)"
+    )
     print(f"  Diretório        : {output_dir}")
     print(f"  Metadata         : {meta_path}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"""
   📋 PRÓXIMOS PASSOS (Anotação):
 
@@ -281,35 +292,32 @@ def main():
     parser.add_argument(
         "--video",
         default="video_granja.mp4",
-        help="Caminho para o vídeo de granja (padrão: video_granja.mp4)"
+        help="Caminho para o vídeo de granja (padrão: video_granja.mp4)",
     )
     parser.add_argument(
         "--output",
         default="data/annotation_frames/",
-        help="Diretório de saída dos frames (padrão: data/annotation_frames/)"
+        help="Diretório de saída dos frames (padrão: data/annotation_frames/)",
     )
     parser.add_argument(
-        "--count",
-        type=int,
-        default=200,
-        help="Número de frames a extrair (padrão: 200)"
+        "--count", type=int, default=200, help="Número de frames a extrair (padrão: 200)"
     )
     parser.add_argument(
         "--min-quality",
         type=float,
         default=80.0,
-        help="Score mínimo de nitidez Laplaciana (padrão: 80)"
+        help="Score mínimo de nitidez Laplaciana (padrão: 80)",
     )
     parser.add_argument(
         "--min-hamming",
         type=int,
         default=15,
-        help="Distância mínima de Hamming entre frames (diversidade, padrão: 15)"
+        help="Distância mínima de Hamming entre frames (diversidade, padrão: 15)",
     )
     parser.add_argument(
         "--gen-yaml",
         action="store_true",
-        help="Gera o data.yaml base para treinamento no diretório data/dataset/"
+        help="Gera o data.yaml base para treinamento no diretório data/dataset/",
     )
     args = parser.parse_args()
 
@@ -318,7 +326,7 @@ def main():
     if not os.path.exists(video_path):
         # Tenta encontrar relativo ao script
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        alt_path   = os.path.join(script_dir, "..", args.video)
+        alt_path = os.path.join(script_dir, "..", args.video)
         if os.path.exists(alt_path):
             video_path = os.path.normpath(alt_path)
         else:
@@ -327,11 +335,11 @@ def main():
             sys.exit(1)
 
     extract_frames(
-        video_path   = video_path,
-        output_dir   = args.output,
-        target_count = args.count,
-        min_blur_score = args.min_quality,
-        min_hamming_dist = args.min_hamming,
+        video_path=video_path,
+        output_dir=args.output,
+        target_count=args.count,
+        min_blur_score=args.min_quality,
+        min_hamming_dist=args.min_hamming,
     )
 
     if args.gen_yaml:

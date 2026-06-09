@@ -3,6 +3,7 @@ import logging
 from unittest.mock import patch, MagicMock
 from src.alerts.providers import AlertProvider, build_alert_provider
 
+
 def test_alert_provider_send_default(caplog):
     caplog.set_level(logging.INFO)
 
@@ -53,9 +54,9 @@ def test_alert_provider_send_telegram(mock_post, caplog):
     mock_post.assert_called_once_with(
         "https://api.telegram.org/botfake_token/sendMessage",
         json={"chat_id": "fake_chat_id", "text": "🚨 [ChikGuard Alert]\nTelegram Test Alert"},
-        timeout=5
+        timeout=5,
     )
-    
+
     log_messages = [record.message for record in caplog.records]
     assert any("Notificação via Telegram enviada com sucesso." in msg for msg in log_messages)
 
@@ -84,7 +85,7 @@ def test_alert_provider_send_twilio_sms(mock_post, caplog):
         "https://api.twilio.com/2010-04-01/Accounts/AC_sid/Messages.json",
         data={"From": "+123456", "To": "+654321", "Body": "🚨 [ChikGuard] Twilio Test Alert"},
         auth=("AC_sid", "auth_token"),
-        timeout=5
+        timeout=5,
     )
 
     log_messages = [record.message for record in caplog.records]

@@ -6,6 +6,7 @@ from typing import List, Dict, Any, Optional
 
 logger = logging.getLogger("chikguard.analytics_engine")
 
+
 class AnalyticsEngine:
     def __init__(self, db_session, camera_id: str, export_interval: float = 5.0):
         """
@@ -17,25 +18,28 @@ class AnalyticsEngine:
         self.export_interval = export_interval
 
         # Local state to calculate metrics between frames
-        self.bird_last_state = {} # dict mapping track_id to { "x": float, "y": float, "ts": float }
+        self.bird_last_state = {}  # dict mapping track_id to { "x": float, "y": float, "ts": float }
 
         import time
+
         # Buffer to accumulate metrics for aggregated exports
         self.metrics_buffer = {
             "density_birds": [],
             "density_mask_area_px": [],
             "activity_px_s": [],
-            "tracked_ratio": []
+            "tracked_ratio": [],
         }
         self.last_export_time = time.time()
 
-    def export_metrics(self, detections: List[Dict[str, Any]], frame_timestamp: float) -> Optional[Any]:
+    def export_metrics(
+        self, detections: List[Dict[str, Any]], frame_timestamp: float
+    ) -> Optional[Any]:
         """
         Calculates density and activity metrics from the detections, buffers them,
         and exports them to the database periodically based on `export_interval`.
         Activity is measured in pixels/second based on tracking IDs.
         """
-        from database import EventLog # Local import to avoid circular dependency
+        from database import EventLog  # Local import to avoid circular dependency
         import time
 
         if not detections:
@@ -70,7 +74,7 @@ class AnalyticsEngine:
                         dx = cx - prev["x"]
                         dy = cy - prev["y"]
                         dist = math.hypot(dx, dy)
-                        velocity = dist / dt # pixels/second
+                        velocity = dist / dt  # pixels/second
 
                         total_velocity += velocity
                         active_tracked_birds += 1
@@ -78,7 +82,9 @@ class AnalyticsEngine:
         # Update state for next frame
         self.bird_last_state = current_state
 
-        avg_activity_px_s = total_velocity / active_tracked_birds if active_tracked_birds > 0 else 0.0
+        avg_activity_px_s = (
+            total_velocity / active_tracked_birds if active_tracked_birds > 0 else 0.0
+        )
         tracked_ratio = active_tracked_birds / total_birds if total_birds > 0 else 0.0
 
         # Add to buffer
@@ -92,17 +98,25 @@ class AnalyticsEngine:
         if current_time - self.last_export_time >= self.export_interval:
             try:
                 # Calculate averages for the buffered period
-                avg_density = sum(self.metrics_buffer["density_birds"]) / len(self.metrics_buffer["density_birds"])
-                avg_mask_area = sum(self.metrics_buffer["density_mask_area_px"]) / len(self.metrics_buffer["density_mask_area_px"])
-                avg_activity = sum(self.metrics_buffer["activity_px_s"]) / len(self.metrics_buffer["activity_px_s"])
-                avg_tracked_ratio = sum(self.metrics_buffer["tracked_ratio"]) / len(self.metrics_buffer["tracked_ratio"])
+                avg_density = sum(self.metrics_buffer["density_birds"]) / len(
+                    self.metrics_buffer["density_birds"]
+                )
+                avg_mask_area = sum(self.metrics_buffer["density_mask_area_px"]) / len(
+                    self.metrics_buffer["density_mask_area_px"]
+                )
+                avg_activity = sum(self.metrics_buffer["activity_px_s"]) / len(
+                    self.metrics_buffer["activity_px_s"]
+                )
+                avg_tracked_ratio = sum(self.metrics_buffer["tracked_ratio"]) / len(
+                    self.metrics_buffer["tracked_ratio"]
+                )
 
                 # Format payload for EventLog.metadata_json
                 payload = {
                     "density_birds": round(avg_density, 2),
                     "density_mask_area_px": round(avg_mask_area, 2),
                     "activity_px_s": round(avg_activity, 2),
-                    "tracked_ratio": round(avg_tracked_ratio, 2)
+                    "tracked_ratio": round(avg_tracked_ratio, 2),
                 }
 
                 # We must use timezone-naive UTC datetime for the timestamp column as per codebase standards
@@ -114,7 +128,7 @@ class AnalyticsEngine:
                     level="info",
                     message=f"CV Analytics: ~{int(avg_density)} birds, {avg_activity:.1f} px/s avg movement over {self.export_interval}s",
                     timestamp=now_utc,
-                    metadata_json=json.dumps(payload)
+                    metadata_json=json.dumps(payload),
                 )
 
                 self.db.add(event)
@@ -133,7 +147,7 @@ class AnalyticsEngine:
                     "density_birds": [],
                     "density_mask_area_px": [],
                     "activity_px_s": [],
-                    "tracked_ratio": []
+                    "tracked_ratio": [],
                 }
                 self.last_export_time = current_time
 

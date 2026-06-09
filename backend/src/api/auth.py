@@ -87,7 +87,11 @@ def create_auth_blueprint(deps):
         )
         db.session.add(row)
         db.session.commit()
-        audit("account_created", source="security", details={"username": username, "role": role, "active": active})
+        audit(
+            "account_created",
+            source="security",
+            details={"username": username, "role": role, "active": active},
+        )
         return jsonify({"msg": "Conta criada", "item": row.to_dict()}), 201
 
     @bp.route("/api/accounts/users/<int:account_id>", methods=["PATCH"])
@@ -101,9 +105,13 @@ def create_auth_blueprint(deps):
 
         account = get_current_account()
         if row.role == "superadmin" and (not account or account.role != "superadmin"):
-            return jsonify({"msg": "Apenas superadmins podem alterar ou conceder acesso superadmin"}), 403
+            return jsonify(
+                {"msg": "Apenas superadmins podem alterar ou conceder acesso superadmin"}
+            ), 403
         elif row.role == "admin" and (not account or account.role not in ["superadmin", "admin"]):
-            return jsonify({"msg": "Apenas admins/superadmins podem alterar ou conceder acesso admin"}), 403
+            return jsonify(
+                {"msg": "Apenas admins/superadmins podem alterar ou conceder acesso admin"}
+            ), 403
 
         data = request.get_json(silent=True) or {}
         if "role" in data:
@@ -112,10 +120,14 @@ def create_auth_blueprint(deps):
                 return jsonify({"msg": "role invalido"}), 400
             if role == "superadmin":
                 if not account or account.role != "superadmin":
-                    return jsonify({"msg": "Apenas superadmins podem alterar ou conceder acesso superadmin"}), 403
+                    return jsonify(
+                        {"msg": "Apenas superadmins podem alterar ou conceder acesso superadmin"}
+                    ), 403
             elif role == "admin":
                 if not account or account.role not in ["superadmin", "admin"]:
-                    return jsonify({"msg": "Apenas admins/superadmins podem alterar ou conceder acesso admin"}), 403
+                    return jsonify(
+                        {"msg": "Apenas admins/superadmins podem alterar ou conceder acesso admin"}
+                    ), 403
             row.role = role
         if "active" in data:
             row.active = bool(data.get("active"))
@@ -129,10 +141,8 @@ def create_auth_blueprint(deps):
         audit(
             "account_updated",
             source="security",
-            details={
-                "account_id": account_id,
-                "payload_keys": list(
-                    data.keys())})
+            details={"account_id": account_id, "payload_keys": list(data.keys())},
+        )
         return jsonify({"msg": "Conta atualizada", "item": row.to_dict()})
 
     @bp.route("/api/accounts/users/<int:account_id>", methods=["DELETE"])
@@ -157,10 +167,15 @@ def create_auth_blueprint(deps):
         try:
             db.session.delete(row)
             db.session.commit()
-            audit("account_deleted", source="security", details={"account_id": account_id, "username": username})
+            audit(
+                "account_deleted",
+                source="security",
+                details={"account_id": account_id, "username": username},
+            )
         except Exception as e:
             db.session.rollback()
             import logging
+
             logging.error(f"Erro ao excluir conta local: {e}")
             return jsonify({"error": "Erro interno ao excluir conta local"}), 500
 
@@ -169,7 +184,11 @@ def create_auth_blueprint(deps):
                 SUPABASE_URL = os.environ.get("SUPABASE_URL")
                 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 
-                if SUPABASE_URL and SUPABASE_KEY and SUPABASE_KEY != "YOUR_SUPABASE_SERVICE_ROLE_KEY_HERE":
+                if (
+                    SUPABASE_URL
+                    and SUPABASE_KEY
+                    and SUPABASE_KEY != "YOUR_SUPABASE_SERVICE_ROLE_KEY_HERE"
+                ):
                     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
                     try:
@@ -180,9 +199,13 @@ def create_auth_blueprint(deps):
                                 break
                     except Exception as e:
                         import logging
-                        logging.getLogger(__name__).error("Failed to delete user from Supabase auth: %s", e)
+
+                        logging.getLogger(__name__).error(
+                            "Failed to delete user from Supabase auth: %s", e
+                        )
             except Exception as e:
                 import logging
+
                 logging.getLogger(__name__).error("Supabase connection error during delete: %s", e)
 
         return jsonify({"msg": "Conta excluida com sucesso"})
@@ -193,7 +216,9 @@ def create_auth_blueprint(deps):
         if not ok:
             return resp
         if request.method == "GET":
-            rows = RolePermission.query.order_by(RolePermission.role.asc(), RolePermission.permission.asc()).all()
+            rows = RolePermission.query.order_by(
+                RolePermission.role.asc(), RolePermission.permission.asc()
+            ).all()
             return jsonify({"count": len(rows), "items": [r.to_dict() for r in rows]})
 
         data = request.get_json(silent=True) or {}
@@ -215,10 +240,8 @@ def create_auth_blueprint(deps):
         audit(
             "permission_updated",
             source="security",
-            details={
-                "role": role,
-                "permission": permission,
-                "allowed": allowed})
+            details={"role": role, "permission": permission, "allowed": allowed},
+        )
         return jsonify({"msg": "Permissao atualizada", "item": row.to_dict()})
 
     @bp.route("/api/admin/pending-users", methods=["GET"])
@@ -243,6 +266,7 @@ def create_auth_blueprint(deps):
 
         except Exception as e:
             import logging
+
             logging.error(f"Admin pending users error: {e}")
             return jsonify({"error": "Erro interno no servidor"}), 500
 
@@ -261,44 +285,64 @@ def create_auth_blueprint(deps):
 
         account = get_current_account()
         if target_role == "SUPERADMIN" and (not account or account.role != "superadmin"):
-            return jsonify({"msg": "Apenas superadmins podem aprovar ou elevar usuarios a superadmin"}), 403
-        elif target_role == "ADMIN" and (not account or account.role not in ["superadmin", "admin"]):
-            return jsonify({"msg": "Apenas admins/superadmins podem aprovar usuarios para admin"}), 403
+            return jsonify(
+                {"msg": "Apenas superadmins podem aprovar ou elevar usuarios a superadmin"}
+            ), 403
+        elif target_role == "ADMIN" and (
+            not account or account.role not in ["superadmin", "admin"]
+        ):
+            return jsonify(
+                {"msg": "Apenas admins/superadmins podem aprovar usuarios para admin"}
+            ), 403
 
         from sqlalchemy import text
+
         try:
-            sql = text("UPDATE profiles SET status = 'ACTIVE', role = :r, approved_at = now() "
-                       "WHERE id = :uid RETURNING id")
+            sql = text(
+                "UPDATE profiles SET status = 'ACTIVE', role = :r, approved_at = now() "
+                "WHERE id = :uid RETURNING id"
+            )
             res = db.session.execute(sql, {"r": target_role, "uid": target_user_id}).fetchone()
             db.session.commit()
             if res:
                 audit(
                     "iam_user_approved",
                     source="security_db",
-                    details={
-                        "target_user_id": target_user_id,
-                        "role": target_role})
-                return jsonify({"message": "User approved successfully", "data": {"id": target_user_id}}), 200
+                    details={"target_user_id": target_user_id, "role": target_role},
+                )
+                return jsonify(
+                    {"message": "User approved successfully", "data": {"id": target_user_id}}
+                ), 200
         except Exception as e:
             db.session.rollback()
             import logging
-            logging.getLogger(__name__).error("Direct DB Update Failed (trying Supabase REST Admin): %s", e)
+
+            logging.getLogger(__name__).error(
+                "Direct DB Update Failed (trying Supabase REST Admin): %s", e
+            )
 
         try:
             SUPABASE_URL = os.environ.get("SUPABASE_URL")
             SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 
-            if not SUPABASE_URL or not SUPABASE_KEY or SUPABASE_KEY == "YOUR_SUPABASE_SERVICE_ROLE_KEY_HERE":
-                return jsonify({"msg": "Supabase credenciais REST ausentes e DB direta falhou"}), 500
+            if (
+                not SUPABASE_URL
+                or not SUPABASE_KEY
+                or SUPABASE_KEY == "YOUR_SUPABASE_SERVICE_ROLE_KEY_HERE"
+            ):
+                return jsonify(
+                    {"msg": "Supabase credenciais REST ausentes e DB direta falhou"}
+                ), 500
 
             supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
             # Update direto usando service_role
-            response = supabase.table("profiles").update({
-                "status": "ACTIVE",
-                "role": target_role,
-                "approved_at": "now()"
-            }).eq("id", target_user_id).execute()
+            response = (
+                supabase.table("profiles")
+                .update({"status": "ACTIVE", "role": target_role, "approved_at": "now()"})
+                .eq("id", target_user_id)
+                .execute()
+            )
 
             if not response.data:
                 return jsonify({"msg": "Falha ao atualizar no Supabase"}), 400
@@ -306,12 +350,12 @@ def create_auth_blueprint(deps):
             audit(
                 "iam_user_approved",
                 source="security",
-                details={
-                    "target_user_id": target_user_id,
-                    "role": target_role})
+                details={"target_user_id": target_user_id, "role": target_role},
+            )
             return jsonify({"message": "User approved successfully", "data": response.data}), 200
         except Exception as e:
             import logging
+
             logging.error(f"Admin approve user error: {e}")
             return jsonify({"error": "Erro interno no servidor"}), 500
 
@@ -321,7 +365,12 @@ def create_auth_blueprint(deps):
         WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET")
 
         auth_header = request.headers.get("Authorization")
-        if WEBHOOK_SECRET and (not auth_header or not hmac.compare_digest(auth_header.encode('utf-8'), f"Bearer {WEBHOOK_SECRET}".encode('utf-8'))):
+        if WEBHOOK_SECRET and (
+            not auth_header
+            or not hmac.compare_digest(
+                auth_header.encode("utf-8"), f"Bearer {WEBHOOK_SECRET}".encode("utf-8")
+            )
+        ):
             return jsonify({"error": "Unauthorized"}), 401
 
         data = request.get_json(silent=True) or {}
@@ -359,6 +408,7 @@ def create_auth_blueprint(deps):
                             server.send_message(msg)
                 except Exception as e:
                     import logging
+
                     logging.getLogger(__name__).error("Erro SMTP webhook: %s", e)
 
                 return jsonify({"message": "Notificação processada"}), 200
@@ -381,7 +431,9 @@ def create_auth_blueprint(deps):
             login_attempt_state[ip] = state
 
         if state["count"] >= LOGIN_RATE_MAX_ATTEMPTS:
-            audit("login_failed_rate_limit", source="security", details={"ip": ip}, actor="anonymous")
+            audit(
+                "login_failed_rate_limit", source="security", details={"ip": ip}, actor="anonymous"
+            )
             return jsonify({"msg": "Muitas tentativas. Tente mais tarde."}), 429
 
         data = request.get_json(silent=True) or {}
@@ -392,19 +444,24 @@ def create_auth_blueprint(deps):
             return jsonify({"msg": "Usuario e senha obrigatorios"}), 400
 
         account = Account.query.filter_by(username=username).first()
-        
+
         # Defense in depth: Prevent timing-based user enumeration.
-        # We always verify a password hash (either the user's or a dummy one) 
+        # We always verify a password hash (either the user's or a dummy one)
         # to ensure the login endpoint takes roughly the same time.
-        dummy_hash = "$2b$12$aT1/E4n.XqPzG1aL9m.J.OqU3I.H.U8Ww.A2wQ/p.W/mY4.X2wW82" # Random valid bcrypt hash
+        dummy_hash = "$2b$12$aT1/E4n.XqPzG1aL9m.J.OqU3I.H.U8Ww.A2wQ/p.W/mY4.X2wW82"  # Random valid bcrypt hash
         hash_to_check = account.password_hash if account else dummy_hash
-        
+
         valid_pwd = bcrypt.check_password_hash(hash_to_check, password)
 
         if not account or not account.active or not valid_pwd:
             state["count"] += 1
             login_attempt_state[ip] = state
-            audit("login_failed", source="security", details={"username": username, "ip": ip}, actor=username)
+            audit(
+                "login_failed",
+                source="security",
+                details={"username": username, "ip": ip},
+                actor=username,
+            )
             return jsonify({"msg": "Credenciais invalidas"}), 401
 
         # Success reset
@@ -442,17 +499,24 @@ def create_auth_blueprint(deps):
                         status = supabase_status
         except Exception as e:
             import logging
+
             logging.getLogger(__name__).error("Supabase sync error (non-critical): %s", e)
 
         access_token = create_access_token(
             identity=str(account.id),
-            additional_claims={"role": account.role, "username": account.username, "status": status}
+            additional_claims={
+                "role": account.role,
+                "username": account.username,
+                "status": status,
+            },
         )
-        return jsonify({
-            "access_token": access_token,
-            "role": account.role,
-            "username": account.username,
-            "status": status
-        }), 200
+        return jsonify(
+            {
+                "access_token": access_token,
+                "role": account.role,
+                "username": account.username,
+                "status": status,
+            }
+        ), 200
 
     return bp

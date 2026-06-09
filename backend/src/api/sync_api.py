@@ -3,7 +3,7 @@ from src.security.auth import require_auth
 
 
 def create_sync_blueprint(deps):
-    bp = Blueprint('sync_api', __name__)
+    bp = Blueprint("sync_api", __name__)
     db = deps.get("db")
     SyncQueueItem = deps.get("SyncQueueItem")
 
@@ -18,8 +18,11 @@ def create_sync_blueprint(deps):
             return jsonify({"status": "online", "pending_items": pending})
         except Exception as e:
             import logging
+
             logging.getLogger(__name__).error("Erro na API de sync: %s", e)
-            return jsonify({"status": "error", "message": "Ocorreu um erro interno de sincronizacao."}), 500
+            return jsonify(
+                {"status": "error", "message": "Ocorreu um erro interno de sincronizacao."}
+            ), 500
 
     @bp.route("/api/sync/pending", methods=["GET"])
     @require_auth()

@@ -4,24 +4,29 @@ import json
 from unittest.mock import patch
 from flask import Flask, jsonify, request
 from src.security.hardening import (
-    setup_hardening, BLACKLISTED_IPS, IP_REQUESTS, 
-    BLOCK_DURATION_SEC, RATE_LIMIT_MAX
+    setup_hardening,
+    BLACKLISTED_IPS,
+    IP_REQUESTS,
+    BLOCK_DURATION_SEC,
+    RATE_LIMIT_MAX,
 )
+
 
 @pytest.fixture
 def secure_app():
     app = Flask("secure_test_app")
     setup_hardening(app)
-    
+
     @app.route("/api/test-route", methods=["GET", "POST"])
     def test_route():
         return jsonify({"status": "ok"})
-        
+
     # Reset blacklists and request counters between tests
     BLACKLISTED_IPS.clear()
     IP_REQUESTS.clear()
-    
+
     return app
+
 
 @pytest.fixture
 def client(secure_app):
@@ -46,7 +51,7 @@ def test_honeypot_path_blocking(client):
     # 2. Verificar se o IP foi incluído na blacklist
     # O cliente de teste do Flask tem remote_addr = '127.0.0.1' por padrão
     assert "127.0.0.1" in BLACKLISTED_IPS
-    
+
     # 3. Próxima requisição normal do mesmo IP deve ser rejeitada imediatamente
     with patch("time.sleep") as mock_sleep:
         response2 = client.get("/api/test-route")
@@ -68,9 +73,7 @@ def test_xss_json_payload_blocking(client):
     """Verifica se tentativas de XSS no corpo do JSON são rejeitadas."""
     payload = {"comment": "<script>alert('hack')</script>"}
     response = client.post(
-        "/api/test-route", 
-        data=json.dumps(payload), 
-        content_type="application/json"
+        "/api/test-route", data=json.dumps(payload), content_type="application/json"
     )
     assert response.status_code == 400
     data = json.loads(response.data)

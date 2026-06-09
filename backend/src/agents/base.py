@@ -2,8 +2,10 @@ from typing import Dict, Any, List, Tuple
 from datetime import datetime, timedelta
 from database import db, SensorReading, AcousticReading, EventLog, BatchLogbook, Batch
 
+
 class ChikGuardAgent:
     """Classe base abstrata para os agentes de decisão inteligente do ChikGuard."""
+
     def __init__(self, name: str, description: str):
         self.name = name
         self.description = description
@@ -18,10 +20,11 @@ class VetWelfareAgent(ChikGuardAgent):
     Agente Veterinário e de Bem-Estar Animal.
     Analisa correlações de áudio, visão e sensores físicos para gerar diagnósticos e recomendações.
     """
+
     def __init__(self):
         super().__init__(
             name="VetWelfareAgent",
-            description="Analisa a saúde, comportamento e bem-estar do lote correlacionando áudio, visão e sensores físicos."
+            description="Analisa a saúde, comportamento e bem-estar do lote correlacionando áudio, visão e sensores físicos.",
         )
 
     def fetch_telemetry(self, hours: int = 4) -> Dict[str, Any]:
@@ -31,69 +34,118 @@ class VetWelfareAgent(ChikGuardAgent):
         sensors = SensorReading.query.filter(SensorReading.timestamp >= time_limit).all()
         acoustics = AcousticReading.query.filter(AcousticReading.timestamp >= time_limit).all()
 
-        critical_events = ["behavior_alert", "prostration_alert", "immobility_alert", "carcass_alert", "thermal_anomaly_alert"]
-        events = EventLog.query.filter(EventLog.timestamp >= time_limit, EventLog.event_type.in_(critical_events)).all()
-        metrics = EventLog.query.filter(EventLog.timestamp >= time_limit, EventLog.event_type == "vision_metrics").all()
+        critical_events = [
+            "behavior_alert",
+            "prostration_alert",
+            "immobility_alert",
+            "carcass_alert",
+            "thermal_anomaly_alert",
+        ]
+        events = EventLog.query.filter(
+            EventLog.timestamp >= time_limit, EventLog.event_type.in_(critical_events)
+        ).all()
+        metrics = EventLog.query.filter(
+            EventLog.timestamp >= time_limit, EventLog.event_type == "vision_metrics"
+        ).all()
 
         return {
             "sensors": [s.to_dict() for s in sensors],
             "acoustics": [a.to_dict() for a in acoustics],
             "events": [e.to_dict() for e in events],
-            "metrics": [m.to_dict() for m in metrics]
+            "metrics": [m.to_dict() for m in metrics],
         }
 
     # ── Funções de Diagnóstico Clínico (SRP - Single Responsibility) ──
 
-    def _diagnose_ammonia(self, avg_amon: float, recommendations: List[str], anomalies: List[str]) -> str:
+    def _diagnose_ammonia(
+        self, avg_amon: float, recommendations: List[str], anomalies: List[str]
+    ) -> str:
         """Avalia os riscos de toxicidade por gás amônia."""
         if avg_amon > 20.0:
-            anomalies.append(f"Nível de amônia perigosamente alto: {avg_amon:.1f} ppm (Limite: 20 ppm).")
+            anomalies.append(
+                f"Nível de amônia perigosamente alto: {avg_amon:.1f} ppm (Limite: 20 ppm)."
+            )
             recommendations.append("Ligar ventilação máxima imediatamente para renovação do ar.")
             return "CRITICAL"
         if avg_amon > 15.0:
             anomalies.append(f"Amônia elevada: {avg_amon:.1f} ppm.")
-            recommendations.append("Aumentar ciclos de ventilação e checar acúmulo de umidade na cama.")
+            recommendations.append(
+                "Aumentar ciclos de ventilação e checar acúmulo de umidade na cama."
+            )
             return "WARNING"
         return "NORMAL"
 
-    def _diagnose_respiratory_health(self, avg_cough: float, avg_resp: float, avg_stress: float, 
-                                    recommendations: List[str], anomalies: List[str]) -> str:
+    def _diagnose_respiratory_health(
+        self,
+        avg_cough: float,
+        avg_resp: float,
+        avg_stress: float,
+        recommendations: List[str],
+        anomalies: List[str],
+    ) -> str:
         """Avalia a saúde respiratória e estresse acústico das aves."""
         if avg_cough > 0.5 or avg_resp < 0.7:
-            anomalies.append(f"Detecção de estresse acústico/tosse: Tosse={avg_cough:.2f}, RespHealth={avg_resp:.2f}.")
-            recommendations.append("Avaliar a saúde do lote urgentemente. Possível surto de infecção respiratória.")
+            anomalies.append(
+                f"Detecção de estresse acústico/tosse: Tosse={avg_cough:.2f}, RespHealth={avg_resp:.2f}."
+            )
+            recommendations.append(
+                "Avaliar a saúde do lote urgentemente. Possível surto de infecção respiratória."
+            )
             return "CRITICAL"
         if avg_stress > 0.6:
             anomalies.append(f"Estresse sonoro elevado (vocalizações de alarme): {avg_stress:.2f}.")
-            recommendations.append("Investigar potenciais fontes de estresse físico, predadores ou ruídos mecânicos.")
+            recommendations.append(
+                "Investigar potenciais fontes de estresse físico, predadores ou ruídos mecânicos."
+            )
             return "WARNING"
         return "NORMAL"
 
-    def _diagnose_visual_anomalies(self, carcass_count: int, prostration_count: int, immobility_count: int, 
-                                  behavior_count: int, recommendations: List[str], anomalies: List[str]) -> str:
+    def _diagnose_visual_anomalies(
+        self,
+        carcass_count: int,
+        prostration_count: int,
+        immobility_count: int,
+        behavior_count: int,
+        recommendations: List[str],
+        anomalies: List[str],
+    ) -> str:
         """Avalia anomalias visuais como mortalidade, apatia e amontoamento."""
         status = "NORMAL"
-        
+
         if carcass_count > 0:
-            anomalies.append(f"Detecção de {carcass_count} alerta(s) de carcaça (aves mortas) recente.")
-            recommendations.append("Realizar remoção manual imediata das aves mortas para evitar contaminações.")
+            anomalies.append(
+                f"Detecção de {carcass_count} alerta(s) de carcaça (aves mortas) recente."
+            )
+            recommendations.append(
+                "Realizar remoção manual imediata das aves mortas para evitar contaminações."
+            )
             status = "CRITICAL"
-        
+
         if (prostration_count + immobility_count) > 5:
-            anomalies.append(f"Alto índice de aves prostradas/imóveis: {prostration_count + immobility_count} avistamentos.")
-            recommendations.append("Verificar o conforto térmico local ou possíveis sintomas de apatia infecciosa.")
+            anomalies.append(
+                f"Alto índice de aves prostradas/imóveis: {prostration_count + immobility_count} avistamentos."
+            )
+            recommendations.append(
+                "Verificar o conforto térmico local ou possíveis sintomas de apatia infecciosa."
+            )
             if status != "CRITICAL":
                 status = "WARNING"
-                
+
         if behavior_count > 3:
-            anomalies.append(f"Anomalias de comportamento espacial/agrupamento recorrentes ({behavior_count} alertas).")
-            recommendations.append("Verificar a uniformidade térmica do galpão (bolsões de frio ou correntes de vento).")
+            anomalies.append(
+                f"Anomalias de comportamento espacial/agrupamento recorrentes ({behavior_count} alertas)."
+            )
+            recommendations.append(
+                "Verificar a uniformidade térmica do galpão (bolsões de frio ou correntes de vento)."
+            )
             if status == "NORMAL":
                 status = "WARNING"
-                
+
         return status
 
-    def _aggregate_averages(self, telemetry: Dict[str, Any]) -> Tuple[Dict[str, float], Dict[str, int]]:
+    def _aggregate_averages(
+        self, telemetry: Dict[str, Any]
+    ) -> Tuple[Dict[str, float], Dict[str, int]]:
         """Calcula as médias de sensores e soma a contagem dos eventos clínicos."""
         # Médias físicas
         temp = [s["temperature_c"] for s in telemetry["sensors"] if s["temperature_c"] is not None]
@@ -121,13 +173,19 @@ class VetWelfareAgent(ChikGuardAgent):
             "prostration": sum(1 for e in events if e["event_type"] == "prostration_alert"),
             "immobility": sum(1 for e in events if e["event_type"] == "immobility_alert"),
             "behavior": sum(1 for e in events if e["event_type"] == "behavior_alert"),
-            "thermal_anomaly": sum(1 for e in events if e["event_type"] == "thermal_anomaly_alert")
+            "thermal_anomaly": sum(1 for e in events if e["event_type"] == "thermal_anomaly_alert"),
         }
 
         return averages, counts
 
-    def _generate_diagnostic_note(self, welfare_status: str, averages: Dict[str, float], 
-                                  counts: Dict[str, int], anomalies: List[str], recommendations: List[str]) -> str:
+    def _generate_diagnostic_note(
+        self,
+        welfare_status: str,
+        averages: Dict[str, float],
+        counts: Dict[str, int],
+        anomalies: List[str],
+        recommendations: List[str],
+    ) -> str:
         """Formata o relatório clínico final a ser persistido no Logbook."""
         summary = (
             f"[Diagnóstico Veterinário - {welfare_status}]\n"
@@ -153,14 +211,27 @@ class VetWelfareAgent(ChikGuardAgent):
 
         # Executa as regras de diagnóstico em cadeia
         amonia_status = self._diagnose_ammonia(averages["amon"], recommendations, anomalies)
-        resp_status = self._diagnose_respiratory_health(averages["cough"], averages["resp"], averages["stress"], recommendations, anomalies)
-        visual_status = self._diagnose_visual_anomalies(counts["carcass"], counts["prostration"], counts["immobility"], counts["behavior"], recommendations, anomalies)
+        resp_status = self._diagnose_respiratory_health(
+            averages["cough"], averages["resp"], averages["stress"], recommendations, anomalies
+        )
+        visual_status = self._diagnose_visual_anomalies(
+            counts["carcass"],
+            counts["prostration"],
+            counts["immobility"],
+            counts["behavior"],
+            recommendations,
+            anomalies,
+        )
 
         # Escolhe o status mais grave (CRITICAL > WARNING > NORMAL)
         status_rank = {"NORMAL": 0, "WARNING": 1, "CRITICAL": 2}
-        welfare_status = max([amonia_status, resp_status, visual_status], key=lambda s: status_rank[s])
+        welfare_status = max(
+            [amonia_status, resp_status, visual_status], key=lambda s: status_rank[s]
+        )
 
-        summary_text = self._generate_diagnostic_note(welfare_status, averages, counts, anomalies, recommendations)
+        summary_text = self._generate_diagnostic_note(
+            welfare_status, averages, counts, anomalies, recommendations
+        )
 
         # Registro no diário de bordo (BatchLogbook) do lote ativo se status for de atenção/crítico
         log_created = False
@@ -173,7 +244,7 @@ class VetWelfareAgent(ChikGuardAgent):
                     batch_id=batch_id,
                     note=summary_text,
                     author="Agent_VetWelfare",
-                    timestamp=datetime.utcnow()
+                    timestamp=datetime.utcnow(),
                 )
                 db.session.add(log_entry)
                 db.session.commit()
@@ -190,7 +261,7 @@ class VetWelfareAgent(ChikGuardAgent):
             "recommendations": recommendations,
             "summary": summary_text,
             "logbook_entry_created": log_created,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.utcnow().isoformat(),
         }
 
 
@@ -199,15 +270,17 @@ class ClimateAgent(ChikGuardAgent):
     Agente de Climatização Preditiva.
     Consome a previsão externa e sugere ajustes preventivos para aquecedores e ventiladores.
     """
+
     def __init__(self, weather_plugin=None):
         super().__init__(
             name="ClimateAgent",
-            description="Analisa a previsão do tempo externa para ajustar dinamicamente as metas térmicas da FSM."
+            description="Analisa a previsão do tempo externa para ajustar dinamicamente as metas térmicas da FSM.",
         )
         self.weather_plugin = weather_plugin
 
-    def _determine_adjustments(self, weather: Dict[str, Any], forecast: List[Dict[str, Any]], 
-                               targets: Dict[str, float]) -> List[str]:
+    def _determine_adjustments(
+        self, weather: Dict[str, Any], forecast: List[Dict[str, Any]], targets: Dict[str, float]
+    ) -> List[str]:
         """Analisa a previsão de curto prazo e ajusta preventivamente os alvos climáticos."""
         adjustments = []
         heatwave = weather.get("heatwave_active", False)
@@ -223,15 +296,19 @@ class ClimateAgent(ChikGuardAgent):
             targets["fan_off_temp"] = 29.0
             targets["heater_on_temp"] = 21.0
             targets["heater_off_temp"] = 22.0
-            adjustments.append("Pré-resfriamento preventivo ativado: ventiladores ajustados para 30.0°C.")
-            
+            adjustments.append(
+                "Pré-resfriamento preventivo ativado: ventiladores ajustados para 30.0°C."
+            )
+
         elif cold_snap or low_temp_forecasted:
             # Pré-aquecimento preventivo: eleva limites de aquecedores
             targets["heater_on_temp"] = 26.0
             targets["heater_off_temp"] = 27.0
             targets["fan_on_temp"] = 33.0
             targets["fan_off_temp"] = 32.0
-            adjustments.append("Pré-aquecimento preventivo ativado: aquecedores elevados para 26.0°C.")
+            adjustments.append(
+                "Pré-aquecimento preventivo ativado: aquecedores elevados para 26.0°C."
+            )
 
         return adjustments
 
@@ -244,7 +321,7 @@ class ClimateAgent(ChikGuardAgent):
                 "agent": self.name,
                 "status": "FAILED",
                 "error": "WeatherForecastPlugin não disponível.",
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             }
 
         weather = plugin.get_current_weather()
@@ -257,7 +334,7 @@ class ClimateAgent(ChikGuardAgent):
             "fan_off_temp": 31.0,
             "heater_on_temp": 24.0,
             "heater_off_temp": 25.0,
-            "target_temp": 28.0
+            "target_temp": 28.0,
         }
 
         adjustments = self._determine_adjustments(weather, forecast, targets)
@@ -270,9 +347,10 @@ class ClimateAgent(ChikGuardAgent):
                 log_entry = BatchLogbook(
                     camera_id=context.get("camera_id", "galpao-1"),
                     batch_id=batch_id,
-                    note=f"[Otimização Climática - ClimateAgent]\n" + "\n".join([f"- {a}" for a in adjustments]),
+                    note=f"[Otimização Climática - ClimateAgent]\n"
+                    + "\n".join([f"- {a}" for a in adjustments]),
                     author="Agent_Climate",
-                    timestamp=datetime.utcnow()
+                    timestamp=datetime.utcnow(),
                 )
                 db.session.add(log_entry)
                 db.session.commit()
@@ -285,5 +363,5 @@ class ClimateAgent(ChikGuardAgent):
             "current_external_temp": external_temp,
             "adjustments": adjustments,
             "recommended_targets": targets,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.utcnow().isoformat(),
         }

@@ -53,7 +53,7 @@ logger = logging.getLogger("chikguard.async_uploader")
 
 # ── Configuracao via ENV ──────────────────────────────────────────────────────
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")     # service_role key
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")  # service_role key
 STORAGE_BUCKET = os.getenv("STORAGE_BUCKET", "chick-crops")
 DB_TABLE = os.getenv("REGISTRATION_TABLE", "chick_registrations")
 ACTIVE_CAMERA_ID = os.getenv("ACTIVE_CAMERA_ID", "galpao-1")
@@ -67,6 +67,7 @@ MAX_RETRIES = int(os.getenv("UPLOAD_MAX_RETRIES", "3"))
 # =============================================================================
 # Extracao de crop com mascara
 # =============================================================================
+
 
 def extract_crop(
     frame: np.ndarray,
@@ -107,7 +108,8 @@ def extract_crop(
             mask_crop = mask[y1:y2, x1:x2]
             if mask_crop.shape[:2] != crop.shape[:2]:
                 mask_crop = cv2.resize(
-                    mask_crop, (crop.shape[1], crop.shape[0]),
+                    mask_crop,
+                    (crop.shape[1], crop.shape[0]),
                     interpolation=cv2.INTER_NEAREST,
                 )
             # Garante mascara binaria
@@ -134,16 +136,18 @@ def crop_to_jpeg_bytes(crop: np.ndarray, quality: int = JPEG_QUALITY) -> bytes:
 # Payload de upload
 # =============================================================================
 
+
 @dataclass
 class UploadPayload:
     """Dados de um pintinho a ser salvo — colocado na fila pelo camera_loop."""
+
     track_id: int
     centroid: Tuple[float, float]
     bbox: List[float]
     confidence: float
     species: str
     class_id: int
-    crop_jpg: bytes                    # bytes JPEG do crop
+    crop_jpg: bytes  # bytes JPEG do crop
     timestamp: float = field(default_factory=time.time)
     extra: Dict[str, Any] = field(default_factory=dict)
 
@@ -151,6 +155,7 @@ class UploadPayload:
 # =============================================================================
 # AsyncUploader — Worker de I/O
 # =============================================================================
+
 
 class AsyncUploader:
     """
@@ -193,7 +198,9 @@ class AsyncUploader:
         self._task = loop.create_task(self._worker_loop())
         logger.info(
             "[Uploader] Worker iniciado. bucket=%s table=%s queue_max=%d",
-            self._bucket, self._table, QUEUE_MAX_SIZE,
+            self._bucket,
+            self._table,
+            QUEUE_MAX_SIZE,
         )
 
     async def stop_worker(self):
@@ -257,10 +264,8 @@ class AsyncUploader:
 
         # Usa call_soon_threadsafe para enfileirar de forma thread-safe
         try:
-            future = asyncio.run_coroutine_threadsafe(
-                self._safe_enqueue(payload), self._loop
-            )
-            result = future.result(timeout=0.05)   # nao espera mais de 50ms
+            future = asyncio.run_coroutine_threadsafe(self._safe_enqueue(payload), self._loop)
+            result = future.result(timeout=0.05)  # nao espera mais de 50ms
             if result:
                 self._stats["enqueued"] += 1
             else:
@@ -293,7 +298,8 @@ class AsyncUploader:
                 except Exception as exc:
                     logger.error(
                         "[Uploader] Falha definitiva track_id=%d: %s",
-                        payload.track_id, exc,
+                        payload.track_id,
+                        exc,
                     )
                     self._stats["failed"] += 1
                 finally:
@@ -312,15 +318,20 @@ class AsyncUploader:
                 await self._insert_database(payload, image_url)
                 logger.debug(
                     "[Uploader] track_id=%d salvo em %d tentativa(s).",
-                    payload.track_id, attempt,
+                    payload.track_id,
+                    attempt,
                 )
                 return
             except Exception as exc:
                 last_exc = exc
-                wait = 2 ** (attempt - 1)   # 1s, 2s, 4s
+                wait = 2 ** (attempt - 1)  # 1s, 2s, 4s
                 logger.warning(
                     "[Uploader] Tentativa %d/%d falhou para track_id=%d: %s — aguardando %ds",
-                    attempt, MAX_RETRIES, payload.track_id, exc, wait,
+                    attempt,
+                    MAX_RETRIES,
+                    payload.track_id,
+                    exc,
+                    wait,
                 )
                 await asyncio.sleep(wait)
 
@@ -345,7 +356,7 @@ class AsyncUploader:
         headers = {
             "Authorization": f"Bearer {self._key}",
             "Content-Type": "image/jpeg",
-            "x-upsert": "true",   # sobrescreve se ja existir
+            "x-upsert": "true",  # sobrescreve se ja existir
         }
 
         async with aiohttp.ClientSession() as session:
@@ -415,8 +426,12 @@ class AsyncUploader:
             "batch_id": BATCH_ID,
             "centroid_x": round(payload.centroid[0], 2),
             "centroid_y": round(payload.centroid[1], 2),
-            "bbox": {"x1": payload.bbox[0], "y1": payload.bbox[1],
-                     "x2": payload.bbox[2], "y2": payload.bbox[3]},
+            "bbox": {
+                "x1": payload.bbox[0],
+                "y1": payload.bbox[1],
+                "x2": payload.bbox[2],
+                "y2": payload.bbox[3],
+            },
             "confidence": round(float(payload.confidence), 4),
             "species": payload.species,
             "image_url": image_url,
@@ -444,8 +459,12 @@ class AsyncUploader:
             "batch_id": BATCH_ID,
             "centroid_x": round(payload.centroid[0], 2),
             "centroid_y": round(payload.centroid[1], 2),
-            "bbox": {"x1": payload.bbox[0], "y1": payload.bbox[1],
-                     "x2": payload.bbox[2], "y2": payload.bbox[3]},
+            "bbox": {
+                "x1": payload.bbox[0],
+                "y1": payload.bbox[1],
+                "x2": payload.bbox[2],
+                "y2": payload.bbox[3],
+            },
             "confidence": round(float(payload.confidence), 4),
             "species": payload.species,
             "image_url": image_url,
@@ -455,7 +474,8 @@ class AsyncUploader:
 
         def _do_insert():
             resp = requests.post(
-                url, json=body,
+                url,
+                json=body,
                 headers={
                     "Authorization": f"Bearer {self._key}",
                     "apikey": self._key,

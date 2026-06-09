@@ -4,6 +4,7 @@ from src.reports.generator import generate_esg_report, generate_weekly_report, _
 from src.security.auth import require_auth
 from src.security.rate_limiter import limiter
 
+
 def create_reports_blueprint(deps):
     bp = Blueprint("reports_api", __name__)
 
@@ -18,9 +19,12 @@ def create_reports_blueprint(deps):
         days = int(data.get("days", 30))
         email = str(data.get("email", "")).strip() or None
         try:
-            path = generate_esg_report(current_app.app_context, active_camera_id, utcnow_func, days=days)
+            path = generate_esg_report(
+                current_app.app_context, active_camera_id, utcnow_func, days=days
+            )
         except Exception as exc:
             import logging
+
             logging.getLogger(__name__).error("Falha ao gerar PDF ESG: %s", exc)
             return jsonify({"msg": "Falha interna ao gerar PDF ESG"}), 500
 
@@ -43,10 +47,18 @@ def create_reports_blueprint(deps):
     def download_esg():
         days = request.args.get("days", default=30, type=int)
         try:
-            path = generate_esg_report(current_app.app_context, active_camera_id, utcnow_func, days=days)
-            return send_file(path, mimetype="application/pdf", as_attachment=True, download_name=os.path.basename(path))
+            path = generate_esg_report(
+                current_app.app_context, active_camera_id, utcnow_func, days=days
+            )
+            return send_file(
+                path,
+                mimetype="application/pdf",
+                as_attachment=True,
+                download_name=os.path.basename(path),
+            )
         except Exception as exc:
             import logging
+
             logging.getLogger(__name__).error("Falha ao gerar/exportar PDF ESG: %s", exc)
             return jsonify({"msg": "Falha interna ao gerar/exportar PDF ESG"}), 500
 
@@ -60,6 +72,7 @@ def create_reports_blueprint(deps):
             path = generate_weekly_report(current_app.app_context, active_camera_id, utcnow_func)
         except Exception as exc:
             import logging
+
             logging.getLogger(__name__).error("Falha ao gerar PDF: %s", exc)
             return jsonify({"msg": "Falha interna ao gerar PDF"}), 500
 
@@ -88,9 +101,15 @@ def create_reports_blueprint(deps):
                 message="Relatorio semanal exportado pelo painel",
                 metadata={"file": path},
             )
-            return send_file(path, mimetype="application/pdf", as_attachment=True, download_name=os.path.basename(path))
+            return send_file(
+                path,
+                mimetype="application/pdf",
+                as_attachment=True,
+                download_name=os.path.basename(path),
+            )
         except Exception as exc:
             import logging
+
             logging.getLogger(__name__).error("Falha ao gerar/exportar PDF: %s", exc)
             return jsonify({"msg": "Falha interna ao gerar/exportar PDF"}), 500
 

@@ -2,11 +2,12 @@ from src.plugins.base import PluginBase, PluginInfo
 from typing import Dict, Any, List
 import os
 
+
 class WeatherForecastPlugin(PluginBase):
     info = PluginInfo(
         name="weather_forecast",
         version="0.1.0",
-        description="Plugin de previsão do tempo local para otimização climática prévia do galpão."
+        description="Plugin de previsão do tempo local para otimização climática prévia do galpão.",
     )
 
     def __init__(self):
@@ -36,14 +37,14 @@ class WeatherForecastPlugin(PluginBase):
             "temperature_c": self.mock_temp_c,
             "heatwave_active": self.mock_heatwave,
             "cold_snap_active": self.mock_cold_snap,
-            "timestamp": "now"
+            "timestamp": "now",
         }
 
     def get_forecast_12h(self) -> List[Dict[str, Any]]:
         """Gera uma previsão horária simplificada para as próximas 12 horas."""
         forecast = []
         base_temp = self.mock_temp_c
-        
+
         for hour in range(1, 13):
             # Simula oscilação diurna simples (eleva à tarde, cai à noite)
             temp_offset = 2.0 if hour < 6 else -3.0
@@ -51,12 +52,14 @@ class WeatherForecastPlugin(PluginBase):
                 temp_offset += 5.0
             elif self.mock_cold_snap:
                 temp_offset -= 6.0
-                
-            forecast.append({
-                "hour_offset": hour,
-                "temp_c": round(base_temp + temp_offset, 1),
-                "humidity_pct": 50 if not self.mock_cold_snap else 80
-            })
+
+            forecast.append(
+                {
+                    "hour_offset": hour,
+                    "temp_c": round(base_temp + temp_offset, 1),
+                    "humidity_pct": 50 if not self.mock_cold_snap else 80,
+                }
+            )
         return forecast
 
     def health(self) -> Dict[str, Any]:
@@ -64,8 +67,9 @@ class WeatherForecastPlugin(PluginBase):
             "status": "ok",
             "current_external_temp": self.mock_temp_c,
             "heatwave": self.mock_heatwave,
-            "cold_snap": self.mock_cold_snap
+            "cold_snap": self.mock_cold_snap,
         }
+
 
 def register():
     return WeatherForecastPlugin()

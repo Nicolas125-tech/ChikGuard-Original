@@ -4,6 +4,7 @@ from mixins import SyncMixin
 
 db = SQLAlchemy()
 
+
 # Tabela de Inquilinos (Empresas/Cooperativas) para Fase 3 (SaaS Multi-Tenant)
 class Tenant(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -16,7 +17,7 @@ class Tenant(db.Model):
             "id": self.id,
             "name": self.name,
             "active": self.active,
-            "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S")
+            "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S"),
         }
 
 
@@ -46,7 +47,9 @@ class Account(db.Model):
             "role": self.role,
             "active": self.active,
             "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-            "last_login_at": self.last_login_at.strftime("%Y-%m-%d %H:%M:%S") if self.last_login_at else None,
+            "last_login_at": self.last_login_at.strftime("%Y-%m-%d %H:%M:%S")
+            if self.last_login_at
+            else None,
         }
 
 
@@ -56,9 +59,7 @@ class RolePermission(db.Model):
     permission = db.Column(db.String(80), nullable=False, index=True)
     allowed = db.Column(db.Boolean, nullable=False, default=True)
 
-    __table_args__ = (
-        db.UniqueConstraint("role", "permission", name="uq_role_permission"),
-    )
+    __table_args__ = (db.UniqueConstraint("role", "permission", name="uq_role_permission"),)
 
     def to_dict(self):
         return {
@@ -68,13 +69,14 @@ class RolePermission(db.Model):
             "allowed": self.allowed,
         }
 
+
 # NOVA TABELA: Histórico de Leituras
 class Reading(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
     temperatura = db.Column(db.Float, nullable=False)
     status = db.Column(db.String(50), nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow) # Data e hora automática
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)  # Data e hora automática
 
     def to_dict(self):
         return {
@@ -83,7 +85,7 @@ class Reading(db.Model):
             "temp": self.temperatura,
             "status": self.status,
             "hora": self.timestamp.strftime("%H:%M:%S"),
-            "data": self.timestamp.strftime("%d/%m/%Y")
+            "data": self.timestamp.strftime("%d/%m/%Y"),
         }
 
 
@@ -109,7 +111,7 @@ class BirdSnapshot(db.Model, SyncMixin):
             "bbox": [self.x1, self.y1, self.x2, self.y2],
             "temperatura_estimada": self.temperatura_estimada,
             "metodo_temperatura": self.metodo_temperatura,
-            "timestamp": self.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            "timestamp": self.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
         }
 
 
@@ -392,6 +394,7 @@ class BatchLogbook(db.Model):
             "timestamp": self.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
         }
 
+
 class PushToken(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
@@ -406,6 +409,7 @@ class PushToken(db.Model):
             "timestamp": self.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
         }
 
+
 class Camera(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
@@ -415,11 +419,9 @@ class Camera(db.Model):
     connection_url = db.Column(db.String(255), nullable=True)
     status = db.Column(db.String(30), nullable=False, default="offline")
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    
-    __table_args__ = (
-        db.UniqueConstraint("tenant_id", "camera_id", name="uq_tenant_camera"),
-    )
-    
+
+    __table_args__ = (db.UniqueConstraint("tenant_id", "camera_id", name="uq_tenant_camera"),)
+
     def to_dict(self):
         return {
             "id": self.id,

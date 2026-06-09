@@ -1,9 +1,9 @@
 import os
 
-components_dir = 'c:/nic/ChikGuard-Original/frontend/src/components'
-pages_dir = 'c:/nic/ChikGuard-Original/frontend/src/pages'
+components_dir = "c:/nic/ChikGuard-Original/frontend/src/components"
+pages_dir = "c:/nic/ChikGuard-Original/frontend/src/pages"
 
-camera_panel_code = '''import React, { useState } from 'react';
+camera_panel_code = """import React, { useState } from 'react';
 import { Maximize, WifiOff } from 'lucide-react';
 import WebRTCVideo from './WebRTCVideo';
 import HeatmapOverlay from './HeatmapOverlay';
@@ -60,9 +60,9 @@ export default function CameraPanel({ token, serverIP }) {
     </div>
   );
 }
-'''
+"""
 
-climate_panel_code = '''import React, { useState, useEffect, useCallback } from 'react';
+climate_panel_code = """import React, { useState, useEffect, useCallback } from 'react';
 import { Wind, Zap, Thermometer, LayoutDashboard } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { getBaseUrl } from '../utils/config';
@@ -169,9 +169,9 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
     </div>
   );
 }
-'''
+"""
 
-overview_panel_code = '''import React, { useState, useEffect, useCallback } from 'react';
+overview_panel_code = """import React, { useState, useEffect, useCallback } from 'react';
 import { Thermometer, Bird, CheckCircle, Activity } from 'lucide-react';
 import { getBaseUrl } from '../utils/config';
 
@@ -256,9 +256,9 @@ export default function OverviewPanel({ token, serverIP, prefs }) {
     </div>
   );
 }
-'''
+"""
 
-dashboard_panel_code = '''import React, { useState, useMemo, useEffect } from 'react';
+dashboard_panel_code = """import React, { useState, useMemo, useEffect } from 'react';
 import { LayoutDashboard, Camera, Wind, History, Settings, Database, LogOut } from 'lucide-react';
 
 import OverviewPanel from '../components/OverviewPanel';
@@ -419,12 +419,14 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
     </div>
   );
 }
-'''
+"""
+
 
 def write_and_log(path, content):
-    with open(path, 'w', encoding='utf-8') as f:
+    with open(path, "w", encoding="utf-8") as f:
         f.write(content)
     print(f"Written: {path}")
+
 
 write_and_log(f"{components_dir}/CameraPanel.jsx", camera_panel_code)
 write_and_log(f"{components_dir}/ClimatePanel.jsx", climate_panel_code)

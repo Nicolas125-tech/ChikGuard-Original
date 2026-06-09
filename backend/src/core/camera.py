@@ -14,7 +14,6 @@ Uso:
     cam.stop()
 """
 
-
 import cv2
 import logging
 import threading
@@ -56,13 +55,13 @@ class AsyncCameraReader:
 
         # --- Buffer atomico LIFO (1 slot) ------------------------------------
         self._frame: Optional[np.ndarray] = None
-        self._lock = threading.Lock()          # protege apenas a troca do slot
+        self._lock = threading.Lock()  # protege apenas a troca do slot
 
         # --- Controle de thread ----------------------------------------------
         self._running = False
         self._thread: Optional[threading.Thread] = None
         self._cap: Optional[cv2.VideoCapture] = None
-        self._is_live = False                   # False = sem camera real
+        self._is_live = False  # False = sem camera real
         self._fail_streak = 0
         self._last_reconnect = 0.0
 
@@ -86,7 +85,10 @@ class AsyncCameraReader:
         self._thread.start()
         logger.info(
             "[Camera] Thread iniciada: index=%d res=%dx%d target=%.0f FPS",
-            self.index, self.width, self.height, self.target_fps,
+            self.index,
+            self.width,
+            self.height,
+            self.target_fps,
         )
         return self
 
@@ -125,7 +127,7 @@ class AsyncCameraReader:
                 cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
                 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
                 cap.set(cv2.CAP_PROP_FPS, self.target_fps)
-                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)          # LIFO na camera
+                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # LIFO na camera
                 cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
 
                 # Verifica leitura real
@@ -146,7 +148,11 @@ class AsyncCameraReader:
                 actual_fps = cap.get(cv2.CAP_PROP_FPS)
                 logger.info(
                     "[Camera] Aberta (%s) %dx%d @ %.0f FPS (pedido: %.0f FPS)",
-                    bname, actual_w, actual_h, actual_fps, self.target_fps,
+                    bname,
+                    actual_w,
+                    actual_h,
+                    actual_fps,
+                    self.target_fps,
                 )
                 return True
             except Exception as exc:
