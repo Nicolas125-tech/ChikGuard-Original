@@ -3,7 +3,8 @@ from flask import Blueprint, jsonify, request, send_file, current_app
 from src.reports.generator import generate_esg_report, generate_weekly_report, _send_report_email
 from src.security.auth import require_auth
 from src.security.rate_limiter import limiter
-
+from database import db, Batch, WeightEstimate
+from src.ai.forecast import predict_slaughter_date
 
 def create_reports_blueprint(deps):
     bp = Blueprint("reports_api", __name__)
@@ -112,5 +113,47 @@ def create_reports_blueprint(deps):
 
             logging.getLogger(__name__).error("Falha ao gerar/exportar PDF: %s", exc)
             return jsonify({"msg": "Falha interna ao gerar/exportar PDF"}), 500
+
+    @bp.route("/api/forecast/weight", methods=["GET"])
+    @require_auth()
+    def get_weight_forecast():
+        target_weight = request.args.get("target_weight", default=2800.0, type=float)
+        
+        batch = Batch.query.filter_by(camera_id=active_camera_id, active=True).first()
+        if not batch:
+            return jsonify({"error": "Nenhum lote ativo encontrado"}), 404
+            
+        start_date = batch.start_date
+        
+        weights = WeightEstimate.query.filter(
+            WeightEstimate.camera_id == active_camera_id,
+            WeightEstimate.timestamp >= start_date
+        ).order_by(WeightEstimate.timestamp.asc()).all()
+        
+        if not weights:
+            return jsonify({"error": "Sem dados de peso para prever"}), 400
+            
+        daily_weights = {}
+        for w in weights:
+            day_diff = (w.timestamp - start_date).days
+            if day_diff not in daily_weights:
+                daily_weights[day_diff] = []
+            daily_weights[day_diff].append(w.avg_weight_g)
+            
+        weight_data = []
+        for day, vals in daily_weights.items():
+            weight_data.append({"day": day, "avg_weight": sum(vals)/len(vals)})
+            
+        forecast = predict_slaughter_date(weight_data, start_date, target_weight=target_weight)
+        
+        if not forecast:
+            return jsonify({"error": "Dados insuficientes (mínimo de 3 dias de medição necessários)"}), 400
+            
+        return jsonify({
+            "batch_id": batch.id,
+            "start_date": start_date.strftime("%Y-%m-%d"),
+            "current_day": max(daily_weights.keys()),
+            "forecast": forecast
+        })
 
     return bp
