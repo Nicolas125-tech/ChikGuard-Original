@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "test": "node --test src/utils/*.test.js",
+    "test:watch": "node --test --watch src/utils/*.test.js",
     "dev": "vite --host",
     "build": "vite build",
     "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "preview": "vite preview"
   },
   "dependencies": {
