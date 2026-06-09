@@ -112,7 +112,8 @@ export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], ac
       a.remove();
       window.URL.revokeObjectURL(url);
       setReportMsg('Download concluído!');
-    } catch (e) {
+    } catch (err) {
+      console.error(err);
       setReportMsg('Erro ao gerar relatório local');
     } finally {
       setIsGeneratingReport(false);
@@ -181,7 +182,7 @@ export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], ac
               <span className="text-slate-500 font-medium block mb-1">Água</span>
               <span className="text-xl sm:text-2xl font-bold text-cyan-300">{sensors?.water_level_pct !== undefined ? Number(sensors.water_level_pct).toLocaleString('pt-BR') : '--'} <span className="text-sm text-slate-400">%</span></span>
             </div>
-            <button onClick={toggleAuto} className={`rounded-xl p-3 sm:p-4 font-bold text-sm sm:text-base flex flex-col items-center justify-center gap-1 sm:gap-2 border transition-all ${autoMode?.enabled ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}>
+            <button aria-pressed={!!autoMode?.enabled} onClick={toggleAuto} className={`rounded-xl p-3 sm:p-4 font-bold text-sm sm:text-base flex flex-col items-center justify-center gap-1 sm:gap-2 border transition-all ${autoMode?.enabled ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={autoMode?.enabled ? 'text-white' : 'text-slate-400'}><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
               {autoMode?.enabled ? 'Auto Ativo' : 'Ativar Auto'}
             </button>
