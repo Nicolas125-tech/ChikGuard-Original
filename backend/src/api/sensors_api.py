@@ -248,4 +248,31 @@ def create_sensors_blueprint(deps):
             
         return jsonify(result)
 
+    @bp.route("/api/ai/spatial/huddling", methods=["GET"])
+    @require_auth()
+    def check_huddling():
+        # Pegar historico de tracking x,y das aves nos ultimos 3 minutos
+        from database import BirdTrackPoint
+        start = utcnow() - timedelta(minutes=3)
+        
+        points = BirdTrackPoint.query.filter(
+            BirdTrackPoint.tenant_id == request.tenant_id, 
+            BirdTrackPoint.timestamp >= start
+        ).all()
+        
+        pts_list = [{"x": p.x, "y": p.y} for p in points]
+        
+        from src.ai.spatial import detect_huddling
+        result = detect_huddling(pts_list)
+        
+        if result.get("huddling_detected"):
+            log_event(
+                event_type="spatial_anomaly",
+                level="high",
+                message="IA Espacial (DBSCAN) detectou aves amontoadas! Possivel corrente de ar frio.",
+                metadata=result
+            )
+            
+        return jsonify(result)
+
     return bp
