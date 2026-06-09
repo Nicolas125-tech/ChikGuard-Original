@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Thermometer, Bird, Activity, TrendingUp, TrendingDown, Minus, Database } from 'lucide-react';
-import { getBaseUrl } from '../utils/config';
+import { getBaseUrl } from '@/utils/config';
+import WeightForecastChart from '@/components/WeightForecastChart';
 
 /* ── Animated Number ─────────────────────────────────────────── */
 function AnimatedNum({ value, decimals = 0 }) {
@@ -233,6 +234,10 @@ export default function OverviewPanel({ token, serverIP, prefs, cameras = [], ac
           </div>
         </div>
       </div>
+      
+      {/* ── AI Forecast Chart ── */}
+      <WeightForecastChart token={token} serverIP={serverIP} />
+      
     </div>
     </div>
   );
