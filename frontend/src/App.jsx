@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import OpeningScreen from './pages/OpeningScreen';
-import LandingPage from './pages/LandingPage';
-import LoginScreen from './pages/LoginScreen';
-import TVScreen from './pages/TVScreen';
-import Dashboard from './pages/Dashboard';
-import SetupScreen from './pages/SetupScreen';
-import { STORAGE, readPrefs } from './utils/config';
-import { supabase, isSupabaseConfigured } from './utils/supabaseClient';
+import OpeningScreen from '@/pages/OpeningScreen';
+import LandingPage from '@/pages/LandingPage';
+import LoginScreen from '@/pages/LoginScreen';
+import TVScreen from '@/pages/TVScreen';
+import Dashboard from '@/pages/Dashboard';
+import SetupScreen from '@/pages/SetupScreen';
+import { STORAGE, readPrefs } from '@/utils/config';
+import { supabase, isSupabaseConfigured } from '@/utils/supabaseClient';
 
 // ─── Error Boundary ───────────────────────────────────────────────────────────
 // Captura qualquer erro de renderização não tratado e exibe uma tela de
