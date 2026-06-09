@@ -5,6 +5,7 @@ import {
   UserCheck, UserX, ShieldCheck, Clock, Users,
   RefreshCw, AlertTriangle, ShieldOff,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 // ─── Helpers de estilo ─────────────────────────────────────────────────────────
 const ROLE_BADGE = {
@@ -100,13 +101,14 @@ export default function AdminPanel({ token, serverIP }) {
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        alert(`Erro ao aprovar: ${d.msg || d.error || 'Falha desconhecida.'}`);
+        toast.error(`Erro ao aprovar: ${d.msg || d.error || 'Falha desconhecida.'}`);
         return;
       }
+      toast.success('Utilizador aprovado com sucesso!');
       // Remove da lista de pendentes localmente (sem re-fetch)
       setUsers((prev) => prev.filter((u) => u.id !== userId));
     } catch {
-      alert('Erro de rede ao aprovar utilizador. Tente novamente.');
+      toast.error('Erro de rede ao aprovar utilizador. Tente novamente.');
     } finally {
       setActionLoading(null);
     }
@@ -127,15 +129,16 @@ export default function AdminPanel({ token, serverIP }) {
         body: JSON.stringify({ active: false }),
       });
       if (res.ok) {
+        toast.success('Conta suspensa com sucesso.');
         setUsers((prev) =>
           prev.map((u) => u.id === userId ? { ...u, status: 'SUSPENDED', active: false } : u)
         );
       } else {
         const d = await res.json().catch(() => ({}));
-        alert(`Erro ao suspender: ${d.msg || 'Falha desconhecida.'}`);
+        toast.error(`Erro ao suspender: ${d.msg || 'Falha desconhecida.'}`);
       }
     } catch {
-      alert('Erro de rede ao suspender conta.');
+      toast.error('Erro de rede ao suspender conta.');
     } finally {
       setActionLoading(null);
     }
@@ -156,15 +159,16 @@ export default function AdminPanel({ token, serverIP }) {
         body: JSON.stringify({ active: true }),
       });
       if (res.ok) {
+        toast.success('Conta reativada com sucesso.');
         setUsers((prev) =>
           prev.map((u) => u.id === userId ? { ...u, status: 'ACTIVE', active: true } : u)
         );
       } else {
         const d = await res.json().catch(() => ({}));
-        alert(`Erro ao reativar: ${d.msg || 'Falha desconhecida.'}`);
+        toast.error(`Erro ao reativar: ${d.msg || 'Falha desconhecida.'}`);
       }
     } catch {
-      alert('Erro de rede ao reativar conta.');
+      toast.error('Erro de rede ao reativar conta.');
     } finally {
       setActionLoading(null);
     }
@@ -183,13 +187,14 @@ export default function AdminPanel({ token, serverIP }) {
         },
       });
       if (res.ok) {
+        toast.success('Conta excluída com sucesso.');
         setUsers((prev) => prev.filter((u) => u.id !== userId));
       } else {
         const d = await res.json().catch(() => ({}));
-        alert(`Erro ao excluir: ${d.msg || 'Falha desconhecida.'}`);
+        toast.error(`Erro ao excluir: ${d.msg || 'Falha desconhecida.'}`);
       }
     } catch {
-      alert('Erro de rede ao excluir conta.');
+      toast.error('Erro de rede ao excluir conta.');
     } finally {
       setActionLoading(null);
     }

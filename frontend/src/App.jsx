@@ -7,6 +7,7 @@ import Dashboard from '@/pages/Dashboard';
 import SetupScreen from '@/pages/SetupScreen';
 import { STORAGE, readPrefs } from '@/utils/config';
 import { supabase, isSupabaseConfigured } from '@/utils/supabaseClient';
+import { Toaster } from 'sonner';
 
 // ─── Error Boundary ───────────────────────────────────────────────────────────
 // Captura qualquer erro de renderização não tratado e exibe uma tela de
@@ -277,6 +278,7 @@ function AppCore() {
 export default function App() {
   return (
     <ErrorBoundary>
+      <Toaster theme="dark" position="top-right" richColors toastOptions={{ style: { background: '#0f172a', borderColor: '#1e293b' } }} />
       <AppCore />
     </ErrorBoundary>
   );

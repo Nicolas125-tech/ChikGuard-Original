@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Camera, Plus, Trash2, Edit2, PlayCircle, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function CamerasManager({ serverIP, token }) {
   const [cameras, setCameras] = useState([]);
@@ -60,12 +61,13 @@ export default function CamerasManager({ serverIP, token }) {
         setFormData({ camera_id: '', name: '', connection_type: 'url', connection_url: '' });
         setEditingId(null);
         fetchCameras();
+        toast.success(editingId ? "Câmera editada com sucesso" : "Câmera adicionada com sucesso");
       } else {
         const err = await res.json();
-        alert(err.msg || "Erro ao salvar");
+        toast.error(err.msg || "Erro ao salvar");
       }
     } catch (err) { console.error(err);
-      alert("Erro de conexão");
+      toast.error("Erro de conexão");
     }
   };
 
@@ -78,9 +80,12 @@ export default function CamerasManager({ serverIP, token }) {
       });
       if (res.ok) {
         fetchCameras();
+        toast.success("Câmera excluída");
+      } else {
+        toast.error("Erro ao excluir câmera");
       }
     } catch (err) { console.error(err);
-      console.error(err);
+      toast.error("Erro ao conectar");
     }
   };
 

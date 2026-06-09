@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Settings, Save, CheckCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { DEFAULT_PREFS } from '../utils/config';
 
 export default function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServer }) {
@@ -16,6 +17,7 @@ export default function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServ
       countMs: Number(draft.countMs) || DEFAULT_PREFS.countMs,
     });
     setSaved(true);
+    toast.success('Configurações salvas com sucesso!');
     setTimeout(() => setSaved(false), 1600);
   };
 
@@ -141,13 +143,13 @@ export default function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServ
 
             if (res.ok) {
               e.target.reset();
-              alert('Nova granja adicionada com sucesso! Atualize a página para vê-la no menu superior.');
+              toast.success('Nova granja adicionada com sucesso! Atualize a página para vê-la no menu superior.');
             } else {
-              alert('Falha ao adicionar a granja.');
+              toast.error('Falha ao adicionar a granja.');
             }
           } catch (err) {
             console.error(err);
-            alert('Erro de conexão ao adicionar granja.');
+            toast.error('Erro de conexão ao adicionar granja.');
           }
         }} className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Nome da Nova Granja" id="farmName" description="Ex: Galpão Sul 2">

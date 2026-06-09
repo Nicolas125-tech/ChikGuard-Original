@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Cpu, Wind, Zap, SlidersHorizontal } from 'lucide-react';
 import { getBaseUrl } from '../utils/config';
+import { toast } from 'sonner';
 
 export default function DevicesPanel({ token, serverIP, canControlDevices, cameras = [], activeCamera }) {
   const [dispositivos, setDispositivos] = useState({ ventilacao: false, aquecedor: false });
@@ -102,7 +103,7 @@ export default function DevicesPanel({ token, serverIP, canControlDevices, camer
     }
 
     loadDevices();
-    alert('⚠️ MODO EMERGÊNCIA ATIVADO: Ventilação forçada ativada, aquecedor e IA desligados!');
+    toast.error('⚠️ MODO EMERGÊNCIA ATIVADO: Ventilação forçada ativada, aquecedor e IA desligados!', { duration: 5000 });
   };
 
   const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';

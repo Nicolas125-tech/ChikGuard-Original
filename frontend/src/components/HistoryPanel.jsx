@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, Database } from 'lucide-react';
 import { getBaseUrl } from '../utils/config';
+import { toast } from 'sonner';
 
 export default function HistoryPanel({ serverIP, prefs, token, cameras = [], activeCamera }) {
   const [history, setHistory] = useState([]);
@@ -37,7 +38,7 @@ export default function HistoryPanel({ serverIP, prefs, token, cameras = [], act
 
   const exportHistoryCSV = () => {
     if (!history || history.length === 0) {
-      alert("Nenhum histórico para exportar.");
+      toast.error("Nenhum histórico para exportar.");
       return;
     }
     const header = "Data,Hora,Status,Temperatura\n";
