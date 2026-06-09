@@ -69,16 +69,52 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
       content: 'Aqui é o menu principal. Navegue entre as seções de Monitoramento, Operações e Administração.',
     },
     {
-      target: '.tour-camera-selector',
-      content: 'Troque de granja/galpão rapidamente usando este seletor no cabeçalho.',
+      target: '[data-tour="overview"]',
+      content: 'Na Visão Geral, você acompanha um resumo das principais métricas do aviário em tempo real.',
     },
     {
-      target: '.tour-alerts',
-      content: 'Fique de olho aqui para notificações críticas de anomalias (temperatura, intrusos, comportamento).',
+      target: '[data-tour="camera"]',
+      content: 'Câmeras Ao Vivo: Visualize o monitoramento em tempo real processado pela nossa inteligência artificial.',
+    },
+    {
+      target: '[data-tour="digitaltwin"]',
+      content: 'Gêmeo Digital 2D: Veja a distribuição espacial térmica e o mapa de movimentação do galpão.',
+    },
+    {
+      target: '[data-tour="birds"]',
+      content: 'Aves & Tracking: Acesse detalhes sobre rastreamento, histórico de movimentação e biometria por IA.',
+    },
+    {
+      target: '[data-tour="alerts"]',
+      content: 'Alertas: Central de notificações críticas de anomalias (temperatura, intrusos, comportamento anômalo).',
+    },
+    {
+      target: '[data-tour="climate"]',
+      content: 'Clima & IoT: Monitore e controle o clima e atuadores como aquecedores e exaustores.',
+    },
+    {
+      target: '[data-tour="smartops"]',
+      content: 'Operações Smart: Acesse relatórios inteligentes, otimizações automáticas e análises da produção.',
+    },
+    {
+      target: '[data-tour="management"]',
+      content: 'Gestão Avançada: Visualize indicadores de desempenho (KPIs) e os balanços do lote.',
+    },
+    {
+      target: '[data-tour="devices"]',
+      content: 'Dispositivos: Verifique o status operacional se sensores, atuadores e relés estão online.',
+    },
+    {
+      target: '[data-tour="history"]',
+      content: 'Histórico: Analise gráficos e tabelas com todo o histórico de dados exportável.',
+    },
+    {
+      target: '.tour-camera-selector',
+      content: 'Troque de granja/galpão rapidamente a qualquer momento usando este seletor.',
     },
     {
       target: '.tour-user-menu',
-      content: 'Acesse as configurações da sua conta e saia do sistema por aqui.',
+      content: 'Por fim, acesse as configurações da sua conta, permissões, e o botão para repetir este tutorial aqui.',
     }
   ];
 
@@ -256,6 +292,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
               return (
                 <button
                   key={item.id}
+                  data-tour={item.id}
                   onClick={() => handleTabChange(item.id)}
                   className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium flex items-center gap-3 transition-all duration-200 group relative ${
                     isActive
@@ -471,7 +508,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
           close: 'Fechar',
           last: 'Finalizar',
           next: 'Próximo',
-          skip: 'Pular'
+          skip: 'Pular Tutorial'
         }}
       />
       {renderDesktopSidebar()}
