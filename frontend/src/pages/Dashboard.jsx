@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import Joyride, { STATUS } from 'react-joyride';
 import ChickenPhoto from '../components/ChickenPhoto';
 
 import {
@@ -38,6 +39,48 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
 
   const baseUrl = getBaseUrl(serverIP);
   const canControlDevices = role === 'admin' || role === 'operator' || role === 'superadmin';
+
+  // ── Tutorial (Joyride) ──
+  const [runTour, setRunTour] = useState(false);
+
+  useEffect(() => {
+    const isCompleted = localStorage.getItem('cg_tourCompleted');
+    if (!isCompleted) {
+      setRunTour(true);
+    }
+  }, []);
+
+  const handleJoyrideCallback = (data) => {
+    const { status } = data;
+    if ([STATUS.FINISHED, STATUS.SKIPPED].includes(status)) {
+      setRunTour(false);
+      localStorage.setItem('cg_tourCompleted', 'true');
+    }
+  };
+
+  const tourSteps = [
+    {
+      target: 'body',
+      content: 'Bem-vindo ao ChikGuard Premium! Vamos fazer um rápido tour pelas principais funcionalidades.',
+      placement: 'center',
+    },
+    {
+      target: '.tour-sidebar',
+      content: 'Aqui é o menu principal. Navegue entre as seções de Monitoramento, Operações e Administração.',
+    },
+    {
+      target: '.tour-camera-selector',
+      content: 'Troque de granja/galpão rapidamente usando este seletor no cabeçalho.',
+    },
+    {
+      target: '.tour-alerts',
+      content: 'Fique de olho aqui para notificações críticas de anomalias (temperatura, intrusos, comportamento).',
+    },
+    {
+      target: '.tour-user-menu',
+      content: 'Acesse as configurações da sua conta e saia do sistema por aqui.',
+    }
+  ];
 
   // ── Sincronização de Rotas por Hash ──
   useEffect(() => {
@@ -240,7 +283,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
         ))}
       </div>
 
-      <div className="p-3 border-t border-slate-800/60">
+      <div className="p-3 border-t border-slate-800/60 tour-user-menu">
         <div className="flex items-center gap-3 mb-3 px-2">
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-xs font-bold text-white uppercase shadow-md">
             {role[0]}
@@ -265,7 +308,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
   // ── Métodos de Renderização Secundários (Clean Code Layout) ──
 
   const renderDesktopSidebar = () => (
-    <aside className="w-60 flex-col z-40 relative hidden md:flex shrink-0 glass-panel shadow-2xl">
+    <aside className="w-60 flex-col z-40 relative hidden md:flex shrink-0 glass-panel shadow-2xl tour-sidebar">
       <div className="p-5 border-b border-slate-800/60 flex items-center gap-3">
         <div className="bg-emerald-500/10 p-1.5 rounded-xl border border-emerald-500/20 w-9 h-9 flex items-center justify-center shadow-inner">
           <img src="/logo.jpeg" alt="ChikGuard" className="w-6 h-6 object-contain drop-shadow-md" />
@@ -329,7 +372,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
               title="Selecionar granja/câmera"
             value={activeCamera} 
             onChange={(e) => switchCamera(e.target.value)}
-            className="bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-medium focus:outline-none focus:border-emerald-500 transition-colors cursor-pointer"
+            className="tour-camera-selector bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-medium focus:outline-none focus:border-emerald-500 transition-colors cursor-pointer"
           >
             {cameras.map(c => (
               <option key={c.camera_id} value={c.camera_id}>{c.name}</option>
@@ -352,7 +395,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
         <button
           aria-label="View alerts"
           onClick={() => handleTabChange('alerts')}
-          className="relative p-2 rounded-lg text-slate-400 hover:bg-slate-800 transition-colors border border-slate-800/50 hover:border-slate-700"
+          className="tour-alerts relative p-2 rounded-lg text-slate-400 hover:bg-slate-800 transition-colors border border-slate-800/50 hover:border-slate-700"
         >
           <Bell size={18} />
           {alertCount > 0 && (
@@ -392,7 +435,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
       case 'history':
         return <HistoryPanel token={token} serverIP={serverIP} prefs={prefs} cameras={cameras} activeCamera={activeCamera} />;
       case 'settings':
-        return <SettingsPanel serverIP={serverIP} token={token} prefs={prefs} onSavePrefs={onSavePrefs} onSaveServer={onSaveServer} />;
+        return <SettingsPanel serverIP={serverIP} token={token} prefs={prefs} onSavePrefs={onSavePrefs} onSaveServer={onSaveServer} onRestartTour={() => setRunTour(true)} />;
       case 'profile':
         return <ProfilePanel role={role} cameras={cameras} />;
       case 'cameras':
@@ -408,6 +451,29 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
 
   return (
     <div className="min-h-screen bg-premium-glow text-slate-300 flex overflow-hidden">
+      <Joyride
+        steps={tourSteps}
+        run={runTour}
+        continuous={true}
+        showSkipButton={true}
+        showProgress={true}
+        callback={handleJoyrideCallback}
+        styles={{
+          options: {
+            primaryColor: '#10b981',
+            textColor: '#334155',
+            backgroundColor: '#ffffff',
+            zIndex: 10000,
+          }
+        }}
+        locale={{
+          back: 'Anterior',
+          close: 'Fechar',
+          last: 'Finalizar',
+          next: 'Próximo',
+          skip: 'Pular'
+        }}
+      />
       {renderDesktopSidebar()}
       {renderMobileSidebar()}
 

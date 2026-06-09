@@ -3,7 +3,7 @@ import { Settings, Save, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { DEFAULT_PREFS } from '../utils/config';
 
-export default function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServer }) {
+export default function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServer, onRestartTour }) {
   const [serverDraft, setServerDraft] = useState(serverIP);
   const [draft, setDraft] = useState(prefs);
   const [saved, setSaved] = useState(false);
@@ -99,16 +99,27 @@ export default function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServ
             <CheckCircle size={18} /> Salvo com sucesso!
           </div>
         ) : (
-          <div className="text-sm text-slate-500 hidden sm:block">Recomendamos manter os intervalos acima de 3000ms.</div>
+          <div className="text-sm font-medium text-slate-400 bg-slate-800/30 px-4 py-2.5 rounded-xl border border-slate-700/50 hidden sm:flex items-center">
+            Pressione Salvar para aplicar
+          </div>
         )}
-
-        <button
-          onClick={saveAll}
-          className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-8 py-3.5 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5"
-        >
-          <Save size={18} />
-          Salvar Configurações
-        </button>
+        
+        <div className="flex gap-3 w-full sm:w-auto">
+          {onRestartTour && (
+            <button
+              onClick={onRestartTour}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 font-semibold px-6 py-2.5 rounded-xl border border-indigo-500/20 hover:border-indigo-500/40 transition-all shadow-sm group"
+            >
+              Repetir Tutorial
+            </button>
+          )}
+          <button
+            onClick={saveAll}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-6 py-2.5 rounded-xl transition-all shadow-lg shadow-emerald-600/20 hover:shadow-emerald-500/30 transform hover:-translate-y-0.5"
+          >
+            <Save size={18} className="mr-1" /> Salvar Configurações
+          </button>
+        </div>
       </div>
 
       <div className="mt-12 pt-8 border-t border-slate-800">
