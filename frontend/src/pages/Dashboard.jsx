@@ -46,6 +46,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
   useEffect(() => {
     const isCompleted = localStorage.getItem('cg_tourCompleted');
     if (!isCompleted) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRunTour(true);
     }
   }, []);
