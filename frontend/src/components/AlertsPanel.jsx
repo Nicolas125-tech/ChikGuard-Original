@@ -68,7 +68,7 @@ export default function AlertsPanel({ serverIP, prefs, token, cameras = [], acti
         <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Alertas do Sistema - <span className="text-emerald-400">{farmName}</span></h2>
         <div className="flex items-center gap-3">
           {visibleAlerts.length > 0 && (
-            <button onClick={clearAll} className="text-xs font-semibold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-700">
+            <button onClick={clearAll} className="text-xs font-semibold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-700 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none">
               Limpar Todos
             </button>
           )}
@@ -121,9 +121,10 @@ export default function AlertsPanel({ serverIP, prefs, token, cameras = [], acti
           <button 
             onClick={() => dismissAlert(alert.id)}
             title="Marcar como resolvido"
-            className="absolute top-4 right-4 p-2 bg-slate-950/40 hover:bg-emerald-500/20 text-slate-500 hover:text-emerald-400 rounded-lg transition-all border border-slate-800 hover:border-emerald-500/30 group"
+            aria-label="Marcar como resolvido"
+            className="absolute top-4 right-4 p-2 bg-slate-950/40 hover:bg-emerald-500/20 text-slate-500 hover:text-emerald-400 rounded-lg transition-all border border-slate-800 hover:border-emerald-500/30 group focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="group-hover:scale-110 transition-transform"><polyline points="20 6 9 17 4 12"/></svg>
+            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="group-hover:scale-110 transition-transform"><polyline points="20 6 9 17 4 12"/></svg>
           </button>
         </div>
       ))}
