@@ -1,7 +1,18 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import SystemCard from './SystemCard';
 import { getBaseUrl } from '../utils/config';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, TrendingUp } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
+
+const growthDataMock = [
+  { day: 'Dia 1', ideal: 45, real: 46 },
+  { day: 'Dia 7', ideal: 180, real: 175 },
+  { day: 'Dia 14', ideal: 450, real: 430 },
+  { day: 'Dia 21', ideal: 850, real: 810 },
+  { day: 'Dia 28', ideal: 1400, real: 1350 },
+  { day: 'Dia 35', ideal: 2100, real: 2050 },
+  { day: 'Dia 42', ideal: 2900, real: null }, // Predição
+];
 
 export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], activeCamera }) {
   const baseUrl = getBaseUrl(serverIP);
@@ -254,6 +265,45 @@ export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], ac
         </div>
       </div>
 
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-lg sm:text-xl text-white tracking-tight flex items-center gap-2">
+            <span className="bg-emerald-500/20 text-emerald-400 p-2 rounded-xl border border-emerald-500/30">
+              <TrendingUp size={20} />
+            </span>
+            Análise Preditiva de Crescimento (IA)
+          </h3>
+          <span className="text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 px-3 py-1 rounded-full">YOLO Estimation</span>
+        </div>
+        <p className="text-slate-400 text-sm mb-6">Comparativo do peso estimado (em gramas) das aves capturadas pelas câmeras em relação à curva ideal da linhagem.</p>
+        
+        <div className="h-[300px] w-full bg-slate-950/50 rounded-xl border border-slate-800 p-4">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={growthDataMock} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="colorReal" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                </linearGradient>
+                <linearGradient id="colorIdeal" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+              <XAxis dataKey="day" stroke="#94a3b8" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
+              <YAxis stroke="#94a3b8" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
+              <RechartsTooltip 
+                contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '0.75rem', color: '#f8fafc' }}
+                itemStyle={{ fontWeight: 'bold' }}
+              />
+              <Legend wrapperStyle={{ paddingTop: '15px' }} />
+              <Area type="monotone" name="Curva Ideal (g)" dataKey="ideal" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorIdeal)" strokeDasharray="5 5" />
+              <Area type="monotone" name="Peso Real Estimado (g)" dataKey="real" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorReal)" activeDot={{ r: 6, strokeWidth: 0, fill: '#10b981' }} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-sm">
         <h3 className="font-bold text-lg sm:text-xl text-white mb-4 tracking-tight flex items-center gap-2">
           Diário do Lote (Logbook)
