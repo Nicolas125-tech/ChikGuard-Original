@@ -44,7 +44,9 @@ def _send_report_email(file_path, recipient):
             server.send_message(msg)
         return True, "sent"
     except Exception as exc:
-        return False, str(exc)
+        import logging
+        logging.getLogger(__name__).error("Falha ao enviar email: %s", exc)
+        return False, "Falha de comunicacao com o servidor SMTP"
 
 
 def generate_weekly_report(app_context, camera_id, utcnow_func, week_end=None):
