@@ -59,6 +59,7 @@ from database import (
     Camera,
     RolePermission,
     PushToken,
+    AutomationRule,
 )
 
 import cv2
@@ -3048,7 +3049,7 @@ from src.core.automation_engine import AutomationEngine
 
 mqtt_client = ChikGuardMQTTClient(app_context_fn=app.app_context)
 mqtt_client.start()
-automation_engine = AutomationEngine(mqtt_client)
+automation_engine = AutomationEngine(mqtt_client, app_context_fn=app.app_context)
 
 api_deps = {
     "time": time,
@@ -3905,6 +3906,37 @@ def reload_plugins():
     items = PLUGIN_MANAGER.list_plugins()
     _audit("plugins_reloaded", source="backend", details={"count": len(items)})
     return jsonify({"msg": "Plugins recarregados", "count": len(items), "plugins": items})
+
+
+@app.route("/api/rules", methods=["GET"])
+def get_rules():
+    rules = AutomationRule.query.all()
+    return jsonify([r.to_dict() for r in rules])
+
+@app.route("/api/rules", methods=["POST"])
+def create_rule():
+    data = request.json
+    rule = AutomationRule(
+        name=data.get("name"),
+        condition_variable=data.get("condition_variable"),
+        condition_operator=data.get("condition_operator"),
+        condition_value=data.get("condition_value"),
+        action_device=data.get("action_device"),
+        action_state=data.get("action_state"),
+        active=data.get("active", True)
+    )
+    db.session.add(rule)
+    db.session.commit()
+    return jsonify(rule.to_dict()), 201
+
+@app.route("/api/rules/<int:rule_id>", methods=["DELETE"])
+def delete_rule(rule_id):
+    rule = AutomationRule.query.get(rule_id)
+    if not rule:
+        return jsonify({"msg": "Regra não encontrada"}), 404
+    db.session.delete(rule)
+    db.session.commit()
+    return jsonify({"msg": "Regra deletada"}), 200
 
 
 if __name__ == "__main__":

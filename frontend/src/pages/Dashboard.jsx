@@ -23,6 +23,7 @@ import SystemPanel from '../components/SystemPanel';
 import DigitalTwinPanel from '../components/DigitalTwinPanel';
 import CamerasManager from '../components/CamerasManager';
 import ProfilePanel from '../components/ProfilePanel';
+import RulesPanel from '../components/RulesPanel';
 import { getBaseUrl } from '../utils/config';
 
 export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, onSaveServer, onLogout }) {
@@ -242,6 +243,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
         items: [
           { id: 'climate',   label: 'Clima & IoT',        icon: Wind },
           { id: 'smartops',  label: 'Operações Smart',    icon: Cpu },
+          { id: 'rules',     label: 'Motor de Regras',    icon: Settings },
           { id: 'management',label: 'Gestão Avançada',    icon: BarChart3 },
           { id: 'devices',   label: 'Dispositivos',       icon: Shield },
           { id: 'history',   label: 'Histórico',          icon: History },
@@ -465,6 +467,8 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
         return <ClimatePanel token={token} serverIP={serverIP} prefs={prefs} canControlDevices={canControlDevices} cameras={cameras} activeCamera={activeCamera} />;
       case 'smartops':
         return <SmartOpsPanel serverIP={serverIP} prefs={prefs} token={token} cameras={cameras} activeCamera={activeCamera} />;
+      case 'rules':
+        return <RulesPanel serverIP={serverIP} />;
       case 'management':
         return <ManagementPanel token={token} serverIP={serverIP} prefs={prefs} cameras={cameras} activeCamera={activeCamera} />;
       case 'devices':

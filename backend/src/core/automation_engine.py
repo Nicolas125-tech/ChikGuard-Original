@@ -14,13 +14,39 @@ class AutomationEngine:
     via MQTT para salvar a vida das aves.
     """
 
-    def __init__(self, mqtt_client: ChikGuardMQTTClient):
+    def __init__(self, mqtt_client: ChikGuardMQTTClient, app_context_fn=None):
         self.mqtt = mqtt_client
         self._last_action_time = {}
         self.cooldown_seconds = 120  # Evita ligar/desligar exaustor a cada segundo
+        self.app_context_fn = app_context_fn
 
     def process_telemetry(self, camera_id: str, temp_c: float, humidity_pct: float):
-        """Avalia telemetria básica (Temperatura/Umidade)"""
+        """Avalia telemetria básica (Temperatura/Umidade) usando regras do DB e fallback"""
+        # Regras Dinâmicas
+        if self.app_context_fn:
+            from database import AutomationRule
+            with self.app_context_fn():
+                rules = AutomationRule.query.filter_by(active=True).all()
+                for rule in rules:
+                    val = None
+                    if rule.condition_variable == "temp_c":
+                        val = temp_c
+                    elif rule.condition_variable == "humidity_pct":
+                        val = humidity_pct
+                    
+                    if val is not None:
+                        triggered = False
+                        if rule.condition_operator == ">" and val > rule.condition_value: triggered = True
+                        elif rule.condition_operator == "<" and val < rule.condition_value: triggered = True
+                        elif rule.condition_operator == "==" and val == rule.condition_value: triggered = True
+                        
+                        if triggered:
+                            self._trigger_action(
+                                camera_id, rule.action_device, rule.action_state,
+                                reason=f"Regra customizada: {rule.name} ({val} {rule.condition_operator} {rule.condition_value})"
+                            )
+
+        # Fallback Hardcoded
         if temp_c > 31.0:
             self._trigger_action(
                 camera_id, "exhaust_fan", "on", reason=f"Temperatura critica ({temp_c}°C)"

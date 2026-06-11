@@ -433,3 +433,30 @@ class Camera(db.Model):
             "status": self.status,
             "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S"),
         }
+
+
+class AutomationRule(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
+    name = db.Column(db.String(100), nullable=False)
+    condition_variable = db.Column(db.String(50), nullable=False)  # Ex: 'temp_c', 'humidity_pct'
+    condition_operator = db.Column(db.String(10), nullable=False)  # Ex: '>', '<', '=='
+    condition_value = db.Column(db.Float, nullable=False)
+    action_device = db.Column(db.String(50), nullable=False)       # Ex: 'exhaust_fan', 'heater'
+    action_state = db.Column(db.String(20), nullable=False)        # Ex: 'on', 'off'
+    active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "tenant_id": self.tenant_id,
+            "name": self.name,
+            "condition_variable": self.condition_variable,
+            "condition_operator": self.condition_operator,
+            "condition_value": self.condition_value,
+            "action_device": self.action_device,
+            "action_state": self.action_state,
+            "active": self.active,
+            "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+        }
