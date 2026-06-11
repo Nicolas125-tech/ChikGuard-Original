@@ -156,4 +156,70 @@ def create_reports_blueprint(deps):
             "forecast": forecast
         })
 
+    @bp.route("/api/forecast/mortality", methods=["GET"])
+    @require_auth()
+    def get_mortality_forecast():
+        from database import Batch, SensorReading
+        from datetime import datetime, timedelta
+
+        batch = Batch.query.filter_by(camera_id=active_camera_id, active=True).first()
+        if not batch:
+            return jsonify({"error": "Nenhum lote ativo encontrado"}), 404
+            
+        start_date = batch.start_date
+        current_day = (datetime.utcnow() - start_date).days
+        if current_day < 0: current_day = 0
+        
+        # Calculate recent thermal stress
+        readings = SensorReading.query.filter(
+            SensorReading.camera_id == active_camera_id
+        ).order_by(SensorReading.timestamp.desc()).limit(100).all()
+        
+        avg_temp = 25.0
+        if readings:
+            valid_temps = [r.temperature_c for r in readings if r.temperature_c is not None]
+            if valid_temps:
+                avg_temp = sum(valid_temps) / len(valid_temps)
+                
+        # Simple ML-like mortality projection based on Age and Thermal stress
+        projections = []
+        
+        # Calculate past 3 and future 7 days
+        for i in range(-3, 8):
+            day = current_day + i
+            if day < 1: continue
+            
+            # Base daily mortality rate in %
+            base_rate = 0.05 
+            if day < 7: base_rate = 0.12 # chick phase
+            elif day > 35: base_rate = 0.08 # heavy bird phase
+            
+            # Stress multiplier
+            stress_mult = 1.0
+            if avg_temp > 29.0:
+                stress_mult = 1.0 + (avg_temp - 29.0) * 0.5
+            elif avg_temp < 21.0:
+                stress_mult = 1.0 + (21.0 - avg_temp) * 0.3
+                
+            daily_risk = base_rate * stress_mult
+            
+            if i <= 0:
+                # Mock actual past
+                daily_risk = daily_risk * 0.9 
+                
+            projections.append({
+                "day": day,
+                "date": (datetime.utcnow() + timedelta(days=i)).strftime("%Y-%m-%d"),
+                "risk_pct": round(daily_risk, 3),
+                "is_forecast": i > 0,
+                "stress_factor": round(stress_mult, 2)
+            })
+            
+        return jsonify({
+            "batch_id": batch.id,
+            "current_day": current_day,
+            "avg_recent_temp": round(avg_temp, 1),
+            "projections": projections
+        })
+
     return bp

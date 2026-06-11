@@ -3,6 +3,7 @@ import SystemCard from './SystemCard';
 import { getBaseUrl } from '../utils/config';
 import { RefreshCw, TrendingUp } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import MortalityForecastChart from './MortalityForecastChart';
 
 const growthDataMock = [
   { day: 'Dia 1', ideal: 45, real: 46 },
@@ -304,13 +305,14 @@ export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], ac
           </ResponsiveContainer>
         </div>
       </div>
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-sm">
+
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-sm xl:col-span-2 mt-4 sm:mt-6">
         <h3 className="font-bold text-lg sm:text-xl text-white mb-4 tracking-tight flex items-center gap-2">
           Diário do Lote (Logbook)
         </h3>
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-5">
-          <input aria-label="Nota de diário" value={logNote} disabled={isSavingLog} onChange={(e) => setLogNote(e.target.value)} placeholder="Descreva eventos importantes (ex: Dia 12: Vacinação Gumboro via água)..." className="flex-1 bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-3 text-sm sm:text-base focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all placeholder:text-slate-600 disabled:opacity-50" />
-          <button onClick={saveLogNote} disabled={isSavingLog} className="flex items-center gap-2 justify-center bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl px-6 py-3 text-sm sm:text-base font-bold shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 whitespace-nowrap disabled:opacity-50 disabled:hover:translate-y-0">
+          <input aria-label="Nota de diário" value={logNote} disabled={isSavingLog} onChange={(e) => setLogNote(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && saveLogNote()} placeholder="Descreva eventos importantes..." className="flex-1 bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-3 text-sm sm:text-base focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all placeholder:text-slate-600 disabled:opacity-50" />
+          <button onClick={saveLogNote} disabled={isSavingLog || !logNote} className="flex items-center gap-2 justify-center bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl px-6 py-3 text-sm sm:text-base font-bold shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 whitespace-nowrap disabled:opacity-50 disabled:hover:translate-y-0">
             {isSavingLog ? <RefreshCw size={18} className="animate-spin" /> : 'Registrar Log'}
           </button>
         </div>
@@ -325,10 +327,16 @@ export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], ac
                 <p className="text-slate-300 font-medium leading-relaxed">{item.note}</p>
               </div>
             ))}
-            {(logbook.items || []).length === 0 && <div className="text-slate-500 text-sm text-center py-8">Nenhum log registrado. Comece a documentar o manejo.</div>}
+            {(logbook.items || []).length === 0 && <div className="text-slate-500 text-sm text-center py-8">Nenhum log registrado.</div>}
           </div>
         </div>
       </div>
+
+      {/* NOVO MÓDULO: PREVISÃO DE MORTALIDADE */}
+      <div className="xl:col-span-2">
+        <MortalityForecastChart token={token} serverIP={serverIP} />
+      </div>
+
     </div>
   );
 }
