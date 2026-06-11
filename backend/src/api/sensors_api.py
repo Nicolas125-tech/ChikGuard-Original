@@ -145,7 +145,10 @@ def create_sensors_blueprint(deps):
             return jsonify({"msg": "Envie arquivo de audio no campo 'audio'"}), 400
 
         try:
-            raw = f.read()
+            # Limite de 5MB para evitar DoS por arquivos gigantes
+            raw = f.read(5 * 1024 * 1024 + 1)
+            if len(raw) > 5 * 1024 * 1024:
+                return jsonify({"msg": "Arquivo de audio muito grande (max 5MB)"}), 413
             y, sr = sf.read(io.BytesIO(raw), always_2d=False)
             if isinstance(y, np.ndarray) and y.ndim > 1:
                 y = np.mean(y, axis=1)
