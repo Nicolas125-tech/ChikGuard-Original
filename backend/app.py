@@ -3909,11 +3909,13 @@ def reload_plugins():
 
 
 @app.route("/api/rules", methods=["GET"])
+@require_auth()
 def get_rules():
     rules = AutomationRule.query.all()
     return jsonify([r.to_dict() for r in rules])
 
 @app.route("/api/rules", methods=["POST"])
+@require_auth()
 def create_rule():
     data = request.json
     rule = AutomationRule(
@@ -3930,6 +3932,7 @@ def create_rule():
     return jsonify(rule.to_dict()), 201
 
 @app.route("/api/rules/<int:rule_id>", methods=["DELETE"])
+@require_auth()
 def delete_rule(rule_id):
     rule = AutomationRule.query.get(rule_id)
     if not rule:
