@@ -465,6 +465,9 @@ def create_auth_blueprint(deps):
         if not username or not password:
             return jsonify({"msg": "Usuario e senha obrigatorios"}), 400
 
+        if len(username) > 100 or len(password) > 100:
+            return jsonify({"msg": "Tamanho de usuario ou senha excede o limite"}), 400
+
         account = Account.query.filter_by(username=username).first()
 
         # Defense in depth: Prevent timing-based user enumeration.
