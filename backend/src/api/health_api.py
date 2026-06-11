@@ -2,7 +2,7 @@ import psutil
 import time
 from flask import Blueprint, jsonify
 from src.security.auth import require_auth
-from src.database import db
+from database import db
 
 boot_time = time.time()
 
