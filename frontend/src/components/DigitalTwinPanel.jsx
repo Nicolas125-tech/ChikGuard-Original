@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Layers, Thermometer, Bird, Cpu, AlertTriangle, Fan, Flame, Activity } from 'lucide-react';
 import { getBaseUrl } from '../utils/config';
+import DigitalTwin3D from './DigitalTwin3D';
 
 export default function DigitalTwinPanel({ token, serverIP, cameras = [], activeCamera }) {
   const [activeLayer, setActiveLayer] = useState('sensors'); // 'sensors' | 'birds' | 'devices' | 'alerts'
@@ -444,6 +445,10 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
           </div>
         </div>
       </div>
+
+      {/* 3D WEBGL VERSION */}
+      <DigitalTwin3D sensors={sensorLive} devices={deviceState} />
+
     </div>
   );
 }
