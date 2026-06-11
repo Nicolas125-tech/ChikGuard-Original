@@ -8,6 +8,8 @@ from supabase import create_client
 from src.security.rate_limiter import limiter
 
 
+ROLE_LEVELS = {"viewer": 1, "operator": 2, "admin": 3, "superadmin": 4}
+
 def create_auth_blueprint(deps):
     bp = Blueprint("auth_api", __name__)
 
@@ -66,16 +68,19 @@ def create_auth_blueprint(deps):
             return jsonify({"msg": "username e password sao obrigatorios"}), 400
         if len(password) < 8:
             return jsonify({"msg": "password muito curto (min 8 caracteres)"}), 400
-        if role not in ("superadmin", "admin", "operator", "viewer"):
+        if role not in ROLE_LEVELS:
             return jsonify({"msg": "role invalido"}), 400
-        if role == "superadmin":
-            account = get_current_account()
-            if not account or account.role != "superadmin":
-                return jsonify({"msg": "Apenas superadmins podem criar contas superadmin"}), 403
-        elif role == "admin":
-            account = get_current_account()
-            if not account or account.role not in ["superadmin", "admin"]:
-                return jsonify({"msg": "Apenas admins/superadmins podem criar contas admin"}), 403
+
+        account = get_current_account()
+        actor_role = account.role if account else "viewer"
+        actor_level = ROLE_LEVELS.get(actor_role, 0)
+        target_level = ROLE_LEVELS.get(role, 0)
+
+        if target_level > actor_level:
+            return jsonify({"msg": "Apenas usuarios com cargo superior podem criar esta conta"}), 403
+        if target_level == actor_level and actor_role not in ["superadmin", "admin"]:
+            return jsonify({"msg": "Apenas admins e superadmins podem criar contas de mesmo nivel"}), 403
+
         if Account.query.filter_by(username=username).first() is not None:
             return jsonify({"msg": "usuario ja existe"}), 409
 
@@ -104,31 +109,29 @@ def create_auth_blueprint(deps):
             return jsonify({"msg": "Conta nao encontrada"}), 404
 
         account = get_current_account()
-        if row.role == "superadmin" and (not account or account.role != "superadmin"):
-            return jsonify(
-                {"msg": "Apenas superadmins podem alterar ou conceder acesso superadmin"}
-            ), 403
-        elif row.role == "admin" and (not account or account.role not in ["superadmin", "admin"]):
-            return jsonify(
-                {"msg": "Apenas admins/superadmins podem alterar ou conceder acesso admin"}
-            ), 403
+        actor_role = account.role if account else "viewer"
+        actor_id = account.id if account else None
+        actor_level = ROLE_LEVELS.get(actor_role, 0)
+        target_current_level = ROLE_LEVELS.get(row.role, 0)
+
+        if target_current_level > actor_level and actor_id != account_id:
+            return jsonify({"msg": "Permissao negada para alterar conta com cargo superior"}), 403
+        if target_current_level == actor_level and actor_id != account_id and actor_role not in ["superadmin", "admin"]:
+            return jsonify({"msg": "Permissao negada para alterar conta com cargo igual"}), 403
 
         data = request.get_json(silent=True) or {}
         if "role" in data:
             role = str(data.get("role", "")).strip().lower()
-            if role not in ("superadmin", "admin", "operator", "viewer"):
-                return jsonify({"msg": "role invalido"}), 400
-            if role == "superadmin":
-                if not account or account.role != "superadmin":
-                    return jsonify(
-                        {"msg": "Apenas superadmins podem alterar ou conceder acesso superadmin"}
-                    ), 403
-            elif role == "admin":
-                if not account or account.role not in ["superadmin", "admin"]:
-                    return jsonify(
-                        {"msg": "Apenas admins/superadmins podem alterar ou conceder acesso admin"}
-                    ), 403
-            row.role = role
+            if role != row.role:
+                if role not in ROLE_LEVELS:
+                    return jsonify({"msg": "role invalido"}), 400
+                target_new_level = ROLE_LEVELS.get(role, 0)
+
+                if target_new_level > actor_level:
+                    return jsonify({"msg": "Permissao negada para elevar a cargo superior ao seu"}), 403
+                if target_new_level == actor_level and actor_role not in ["superadmin", "admin"]:
+                    return jsonify({"msg": "Permissao negada para elevar a cargo igual ao seu"}), 403
+                row.role = role
         if "active" in data:
             row.active = bool(data.get("active"))
         if "password" in data:
@@ -156,10 +159,17 @@ def create_auth_blueprint(deps):
             return jsonify({"msg": "Conta nao encontrada"}), 404
 
         account = get_current_account()
+        actor_role = account.role if account else "viewer"
+        actor_level = ROLE_LEVELS.get(actor_role, 0)
+        target_level = ROLE_LEVELS.get(row.role, 0)
+
         if row.role == "superadmin":
             return jsonify({"msg": "Nao é possivel excluir um superadmin localmente"}), 403
-        elif row.role == "admin" and (not account or account.role not in ["superadmin", "admin"]):
-            return jsonify({"msg": "Apenas admins/superadmins podem excluir contas admin"}), 403
+
+        if target_level > actor_level:
+            return jsonify({"msg": "Permissao negada para excluir conta com cargo superior"}), 403
+        if target_level == actor_level and actor_role not in ["superadmin", "admin"]:
+            return jsonify({"msg": "Permissao negada para excluir conta com cargo igual"}), 403
 
         username = row.username
         is_email = "@" in username
@@ -226,8 +236,18 @@ def create_auth_blueprint(deps):
         permission = str(data.get("permission", "")).strip()
         allowed = bool(data.get("allowed", True))
 
-        if role not in ("superadmin", "admin", "operator", "viewer") or not permission:
+        if role not in ROLE_LEVELS or not permission:
             return jsonify({"msg": "role e permission sao obrigatorios"}), 400
+
+        account = get_current_account()
+        actor_role = account.role if account else "viewer"
+        actor_level = ROLE_LEVELS.get(actor_role, 0)
+        target_level = ROLE_LEVELS.get(role, 0)
+
+        if target_level > actor_level:
+            return jsonify({"msg": "Permissao negada para alterar permissoes de cargo superior"}), 403
+        if target_level == actor_level and actor_role not in ["superadmin", "admin"]:
+            return jsonify({"msg": "Permissao negada para alterar permissoes de cargo igual"}), 403
 
         row = RolePermission.query.filter_by(role=role, permission=permission).first()
         if row is None:
@@ -283,17 +303,19 @@ def create_auth_blueprint(deps):
         if not target_user_id:
             return jsonify({"msg": "target_user_id é obrigatorio"}), 400
 
+        target_role_lower = target_role.lower()
+        if target_role_lower not in ROLE_LEVELS:
+            return jsonify({"msg": "role invalido"}), 400
+
         account = get_current_account()
-        if target_role == "SUPERADMIN" and (not account or account.role != "superadmin"):
-            return jsonify(
-                {"msg": "Apenas superadmins podem aprovar ou elevar usuarios a superadmin"}
-            ), 403
-        elif target_role == "ADMIN" and (
-            not account or account.role not in ["superadmin", "admin"]
-        ):
-            return jsonify(
-                {"msg": "Apenas admins/superadmins podem aprovar usuarios para admin"}
-            ), 403
+        actor_role = account.role if account else "viewer"
+        actor_level = ROLE_LEVELS.get(actor_role, 0)
+        target_level = ROLE_LEVELS.get(target_role_lower, 0)
+
+        if target_level > actor_level:
+            return jsonify({"msg": "Permissao negada para aprovar usuario com cargo superior"}), 403
+        if target_level == actor_level and actor_role not in ["superadmin", "admin"]:
+            return jsonify({"msg": "Permissao negada para aprovar usuario com cargo igual"}), 403
 
         from sqlalchemy import text
 
