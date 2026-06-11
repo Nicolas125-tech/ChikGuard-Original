@@ -1,4 +1,4 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useRef, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, useTexture } from '@react-three/drei';
 import { Activity, Thermometer, Wind } from 'lucide-react';
@@ -44,7 +44,7 @@ function Heater({ position, isOn }) {
   );
 }
 
-function Shed({ sensors, devices }) {
+function Shed({ sensors, devices, width, length }) {
   const isFanOn = devices?.ventilacao === true;
   const isHeaterOn = devices?.aquecedor === true;
   
@@ -56,39 +56,39 @@ function Shed({ sensors, devices }) {
     <group>
       {/* Floor */}
       <mesh position={[0, -0.5, 0]} receiveShadow>
-        <boxGeometry args={[12, 0.2, 24]} />
+        <boxGeometry args={[width, 0.2, length]} />
         <meshStandardMaterial color="#78716c" roughness={0.9} />
       </mesh>
       
       {/* Walls (Transparent) */}
-      <mesh position={[-6, 1.5, 0]} castShadow receiveShadow>
-        <boxGeometry args={[0.2, 4, 24]} />
+      <mesh position={[-width/2, 1.5, 0]} castShadow receiveShadow>
+        <boxGeometry args={[0.2, 4, length]} />
         <meshStandardMaterial color="#cbd5e1" transparent opacity={0.3} />
       </mesh>
-      <mesh position={[6, 1.5, 0]} castShadow receiveShadow>
-        <boxGeometry args={[0.2, 4, 24]} />
+      <mesh position={[width/2, 1.5, 0]} castShadow receiveShadow>
+        <boxGeometry args={[0.2, 4, length]} />
         <meshStandardMaterial color="#cbd5e1" transparent opacity={0.3} />
       </mesh>
-      <mesh position={[0, 1.5, 12]} castShadow receiveShadow>
-        <boxGeometry args={[12, 4, 0.2]} />
+      <mesh position={[0, 1.5, length/2]} castShadow receiveShadow>
+        <boxGeometry args={[width, 4, 0.2]} />
         <meshStandardMaterial color="#cbd5e1" transparent opacity={0.3} />
       </mesh>
-      <mesh position={[0, 1.5, -12]} castShadow receiveShadow>
-        <boxGeometry args={[12, 4, 0.2]} />
+      <mesh position={[0, 1.5, -length/2]} castShadow receiveShadow>
+        <boxGeometry args={[width, 4, 0.2]} />
         <meshStandardMaterial color="#cbd5e1" transparent opacity={0.3} />
       </mesh>
 
       {/* Roof Frame */}
       <mesh position={[0, 3.5, 0]} rotation={[0, 0, 0]}>
-         <boxGeometry args={[12, 0.2, 24]} />
+         <boxGeometry args={[width, 0.2, length]} />
          <meshStandardMaterial color="#334155" wireframe />
       </mesh>
 
       {/* Equipment */}
-      {/* Exhaust fans at the back wall (-11.8) */}
-      <Fan position={[-3, 1.5, -11.8]} isRunning={isFanOn} />
-      <Fan position={[0, 1.5, -11.8]} isRunning={isFanOn} />
-      <Fan position={[3, 1.5, -11.8]} isRunning={isFanOn} />
+      {/* Exhaust fans at the back wall */}
+      <Fan position={[-width/4, 1.5, -length/2 + 0.2]} isRunning={isFanOn} />
+      <Fan position={[0, 1.5, -length/2 + 0.2]} isRunning={isFanOn} />
+      <Fan position={[width/4, 1.5, -length/2 + 0.2]} isRunning={isFanOn} />
 
       {/* Heaters hanging from roof */}
       <Heater position={[-2, 2.5, -5]} isOn={isHeaterOn} />
@@ -107,35 +107,51 @@ function Shed({ sensors, devices }) {
 }
 
 export default function DigitalTwin3D({ sensors, devices }) {
+  const [width, setWidth] = useState(12);
+  const [length, setLength] = useState(24);
+
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-sm mt-6">
-      <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-6 gap-4">
+      <div className="flex flex-col sm:flex-row justify-between sm:items-start mb-6 gap-4">
         <div className="flex items-center gap-3">
           <div className="bg-indigo-500/20 p-2.5 rounded-xl border border-indigo-500/30">
             <Activity size={24} className="text-indigo-400" />
           </div>
           <div>
             <h2 className="text-xl font-bold text-white tracking-tight">Gêmeo Digital 3D (WebGL)</h2>
-            <p className="text-xs text-slate-400 mt-1">Navegação imersiva em tempo real no galpão</p>
+            <p className="text-xs text-slate-400 mt-1">Simulação proporcional da granja</p>
           </div>
         </div>
         
-        <div className="flex items-center gap-3 bg-slate-950 p-2 rounded-xl border border-slate-800">
-           <div className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1 ${devices?.ventilacao ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>
-              <Wind size={14} /> Exaustão
-           </div>
-           <div className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1 ${devices?.aquecedor ? 'bg-rose-500/20 text-rose-400' : 'bg-slate-800 text-slate-500'}`}>
-              <Thermometer size={14} /> Aquecimento
-           </div>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-3 bg-slate-950 p-2 rounded-xl border border-slate-800 self-end">
+             <div className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1 ${devices?.ventilacao ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>
+                <Wind size={14} /> Exaustão
+             </div>
+             <div className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1 ${devices?.aquecedor ? 'bg-rose-500/20 text-rose-400' : 'bg-slate-800 text-slate-500'}`}>
+                <Thermometer size={14} /> Aquecimento
+             </div>
+          </div>
+          
+          <div className="flex items-center gap-2 bg-slate-800/50 p-2 rounded-xl border border-slate-700/50">
+             <div className="flex items-center gap-1">
+               <label className="text-xs text-slate-400 font-medium ml-1">Largura (m):</label>
+               <input type="number" min="5" max="30" value={width} onChange={(e)=>setWidth(Number(e.target.value))} className="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white w-14 outline-none" />
+             </div>
+             <div className="flex items-center gap-1">
+               <label className="text-xs text-slate-400 font-medium ml-1">Comprimento (m):</label>
+               <input type="number" min="10" max="60" value={length} onChange={(e)=>setLength(Number(e.target.value))} className="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white w-14 outline-none" />
+             </div>
+          </div>
         </div>
       </div>
       
       <div className="h-[400px] w-full rounded-2xl overflow-hidden bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-700 cursor-move relative shadow-inner">
-        <Canvas shadows camera={{ position: [0, 8, 18], fov: 45 }}>
+        <Canvas shadows camera={{ position: [0, Math.max(10, length/2), Math.max(15, length)], fov: 45 }}>
           <ambientLight intensity={0.6} />
           <directionalLight position={[10, 15, 10]} intensity={1.5} castShadow shadow-mapSize={[1024, 1024]} />
           
-          <Shed sensors={sensors} devices={devices} />
+          <Shed sensors={sensors} devices={devices} width={width} length={length} />
           
           <OrbitControls 
             enablePan={false} 
