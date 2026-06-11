@@ -3477,6 +3477,8 @@ def voice_command():
     command = str(data.get("text", "")).strip().lower()
     if not command:
         return jsonify({"msg": "Comando vazio"}), 400
+    if len(command) > 500:
+        return jsonify({"msg": "Comando excedeu limite de tamanho"}), 400
 
     action = None
     target_state = {}
@@ -3648,6 +3650,8 @@ def logbook():
     author = str(data.get("author", "")).strip() or "operador"
     if not note:
         return jsonify({"msg": "Campo note e obrigatorio"}), 400
+    if len(note) > 2000 or len(author) > 100:
+        return jsonify({"msg": "Tamanho de nota ou autor excede limite"}), 400
     batch = _active_batch(ACTIVE_CAMERA_ID)
     row = BatchLogbook(
         camera_id=ACTIVE_CAMERA_ID,
