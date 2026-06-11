@@ -19,6 +19,8 @@ def create_reports_blueprint(deps):
         data = request.get_json(silent=True) or {}
         days = int(data.get("days", 30))
         email = str(data.get("email", "")).strip() or None
+        if email and len(email) > 100:
+            return jsonify({"msg": "Tamanho de email excede o limite"}), 400
         try:
             path = generate_esg_report(
                 current_app.app_context, active_camera_id, utcnow_func, days=days
@@ -111,6 +113,8 @@ def create_reports_blueprint(deps):
     def generate_weekly():
         data = request.get_json(silent=True) or {}
         email = str(data.get("email", "")).strip() or None
+        if email and len(email) > 100:
+            return jsonify({"msg": "Tamanho de email excede o limite"}), 400
         try:
             path = generate_weekly_report(current_app.app_context, active_camera_id, utcnow_func)
         except Exception as exc:

@@ -31,6 +31,9 @@ def create_cameras_blueprint(deps):
         if not camera_id or not name:
             return jsonify({"msg": "camera_id and name are required"}), 400
 
+        if len(str(camera_id)) > 50 or len(str(name)) > 100 or len(str(data.get("connection_url", ""))) > 500:
+            return jsonify({"msg": "Input length limits exceeded"}), 400
+
         if Camera.query.filter_by(camera_id=camera_id).first():
             return jsonify({"msg": "camera_id already exists"}), 400
 
@@ -57,6 +60,10 @@ def create_cameras_blueprint(deps):
             return jsonify({"msg": "Camera not found"}), 404
 
         data = request.get_json() or {}
+        
+        if len(str(data.get("name", ""))) > 100 or len(str(data.get("connection_url", ""))) > 500:
+            return jsonify({"msg": "Input length limits exceeded"}), 400
+
         if "name" in data:
             c.name = data["name"]
         if "connection_type" in data:
@@ -95,6 +102,8 @@ def create_cameras_blueprint(deps):
         cid = data.get("camera_id")
         if not cid:
             return jsonify({"msg": "Missing camera_id"}), 400
+        if len(str(cid)) > 50:
+            return jsonify({"msg": "Input length limits exceeded"}), 400
 
         c = Camera.query.filter_by(camera_id=cid).first()
         if not c:

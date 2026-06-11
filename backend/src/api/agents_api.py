@@ -54,6 +54,8 @@ def create_agents_blueprint(api_deps):
         user_message = data.get("message", "")
         if not user_message:
             return jsonify({"error": "Mensagem vazia"}), 400
+        if len(str(user_message)) > 2000:
+            return jsonify({"error": "Tamanho da mensagem excede o limite (2000 caracteres)"}), 400
 
         # Obtém a chave da API do Gemini a partir do ambiente (.env)
         api_key = os.getenv("GEMINI_API_KEY")

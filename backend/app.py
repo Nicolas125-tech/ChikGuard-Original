@@ -3587,6 +3587,8 @@ def batches():
     notes = str(data.get("notes", "")).strip() or None
     if not name or not start_date_raw:
         return jsonify({"msg": "name e start_date (YYYY-MM-DD) sao obrigatorios"}), 400
+    if len(name) > 100 or (notes and len(notes) > 2000):
+        return jsonify({"msg": "Tamanho de nome ou notas excede o limite"}), 400
     try:
         start_date = datetime.strptime(start_date_raw, "%Y-%m-%d")
     except Exception:
@@ -4005,6 +4007,8 @@ def register_push_token():
         token = data.get("token")
         if not token:
             return jsonify({"msg": "Token e obrigatorio"}), 400
+        if len(str(token)) > 255:
+            return jsonify({"msg": "Token excedeu o limite de tamanho"}), 400
 
         with app.app_context():
             existing = PushToken.query.filter_by(token=token).first()
