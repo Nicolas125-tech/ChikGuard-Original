@@ -24,6 +24,7 @@ import DigitalTwinPanel from '../components/DigitalTwinPanel';
 import CamerasManager from '../components/CamerasManager';
 import ProfilePanel from '../components/ProfilePanel';
 import RulesPanel from '../components/RulesPanel';
+import BatchPassport from '../components/BatchPassport';
 import { getBaseUrl } from '../utils/config';
 
 export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, onSaveServer, onLogout }) {

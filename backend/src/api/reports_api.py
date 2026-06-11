@@ -63,6 +63,48 @@ def create_reports_blueprint(deps):
             logging.getLogger(__name__).error("Falha ao gerar/exportar PDF ESG: %s", exc)
             return jsonify({"msg": "Falha interna ao gerar/exportar PDF ESG"}), 500
 
+    @bp.route("/api/reports/passport", methods=["GET"])
+    @require_auth()
+    def get_batch_passport():
+        active_batch = Batch.query.filter_by(active=True).first()
+        if not active_batch:
+            return jsonify({
+                "passport_id": "ND-0000",
+                "batch_name": "Nenhum Lote Ativo",
+                "status": "Inativo",
+                "start_date": "N/A",
+                "current_age_days": 0,
+                "initial_count": 0,
+                "mortality_rate": 0,
+                "avg_temperature": 0,
+                "stress_events": 0,
+                "medications": [],
+                "certification": "Pendente"
+            })
+            
+        # Calcula idade
+        start = active_batch.start_date
+        now = utcnow_func()
+        age_days = (now - start).days if start else 0
+        
+        # Simula agregacao rapida pro passaporte
+        mort_rate = round((active_batch.current_mortality / active_batch.initial_count) * 100, 2) if active_batch.initial_count > 0 else 0
+        
+        passport_data = {
+            "passport_id": f"CG-PT-{active_batch.id}-{now.strftime('%Y%m')}",
+            "batch_name": active_batch.name,
+            "status": "Em andamento" if active_batch.active else "Finalizado",
+            "start_date": start.strftime("%d/%m/%Y") if start else "N/A",
+            "current_age_days": age_days,
+            "initial_count": active_batch.initial_count,
+            "mortality_rate": mort_rate,
+            "avg_temperature": 27.5, # Simulado, poderia agregar SensorReadings
+            "stress_events": 2, # Simulado
+            "medications": ["Vacina Newcastle (Dia 7)", "Anticoccidiano (Preventivo)"],
+            "certification": "Aprovado - Padrão Ouro Exportação" if mort_rate < 3.0 else "Regular"
+        }
+        return jsonify(passport_data)
+
     @bp.route("/api/reports/weekly", methods=["POST"])
     @require_auth()
     @limiter.limit("5 per minute")
