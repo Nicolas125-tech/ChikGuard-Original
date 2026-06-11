@@ -3911,12 +3911,18 @@ def reload_plugins():
 @app.route("/api/rules", methods=["GET"])
 @require_auth()
 def get_rules():
+    ok, resp = _require_permission("monitor.read")
+    if not ok:
+        return resp
     rules = AutomationRule.query.all()
     return jsonify([r.to_dict() for r in rules])
 
 @app.route("/api/rules", methods=["POST"])
 @require_auth()
 def create_rule():
+    ok, resp = _guard_critical_action("create_rule", permission="automation.manage")
+    if not ok:
+        return resp
     data = request.json
     rule = AutomationRule(
         name=data.get("name"),
@@ -3934,6 +3940,9 @@ def create_rule():
 @app.route("/api/rules/<int:rule_id>", methods=["DELETE"])
 @require_auth()
 def delete_rule(rule_id):
+    ok, resp = _guard_critical_action("delete_rule", permission="automation.manage")
+    if not ok:
+        return resp
     rule = AutomationRule.query.get(rule_id)
     if not rule:
         return jsonify({"msg": "Regra não encontrada"}), 404
