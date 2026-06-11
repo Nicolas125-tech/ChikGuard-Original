@@ -198,4 +198,4 @@ def get_frame_analysis():
         return processor.process_frame()
     except Exception as e:
         print(f"Erro ao processar frame: {e}")
-        return {"error": str(e)}
+        return {"error": "Erro interno ao processar frame"}

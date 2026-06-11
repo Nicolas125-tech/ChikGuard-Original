@@ -81,7 +81,7 @@ def require_auth(roles=None):
                     f"Erro de autenticacao: {str(e)} - Token: {token[:15]}..."
                 )
                 print(f"JWT ERROR: {str(e)}")
-                return jsonify({"error": "Erro de processamento de token", "details": str(e)}), 401
+                return jsonify({"error": "Erro de processamento de token"}), 401
 
             return f(*args, **kwargs)
 
