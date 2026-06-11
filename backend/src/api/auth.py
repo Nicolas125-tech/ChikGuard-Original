@@ -242,6 +242,9 @@ def create_auth_blueprint(deps):
 
         if role not in ROLE_LEVELS or not permission:
             return jsonify({"msg": "role e permission sao obrigatorios"}), 400
+        
+        if len(role) > 50 or len(permission) > 100:
+            return jsonify({"msg": "Tamanho dos campos excede o limite"}), 400
 
         account = get_current_account()
         actor_role = account.role if account else "viewer"

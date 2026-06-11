@@ -1644,7 +1644,8 @@ def _telegram_send(frame_bgr, caption):
             return True, "sent"
         return False, f"http_{response.status_code}"
     except Exception as exc:
-        return False, str(exc)
+        LOGGER.exception("Error sending photo to Telegram: %s", exc)
+        return False, "Failed to communicate with Telegram API"
 
 
 def _telegram_send_text(message):
@@ -1657,7 +1658,8 @@ def _telegram_send_text(message):
         response = requests.post(url, data={"chat_id": chat_id, "text": message}, timeout=10)
         return (response.ok, f"http_{response.status_code}" if not response.ok else "sent")
     except Exception as exc:
-        return False, str(exc)
+        LOGGER.exception("Error sending text to Telegram: %s", exc)
+        return False, "Failed to communicate with Telegram API"
 
 
 def _trigger_local_alarm():
@@ -3929,7 +3931,10 @@ def create_rule():
     ok, resp = _guard_critical_action("create_rule", permission="automation.manage")
     if not ok:
         return resp
-    data = request.json
+    data = request.json or {}
+    for k in ["name", "condition_variable", "condition_operator", "condition_value", "action_device", "action_state"]:
+        if data.get(k) and len(str(data[k])) > 100:
+            return jsonify({"msg": "Input length limits exceeded"}), 400
     rule = AutomationRule(
         name=data.get("name"),
         condition_variable=data.get("condition_variable"),
