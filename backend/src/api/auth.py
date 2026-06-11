@@ -68,6 +68,8 @@ def create_auth_blueprint(deps):
             return jsonify({"msg": "username e password sao obrigatorios"}), 400
         if len(password) < 8:
             return jsonify({"msg": "password muito curto (min 8 caracteres)"}), 400
+        if len(username) > 50 or len(password) > 100:
+            return jsonify({"msg": "Tamanho de usuario ou senha excede o limite"}), 400
         if role not in ROLE_LEVELS:
             return jsonify({"msg": "role invalido"}), 400
 
@@ -138,6 +140,8 @@ def create_auth_blueprint(deps):
             pwd = str(data.get("password", "")).strip()
             if len(pwd) < 8:
                 return jsonify({"msg": "password muito curto (min 8 caracteres)"}), 400
+            if len(pwd) > 100:
+                return jsonify({"msg": "Tamanho da senha excede o limite"}), 400
             row.password_hash = bcrypt.generate_password_hash(pwd).decode("utf-8")
 
         db.session.commit()
