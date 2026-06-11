@@ -291,6 +291,7 @@ def create_auth_blueprint(deps):
             return jsonify({"error": "Erro interno no servidor"}), 500
 
     @bp.route("/api/admin/approve-user", methods=["POST"])
+    @limiter.limit("10 per minute")
     def admin_approve_user():
         ok, resp = guard_critical_action("admin_approve_user", permission="accounts.manage")
         if not ok:
