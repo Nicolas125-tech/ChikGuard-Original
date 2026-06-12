@@ -11,7 +11,11 @@ export default function SystemPanel({ serverIP, prefs, token }) {
     try {
       const headers = { Authorization: `Bearer ${token}` };
       const res = await fetch(`${baseUrl}/api/health/system`, { headers });
-      if (res.ok) setHealth(await res.json());
+      // Bolt Optimization: Prevent unnecessary re-renders when polling data is identical.
+      if (res.ok) {
+        const data = await res.json();
+        setHealth(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+      }
     } catch (err) {
       console.error('Error fetching system health:', err);
     }
