@@ -195,11 +195,12 @@ export default function RulesPanel({ serverIP }) {
                   </div>
                 </div>
                 <button 
+                  aria-label="Excluir regra"
                   onClick={() => handleDelete(r.id)}
-                  className="mt-3 sm:mt-0 p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-400/10 rounded-lg transition-colors"
+                  className="mt-3 sm:mt-0 p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-400/10 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none"
                   title="Excluir"
                 >
-                  <Trash2 size={18} />
+                  <Trash2 size={18} aria-hidden="true" />
                 </button>
               </div>
             ))}
