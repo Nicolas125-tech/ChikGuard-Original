@@ -26,22 +26,27 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
         fetch(`${baseUrl}/api/thermal-anomalies/live?minutes=15`, { headers }),
       ]);
 
+      // Bolt Optimization: Prevent unnecessary re-renders when polling data is identical.
       if (rSensors.ok) {
-        setSensorLive(await rSensors.json());
+        const sData = await rSensors.json();
+        setSensorLive(prev => JSON.stringify(prev) === JSON.stringify(sData) ? prev : sData);
       }
 
       if (rDevices.ok) {
-        setDeviceState(await rDevices.json());
+        const dData = await rDevices.json();
+        setDeviceState(prev => JSON.stringify(prev) === JSON.stringify(dData) ? prev : dData);
       }
 
       if (rHeatmap.ok) {
         const hData = await rHeatmap.json();
-        setHeatmapPoints(hData.points || []);
+        const newPoints = hData.points || [];
+        setHeatmapPoints(prev => JSON.stringify(prev) === JSON.stringify(newPoints) ? prev : newPoints);
       }
 
       if (rAnomalies.ok) {
         const aData = await rAnomalies.json();
-        setThermalAnomalies(aData.items || []);
+        const newItems = aData.items || [];
+        setThermalAnomalies(prev => JSON.stringify(prev) === JSON.stringify(newItems) ? prev : newItems);
       }
     } catch (err) {
       console.error('Error fetching digital twin data:', err);

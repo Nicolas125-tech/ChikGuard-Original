@@ -10,9 +10,11 @@ export default function HeatmapOverlay({ serverIP, token }) {
       const response = await fetch(`${baseUrl}/api/heatmap/3d?hours=2&grid=32`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      // Bolt Optimization: Prevent unnecessary re-renders when polling data is identical.
       if (response.ok) {
         const data = await response.json();
-        setPoints(data.points || []);
+        const newPoints = data.points || [];
+        setPoints(prev => JSON.stringify(prev) === JSON.stringify(newPoints) ? prev : newPoints);
       }
     } catch (err) {
       console.error('Heatmap fetch error:', err);
