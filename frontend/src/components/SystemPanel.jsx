@@ -1,10 +1,39 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getBaseUrl } from '../utils/config';
-import { Activity, HardDrive, Cpu, Database, Server, Clock } from 'lucide-react';
+import { Activity, Database, Server, Clock, Cpu, HardDrive } from 'lucide-react';
+
+const MetricBar = ({ label, percent, icon, colorClass }) => (
+  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
+    <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center gap-3">
+        <div className="p-2 bg-slate-800 rounded-lg">
+          {icon && React.createElement(icon, { size: 18, className: "text-slate-400" })}
+        </div>
+        <span className="text-slate-400 font-medium text-sm">{label}</span>
+      </div>
+      <span className="text-white font-bold text-lg">{percent !== undefined ? `${percent}%` : '--'}</span>
+    </div>
+    <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+      <div className={`h-2.5 rounded-full ${colorClass}`} style={{ width: `${percent || 0}%` }}></div>
+    </div>
+  </div>
+);
+
+const StatusCard = ({ label, value, icon, isOnline }) => (
+  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+    <div className="flex items-center justify-between mb-3">
+      <div className="p-2 bg-slate-800 rounded-lg">
+        {icon && React.createElement(icon, { size: 18, className: isOnline ? "text-emerald-400" : "text-slate-400" })}
+      </div>
+      <div className={`status-dot ${isOnline ? 'online' : 'offline'}`} />
+    </div>
+    <div className="text-slate-400 text-sm font-medium mb-1">{label}</div>
+    <div className="text-white font-bold text-lg truncate">{value}</div>
+  </div>
+);
 
 export default function SystemPanel({ serverIP, prefs, token }) {
   const [health, setHealth] = useState(null);
-  const baseUrl = getBaseUrl(serverIP);
+  const baseUrl = serverIP ? `http://${serverIP}` : '';
   const pollMs = prefs?.statusMs || 5000;
 
   const loadHealth = useCallback(async () => {
@@ -31,34 +60,6 @@ export default function SystemPanel({ serverIP, prefs, token }) {
   }, [loadHealth, pollMs]);
 
   const uptime = health ? `${Math.floor(health.uptime_seconds / 3600)}h ${Math.floor((health.uptime_seconds % 3600) / 60)}m` : '--';
-
-  const MetricBar = ({ label, percent, icon: Icon, colorClass }) => (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-2">
-          <Icon size={18} className="text-slate-400" />
-          <span className="text-sm font-semibold tracking-wider text-slate-300">{label}</span>
-        </div>
-        <span className="text-xl font-bold">{percent !== undefined ? `${percent.toFixed(1)}%` : '--'}</span>
-      </div>
-      <div className="w-full bg-slate-800 rounded-full h-3">
-        <div className={`h-3 rounded-full transition-all duration-500 ease-out ${colorClass}`} style={{ width: `${percent || 0}%` }}></div>
-      </div>
-    </div>
-  );
-
-  const StatusCard = ({ label, value, icon: Icon, isOnline }) => (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs uppercase tracking-wider text-slate-400">{label}</span>
-        <Icon size={16} className={isOnline ? "text-emerald-500" : "text-rose-500"} />
-      </div>
-      <div className="text-2xl font-bold flex items-center space-x-2">
-        <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></div>
-        <span>{value}</span>
-      </div>
-    </div>
-  );
 
   return (
     <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">

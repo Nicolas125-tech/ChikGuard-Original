@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Joyride, STATUS } from 'react-joyride';
+import { Joyride, STATUS, ACTIONS, EVENTS } from 'react-joyride';
 import ChickenPhoto from '../components/ChickenPhoto';
 
 import {
@@ -48,15 +48,24 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
   useEffect(() => {
     const isCompleted = localStorage.getItem('cg_tourCompleted');
     if (!isCompleted) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRunTour(true);
     }
+    return () => {
+      document.body.style.overflow = ''; // Cleanup on unmount
+    };
   }, []);
 
   const handleJoyrideCallback = (data) => {
-    const { status } = data;
-    if ([STATUS.FINISHED, STATUS.SKIPPED].includes(status)) {
+    const { status, action, type } = data;
+    if (
+      [STATUS.FINISHED, STATUS.SKIPPED].includes(status) ||
+      action === ACTIONS.CLOSE ||
+      type === EVENTS.TARGET_NOT_FOUND
+    ) {
       setRunTour(false);
       localStorage.setItem('cg_tourCompleted', 'true');
+      document.body.style.overflow = ''; // Force reset overflow
     }
   };
 
@@ -493,29 +502,44 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
 
   return (
     <div className="min-h-screen bg-premium-glow text-slate-300 flex overflow-hidden">
-      <Joyride
-        steps={tourSteps}
-        run={runTour}
-        continuous={true}
-        showSkipButton={true}
-        showProgress={true}
-        callback={handleJoyrideCallback}
-        styles={{
-          options: {
-            primaryColor: '#10b981',
-            textColor: '#334155',
-            backgroundColor: '#ffffff',
-            zIndex: 10000,
-          }
-        }}
-        locale={{
-          back: 'Anterior',
-          close: 'Fechar',
-          last: 'Finalizar',
-          next: 'Próximo',
-          skip: 'Pular Tutorial'
-        }}
-      />
+      {runTour && (
+        <Joyride
+          disableScrollParentFix={true}
+          disableScrolling={false}
+          disableOverlayClose={false}
+          spotlightClicks={true}
+          steps={tourSteps}
+          run={runTour}
+          continuous={true}
+          showSkipButton={true}
+          showProgress={true}
+          callback={handleJoyrideCallback}
+          floaterProps={{
+            disableAnimation: true,
+          }}
+          styles={{
+            options: {
+              primaryColor: '#10b981',
+              textColor: '#334155',
+              backgroundColor: '#ffffff',
+              zIndex: 100000,
+            },
+            overlay: {
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            },
+            spotlight: {
+              backgroundColor: 'transparent',
+            }
+          }}
+          locale={{
+            back: 'Anterior',
+            close: 'Fechar',
+            last: 'Finalizar',
+            next: 'Próximo',
+            skip: 'Pular Tutorial'
+          }}
+        />
+      )}
       {renderDesktopSidebar()}
       {renderMobileSidebar()}
 
