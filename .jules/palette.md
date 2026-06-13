@@ -20,3 +20,6 @@
 ## 2024-06-02 - Prefer aria-pressed for Toggle Buttons with Text
 **Learning:** While dynamic `aria-label`s (e.g., "Ativar X" / "Desativar X") provide clear actionable instructions, they override the visible internal text of a button for screen readers. For toggle buttons that contain descriptive visible text, a more strictly correct pattern is to use `aria-pressed="true|false"`. This preserves the internal description while accurately announcing the button's state to assistive technology.
 **Action:** Default to `aria-pressed` for stateful toggle buttons that have visible text inside them. Reserve dynamic `aria-label`s for icon-only toggle buttons or buttons where the internal text is non-descriptive.
+## 2024-06-13 - Interactive Divs Must Support Keyboard Navigation
+**Learning:** Custom interactive components, such as the large statistics cards in `OverviewPanel.jsx` that function as navigation tabs (`onClick`), often lack keyboard support. While they look and act like buttons to mouse users, keyboard-only users cannot focus them or activate them.
+**Action:** When applying `onClick` and `role="button"` to non-semantic elements like `div`s, always pair them with `tabIndex={0}`, an `onKeyDown` handler (listening for `Enter` and `Space`), and visible focus states (e.g., `focus-visible:ring-2`) to ensure WCAG compliance.
