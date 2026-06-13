@@ -157,8 +157,15 @@ export default function OverviewPanel({ token, serverIP, prefs, cameras = [], ac
       {/* ── Temperatura ── */}
       <div 
         onClick={() => onTabChange && onTabChange('climate')}
-        className="card-premium p-6 animate-fade-in-up stagger-1 hover-lift cursor-pointer hover:border-rose-500/40 transition-all"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onTabChange && onTabChange('climate');
+          }
+        }}
+        className="card-premium p-6 animate-fade-in-up stagger-1 hover-lift cursor-pointer hover:border-rose-500/40 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
         role="button"
+        tabIndex={0}
       >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2 text-slate-400 font-semibold text-xs uppercase tracking-widest">
@@ -189,8 +196,15 @@ export default function OverviewPanel({ token, serverIP, prefs, cameras = [], ac
       {/* ── Detecções ── */}
       <div 
         onClick={() => onTabChange && onTabChange('birds')}
-        className="card-premium p-6 animate-fade-in-up stagger-2 hover-lift cursor-pointer hover:border-indigo-500/40 transition-all"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onTabChange && onTabChange('birds');
+          }
+        }}
+        className="card-premium p-6 animate-fade-in-up stagger-2 hover-lift cursor-pointer hover:border-indigo-500/40 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
         role="button"
+        tabIndex={0}
       >
         <div className="flex justify-between items-start mb-4">
           <div className="flex items-center gap-2 text-slate-400 font-semibold text-xs uppercase tracking-widest">
@@ -214,8 +228,15 @@ export default function OverviewPanel({ token, serverIP, prefs, cameras = [], ac
       {/* ── Score de Conforto ── */}
       <div 
         onClick={() => onTabChange && onTabChange('digitaltwin')}
-        className="card-premium p-6 animate-fade-in-up stagger-3 hover-lift cursor-pointer hover:border-emerald-500/40 transition-all"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onTabChange && onTabChange('digitaltwin');
+          }
+        }}
+        className="card-premium p-6 animate-fade-in-up stagger-3 hover-lift cursor-pointer hover:border-emerald-500/40 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
         role="button"
+        tabIndex={0}
       >
         <div className="text-xs uppercase font-semibold tracking-widest text-slate-400 mb-4 flex items-center gap-2">
           <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
