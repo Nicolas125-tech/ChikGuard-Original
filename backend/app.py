@@ -2,75 +2,74 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from src.security.auth import require_auth
-from src.security.headers import setup_security_headers, setup_cors, ALLOWED_ORIGINS
-from src.security.hardening import setup_hardening
-from src.security.rate_limiter import setup_rate_limiting
-from src.core.state_machine import BusinessStateMachine
-from src.plugins.manager import PluginManager
-from src.core.logger import configure_logging
-from src.core.config import load_settings
-from src.api.sync_api import create_sync_blueprint
-from src.api.sensors_api import create_sensors_blueprint
-from src.api.devices import create_devices_blueprint
-from src.api.auth import create_auth_blueprint
-from src.api.reports_api import create_reports_blueprint
-from src.api.routes import create_api_blueprint
-from src.api.agents_api import create_agents_blueprint
-from src.api.batch_api import create_batch_blueprint
-from src.api.health_api import create_health_blueprint
-from src.alerts.providers import build_alert_provider
 import io
-from io import BytesIO
-from datetime import datetime, timedelta, timezone
 import ipaddress
-import math
 import json
-from flask import Flask, jsonify, request, send_file, has_request_context
-from werkzeug.middleware.proxy_fix import ProxyFix
-from flask_cors import CORS
+import math
+import os
+import queue
+import secrets
+import string
+import threading
+import time
+from datetime import datetime, timedelta, timezone
+
+import cv2
+import numpy as np
+from flask import Flask, has_request_context, jsonify, request
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import (
     JWTManager,
     create_access_token,
-    verify_jwt_in_request,
     get_jwt_identity,
+    verify_jwt_in_request,
 )
 from flask_socketio import SocketIO
+from werkzeug.middleware.proxy_fix import ProxyFix
+
 from database import (
-    db,
-    User,
-    Reading,
-    BirdSnapshot,
-    BirdIdentity,
-    BirdTrackPoint,
-    EventLog,
-    SensorReading,
-    Batch,
-    WeightEstimate,
-    AcousticReading,
-    ThermalAnomaly,
-    EnergyUsageDaily,
-    AuditLog,
-    SyncQueueItem,
-    BatchLogbook,
     Account,
-    Tenant,
-    Camera,
-    RolePermission,
-    PushToken,
+    AcousticReading,
+    AuditLog,
     AutomationRule,
+    Batch,
+    BatchLogbook,
+    BirdIdentity,
+    BirdSnapshot,
+    BirdTrackPoint,
+    Camera,
+    EnergyUsageDaily,
+    EventLog,
+    PushToken,
+    Reading,
+    RolePermission,
+    SensorReading,
+    SyncQueueItem,
+    Tenant,
+    ThermalAnomaly,
+    User,
+    WeightEstimate,
+    db,
 )
-
-import cv2
-import numpy as np
-import threading
-import queue
-import time
-import os
-import secrets
-import string
-
+from src.alerts.providers import build_alert_provider
+from src.api.agents_api import create_agents_blueprint
+from src.api.auth import create_auth_blueprint
+from src.api.batch_api import create_batch_blueprint
+from src.api.devices import create_devices_blueprint
+from src.api.health_api import create_health_blueprint
+from src.api.reports_api import create_reports_blueprint
+from src.api.routes import create_api_blueprint
+from src.api.sensors_api import create_sensors_blueprint
+from src.api.sync_api import create_sync_blueprint
+from src.api.vision_api import create_vision_blueprint
+from src.core.config import load_settings
+from src.core.logger import configure_logging
+from src.core.state_machine import BusinessStateMachine
+from src.plugins.manager import PluginManager
+from src.security.auth import require_auth
+from src.security.hardening import setup_hardening
+from src.security.headers import ALLOWED_ORIGINS, setup_cors, setup_security_headers
+from src.security.rate_limiter import setup_rate_limiting
 
 try:
     import requests
@@ -104,12 +103,12 @@ except Exception:
 
 try:
     from src.core.cv_engine import (
-        CameraCapture,
-        InferencePipeline,
-        SpeciesClassifier,
         BirdPoseAnalyzer,
-        PerfMetrics,
+        CameraCapture,
         CVOverlay,
+        InferencePipeline,
+        PerfMetrics,
+        SpeciesClassifier,
         count_by_species,
     )
 
@@ -2160,7 +2159,7 @@ def detectar_objetos(frame, pre_detections=None):
             class_name = _class_name_by_id(det["class_id"])
             active_learning_pipeline.process_detection(frame, det, class_name)
     except Exception:
-        LOGGER.error(f"Failed to process active learning: ")
+        LOGGER.error("Failed to process active learning: ")
 
     # LGPD / GDPR by Design: Anonimizacao no Edge
     h, w = frame.shape[:2]
@@ -3046,8 +3045,8 @@ data_lifecycle_thread = threading.Thread(target=_data_lifecycle_worker, daemon=T
 data_lifecycle_thread.start()
 
 # Inicia MQTT Client (Fase 2)
-from src.core.mqtt_client import ChikGuardMQTTClient
 from src.core.automation_engine import AutomationEngine
+from src.core.mqtt_client import ChikGuardMQTTClient
 
 mqtt_client = ChikGuardMQTTClient(app_context_fn=app.app_context)
 mqtt_client.start()
@@ -3103,6 +3102,24 @@ api_deps = {
     "sf": sf,
     "io": io,
     "np": np,
+    "perf_metrics": _perf_metrics,
+    "camera_capture": _camera_capture,
+    "CV_ENGINE_AVAILABLE": _CV_ENGINE_AVAILABLE,
+    "species_counts": species_counts,
+    "BIRD_CLASS_NAME": BIRD_CLASS_NAME,
+    "DETECTION_CONF": DETECTION_CONF,
+    "INFERENCE_IMGSZ": INFERENCE_IMGSZ,
+    "TRACKER_CONFIG": TRACKER_CONFIG,
+    "behavior_state": behavior_state,
+    "immobility_state": immobility_state,
+    "carcass_state": carcass_state,
+    "heatmap_grid": _heatmap_grid,
+    "heatmap_grid_last_hours": _heatmap_grid_last_hours,
+    "heatmap_points_3d": _heatmap_points_3d,
+    "heatmap_image_bytes": _heatmap_image_bytes,
+    "HEATMAP_DIR": HEATMAP_DIR,
+    "tamper_state": tamper_state,
+    "TAMPER_SENSOR_STALE_SEC": TAMPER_SENSOR_STALE_SEC,
 }
 
 app.register_blueprint(create_api_blueprint(api_deps))
@@ -3114,6 +3131,7 @@ app.register_blueprint(create_reports_blueprint(api_deps))
 app.register_blueprint(create_agents_blueprint(api_deps))
 app.register_blueprint(create_batch_blueprint(api_deps))
 app.register_blueprint(create_health_blueprint(api_deps))
+app.register_blueprint(create_vision_blueprint(api_deps))
 
 
 @app.route("/api/birds/live", methods=["GET"])
@@ -3141,235 +3159,6 @@ def get_live_birds():
             "ttl_seconds": BIRD_LIVE_TTL_SEC,
             "items": items,
             "species_counts": species_counts,
-        }
-    )
-
-
-@app.route("/api/vision/metrics", methods=["GET"])
-@require_auth()
-def get_vision_metrics():
-    """
-    Métricas de performance do pipeline de visão computacional em tempo real.
-    Retorna FPS da câmera, FPS da inferência YOLO, latência em ms e contagem por espécie.
-    """
-    metrics = (
-        _perf_metrics.get()
-        if _perf_metrics
-        else {"fps_camera": 0.0, "fps_inference": 0.0, "latency_ms": 0.0}
-    )
-    camera_live = bool(_camera_capture and _camera_capture.is_live) if _camera_capture else False
-    return jsonify(
-        {
-            "cv_engine_active": bool(_CV_ENGINE_AVAILABLE),
-            "camera_live": camera_live,
-            "fps_camera": metrics.get("fps_camera", 0.0),
-            "fps_inference": metrics.get("fps_inference", 0.0),
-            "latency_ms": metrics.get("latency_ms", 0.0),
-            "species_counts": species_counts,
-            "bird_class_name": BIRD_CLASS_NAME,
-            "detection_conf": DETECTION_CONF,
-            "inference_imgsz": INFERENCE_IMGSZ,
-            "tracker": TRACKER_CONFIG,
-        }
-    )
-
-
-@app.route("/api/birds/history", methods=["GET"])
-@require_auth()
-def get_birds_history():
-    limit = request.args.get("limit", default=300, type=int)
-    limit = max(1, min(limit, 5000))
-    rows = BirdSnapshot.query.order_by(BirdSnapshot.id.desc()).limit(limit).all()
-    return jsonify([row.to_dict() for row in reversed(rows)])
-
-
-@app.route("/api/birds/registry", methods=["GET"])
-@require_auth()
-def get_birds_registry():
-    limit = request.args.get("limit", default=500, type=int)
-    limit = max(1, min(limit, 10000))
-    rows = BirdIdentity.query.order_by(BirdIdentity.last_seen.desc()).limit(limit).all()
-    return jsonify({"count": len(rows), "items": [row.to_dict() for row in rows]})
-
-
-@app.route("/api/birds/path/<int:bird_uid>", methods=["GET"])
-@require_auth()
-def get_bird_path(bird_uid):
-    limit = request.args.get("limit", default=500, type=int)
-    limit = max(1, min(limit, 5000))
-    rows = (
-        BirdTrackPoint.query.filter_by(bird_uid=bird_uid)
-        .order_by(BirdTrackPoint.id.desc())
-        .limit(limit)
-        .all()
-    )
-    items = [row.to_dict() for row in reversed(rows)]
-    return jsonify({"bird_uid": bird_uid, "count": len(items), "items": items})
-
-
-@app.route("/api/behavior/live", methods=["GET"])
-@require_auth()
-def get_behavior_live():
-    return jsonify(
-        {
-            "status": behavior_state["status"],
-            "message": behavior_state["message"],
-            "dispersion_ratio": behavior_state["dispersion_ratio"],
-            "edge_ratio": behavior_state["edge_ratio"],
-            "count": behavior_state["count"],
-            "updated_at_epoch": behavior_state["updated_at"],
-        }
-    )
-
-
-@app.route("/api/immobility/live", methods=["GET"])
-@require_auth()
-def get_immobility_live():
-    now = time.time()
-    items = []
-    for uid, state in immobility_state.items():
-        ax, ay = state["anchor"]
-        items.append(
-            {
-                "bird_uid": int(uid),
-                "x": int(ax),
-                "y": int(ay),
-                "immobile_seconds": round(max(0.0, now - float(state["since"])), 1),
-                "alerted": bool(state.get("alerted", False)),
-            }
-        )
-    items.sort(key=lambda x: x["immobile_seconds"], reverse=True)
-    return jsonify({"count": len(items), "items": items[:200]})
-
-
-@app.route("/api/carcass/live", methods=["GET"])
-@require_auth()
-def carcass_live():
-    items = carcass_state.get("items", [])
-    return jsonify(
-        {
-            "count": len(items),
-            "audio_alert": len(items) > 0,
-            "message": "Atencao: Possivel ave morta no setor X"
-            if items
-            else "Sem carcacas detectadas",
-            "items": items,
-        }
-    )
-
-
-@app.route("/api/heatmap/daily", methods=["GET"])
-@require_auth()
-def get_daily_heatmap():
-    date_str = request.args.get("date")
-    grid_size = request.args.get("grid", default=32, type=int)
-    grid_size = max(8, min(grid_size, 128))
-    try:
-        date_ref = datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else _utcnow().date()
-    except Exception:
-        return jsonify({"msg": "Formato de data invalido. Use YYYY-MM-DD"}), 400
-
-    heat = _heatmap_grid(date_ref=date_ref, grid_size=grid_size)
-    total = float(np.sum(heat))
-    max_cell = float(np.max(heat))
-    norm = (heat / max_cell).tolist() if max_cell > 0 else heat.tolist()
-    return jsonify(
-        {
-            "date": date_ref.strftime("%Y-%m-%d"),
-            "grid_size": grid_size,
-            "total_points": int(total),
-            "max_cell": max_cell,
-            "matrix": norm,
-        }
-    )
-
-
-@app.route("/api/heatmap/daily/image", methods=["GET"])
-@require_auth()
-def get_daily_heatmap_image():
-    date_str = request.args.get("date")
-    try:
-        date_ref = datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else _utcnow().date()
-    except Exception:
-        return jsonify({"msg": "Formato de data invalido. Use YYYY-MM-DD"}), 400
-
-    heat = _heatmap_grid(date_ref=date_ref, grid_size=40)
-    img_bytes = _heatmap_image_bytes(heat)
-    if img_bytes is None:
-        return jsonify({"msg": "Falha ao gerar imagem de heatmap"}), 500
-
-    file_name = f"heatmap_{ACTIVE_CAMERA_ID}_{date_ref.strftime('%Y%m%d')}.jpg"
-    save_path = os.path.join(HEATMAP_DIR, file_name)
-    with open(save_path, "wb") as f:
-        f.write(img_bytes)
-    return send_file(
-        BytesIO(img_bytes), mimetype="image/jpeg", as_attachment=False, download_name=file_name
-    )
-
-
-@app.route("/api/heatmap/rolling24", methods=["GET"])
-@require_auth()
-def get_rolling24_heatmap():
-    hours = request.args.get("hours", default=24, type=int)
-    grid_size = request.args.get("grid", default=40, type=int)
-    grid_size = max(8, min(grid_size, 128))
-    heat = _heatmap_grid_last_hours(hours=hours, grid_size=grid_size)
-    total = float(np.sum(heat))
-    max_cell = float(np.max(heat))
-    norm = (heat / max_cell).tolist() if max_cell > 0 else heat.tolist()
-    return jsonify(
-        {"hours": hours, "grid_size": grid_size, "total_points": int(total), "matrix": norm}
-    )
-
-
-@app.route("/api/heatmap/rolling24/image", methods=["GET"])
-@require_auth()
-def get_rolling24_heatmap_image():
-    hours = request.args.get("hours", default=24, type=int)
-    heat = _heatmap_grid_last_hours(hours=hours, grid_size=40)
-    img_bytes = _heatmap_image_bytes(heat)
-    if img_bytes is None:
-        return jsonify({"msg": "Falha ao gerar heatmap rolling"}), 500
-    return send_file(
-        BytesIO(img_bytes),
-        mimetype="image/jpeg",
-        as_attachment=False,
-        download_name="heatmap_rolling24.jpg",
-    )
-
-
-@app.route("/api/heatmap/3d", methods=["GET"])
-@require_auth()
-def get_heatmap_3d():
-    hours = request.args.get("hours", default=24, type=int)
-    grid_size = request.args.get("grid", default=24, type=int)
-    grid_size = max(8, min(grid_size, 64))
-    points = _heatmap_points_3d(hours=hours, grid_size=grid_size)
-    return jsonify(
-        {
-            "camera_id": ACTIVE_CAMERA_ID,
-            "hours": max(1, min(hours, 168)),
-            "grid_size": grid_size,
-            "points_count": len(points),
-            "points": points,
-        }
-    )
-
-
-@app.route("/api/security/tamper", methods=["GET"])
-@require_auth()
-def tamper_status():
-    age = time.time() - float(sensor_state.get("updated_at", 0.0))
-    return jsonify(
-        {
-            "camera_id": ACTIVE_CAMERA_ID,
-            "last_alert_ts": float(tamper_state.get("last_alert_ts", 0.0)),
-            "last_causes": tamper_state.get("last_causes", []),
-            "alerts_count": int(tamper_state.get("alerts_count", 0)),
-            "dark_frames": int(tamper_state.get("dark_frames", 0)),
-            "freeze_frames": int(tamper_state.get("freeze_frames", 0)),
-            "sensor_stale": bool(age > TAMPER_SENSOR_STALE_SEC),
-            "sensor_age_sec": round(float(age), 2),
         }
     )
 
@@ -3925,6 +3714,7 @@ def get_rules():
     rules = AutomationRule.query.all()
     return jsonify([r.to_dict() for r in rules])
 
+
 @app.route("/api/rules", methods=["POST"])
 @require_auth()
 def create_rule():
@@ -3932,7 +3722,14 @@ def create_rule():
     if not ok:
         return resp
     data = request.json or {}
-    for k in ["name", "condition_variable", "condition_operator", "condition_value", "action_device", "action_state"]:
+    for k in [
+        "name",
+        "condition_variable",
+        "condition_operator",
+        "condition_value",
+        "action_device",
+        "action_state",
+    ]:
         if data.get(k) and len(str(data[k])) > 100:
             return jsonify({"msg": "Input length limits exceeded"}), 400
     rule = AutomationRule(
@@ -3942,11 +3739,12 @@ def create_rule():
         condition_value=data.get("condition_value"),
         action_device=data.get("action_device"),
         action_state=data.get("action_state"),
-        active=data.get("active", True)
+        active=data.get("active", True),
     )
     db.session.add(rule)
     db.session.commit()
     return jsonify(rule.to_dict()), 201
+
 
 @app.route("/api/rules/<int:rule_id>", methods=["DELETE"])
 @require_auth()
@@ -3970,8 +3768,8 @@ if __name__ == "__main__":
         SETTINGS.app_env,
     )
 
-    import ssl
     import os
+    import ssl
 
     ca_cert = os.getenv("MTLS_CA_CERT")
     server_cert = os.getenv("MTLS_SERVER_CERT")
