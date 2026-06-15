@@ -55,6 +55,7 @@ from src.alerts.providers import build_alert_provider
 from src.api.agents_api import create_agents_blueprint
 from src.api.auth import create_auth_blueprint
 from src.api.batch_api import create_batch_blueprint
+from src.api.birds_api import create_birds_blueprint, create_weight_blueprint
 from src.api.devices import create_devices_blueprint
 from src.api.health_api import create_health_blueprint
 from src.api.reports_api import create_reports_blueprint
@@ -3120,6 +3121,9 @@ api_deps = {
     "HEATMAP_DIR": HEATMAP_DIR,
     "tamper_state": tamper_state,
     "TAMPER_SENSOR_STALE_SEC": TAMPER_SENSOR_STALE_SEC,
+    "live_birds": live_birds,
+    "BIRD_LIVE_TTL_SEC": BIRD_LIVE_TTL_SEC,
+    "weight_state": weight_state,
 }
 
 app.register_blueprint(create_api_blueprint(api_deps))
@@ -3132,67 +3136,8 @@ app.register_blueprint(create_agents_blueprint(api_deps))
 app.register_blueprint(create_batch_blueprint(api_deps))
 app.register_blueprint(create_health_blueprint(api_deps))
 app.register_blueprint(create_vision_blueprint(api_deps))
-
-
-@app.route("/api/birds/live", methods=["GET"])
-@require_auth()
-def get_live_birds():
-    now = time.time()
-    with lock:
-        items = [
-            {
-                "bird_uid": int(bid),
-                "confidence": round(float(data["conf"]), 4),
-                "bbox": data["box"],
-                "track_id": int(data.get("track_id", -1)),
-                "last_seen_seconds": round(now - float(data["last_seen"]), 2),
-                "species": data.get("species", "bird"),
-                "species_label": data.get("species_label", "AVE"),
-            }
-            for bid, data in live_birds.items()
-            if (now - float(data["last_seen"])) <= BIRD_LIVE_TTL_SEC
-        ]
-    items.sort(key=lambda item: item["bird_uid"])
-    return jsonify(
-        {
-            "count": len(items),
-            "ttl_seconds": BIRD_LIVE_TTL_SEC,
-            "items": items,
-            "species_counts": species_counts,
-        }
-    )
-
-
-@app.route("/api/weight/live", methods=["GET"])
-@require_auth()
-def weight_live():
-    return jsonify(
-        {
-            "camera_id": ACTIVE_CAMERA_ID,
-            "avg_weight_g": weight_state["avg_weight_g"],
-            "ideal_weight_g": weight_state["ideal_weight_g"],
-            "count": weight_state["count"],
-            "confidence": weight_state["confidence"],
-            "updated_at_epoch": weight_state["updated_at"],
-        }
-    )
-
-
-@app.route("/api/weight/curve", methods=["GET"])
-@require_auth()
-def weight_curve():
-    days = request.args.get("days", default=21, type=int)
-    days = max(1, min(days, 120))
-    start_dt = _utcnow() - timedelta(days=days)
-    rows = (
-        WeightEstimate.query.filter(
-            WeightEstimate.camera_id == ACTIVE_CAMERA_ID, WeightEstimate.timestamp >= start_dt
-        )
-        .order_by(WeightEstimate.timestamp.asc())
-        .all()
-    )
-    points = [r.to_dict() for r in rows]
-    return jsonify({"count": len(points), "items": points})
+app.register_blueprint(create_birds_blueprint(api_deps))
+app.register_blueprint(create_weight_blueprint(api_deps))
 
 
 @app.route("/api/acoustic/model-info", methods=["GET"])
