@@ -69,7 +69,27 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
     }
   };
 
-  const tourSteps = [
+  const isMobile = window.innerWidth < 768;
+
+  const tourSteps = isMobile ? [
+    {
+      target: 'body',
+      content: 'Bem-vindo ao ChikGuard Premium! Vamos fazer um rápido tour pelas principais funcionalidades.',
+      placement: 'center',
+    },
+    {
+      target: 'button[aria-label="Open mobile menu"]',
+      content: 'Aqui você acessa o menu principal com todas as funcionalidades de Monitoramento e Operações.',
+    },
+    {
+      target: '.tour-camera-selector',
+      content: 'Troque de granja/galpão rapidamente usando este seletor.',
+    },
+    {
+      target: '.tour-alerts',
+      content: 'Fique de olho nos Alertas para notificações críticas do sistema.',
+    }
+  ] : [
     {
       target: 'body',
       content: 'Bem-vindo ao ChikGuard Premium! Vamos fazer um rápido tour pelas principais funcionalidades.',
