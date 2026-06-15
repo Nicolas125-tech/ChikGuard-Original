@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Joyride, STATUS, ACTIONS, EVENTS } from 'react-joyride';
+import Joyride, { STATUS, ACTIONS, EVENTS } from 'react-joyride';
 import ChickenPhoto from '../components/ChickenPhoto';
 
 import {
@@ -58,10 +58,15 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
 
   const handleJoyrideCallback = (data) => {
     const { status, action, type } = data;
+    
     if (
-      [STATUS.FINISHED, STATUS.SKIPPED].includes(status) ||
-      action === ACTIONS.CLOSE ||
-      type === EVENTS.TARGET_NOT_FOUND
+      status === 'finished' ||
+      status === 'skipped' ||
+      action === 'close' ||
+      type === 'targetNotFound' ||
+      [STATUS?.FINISHED, STATUS?.SKIPPED].includes(status) ||
+      action === ACTIONS?.CLOSE ||
+      type === EVENTS?.TARGET_NOT_FOUND
     ) {
       setRunTour(false);
       localStorage.setItem('cg_tourCompleted', 'true');
