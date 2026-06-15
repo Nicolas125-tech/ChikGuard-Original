@@ -92,30 +92,11 @@ def create_api_blueprint(deps):
 
     # ── /api/video — MJPEG Stream otimizado ─────────────────────────────────
     @bp.route("/api/video", methods=["GET"])
+    @require_auth(allow_query_token=True)
     def video_feed():
         """
         Stream MJPEG de alta performance protegido por token JWT.
         """
-        # Suporta token via cabeçalho Authorization ou parâmetro query string (para tags <img>)
-        token = None
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            token = auth_header.split(" ")[1]
-        else:
-            token = request.args.get("token")
-
-        if not token:
-            return jsonify({"error": "Token de autenticação ausente"}), 401
-
-        try:
-            import jwt as pyjwt
-            from src.security.auth import SUPABASE_JWT_SECRET
-
-            pyjwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated")
-        except Exception as e:
-            logger.error("Token decode failed: %s", e)
-            return jsonify({"error": "Token inválido ou expirado"}), 401
-
         stream_interval = deps.get("stream_frame_interval_sec", 1.0 / 30)
         quality = deps.get("stream_jpeg_quality", 80)
         encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), quality]

@@ -21,15 +21,19 @@ else:
     supabase_client = None
 
 
-def require_auth(roles=None):
+def require_auth(roles=None, allow_query_token=False):
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
+            token = None
             auth_header = request.headers.get("Authorization", "")
-            if not auth_header.startswith("Bearer "):
-                return jsonify({"error": "Missing or invalid token"}), 401
+            if auth_header.startswith("Bearer "):
+                token = auth_header.split(" ")[1]
+            elif allow_query_token:
+                token = request.args.get("token")
 
-            token = auth_header.split(" ")[1]
+            if not token:
+                return jsonify({"error": "Missing or invalid token"}), 401
             try:
                 # Validate JWT
                 decoded = jwt.decode(
