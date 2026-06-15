@@ -1,7 +1,5 @@
 Flask
 Flask-Cors
-Flask-Bcrypt
-Flask-JWT-Extended
 Flask-SQLAlchemy
 Flask-Migrate
 opencv-python

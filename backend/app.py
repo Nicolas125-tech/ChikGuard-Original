@@ -17,18 +17,10 @@ from datetime import datetime, timedelta, timezone
 import cv2
 import numpy as np
 from flask import Flask, has_request_context, jsonify, request
-from flask_bcrypt import Bcrypt
-from flask_jwt_extended import (
-    JWTManager,
-    create_access_token,
-    get_jwt_identity,
-    verify_jwt_in_request,
-)
 from flask_socketio import SocketIO
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from database import (
-    Account,
     AcousticReading,
     AuditLog,
     AutomationRule,
@@ -361,8 +353,6 @@ setup_hardening(app)
 setup_rate_limiting(app)
 socketio = SocketIO(app, cors_allowed_origins=ALLOWED_ORIGINS, async_mode="threading")
 db.init_app(app)
-bcrypt = Bcrypt(app)
-jwt = JWTManager(app)
 ALERT_PROVIDER = build_alert_provider(SETTINGS)
 PLUGINS_ROOT = os.getenv("PLUGINS_DIR", os.path.join(os.path.dirname(__file__), "plugins"))
 PLUGIN_MANAGER = PluginManager(plugins_root=PLUGINS_ROOT, logger=LOGGER)
@@ -540,21 +530,10 @@ def _guard_critical_action(action_name, permission=None):
     return True, None
 
 
-def _get_current_account():
-    try:
-        verify_jwt_in_request(optional=True)
-        identity = get_jwt_identity()
-    except Exception:
-        identity = None
-    if not identity:
-        return None
-    return Account.query.filter_by(id=int(identity)).first()
-
-
-def _account_has_permission(account, permission):
-    if account is None or not account.active:
+def _account_has_permission(role, permission):
+    if not role:
         return False
-    rows = RolePermission.query.filter_by(role=account.role, allowed=True).all()
+    rows = RolePermission.query.filter_by(role=role, allowed=True).all()
     perms = {r.permission for r in rows}
     if "*" in perms:
         return True
@@ -562,15 +541,18 @@ def _account_has_permission(account, permission):
 
 
 def _require_permission(permission):
-    account = _get_current_account()
-    if not _account_has_permission(account, permission):
-        actor_name = account.username if account is not None else "<no_account>"
-        LOGGER.warning(
-            "[PERM] denied '%s' to '%s' (account_found=%s)",
-            permission,
-            actor_name,
-            account is not None,
-        )
+    try:
+        from flask import request
+
+        user_role = getattr(request, "user_role", None)
+        user_id = getattr(request, "user_id", None)
+    except Exception:
+        user_role = None
+        user_id = None
+
+    if not _account_has_permission(user_role, permission):
+        actor_name = str(user_id) if user_id else "<anonymous>"
+        LOGGER.warning("[PERM] denied '%s' to '%s'", permission, actor_name)
         _audit(
             "permission_denied",
             source="security",
@@ -578,10 +560,10 @@ def _require_permission(permission):
         )
         msg = (
             "Token invalido ou sessao expirada"
-            if account is None
+            if not user_role
             else f"Permissao negada: {permission}"
         )
-        return False, (jsonify({"msg": msg}), 403 if account is not None else 401)
+        return False, (jsonify({"msg": msg}), 403 if user_role else 401)
     return True, None
 
 
@@ -3058,15 +3040,9 @@ api_deps = {
     "time": time,
     "cv2": cv2,
     "db": db,
-    "bcrypt": bcrypt,
-    "create_access_token": create_access_token,
     "request_ip": _request_ip,
     "audit": _audit,
     "utcnow": _utcnow,
-    "login_attempt_state": login_attempt_state,
-    "login_rate_window_sec": LOGIN_RATE_WINDOW_SEC,
-    "login_rate_max_attempts": LOGIN_RATE_MAX_ATTEMPTS,
-    "Account": Account,
     "User": User,
     "Reading": Reading,
     "lock": lock,

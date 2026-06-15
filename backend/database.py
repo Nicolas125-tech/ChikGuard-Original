@@ -1,5 +1,7 @@
-from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+
+from flask_sqlalchemy import SQLAlchemy
+
 from mixins import SyncMixin
 
 db = SQLAlchemy()
@@ -18,38 +20,6 @@ class Tenant(db.Model):
             "name": self.name,
             "active": self.active,
             "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-        }
-
-
-# Tabela de Usuários (Login)
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password = db.Column(db.String(200), nullable=False)
-
-
-class Account(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
-    username = db.Column(db.String(80), unique=True, nullable=False, index=True)
-    password_hash = db.Column(db.String(200), nullable=False)
-    role = db.Column(db.String(30), nullable=False, default="operator", index=True)
-    active = db.Column(db.Boolean, nullable=False, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    last_login_at = db.Column(db.DateTime, nullable=True)
-
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "tenant_id": self.tenant_id,
-            "username": self.username,
-            "role": self.role,
-            "active": self.active,
-            "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-            "last_login_at": self.last_login_at.strftime("%Y-%m-%d %H:%M:%S")
-            if self.last_login_at
-            else None,
         }
 
 
@@ -442,8 +412,8 @@ class AutomationRule(db.Model):
     condition_variable = db.Column(db.String(50), nullable=False)  # Ex: 'temp_c', 'humidity_pct'
     condition_operator = db.Column(db.String(10), nullable=False)  # Ex: '>', '<', '=='
     condition_value = db.Column(db.Float, nullable=False)
-    action_device = db.Column(db.String(50), nullable=False)       # Ex: 'exhaust_fan', 'heater'
-    action_state = db.Column(db.String(20), nullable=False)        # Ex: 'on', 'off'
+    action_device = db.Column(db.String(50), nullable=False)  # Ex: 'exhaust_fan', 'heater'
+    action_state = db.Column(db.String(20), nullable=False)  # Ex: 'on', 'off'
     active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
