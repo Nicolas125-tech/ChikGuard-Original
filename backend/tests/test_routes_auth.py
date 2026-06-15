@@ -72,7 +72,7 @@ def test_routes_mjpeg_unauthorized(client):
     """Garante que a rota de vídeo MJPEG é bloqueada sem autenticação."""
     res = client.get("/api/video")
     assert res.status_code == 401
-    assert "ausente" in res.json["error"]
+    assert "Missing" in res.json["error"]
 
 
 def test_routes_mjpeg_authorized_query_param(client, valid_token):

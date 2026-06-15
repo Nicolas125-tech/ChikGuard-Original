@@ -65,3 +65,8 @@
 **Vulnerability:** The `/api/login` and `/api/admin/notify-new-user` endpoints in `backend/src/api/auth.py` were missing the `@limiter.limit` decorator from `flask-limiter`. While there was manual application logic for the login, not having `flask-limiter` creates gaps and relies on custom code that can easily have errors. Missing rate limits on webhooks can lead to denial of service or excessive resource consumption.
 **Learning:** Explicitly leveraging the standard initialized `flask-limiter` on sensitive endpoints like authentication routes ensures a unified and standard defense-in-depth security layer against brute force.
 **Prevention:** Always apply `flask-limiter`'s `@limiter.limit` decorator to highly sensitive routes (such as logins and webhooks) to mitigate brute-force and DoS attacks reliably.
+
+## 2026-06-14 - [Fix Missing JWT Validation Centralization in Video Route]
+**Vulnerability:** The `/api/video` MJPEG streaming endpoint in `backend/src/api/routes.py` manually decoded the JWT token using `pyjwt.decode(...)` without invoking the centralized `@require_auth` logic.
+**Learning:** Manual JWT decoding bypasses critical centralized checks (such as verifying if an account is `ACTIVE`, blacklisted, or possesses the required role definitions). Streaming endpoints relying on tokens via query parameters often make this mistake.
+**Prevention:** To secure API endpoints that require authentication via URL query parameters, extend the centralized `@require_auth` decorator (e.g., `@require_auth(allow_query_token=True)`) to ensure all security guards execute uniformly.
