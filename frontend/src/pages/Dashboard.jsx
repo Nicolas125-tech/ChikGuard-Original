@@ -511,7 +511,9 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
         return (
           <>
             <DevicesPanel token={token} serverIP={serverIP} prefs={prefs} canControlDevices={canControlDevices} cameras={cameras} activeCamera={activeCamera} />
-            <IoTBridgePanel token={token} serverIP={serverIP} />
+            {(role === 'admin' || role === 'superadmin') && (
+              <IoTBridgePanel token={token} serverIP={serverIP} />
+            )}
           </>
         );
       case 'history':
