@@ -15,8 +15,25 @@ export default function RulesPanel({ serverIP }) {
   const [device, setDevice] = useState('exhaust_fan');
   const [state, setState] = useState('on');
 
-  const fetchRules = async () => {
-    setLoading(true);
+  useEffect(() => {
+    const fetchRules = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`${getBaseUrl(serverIP)}/api/rules`);
+        if (res.ok) {
+          const data = await res.json();
+          setRules(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch rules', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchRules();
+  }, [serverIP]);
+
+  const reloadRules = async () => {
     try {
       const res = await fetch(`${getBaseUrl(serverIP)}/api/rules`);
       if (res.ok) {
@@ -24,15 +41,9 @@ export default function RulesPanel({ serverIP }) {
         setRules(data);
       }
     } catch (err) {
-      console.error('Failed to fetch rules', err);
-    } finally {
-      setLoading(false);
+      console.error('Failed to reload rules', err);
     }
   };
-
-  useEffect(() => {
-    fetchRules();
-  }, [serverIP]);
 
   const handleAddRule = async (e) => {
     e.preventDefault();
@@ -59,11 +70,12 @@ export default function RulesPanel({ serverIP }) {
         toast.success('Regra criada com sucesso!');
         setName('');
         setValue('');
-        fetchRules();
+        reloadRules();
       } else {
         toast.error('Erro ao criar regra');
       }
     } catch (err) {
+      console.error(err);
       toast.error('Falha de conexão');
     }
   };
@@ -76,9 +88,10 @@ export default function RulesPanel({ serverIP }) {
       });
       if (res.ok) {
         toast.success('Regra removida!');
-        fetchRules();
+        reloadRules();
       }
     } catch (err) {
+      console.error(err);
       toast.error('Falha de conexão');
     }
   };

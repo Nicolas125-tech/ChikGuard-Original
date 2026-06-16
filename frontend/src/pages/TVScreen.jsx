@@ -15,9 +15,18 @@ export default function TVScreen({ serverIP, showHeader = false, onLogout }) {
       fetch(`${baseUrl}/api/alerts`),
       fetch(`${baseUrl}/api/weather/forecast`),
     ]);
-    if (s.ok) setSummary(await s.json());
-    if (a.ok) setAlerts(await a.json());
-    if (w.ok) setWeather(await w.json());
+    if (s.ok) {
+      const data = await s.json();
+      setSummary(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+    }
+    if (a.ok) {
+      const data = await a.json();
+      setAlerts(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+    }
+    if (w.ok) {
+      const data = await w.json();
+      setWeather(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+    }
   }, [baseUrl]);
 
   useEffect(() => {

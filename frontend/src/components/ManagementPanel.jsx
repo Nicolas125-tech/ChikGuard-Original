@@ -33,12 +33,30 @@ export default function ManagementPanel({ serverIP, prefs, token, cameras = [], 
       fetch(`${baseUrl}/api/sensors/history?limit=120`, { headers }),
       fetch(`${baseUrl}/api/summary`, { headers }),
     ]);
-    if (wCurve.ok) setWeightCurve((await wCurve.json()).items || []);
-    if (th.ok) setThermal(await th.json());
-    if (en.ok) setEnergy(await en.json());
-    if (au.ok) setAudit(await au.json());
-    if (sy.ok) setSync(await sy.json());
-    if (sh.ok) setSensorHistory((await sh.json()).items || []);
+    if (wCurve.ok) {
+      const data = (await wCurve.json()).items || [];
+      setWeightCurve(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+    }
+    if (th.ok) {
+      const data = await th.json();
+      setThermal(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+    }
+    if (en.ok) {
+      const data = await en.json();
+      setEnergy(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+    }
+    if (au.ok) {
+      const data = await au.json();
+      setAudit(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+    }
+    if (sy.ok) {
+      const data = await sy.json();
+      setSync(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+    }
+    if (sh.ok) {
+      const data = (await sh.json()).items || [];
+      setSensorHistory(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+    }
     if (sum.ok) {
       const d = await sum.json();
       const prev = dadosRef.current;
