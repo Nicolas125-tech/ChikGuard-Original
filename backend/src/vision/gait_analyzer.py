@@ -1,6 +1,7 @@
-from typing import Dict, Any, List, Tuple
-import numpy as np
 from datetime import datetime
+from typing import Any, Dict, List, Tuple
+
+import numpy as np
 
 
 class GaitAnalyzer:

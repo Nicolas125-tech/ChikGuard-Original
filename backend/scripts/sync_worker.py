@@ -1,9 +1,10 @@
-import os
-import time
-import socket
 import logging
-import requests
+import os
+import socket
+import time
 from datetime import datetime, timedelta, timezone
+
+import requests
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 

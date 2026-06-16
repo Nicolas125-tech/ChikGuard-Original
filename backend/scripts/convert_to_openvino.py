@@ -26,11 +26,11 @@ Pós-conversão, configure o .env:
 """
 
 import argparse
+import glob
 import os
+import shutil
 import sys
 import time
-import glob
-import shutil
 
 
 # ── Validação de dependências ──────────────────────────────────────────────────
@@ -52,8 +52,8 @@ def _check_deps():
 
 _check_deps()
 
-from ultralytics import YOLO
 import yaml
+from ultralytics import YOLO
 
 
 def export_to_openvino(
@@ -79,7 +79,7 @@ def export_to_openvino(
 
     model = YOLO(model_path)
 
-    print(f"\n[1/3] Exportando para ONNX intermediário...")
+    print("\n[1/3] Exportando para ONNX intermediário...")
     t0 = time.time()
     model.export(
         format="openvino",
@@ -104,12 +104,12 @@ def quantize_int8(openvino_dir: str, calibration_dir: str, imgsz: int = 640) -> 
     Etapa 2 (opcional): Quantização INT8 usando NNCF + OpenVINO Post-Training Quantization.
     Requer dataset de calibração (imagens de granjas, sem anotações).
     """
-    print(f"\n[2/3] Iniciando quantização INT8 com NNCF...")
+    print("\n[2/3] Iniciando quantização INT8 com NNCF...")
     print(f"      Calibração via: {calibration_dir}")
 
     try:
-        import openvino as ov
         import nncf  # type: ignore
+        import openvino as ov
         from nncf.parameters import ModelType  # type: ignore
         from openvino.runtime import Core  # type: ignore
     except ImportError as e:
@@ -197,26 +197,26 @@ def copy_and_generate_metadata(
 
     print(f"[3/3] ✅ Modelo pronto em: {output_dir}")
     print(f"\n{'=' * 60}")
-    print(f"  📋 PRÓXIMOS PASSOS:")
-    print(f"")
-    print(f"  1. Abra o arquivo .env e configure:")
-    print(f"     INFERENCE_BACKEND=openvino")
+    print("  📋 PRÓXIMOS PASSOS:")
+    print("")
+    print("  1. Abra o arquivo .env e configure:")
+    print("     INFERENCE_BACKEND=openvino")
     print(f"     OPENVINO_MODEL_XML={os.path.join(output_dir, 'model.xml')}")
-    print(f"     ENABLE_SAHI=true")
-    print(f"     SAHI_SLICE_SIZE=640")
-    print(f"     SAHI_OVERLAP=0.20")
-    print(f"     SAHI_WORKERS=4")
-    print(f"     DETECTION_CONF=0.25")
-    print(f"")
-    print(f"  2. Reinicie o servidor: python app.py")
+    print("     ENABLE_SAHI=true")
+    print("     SAHI_SLICE_SIZE=640")
+    print("     SAHI_OVERLAP=0.20")
+    print("     SAHI_WORKERS=4")
+    print("     DETECTION_CONF=0.25")
+    print("")
+    print("  2. Reinicie o servidor: python app.py")
     print(f"{'=' * 60}\n")
 
 
 def benchmark_model(xml_path: str, imgsz: int = 640, n_runs: int = 50):
     """Roda benchmark de latência/FPS no modelo OpenVINO."""
     try:
-        from openvino.runtime import Core
         import numpy as np
+        from openvino.runtime import Core
     except ImportError:
         print("[AVISO] OpenVINO não instalado, pulando benchmark.")
         return
@@ -241,12 +241,12 @@ def benchmark_model(xml_path: str, imgsz: int = 640, n_runs: int = 50):
     fps = n_runs / elapsed
     lat_ms = (elapsed / n_runs) * 1000
 
-    print(f"\n  ┌─────────────────────────────────────┐")
+    print("\n  ┌─────────────────────────────────────┐")
     print(f"  │  BENCHMARK OpenVINO ({device:6s})        │")
     print(f"  │  Latência : {lat_ms:6.1f} ms / frame      │")
     print(f"  │  FPS      : {fps:6.1f} FPS              │")
     print(f"  │  Throughput SAHI (8 tiles) : {fps / 8:5.1f} fps  │")
-    print(f"  └─────────────────────────────────────┘\n")
+    print("  └─────────────────────────────────────┘\n")
 
 
 def main():

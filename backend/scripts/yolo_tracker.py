@@ -1,10 +1,11 @@
-import cv2
 import json
-import time
-from ultralytics import YOLO
-from collections import defaultdict, deque
-import numpy as np
 import os
+import time
+from collections import defaultdict, deque
+
+import cv2
+import numpy as np
+from ultralytics import YOLO
 
 
 class PoultryTracker:

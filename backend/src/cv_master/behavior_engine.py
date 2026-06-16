@@ -1,7 +1,6 @@
 import logging
-import time
 import math
-import cv2
+import time
 
 try:
     import supervision as sv

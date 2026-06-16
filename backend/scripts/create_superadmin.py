@@ -5,6 +5,7 @@ Usa a Service Role Key para ter acesso administrativo completo.
 
 import os
 import sys
+
 import requests
 from dotenv import load_dotenv
 
@@ -143,8 +144,8 @@ def main():
     print("  ChikGuard -- Criacao de Super Admin")
     print("=" * 60)
     print(f"  Email:    {SUPERADMIN_EMAIL}")
-    print(f"  Senha:    ********")
-    print(f"  Role:     superadmin")
+    print("  Senha:    ********")
+    print("  Role:     superadmin")
     print(f"  Supabase: {SUPABASE_URL}")
     print("=" * 60)
 
@@ -159,9 +160,9 @@ def main():
     print("  SUPER ADMIN CONFIGURADO COM SUCESSO!")
     print("=" * 60)
     print(f"  Login:  {SUPERADMIN_EMAIL}")
-    print(f"  Senha:  ********")
-    print(f"  Role:   superadmin")
-    print(f"  Status: ACTIVE (sem necessidade de aprovacao)")
+    print("  Senha:  ********")
+    print("  Role:   superadmin")
+    print("  Status: ACTIVE (sem necessidade de aprovacao)")
     print("=" * 60)
 
 

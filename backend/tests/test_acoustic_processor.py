@@ -1,8 +1,8 @@
-import pytest
-import sys
 import os
+import sys
 import unittest.mock as mock
-from datetime import datetime
+
+import pytest
 
 # Ajusta sys.path para enxergar src/ e o backend
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -21,7 +21,7 @@ os.environ["CORS_ALLOWED_ORIGINS"] = "*"
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 from app import app
-from database import db, AcousticReading, EventLog, Batch
+from database import AcousticReading, Batch, EventLog, db
 from src.audio.acoustic_processor import ContinuousAudioMonitor
 
 

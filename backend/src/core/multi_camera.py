@@ -1,7 +1,9 @@
-import threading
 import logging
-from typing import Dict, Any, List, Optional
+import threading
+from typing import Any, Dict, List, Optional
+
 import numpy as np
+
 from src.core.cv_engine import CameraCapture
 
 logger = logging.getLogger("chikguard.multicamera")

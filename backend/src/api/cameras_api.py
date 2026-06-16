@@ -1,5 +1,5 @@
-import os
 from flask import Blueprint, jsonify, request
+
 from src.security.auth import require_auth
 
 
@@ -31,7 +31,11 @@ def create_cameras_blueprint(deps):
         if not camera_id or not name:
             return jsonify({"msg": "camera_id and name are required"}), 400
 
-        if len(str(camera_id)) > 50 or len(str(name)) > 100 or len(str(data.get("connection_url", ""))) > 500:
+        if (
+            len(str(camera_id)) > 50
+            or len(str(name)) > 100
+            or len(str(data.get("connection_url", ""))) > 500
+        ):
             return jsonify({"msg": "Input length limits exceeded"}), 400
 
         if Camera.query.filter_by(camera_id=camera_id).first():
@@ -60,7 +64,7 @@ def create_cameras_blueprint(deps):
             return jsonify({"msg": "Camera not found"}), 404
 
         data = request.get_json() or {}
-        
+
         if len(str(data.get("name", ""))) > 100 or len(str(data.get("connection_url", ""))) > 500:
             return jsonify({"msg": "Input length limits exceeded"}), 400
 

@@ -1,10 +1,11 @@
-import time
 import json
 import logging
+import time
 from collections import deque
-from typing import Tuple, Optional, Any
+from typing import Any, Optional, Tuple
 
 import numpy as np
+
 from src.audio.audio_processor import compute_mel_spectrogram
 
 logger = logging.getLogger("chikguard.audio.classifier")

@@ -1,7 +1,8 @@
 import logging
-import time
 import re
-from flask import request, jsonify
+import time
+
+from flask import jsonify, request
 
 logger = logging.getLogger(__name__)
 

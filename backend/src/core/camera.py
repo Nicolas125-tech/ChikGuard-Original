@@ -14,12 +14,12 @@ Uso:
     cam.stop()
 """
 
-import cv2
 import logging
 import threading
 import time
 from typing import Optional
 
+import cv2
 import numpy as np
 
 logger = logging.getLogger("chikguard.camera")

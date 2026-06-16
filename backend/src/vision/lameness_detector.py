@@ -1,8 +1,8 @@
-import numpy as np
-from collections import deque
-import json
-import time
 import logging
+import time
+from collections import deque
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 

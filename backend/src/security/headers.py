@@ -1,6 +1,6 @@
-import os
 import logging
-from flask import request
+import os
+
 from flask_cors import CORS
 
 logger = logging.getLogger(__name__)

@@ -1,7 +1,8 @@
-import cv2
+import logging
 import os
 import time
-import logging
+
+import cv2
 
 LOGGER = logging.getLogger(__name__)
 

@@ -1,11 +1,9 @@
 import logging
-import cv2
-import numpy as np
 
 try:
+    import supervision as sv
     from sahi import AutoDetectionModel
     from sahi.predict import get_sliced_prediction
-    import supervision as sv
 except ImportError:
     raise RuntimeError("Alguma dependência SOTA (sahi, supervision) está faltando.")
 

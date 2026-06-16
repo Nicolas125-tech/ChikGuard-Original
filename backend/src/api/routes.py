@@ -1,14 +1,16 @@
-import uuid
-import logging
 import asyncio
-import cv2
+import logging
 import time
+import uuid
 from threading import Thread
-from flask import Blueprint, Response, request, jsonify
+
+import cv2
+import numpy as np
 from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
 from aiortc.contrib.media import MediaRelay
 from av import VideoFrame
-import numpy as np
+from flask import Blueprint, Response, jsonify, request
+
 from src.security.auth import require_auth
 
 relay = MediaRelay()

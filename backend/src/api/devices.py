@@ -1,4 +1,5 @@
 from flask import Blueprint, jsonify, request
+
 from src.security.auth import require_auth
 
 

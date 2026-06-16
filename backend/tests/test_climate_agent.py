@@ -1,7 +1,7 @@
-import pytest
-import sys
 import os
-from datetime import datetime
+import sys
+
+import pytest
 
 # Ajusta sys.path para enxergar src/ e o backend
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -21,10 +21,11 @@ os.environ["JWT_SECRET_KEY"] = "testsecret"
 os.environ["CORS_ALLOWED_ORIGINS"] = "*"
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
-from app import app
-from database import db, Batch, BatchLogbook
-from src.agents.base import ClimateAgent
 from weather_forecast.plugin import WeatherForecastPlugin
+
+from app import app
+from database import Batch, db
+from src.agents.base import ClimateAgent
 from src.core.state_machine import BusinessStateMachine
 
 

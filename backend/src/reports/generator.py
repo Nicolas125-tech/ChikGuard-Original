@@ -1,8 +1,9 @@
 import os
 import smtplib
-from email.message import EmailMessage
 from datetime import timedelta
-from database import Reading, SensorReading, EventLog, AcousticReading
+from email.message import EmailMessage
+
+from database import AcousticReading, EventLog, Reading, SensorReading
 
 try:
     from reportlab.lib.pagesizes import A4
@@ -45,6 +46,7 @@ def _send_report_email(file_path, recipient):
         return True, "sent"
     except Exception as exc:
         import logging
+
         logging.getLogger(__name__).error("Falha ao enviar email: %s", exc)
         return False, "Falha de comunicacao com o servidor SMTP"
 

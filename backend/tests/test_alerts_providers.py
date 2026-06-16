@@ -1,6 +1,6 @@
-import pytest
 import logging
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from src.alerts.providers import AlertProvider, build_alert_provider
 
 

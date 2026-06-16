@@ -1,9 +1,9 @@
-import pytest
-import sys
-import os
 import json
-import asyncio
-from unittest.mock import AsyncMock, patch
+import os
+import sys
+from unittest.mock import patch
+
+import pytest
 
 # Ajusta sys.path para enxergar src/ e o backend
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))

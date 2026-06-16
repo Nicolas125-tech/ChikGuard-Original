@@ -1,5 +1,3 @@
-import os
-
 login_screen_code = """import React, { useState } from 'react';
 import { Mail, Lock, Server, ArrowRight, Loader } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';

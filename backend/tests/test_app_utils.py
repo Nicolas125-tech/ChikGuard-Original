@@ -1,6 +1,4 @@
-import pytest
 import json
-import unittest.mock as mock
 import os
 
 os.environ["ADMIN_PASSWORD"] = "testpassword"

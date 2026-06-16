@@ -25,15 +25,12 @@ Meta de anotação sugerida:
 """
 
 import argparse
+import json
 import os
 import sys
-import json
-import hashlib
-from pathlib import Path
 
 import cv2
 import numpy as np
-
 
 # ── Utilitários de qualidade ──────────────────────────────────────────────────
 
@@ -112,7 +109,7 @@ def extract_frames(
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     print(f"\n{'=' * 60}")
-    print(f"  ChikGuard — Extração de Frames para Anotação")
+    print("  ChikGuard — Extração de Frames para Anotação")
     print(f"{'=' * 60}")
     print(f"  Vídeo    : {video_path}")
     print(f"  Duração  : {duration_sec:.1f}s  ({total_frames} frames @ {fps_video:.1f} FPS)")
@@ -218,7 +215,7 @@ def extract_frames(
     }
 
     print(f"\n{'=' * 60}")
-    print(f"  ✅ Extração concluída!")
+    print("  ✅ Extração concluída!")
     print(f"  Frames salvos    : {saved}")
     print(
         f"  Descartados      : {skipped_blur} (borrado) + "
@@ -331,7 +328,7 @@ def main():
             video_path = os.path.normpath(alt_path)
         else:
             print(f"[ERRO] Vídeo não encontrado: {args.video}")
-            print(f"       Passe o caminho completo com --video /caminho/para/video.mp4")
+            print("       Passe o caminho completo com --video /caminho/para/video.mp4")
             sys.exit(1)
 
     extract_frames(

@@ -1,7 +1,8 @@
 import os
-import cv2
-import albumentations as A
 from pathlib import Path
+
+import albumentations as A
+import cv2
 
 
 def get_augmentation_pipeline():

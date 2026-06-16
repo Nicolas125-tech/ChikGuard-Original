@@ -3,12 +3,11 @@ Script de Integração: SAHI + YOLO para Detecção de Pequenos Objetos (Pintinh
 Este script demonstra como configurar o fatiamento de imagem para alta precisão em galpões.
 """
 
-import cv2
 import time
+
 from sahi import AutoDetectionModel
 from sahi.predict import get_sliced_prediction
 from sahi.utils.cv import read_image
-from ultralytics import YOLO
 
 
 def run_sahi_inference(image_path, model_path="yolov8n-seg.pt"):
@@ -52,7 +51,6 @@ def run_sahi_inference(image_path, model_path="yolov8n-seg.pt"):
 
 if __name__ == "__main__":
     # Exemplo de uso
-    import os
 
     sample_img = "backend/video_granja.mp4"  # Na verdade é vídeo, mas SAHI pode ler frame
     # Para o exemplo, pegamos um frame do vídeo se necessário

@@ -1,6 +1,7 @@
-from typing import Dict, Any, List, Tuple
 from datetime import datetime, timedelta
-from database import db, SensorReading, AcousticReading, EventLog, BatchLogbook, Batch
+from typing import Any, Dict, List, Tuple
+
+from database import AcousticReading, Batch, BatchLogbook, EventLog, SensorReading, db
 
 
 class ChikGuardAgent:
@@ -347,7 +348,7 @@ class ClimateAgent(ChikGuardAgent):
                 log_entry = BatchLogbook(
                     camera_id=context.get("camera_id", "galpao-1"),
                     batch_id=batch_id,
-                    note=f"[Otimização Climática - ClimateAgent]\n"
+                    note="[Otimização Climática - ClimateAgent]\n"
                     + "\n".join([f"- {a}" for a in adjustments]),
                     author="Agent_Climate",
                     timestamp=datetime.utcnow(),

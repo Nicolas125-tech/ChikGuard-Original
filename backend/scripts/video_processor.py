@@ -1,5 +1,6 @@
-import cv2
 from collections import deque
+
+import cv2
 
 
 class VideoProcessor:

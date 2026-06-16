@@ -1,10 +1,11 @@
+import logging
 import threading
 import time
-import logging
-import random
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Optional, Tuple
+
 import numpy as np
-from database import db, AcousticReading, EventLog, Batch
+
+from database import AcousticReading, Batch, EventLog, db
 
 logger = logging.getLogger("chikguard.audio")
 

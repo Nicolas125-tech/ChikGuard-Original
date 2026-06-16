@@ -1,7 +1,9 @@
-from flask import Blueprint, jsonify, request
-from src.security.auth import require_auth
-import requests
 import os
+
+import requests
+from flask import Blueprint, jsonify, request
+
+from src.security.auth import require_auth
 
 
 def _retrieve_knowledge_base(query: str) -> str:
@@ -42,7 +44,7 @@ def create_agents_blueprint(api_deps):
     AcousticReading = api_deps["AcousticReading"]
 
     # Imports locais de tabelas adicionais para evitar dependências circulares
-    from database import EventLog, Batch
+    from database import Batch, EventLog
     from src.security.rate_limiter import limiter
 
     @bp.route("/chat", methods=["POST"])

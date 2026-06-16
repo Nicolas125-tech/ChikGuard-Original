@@ -1,14 +1,13 @@
-import pytest
-import time
 import json
 from unittest.mock import patch
-from flask import Flask, jsonify, request
+
+import pytest
+from flask import Flask, jsonify
+
 from src.security.hardening import (
-    setup_hardening,
     BLACKLISTED_IPS,
     IP_REQUESTS,
-    BLOCK_DURATION_SEC,
-    RATE_LIMIT_MAX,
+    setup_hardening,
 )
 
 

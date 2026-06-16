@@ -11,15 +11,15 @@ Pipeline desacoplado: Captura de câmera ↔ Inferência YOLO em threads separad
 
 from __future__ import annotations
 
-import cv2
+import logging
 import math
 import queue
 import threading
 import time
-import logging
 from collections import deque
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
+import cv2
 import numpy as np
 
 logger = logging.getLogger("chikguard.cv_engine")
@@ -662,17 +662,19 @@ class CVOverlay:
             cx, cy = int((x1 + x2) / 2), int((y1 + y2) / 2)
             cv2.line(draw, (cx - 5, cy), (cx + 5, cy), color, 1, cv2.LINE_AA)
             cv2.line(draw, (cx, cy - 5), (cx, cy + 5), color, 1, cv2.LINE_AA)
-            
+
             # Motion Trail (Rastro de movimento)
             if uid >= 0:
                 if uid not in _track_history:
                     _track_history[uid] = deque(maxlen=_MAX_HISTORY)
                 _track_history[uid].append((cx, cy))
-                
+
                 # Desenha o rastro (fading effect seria ideal, mas polyline eh mais rapido)
                 pts = np.array(_track_history[uid], dtype=np.int32)
                 if len(pts) > 1:
-                    cv2.polylines(draw, [pts], isClosed=False, color=color, thickness=2, lineType=cv2.LINE_AA)
+                    cv2.polylines(
+                        draw, [pts], isClosed=False, color=color, thickness=2, lineType=cv2.LINE_AA
+                    )
 
             # Cantos marcados estilo targeting
             cr = 8

@@ -1,5 +1,3 @@
-import os
-
 components_dir = "c:/nic/ChikGuard-Original/frontend/src/components"
 pages_dir = "c:/nic/ChikGuard-Original/frontend/src/pages"
 

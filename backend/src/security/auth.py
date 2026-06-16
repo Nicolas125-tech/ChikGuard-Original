@@ -1,8 +1,9 @@
 import os
-import jwt
 from functools import wraps
-from flask import request, jsonify
-from supabase import create_client, Client
+
+import jwt
+from flask import jsonify, request
+from supabase import Client, create_client
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get(

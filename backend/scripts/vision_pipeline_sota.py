@@ -1,13 +1,13 @@
-import os
-import cv2
-import time
 import logging
 import threading
-from src.cv_master.inference_sota import SOTAInferenceEngine
-from src.cv_master.tracker_spy import SpyTracker
+import time
+
+import cv2
+
 from src.cv_master.behavior_engine import BehaviorEngine
+from src.cv_master.inference_sota import SOTAInferenceEngine
 from src.cv_master.stream_gateway import HLSStreamGateway
-from core.cv_engine import VideoCaptureThread  # reaproveitando thread de buffer zero
+from src.cv_master.tracker_spy import SpyTracker
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 

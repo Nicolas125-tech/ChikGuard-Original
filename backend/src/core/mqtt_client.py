@@ -1,7 +1,6 @@
 import json
 import logging
-import threading
-import time
+
 import paho.mqtt.client as mqtt
 
 logger = logging.getLogger("chikguard.mqtt")
@@ -81,7 +80,7 @@ class ChikGuardMQTTClient:
 
     def _process_telemetry(self, camera_id: str, payload: dict):
         """Salva a leitura de temperatura/umidade real vinda do IoT."""
-        from database import db, SensorReading
+        from database import SensorReading, db
 
         reading = SensorReading(
             camera_id=camera_id,

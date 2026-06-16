@@ -1,6 +1,8 @@
-from flask import Blueprint, jsonify, request
-from src.security.auth import require_auth
 import time
+
+from flask import Blueprint, jsonify, request
+
+from src.security.auth import require_auth
 
 
 def create_sensors_blueprint(deps):
@@ -211,44 +213,50 @@ def create_sensors_blueprint(deps):
     def check_anomaly():
         # Busca o historico das ultimas 24h para baseline (treino da floresta)
         start = utcnow() - timedelta(hours=24)
-        sensors = SensorReading.query.filter(
-            SensorReading.camera_id == active_camera_id, 
-            SensorReading.timestamp >= start
-        ).order_by(SensorReading.timestamp.desc()).limit(100).all()
-        
+        sensors = (
+            SensorReading.query.filter(
+                SensorReading.camera_id == active_camera_id, SensorReading.timestamp >= start
+            )
+            .order_by(SensorReading.timestamp.desc())
+            .limit(100)
+            .all()
+        )
+
         from src.ai.anomaly import detect_multivariate_anomaly
-        
+
         history = []
         for s in sensors:
-            history.append({
-                "temp": s.temperature_c or 0,
-                "hum": s.humidity_pct or 0,
-                "amm": s.ammonia_ppm or 0,
-                "cough": 0  # Em producao mesclariamos os timestamps
-            })
-            
+            history.append(
+                {
+                    "temp": s.temperature_c or 0,
+                    "hum": s.humidity_pct or 0,
+                    "amm": s.ammonia_ppm or 0,
+                    "cough": 0,  # Em producao mesclariamos os timestamps
+                }
+            )
+
         current = {
             "temp": sensor_state.get("temperature_c", 0),
             "hum": sensor_state.get("humidity_pct", 0),
             "amm": sensor_state.get("ammonia_ppm", 0),
-            "cough": acoustic_state.get("cough_index", 0)
+            "cough": acoustic_state.get("cough_index", 0),
         }
-        
+
         # Fallback de seguranca para evitar crashes em setups novos (bootstrap do dataset)
         if len(history) < 20:
             history = [current] * 25
-            
+
         result = detect_multivariate_anomaly(history, current)
-        
+
         # Dispara alerta global no sistema se detectar uma doenca multivariada invisivel
         if result.get("is_anomaly"):
             log_event(
                 event_type="multivariate_anomaly",
                 level="high",
                 message="IA Detectou padrao anomalo multivariado (Isolation Forest)!",
-                metadata=result
+                metadata=result,
             )
-            
+
         return jsonify(result)
 
     @bp.route("/api/ai/spatial/huddling", methods=["GET"])
@@ -256,26 +264,27 @@ def create_sensors_blueprint(deps):
     def check_huddling():
         # Pegar historico de tracking x,y das aves nos ultimos 3 minutos
         from database import BirdTrackPoint
+
         start = utcnow() - timedelta(minutes=3)
-        
+
         points = BirdTrackPoint.query.filter(
-            BirdTrackPoint.tenant_id == request.tenant_id, 
-            BirdTrackPoint.timestamp >= start
+            BirdTrackPoint.tenant_id == request.tenant_id, BirdTrackPoint.timestamp >= start
         ).all()
-        
+
         pts_list = [{"x": p.x, "y": p.y} for p in points]
-        
+
         from src.ai.spatial import detect_huddling
+
         result = detect_huddling(pts_list)
-        
+
         if result.get("huddling_detected"):
             log_event(
                 event_type="spatial_anomaly",
                 level="high",
                 message="IA Espacial (DBSCAN) detectou aves amontoadas! Possivel corrente de ar frio.",
-                metadata=result
+                metadata=result,
             )
-            
+
         return jsonify(result)
 
     return bp

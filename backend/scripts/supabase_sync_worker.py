@@ -1,9 +1,10 @@
 import asyncio
 import json
 import os
-from dotenv import load_dotenv
-from supabase import create_client, Client
 import time
+
+from dotenv import load_dotenv
+from supabase import Client, create_client
 
 load_dotenv()
 

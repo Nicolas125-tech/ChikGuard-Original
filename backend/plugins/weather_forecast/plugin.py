@@ -1,6 +1,6 @@
+from typing import Any, Dict, List
+
 from src.plugins.base import PluginBase, PluginInfo
-from typing import Dict, Any, List
-import os
 
 
 class WeatherForecastPlugin(PluginBase):

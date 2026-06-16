@@ -1,12 +1,13 @@
-import cv2
 import json
-import time
 import logging
-import paho.mqtt.client as mqtt
+import os
 
 # Importa o detector da nossa src
 import sys
-import os
+import time
+
+import cv2
+import paho.mqtt.client as mqtt
 
 # Adiciona o backend ao path para resolver os imports absolutos
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))

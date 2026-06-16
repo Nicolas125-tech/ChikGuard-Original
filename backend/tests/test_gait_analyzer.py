@@ -1,7 +1,7 @@
-import pytest
-import sys
 import os
+import sys
 from datetime import datetime, timedelta
+
 from src.vision.gait_analyzer import GaitAnalyzer
 
 # Ajusta sys.path para enxergar src/ e o backend

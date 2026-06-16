@@ -1,8 +1,8 @@
-import pytest
-import sys
 import os
-import json
-from datetime import datetime, timedelta, timezone
+import sys
+from datetime import datetime
+
+import pytest
 
 # Ajusta sys.path para enxergar src/ e o backend
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -23,7 +23,7 @@ os.environ["CORS_ALLOWED_ORIGINS"] = "*"
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 from app import app
-from database import db, SensorReading, AcousticReading, EventLog, Batch, BatchLogbook
+from database import AcousticReading, Batch, BatchLogbook, EventLog, SensorReading, db
 from src.agents.base import VetWelfareAgent
 
 

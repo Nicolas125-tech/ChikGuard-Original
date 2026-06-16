@@ -29,10 +29,9 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import sys
 import time
-import shutil
-import platform
 
 # ── Validação de dependências ──────────────────────────────────────────────────
 try:
@@ -161,7 +160,7 @@ def validate_dataset(data_yaml: str) -> bool:
         print(f"  ✅ Classes: {nc} — {list(names.values()) if names else 'não listadas'}")
 
     if issues:
-        print(f"\n[ERRO] Problemas no dataset:")
+        print("\n[ERRO] Problemas no dataset:")
         for i in issues:
             print(f"  • {i}")
         return False
@@ -178,7 +177,7 @@ def train_robust_model(
     min_map50: float = 0.60,  # mínimo aceitável após fine-tuning
 ) -> dict:
     print(f"\n{'=' * 65}")
-    print(f"  🐓 ChikGuard — Treinamento YOLOv8-Seg (Fine-Tuning Robusto)")
+    print("  🐓 ChikGuard — Treinamento YOLOv8-Seg (Fine-Tuning Robusto)")
     print(f"{'=' * 65}")
     print(f"  Modelo base  : {base_model}")
     print(f"  Dataset      : {data_yaml}")
@@ -204,7 +203,7 @@ def train_robust_model(
     train_args["epochs"] = epochs
     train_args["device"] = device
 
-    print(f"\n[AUGMENTAÇÕES ATIVAS]")
+    print("\n[AUGMENTAÇÕES ATIVAS]")
     aug_keys = [
         "mosaic",
         "mixup",
@@ -219,7 +218,7 @@ def train_robust_model(
     for k in aug_keys:
         print(f"  {k:15s} = {train_args[k]}")
 
-    print(f"\n[TREINAMENTO] Iniciando...")
+    print("\n[TREINAMENTO] Iniciando...")
     t0 = time.time()
 
     try:
@@ -256,7 +255,7 @@ def train_robust_model(
                     except (ValueError, TypeError):
                         pass
 
-    print(f"\n[MÉTRICAS FINAIS]")
+    print("\n[MÉTRICAS FINAIS]")
     print(
         f"  mAP@50      : {map50:.3f} ({'✅' if map50 >= min_map50 else '⚠️ abaixo do mínimo'} — mín={min_map50:.2f})"
     )
@@ -264,11 +263,11 @@ def train_robust_model(
 
     if map50 < min_map50:
         print(f"\n  ⚠️  mAP abaixo do mínimo ({map50:.2f} < {min_map50:.2f}).")
-        print(f"     Sugestões:")
-        print(f"       • Adicionar mais imagens de treinamento (meta: 300+)")
-        print(f"       • Verificar qualidade das anotações no Roboflow")
-        print(f"       • Aumentar épocas para 300+")
-        print(f"       • Usar modelo maior: --model yolov8s-seg.pt")
+        print("     Sugestões:")
+        print("       • Adicionar mais imagens de treinamento (meta: 300+)")
+        print("       • Verificar qualidade das anotações no Roboflow")
+        print("       • Aumentar épocas para 300+")
+        print("       • Usar modelo maior: --model yolov8s-seg.pt")
 
     result_info = {
         "success": True,
@@ -315,7 +314,7 @@ def auto_export(best_pt: str) -> dict:
         print(f"  ✅ OpenVINO: {xml_f}")
     except Exception as exc:
         print(f"  ❌ OpenVINO falhou: {exc}")
-        print(f"     Instale com: pip install openvino")
+        print("     Instale com: pip install openvino")
 
     # 3. Copia melhor modelo para o diretório do backend
     backend_dir = os.path.join(os.path.dirname(__file__), "..")
@@ -325,7 +324,7 @@ def auto_export(best_pt: str) -> dict:
     print(f"\n[DEPLOY] Copiando modelo para {models_dir}...")
     try:
         shutil.copy2(best_pt, os.path.join(models_dir, "chikguard_best.pt"))
-        print(f"  ✅ PT copiado: models/chikguard_best.pt")
+        print("  ✅ PT copiado: models/chikguard_best.pt")
     except Exception as exc:
         print(f"  ❌ Falha ao copiar PT: {exc}")
 
@@ -337,25 +336,25 @@ def auto_export(best_pt: str) -> dict:
                 shutil.rmtree(ov_dst)
             shutil.copytree(ov_src, ov_dst)
             out["openvino_deploy"] = os.path.join(ov_dst, "model.xml")
-            print(f"  ✅ OpenVINO copiado: models/chikguard_openvino_fp16/")
+            print("  ✅ OpenVINO copiado: models/chikguard_openvino_fp16/")
         except Exception as exc:
             print(f"  ❌ Falha ao copiar OpenVINO: {exc}")
 
     # Instruções finais
     print(f"\n{'=' * 65}")
-    print(f"  📋 CONFIGURAÇÃO DO BACKEND:")
-    print(f"")
+    print("  📋 CONFIGURAÇÃO DO BACKEND:")
+    print("")
     if "openvino_deploy" in out:
-        print(f"  Edite o .env:")
-        print(f"    INFERENCE_BACKEND=openvino")
+        print("  Edite o .env:")
+        print("    INFERENCE_BACKEND=openvino")
         print(f"    OPENVINO_MODEL_XML={out['openvino_deploy']}")
     else:
-        print(f"  Edite o .env:")
-        print(f"    INFERENCE_BACKEND=pytorch")
-        print(f"    YOLO_SEG_MODEL_PATH=models/chikguard_best.pt")
-    print(f"    ENABLE_SAHI=true")
-    print(f"    DETECTION_CONF=0.25")
-    print(f"  Reinicie: python app.py")
+        print("  Edite o .env:")
+        print("    INFERENCE_BACKEND=pytorch")
+        print("    YOLO_SEG_MODEL_PATH=models/chikguard_best.pt")
+    print("    ENABLE_SAHI=true")
+    print("    DETECTION_CONF=0.25")
+    print("  Reinicie: python app.py")
     print(f"{'=' * 65}\n")
 
     return out
@@ -405,7 +404,7 @@ def main():
     )
 
     if result.get("success"):
-        print(f"\n🎉 Pipeline de treinamento concluído com sucesso!")
+        print("\n🎉 Pipeline de treinamento concluído com sucesso!")
         print(f"   mAP@50 = {result.get('map50', 0):.3f}")
     else:
         print(f"\n❌ Pipeline falhou: {result.get('reason', 'desconhecido')}")

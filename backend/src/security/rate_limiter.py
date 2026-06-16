@@ -1,6 +1,7 @@
-import os
 import logging
-from flask import request, jsonify
+import os
+
+from flask import jsonify, request
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 

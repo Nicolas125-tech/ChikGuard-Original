@@ -9,13 +9,14 @@ High-performance pipeline for poultry monitoring:
 - Asynchronous execution and TensorRT/OpenVINO ready.
 """
 
+import collections
+import logging
+import threading
+import time
+from typing import Any, Dict, List, Optional
+
 import cv2
 import numpy as np
-import time
-import threading
-import logging
-import collections
-from typing import List, Dict, Any, Optional
 from ultralytics import YOLO
 
 try:
@@ -179,8 +180,8 @@ class VisionEngine:
         # Instantiate analytics engine on the fly if needed
         analytics_engine = None
         try:
-            from src.core.analytics_engine import AnalyticsEngine
             from database import db
+            from src.core.analytics_engine import AnalyticsEngine
 
             analytics_engine = AnalyticsEngine(db.session, camera_id="stream")
         except ImportError:

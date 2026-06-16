@@ -1,13 +1,14 @@
-import cv2
-import time
-import threading
-import queue
 import logging
+import queue
+import threading
+import time
+
+import cv2
 
 try:
+    import supervision as sv
     from sahi import AutoDetectionModel
     from sahi.predict import get_sliced_prediction
-    import supervision as sv
     # Utilizaremos a biblioteca supervision que implementa um ByteTrack nativo e perfeitamente
     # integrado aos outputs do SAHI de maneira limpa, mantendo a consistência dos IDs.
 except ImportError:

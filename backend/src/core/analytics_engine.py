@@ -2,7 +2,7 @@ import json
 import logging
 import math
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("chikguard.analytics_engine")
 
@@ -39,8 +39,9 @@ class AnalyticsEngine:
         and exports them to the database periodically based on `export_interval`.
         Activity is measured in pixels/second based on tracking IDs.
         """
-        from database import EventLog  # Local import to avoid circular dependency
         import time
+
+        from database import EventLog  # Local import to avoid circular dependency
 
         if not detections:
             return None
