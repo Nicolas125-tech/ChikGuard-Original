@@ -70,3 +70,8 @@
 **Vulnerability:** The `/api/video` MJPEG streaming endpoint in `backend/src/api/routes.py` manually decoded the JWT token using `pyjwt.decode(...)` without invoking the centralized `@require_auth` logic.
 **Learning:** Manual JWT decoding bypasses critical centralized checks (such as verifying if an account is `ACTIVE`, blacklisted, or possesses the required role definitions). Streaming endpoints relying on tokens via query parameters often make this mistake.
 **Prevention:** To secure API endpoints that require authentication via URL query parameters, extend the centralized `@require_auth` decorator (e.g., `@require_auth(allow_query_token=True)`) to ensure all security guards execute uniformly.
+
+## $(date +%Y-%m-%d) - [Safe Role Extraction for Missing Middleware Context in Auth Routes]
+**Vulnerability:** Endpoints using `guard_critical_action` instead of `@require_auth()` do not explicitly inject `request.user_role` if the JWT middleware context is stripped or bypassing standard parsing due to structural differences. Direct extraction of `request.user_role` can raise an `AttributeError` or return `None`, leading to runtime errors instead of secure denial.
+**Learning:** Even if `guard_critical_action` checks global endpoint permissions, checking explicit user roles dynamically requires robust fallback extraction (`getattr(request, "user_role", "viewer")`).
+**Prevention:** When implementing Role-Based Access Control (RBAC) in Flask routes protected by custom guards, safely extract the role using a secure fallback before performing level arithmetic using dictionaries like `ROLE_LEVELS`.

@@ -69,11 +69,27 @@ def create_auth_blueprint(deps):
         if not supabase:
             return jsonify({"msg": "Supabase não configurado"}), 500
 
+        current_user_role = getattr(request, "user_role", "viewer").lower()
+        current_level = ROLE_LEVELS.get(current_user_role, 0)
+
+        try:
+            profile_response = supabase.table("profiles").select("role").eq("id", str(account_id)).single().execute()
+            target_user_role = str(profile_response.data.get("role", "viewer")).lower()
+            target_level = ROLE_LEVELS.get(target_user_role, 0)
+        except Exception:
+            return jsonify({"msg": "Usuário não encontrado ou erro de acesso"}), 404
+
+        if current_level <= target_level and current_user_role != "superadmin":
+            return jsonify({"msg": "Não é possível modificar usuários com nível igual ou superior"}), 403
+
         try:
             update_data = {}
             if "role" in data:
                 role = str(data.get("role", "")).strip().lower()
                 if role in ROLE_LEVELS:
+                    new_role_level = ROLE_LEVELS.get(role, 0)
+                    if new_role_level >= current_level and current_user_role != "superadmin":
+                        return jsonify({"msg": "Não é possível atribuir um nível igual ou superior ao seu"}), 403
                     update_data["role"] = role
             if "active" in data:
                 # Active in Supabase profiles might map to status
@@ -100,6 +116,19 @@ def create_auth_blueprint(deps):
         supabase = _get_supabase_client()
         if not supabase:
             return jsonify({"msg": "Supabase não configurado"}), 500
+
+        current_user_role = getattr(request, "user_role", "viewer").lower()
+        current_level = ROLE_LEVELS.get(current_user_role, 0)
+
+        try:
+            profile_response = supabase.table("profiles").select("role").eq("id", str(account_id)).single().execute()
+            target_user_role = str(profile_response.data.get("role", "viewer")).lower()
+            target_level = ROLE_LEVELS.get(target_user_role, 0)
+        except Exception:
+            return jsonify({"msg": "Usuário não encontrado ou erro de acesso"}), 404
+
+        if current_level <= target_level and current_user_role != "superadmin":
+            return jsonify({"msg": "Não é possível excluir usuários com nível igual ou superior"}), 403
 
         try:
             supabase.auth.admin.delete_user(str(account_id))
@@ -177,6 +206,14 @@ def create_auth_blueprint(deps):
 
         if not target_user_id:
             return jsonify({"msg": "target_user_id é obrigatorio"}), 400
+
+        current_user_role = getattr(request, "user_role", "viewer").lower()
+        current_level = ROLE_LEVELS.get(current_user_role, 0)
+        target_role_lower = target_role.lower()
+        target_role_level = ROLE_LEVELS.get(target_role_lower, 0)
+
+        if target_role_level >= current_level and current_user_role != "superadmin":
+            return jsonify({"msg": "Não é possível aprovar um usuário com nível igual ou superior ao seu"}), 403
 
         supabase = _get_supabase_client()
         if not supabase:
