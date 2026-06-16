@@ -19,6 +19,7 @@ import AlertsPanel from '../components/AlertsPanel';
 import SmartOpsPanel from '../components/SmartOpsPanel';
 import ManagementPanel from '../components/ManagementPanel';
 import DevicesPanel from '../components/DevicesPanel';
+import IoTBridgePanel from '../components/IoTBridgePanel';
 import SystemPanel from '../components/SystemPanel';
 import DigitalTwinPanel from '../components/DigitalTwinPanel';
 import CamerasManager from '../components/CamerasManager';
@@ -507,7 +508,12 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
       case 'management':
         return <ManagementPanel token={token} serverIP={serverIP} prefs={prefs} cameras={cameras} activeCamera={activeCamera} />;
       case 'devices':
-        return <DevicesPanel token={token} serverIP={serverIP} prefs={prefs} canControlDevices={canControlDevices} cameras={cameras} activeCamera={activeCamera} />;
+        return (
+          <>
+            <DevicesPanel token={token} serverIP={serverIP} prefs={prefs} canControlDevices={canControlDevices} cameras={cameras} activeCamera={activeCamera} />
+            <IoTBridgePanel token={token} serverIP={serverIP} />
+          </>
+        );
       case 'history':
         return <HistoryPanel token={token} serverIP={serverIP} prefs={prefs} cameras={cameras} activeCamera={activeCamera} />;
       case 'settings':

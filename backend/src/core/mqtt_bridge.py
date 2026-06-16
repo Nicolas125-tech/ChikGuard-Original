@@ -5,6 +5,7 @@ import logging
 import asyncio
 import paho.mqtt.client as mqtt
 from src.core.state import sensor_state
+from src.api.fastapi_iot import iot_bridge_state
 
 logger = logging.getLogger(__name__)
 
@@ -14,11 +15,16 @@ MQTT_PORT = int(os.environ.get("MQTT_PORT", 1883))
 MQTT_TOPIC = os.environ.get("MQTT_TOPIC", "chikguard/farm/+/sensors")
 
 def on_connect(client, userdata, flags, rc):
+    iot_bridge_state["broker_address"] = f"{MQTT_BROKER}:{MQTT_PORT}"
+    iot_bridge_state["topic"] = MQTT_TOPIC
+    
     if rc == 0:
+        iot_bridge_state["mqtt_connected"] = True
         logger.info(f"Conectado ao Broker MQTT em {MQTT_BROKER}:{MQTT_PORT} com sucesso.")
         client.subscribe(MQTT_TOPIC)
         logger.info(f"Inscrito no tópico IoT: {MQTT_TOPIC}")
     else:
+        iot_bridge_state["mqtt_connected"] = False
         logger.error(f"Falha na conexão MQTT. Código de retorno: {rc}")
 
 def on_message(client, userdata, msg):
@@ -45,6 +51,9 @@ def on_message(client, userdata, msg):
             
         sensor_state["source"] = "mqtt_esp32"
         sensor_state["updated_at"] = time.time()
+        
+        iot_bridge_state["messages_received"] += 1
+        iot_bridge_state["last_message_at"] = time.time()
         
         logger.debug(f"Sensores atualizados via MQTT ({msg.topic}): Temp {sensor_state['temperature_c']}C | NH3 {sensor_state['ammonia_ppm']}ppm")
         
