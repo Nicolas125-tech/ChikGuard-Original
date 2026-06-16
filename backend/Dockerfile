@@ -24,4 +24,4 @@ ENV PYTHONPATH=/app
 
 EXPOSE 5000
 
-CMD ["python", "app.py"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000"]
