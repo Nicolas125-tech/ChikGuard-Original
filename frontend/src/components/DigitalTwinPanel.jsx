@@ -452,8 +452,9 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
       </div>
 
       {/* 3D WEBGL VERSION */}
-      <DigitalTwin3D sensors={sensorLive} devices={deviceState} />
-
+      {activeLayer === 'sensors' && (
+        <DigitalTwin3D sensors={sensorLive} devices={deviceState} birds={heatmapPoints} />
+      )}
     </div>
   );
 }

@@ -44,7 +44,7 @@ function Heater({ position, isOn }) {
   );
 }
 
-function Shed({ sensors, devices, width, length }) {
+function Shed({ sensors, devices, birds, width, length }) {
   const isFanOn = devices?.ventilacao === true;
   const isHeaterOn = devices?.aquecedor === true;
   
@@ -96,17 +96,37 @@ function Shed({ sensors, devices, width, length }) {
       <Heater position={[-2, 2.5, 5]} isOn={isHeaterOn} />
       <Heater position={[2, 2.5, 5]} isOn={isHeaterOn} />
 
-      {/* Heat zones on floor */}
-      <pointLight position={[-2, 0.5, 2]} intensity={temp > 25 ? 1 : 0} distance={5} color={heatColor} />
-      <pointLight position={[3, 0.5, -4]} intensity={temp > 25 ? 1 : 0} distance={5} color={heatColor} />
-      <pointLight position={[0, 0.5, 8]} intensity={temp > 25 ? 1 : 0} distance={5} color={heatColor} />
-      <pointLight position={[-3, 0.5, -8]} intensity={temp > 25 ? 1 : 0} distance={5} color={heatColor} />
+      {/* Bird Heatmap Spots rendered dynamically from AI tracking data */}
+      {birds && birds.length > 0 ? (
+        birds.map((pt, i) => {
+          // pt.x and pt.y are 0 to 1
+          const posX = (pt.x * width) - (width / 2);
+          const posZ = (pt.y * length) - (length / 2);
+          return (
+            <group key={i} position={[posX, -0.3, posZ]}>
+              <mesh>
+                <sphereGeometry args={[0.3, 16, 16]} />
+                <meshStandardMaterial color="#fcd34d" emissive="#fbbf24" emissiveIntensity={0.5} roughness={0.6} />
+              </mesh>
+              <pointLight intensity={0.3} distance={2} color="#fcd34d" />
+            </group>
+          );
+        })
+      ) : (
+        // Fallback default lights if no birds API data is present
+        <>
+          <pointLight position={[-2, 0.5, 2]} intensity={temp > 25 ? 1 : 0} distance={5} color={heatColor} />
+          <pointLight position={[3, 0.5, -4]} intensity={temp > 25 ? 1 : 0} distance={5} color={heatColor} />
+          <pointLight position={[0, 0.5, 8]} intensity={temp > 25 ? 1 : 0} distance={5} color={heatColor} />
+          <pointLight position={[-3, 0.5, -8]} intensity={temp > 25 ? 1 : 0} distance={5} color={heatColor} />
+        </>
+      )}
       
     </group>
   );
 }
 
-export default function DigitalTwin3D({ sensors, devices }) {
+export default function DigitalTwin3D({ sensors, devices, birds }) {
   const [width, setWidth] = useState(12);
   const [length, setLength] = useState(24);
 
@@ -151,7 +171,7 @@ export default function DigitalTwin3D({ sensors, devices }) {
           <ambientLight intensity={0.6} />
           <directionalLight position={[10, 15, 10]} intensity={1.5} castShadow shadow-mapSize={[1024, 1024]} />
           
-          <Shed sensors={sensors} devices={devices} width={width} length={length} />
+          <Shed sensors={sensors} devices={devices} birds={birds} width={width} length={length} />
           
           <OrbitControls 
             enablePan={false} 
