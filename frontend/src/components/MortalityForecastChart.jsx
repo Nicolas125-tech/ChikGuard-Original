@@ -3,6 +3,27 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Skull, AlertTriangle, Activity } from 'lucide-react';
 import { getBaseUrl } from '../utils/config';
 
+const CustomTooltip = ({ active, payload }) => {
+  if (active && payload && payload.length) {
+    const dataPoint = payload[0].payload;
+    return (
+      <div className="bg-slate-900 border border-slate-700 p-3 rounded-xl shadow-xl">
+        <p className="text-white font-bold mb-1">{dataPoint.is_forecast ? 'Previsão: ' : 'Histórico: '} {dataPoint.date}</p>
+        <p className="text-slate-300 text-sm">Dia do Lote: {dataPoint.day}</p>
+        <p className="text-rose-400 font-medium text-sm mt-2">
+          Risco Estimado: {dataPoint.risk_pct.toFixed(2)}%
+        </p>
+        {dataPoint.stress_factor > 1.2 && (
+          <p className="text-amber-400 text-xs mt-1 flex items-center gap-1">
+            <AlertTriangle size={12} /> Fator de Estresse Elevado
+          </p>
+        )}
+      </div>
+    );
+  }
+  return null;
+};
+
 export default function MortalityForecastChart({ token, serverIP }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -42,27 +63,6 @@ export default function MortalityForecastChart({ token, serverIP }) {
   }
 
   const { projections, current_day, avg_recent_temp } = data;
-
-  const CustomTooltip = ({ active, payload }) => {
-    if (active && payload && payload.length) {
-      const dataPoint = payload[0].payload;
-      return (
-        <div className="bg-slate-900 border border-slate-700 p-3 rounded-xl shadow-xl">
-          <p className="text-white font-bold mb-1">{dataPoint.is_forecast ? 'Previsão: ' : 'Histórico: '} {dataPoint.date}</p>
-          <p className="text-slate-300 text-sm">Dia do Lote: {dataPoint.day}</p>
-          <p className="text-rose-400 font-medium text-sm mt-2">
-            Risco Estimado: {dataPoint.risk_pct.toFixed(2)}%
-          </p>
-          {dataPoint.stress_factor > 1.2 && (
-            <p className="text-amber-400 text-xs mt-1 flex items-center gap-1">
-              <AlertTriangle size={12} /> Fator de Estresse Elevado
-            </p>
-          )}
-        </div>
-      );
-    }
-    return null;
-  };
 
   return (
     <div className="bg-slate-900 border border-rose-900/30 rounded-3xl p-6 mt-6 shadow-sm">
