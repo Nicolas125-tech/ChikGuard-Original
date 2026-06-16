@@ -58,6 +58,10 @@ async def fsm_loop():
                 actuator_state["ventilacao_on"] = result["ventilacao"]
                 actuator_state["aquecedor_on"] = result["aquecedor"]
                 
+            # --- MANUTENCAO PREDITIVA (Verificacao de Falha de Hardware) ---
+            from src.core.predictive_maintenance import run_predictive_diagnostics
+            await run_predictive_diagnostics(actuator_state)
+            
         except Exception as e:
             logger.error(f"Erro critico na FSM Loop: {e}")
             

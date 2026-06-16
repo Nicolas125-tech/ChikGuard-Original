@@ -28,7 +28,19 @@ export default function AlertsPanel({ serverIP, prefs, token, cameras = [], acti
     const socket = io(baseUrl);
     socket.on('new_alert', (data) => {
       console.log('Socket event received (AlertsPanel):', data);
-      loadAlerts();
+      if (data.type === 'hardware_anomaly' || data.type === 'actuator_change') {
+         const dateObj = new Date();
+         setAlerts(prev => [{
+            id: 'rt-' + Date.now() + Math.random(),
+            nivel: data.level === 'critical' ? 'alto' : (data.level === 'info' ? 'baixo' : 'medio'),
+            tipo: data.type === 'hardware_anomaly' ? `Manutenção Preditiva (${data.component})` : 'Ação da FSM',
+            mensagem: data.message,
+            data: dateObj.toLocaleDateString('pt-BR'),
+            hora: dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+         }, ...prev]);
+      } else {
+        loadAlerts();
+      }
     });
 
     return () => {
