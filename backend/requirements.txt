@@ -24,3 +24,10 @@ paho-mqtt>=1.6.1
 Flask-Limiter
 scikit-learn
 PyJWT
+
+# FastAPI Migration
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+python-socketio[asyncio]

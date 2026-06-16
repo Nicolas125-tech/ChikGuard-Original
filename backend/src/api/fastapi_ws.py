@@ -1,0 +1,56 @@
+import socketio
+import logging
+import jwt
+import os
+
+logger = logging.getLogger(__name__)
+
+# O mesmo segredo JWT da autenticacao FastAPI
+SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "default_secret_for_local_dev")
+
+# Usamos AsyncServer com allowed_origins="*" para dev
+sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
+
+# Esta app ASGI envolvera o FastAPI no main.py
+socket_app = socketio.ASGIApp(sio)
+
+@sio.event
+async def connect(sid, environ, auth):
+    """
+    Autentica a conexao do SocketIO verificando o token JWT.
+    O frontend deve enviar: socket.io-client({ auth: { token: '...' } })
+    """
+    token = None
+    if auth and "token" in auth:
+        token = auth["token"]
+    
+    if not token:
+        logger.warning(f"Conexao SocketIO rejeitada (Sem token) - SID: {sid}")
+        return False # Rejeita
+
+    try:
+        # Valida token simples
+        decoded = jwt.decode(
+            token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated"
+        )
+        user_id = decoded.get("sub")
+        
+        async with sio.session(sid) as session:
+            session['user_id'] = user_id
+            
+        logger.info(f"Cliente SocketIO conectado - SID: {sid} (User: {user_id})")
+        return True
+    except Exception as e:
+        logger.error(f"Conexao SocketIO rejeitada (Token invalido) - SID: {sid} - {e}")
+        return False
+
+@sio.event
+async def disconnect(sid):
+    logger.info(f"Cliente SocketIO desconectado - SID: {sid}")
+
+# Funcao helper para emitir alertas (sera chamada pelo backend core/FSM)
+async def emit_new_alert(event_payload):
+    """
+    Substitui o `socketio.emit("new_alert", ...)` antigo do Flask.
+    """
+    await sio.emit("new_alert", event_payload)
