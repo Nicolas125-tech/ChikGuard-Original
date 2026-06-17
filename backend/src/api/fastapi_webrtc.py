@@ -3,6 +3,7 @@ import uuid
 import cv2
 import asyncio
 import logging
+import jwt
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -11,7 +12,7 @@ from aiortc.contrib.media import MediaRelay
 from av import VideoFrame
 
 from src.core.state import get_global_frame
-from src.security.fastapi_auth import get_current_user, UserContext
+from src.security.fastapi_auth import get_current_user, UserContext, SUPABASE_JWT_SECRET
 
 router = APIRouter(prefix="/api/webrtc", tags=["video"])
 logger = logging.getLogger(__name__)
@@ -87,10 +88,20 @@ def webrtc_pcs(user: UserContext = Depends(get_current_user)):
 def video_feed(token: str = None):
     # JWT validacao embutida ou via middleware para streams GET
     # Como e tag <img src="..."/>, usamos query token na autenticacao
-    # Aqui delegaremos temporariamente ou chamaremos a validacao manual:
     if not token:
         raise HTTPException(status_code=401, detail="Token JWT requerido")
-        
+
+    try:
+        # Validate JWT explicitly for streaming endpoint using query parameter
+        jwt.decode(
+            token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated"
+        )
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token JWT expirado")
+    except Exception as e:
+        logger.error(f"Erro de autenticacao de video (Token invalido): {str(e)}")
+        raise HTTPException(status_code=401, detail="Token JWT invalido")
+
     def generate():
         encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
         stream_interval = 1.0 / 30
