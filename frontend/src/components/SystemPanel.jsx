@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Activity, Database, Server, Clock, Cpu, HardDrive } from 'lucide-react';
 
-const MetricBar = ({ label, percent, icon, colorClass }) => (
+const MetricBar = React.memo(({ label, percent, icon, colorClass }) => (
   <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
     <div className="flex items-center justify-between mb-4">
       <div className="flex items-center gap-3">
@@ -16,9 +16,9 @@ const MetricBar = ({ label, percent, icon, colorClass }) => (
       <div className={`h-2.5 rounded-full ${colorClass}`} style={{ width: `${percent || 0}%` }}></div>
     </div>
   </div>
-);
+));
 
-const StatusCard = ({ label, value, icon, isOnline }) => (
+const StatusCard = React.memo(({ label, value, icon, isOnline }) => (
   <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
     <div className="flex items-center justify-between mb-3">
       <div className="p-2 bg-slate-800 rounded-lg">
@@ -29,7 +29,7 @@ const StatusCard = ({ label, value, icon, isOnline }) => (
     <div className="text-slate-400 text-sm font-medium mb-1">{label}</div>
     <div className="text-white font-bold text-lg truncate">{value}</div>
   </div>
-);
+));
 
 export default function SystemPanel({ serverIP, prefs, token }) {
   const [health, setHealth] = useState(null);
