@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Save, CheckCircle } from 'lucide-react';
+import { Settings, Save, CheckCircle, RefreshCw, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { DEFAULT_PREFS } from '../utils/config';
 
@@ -7,6 +7,7 @@ export default function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServ
   const [serverDraft, setServerDraft] = useState(serverIP);
   const [draft, setDraft] = useState(prefs);
   const [saved, setSaved] = useState(false);
+  const [isCreatingFarm, setIsCreatingFarm] = useState(false);
 
   const saveAll = () => {
     onSaveServer(serverDraft);
@@ -132,6 +133,7 @@ export default function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServ
           const url = e.target.cameraUrlNew.value;
           if (!nome) return;
           
+          setIsCreatingFarm(true);
           try {
             const baseUrl = serverIP.replace(/\/$/, '');
             const finalUrl = baseUrl.startsWith('http') ? baseUrl : `http://${baseUrl}`;
@@ -161,6 +163,8 @@ export default function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServ
           } catch (err) {
             console.error(err);
             toast.error('Erro de conexão ao adicionar granja.');
+          } finally {
+            setIsCreatingFarm(false);
           }
         }} className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Nome da Nova Granja" id="farmName" description="Ex: Galpão Sul 2">
@@ -181,8 +185,9 @@ export default function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServ
             />
           </Field>
           <div className="md:col-span-2 flex justify-end mt-2">
-            <button type="submit" className="bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 px-6 rounded-xl border border-slate-700 transition-all flex items-center gap-2 hover:-translate-y-0.5 shadow-sm">
-              Criar Nova Granja
+            <button disabled={isCreatingFarm} type="submit" className="bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 px-6 rounded-xl border border-slate-700 transition-all flex items-center gap-2 hover:-translate-y-0.5 shadow-sm disabled:opacity-50 disabled:hover:translate-y-0 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
+              {isCreatingFarm ? <RefreshCw size={18} className="animate-spin" /> : <Plus size={18} />}
+              {isCreatingFarm ? 'Criando...' : 'Criar Nova Granja'}
             </button>
           </div>
         </form>
