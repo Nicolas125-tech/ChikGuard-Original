@@ -4,7 +4,7 @@ import { getBaseUrl } from '@/utils/config';
 import WeightForecastChart from '@/components/WeightForecastChart';
 
 /* ── Animated Number ─────────────────────────────────────────── */
-function AnimatedNum({ value, decimals = 0 }) {
+const AnimatedNum = React.memo(function AnimatedNum({ value, decimals = 0 }) {
   const [display, setDisplay] = useState(value);
   const prev = useRef(value);
 
@@ -35,10 +35,10 @@ function AnimatedNum({ value, decimals = 0 }) {
   }, [value, decimals]);
 
   return <>{display ?? '--'}</>;
-}
+});
 
 /* ── Score Ring (SVG mini gauge) ──────────────────────────────── */
-function ScoreRing({ score, size = 100 }) {
+const ScoreRing = React.memo(function ScoreRing({ score, size = 100 }) {
   const radius = (size - 12) / 2;
   const circumference = 2 * Math.PI * radius;
   const s = Number(score) || 0;
@@ -60,7 +60,7 @@ function ScoreRing({ score, size = 100 }) {
       </text>
     </svg>
   );
-}
+});
 
 export default function OverviewPanel({ token, serverIP, prefs, cameras = [], activeCamera, onTabChange }) {
   const [dados, setDados] = useState(null);
