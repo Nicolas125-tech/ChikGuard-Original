@@ -26,3 +26,7 @@
 ## 2024-06-17 - [Accessibility] Explicit form control associations
 **Learning:** In complex inline forms (like rule builders or multi-step input groups), relying solely on visual proximity or implicit labeling is insufficient. Screen readers may misinterpret the purpose of `select` and `input` fields if they lack explicit associations. Missing `htmlFor` and `id` links between `<label>` and form controls cause major accessibility violations and poor user experience for keyboard/screen reader users.
 **Action:** Always link `<label>` elements to their corresponding form controls (`<input>`, `<select>`, `<textarea>`) using matching `htmlFor` and `id` attributes, especially in compact grid layouts where visual context isn't parsed by assistive tech.
+
+## 2024-05-24 - Missing Loading States on Async Forms
+**Learning:** Forms that trigger API calls (like adding a new farm in `SettingsPanel`) often lack local loading states (`isSubmitting`), which can lead to double-submissions and poor UX where the user wonders if their click registered.
+**Action:** Always wrap async form submissions with a local boolean state to disable the submit button and display a loading spinner (`<RefreshCw className="animate-spin" />`) to provide immediate feedback. Additionally, ensure focus rings (`focus-visible:ring-2`) are present for keyboard accessibility.
