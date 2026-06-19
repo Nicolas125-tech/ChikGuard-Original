@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Wind, Zap, Thermometer, LayoutDashboard, Download, CloudLightning } from 'lucide-react';
+import { Wind, Zap, Thermometer, LayoutDashboard, Download, CloudLightning, RefreshCw } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { getBaseUrl } from '../utils/config';
 
 export default function ClimatePanel({ token, serverIP, prefs, canControlDevices, cameras = [], activeCamera }) {
   const [dispositivos, setDispositivos] = useState({ ventilacao: false, aquecedor: false });
+  const [isToggling, setIsToggling] = useState(null);
   const [historico, setHistorico] = useState([]);
   const [weather, setWeather] = useState(null);
   const [Erro_State, setErro] = useState(false);
@@ -57,15 +58,18 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
 
   const toggleDevice = async (tipo, ligar) => {
     if (!canControlDevices) return;
+    setIsToggling(tipo);
     try {
         await fetch(`${baseUrl}/api/${tipo}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ ligar }),
         });
-        fetchDevices();
+        await fetchDevices();
     } catch (e) {
         console.error(e);
+    } finally {
+        setIsToggling(null);
     }
   };
 
@@ -111,22 +115,22 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
             <div className="grid grid-cols-2 gap-4 h-48">
               <button 
                 aria-pressed={dispositivos.ventilacao}
-                disabled={!canControlDevices} 
+                disabled={!canControlDevices || isToggling === 'ventilacao'}
                 onClick={() => toggleDevice('ventilacao', !dispositivos.ventilacao)} 
-                className={`border p-5 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all ${dispositivos.ventilacao ? 'border-blue-500/50 bg-blue-500/10 shadow-[0_0_15px_rgba(59,130,246,0.15)]' : 'border-slate-800 bg-slate-950 hover:border-slate-700'} ${!canControlDevices ? 'opacity-50 cursor-not-allowed hidden-disabled' : 'hover:-translate-y-1'}`}
+                className={`border p-5 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none ${dispositivos.ventilacao ? 'border-blue-500/50 bg-blue-500/10 shadow-[0_0_15px_rgba(59,130,246,0.15)]' : 'border-slate-800 bg-slate-950 hover:border-slate-700'} ${(!canControlDevices || isToggling === 'ventilacao') ? 'opacity-50 cursor-not-allowed hidden-disabled' : 'hover:-translate-y-1'}`}
               >
-                <Wind aria-hidden="true" size={40} className={dispositivos.ventilacao ? "text-blue-400" : "text-slate-500"} />
-                <span className={`text-sm font-bold tracking-wide uppercase ${dispositivos.ventilacao ? "text-blue-300" : "text-slate-400"}`}>Ventilar</span>
+                {isToggling === 'ventilacao' ? <RefreshCw aria-hidden="true" size={40} className="animate-spin text-slate-400" /> : <Wind aria-hidden="true" size={40} className={dispositivos.ventilacao ? "text-blue-400" : "text-slate-500"} />}
+                <span className={`text-sm font-bold tracking-wide uppercase ${dispositivos.ventilacao ? "text-blue-300" : "text-slate-400"}`}>{isToggling === 'ventilacao' ? 'Processando...' : 'Ventilar'}</span>
               </button>
               
               <button 
                 aria-pressed={dispositivos.aquecedor}
-                disabled={!canControlDevices} 
+                disabled={!canControlDevices || isToggling === 'aquecedor'}
                 onClick={() => toggleDevice('aquecedor', !dispositivos.aquecedor)} 
-                className={`border p-5 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all ${dispositivos.aquecedor ? 'border-orange-500/50 bg-orange-500/10 shadow-[0_0_15px_rgba(249,115,22,0.15)]' : 'border-slate-800 bg-slate-950 hover:border-slate-700'} ${!canControlDevices ? 'opacity-50 cursor-not-allowed hidden-disabled' : 'hover:-translate-y-1'}`}
+                className={`border p-5 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none ${dispositivos.aquecedor ? 'border-orange-500/50 bg-orange-500/10 shadow-[0_0_15px_rgba(249,115,22,0.15)]' : 'border-slate-800 bg-slate-950 hover:border-slate-700'} ${(!canControlDevices || isToggling === 'aquecedor') ? 'opacity-50 cursor-not-allowed hidden-disabled' : 'hover:-translate-y-1'}`}
               >
-                <Zap aria-hidden="true" size={40} className={dispositivos.aquecedor ? "text-orange-400" : "text-slate-500"} />
-                <span className={`text-sm font-bold tracking-wide uppercase ${dispositivos.aquecedor ? "text-orange-300" : "text-slate-400"}`}>Aquecer</span>
+                {isToggling === 'aquecedor' ? <RefreshCw aria-hidden="true" size={40} className="animate-spin text-slate-400" /> : <Zap aria-hidden="true" size={40} className={dispositivos.aquecedor ? "text-orange-400" : "text-slate-500"} />}
+                <span className={`text-sm font-bold tracking-wide uppercase ${dispositivos.aquecedor ? "text-orange-300" : "text-slate-400"}`}>{isToggling === 'aquecedor' ? 'Processando...' : 'Aquecer'}</span>
               </button>
             </div>
         </div>
