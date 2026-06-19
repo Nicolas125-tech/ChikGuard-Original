@@ -30,3 +30,7 @@
 ## 2024-05-24 - Missing Loading States on Async Forms
 **Learning:** Forms that trigger API calls (like adding a new farm in `SettingsPanel`) often lack local loading states (`isSubmitting`), which can lead to double-submissions and poor UX where the user wonders if their click registered.
 **Action:** Always wrap async form submissions with a local boolean state to disable the submit button and display a loading spinner (`<RefreshCw className="animate-spin" />`) to provide immediate feedback. Additionally, ensure focus rings (`focus-visible:ring-2`) are present for keyboard accessibility.
+
+## 2024-06-19 - Adding loading state and focus rings to hardware control toggles
+**Learning:** In panels with hardware controls, buttons lacked loading/disabled states during API calls. This allows impatient users to click multiple times, potentially creating duplicate database entries. They also lacked keyboard focus styling.
+**Action:** Always wrap `fetch` calls in `try/finally` blocks, introducing `isToggling` state variables. Disable the button and input fields while loading, and replace the button icon with a loading spinner to provide immediate visual feedback. Add focus rings (`focus-visible:ring-2`) for keyboard accessibility.
