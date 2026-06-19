@@ -44,10 +44,26 @@ export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], ac
       fetch(`${baseUrl}/api/logbook?limit=30`, { headers }),
       fetch(`${baseUrl}/api/summary`, { headers }),
     ]);
-    if (i.ok) setImmobility(await i.json());
-    if (bt.ok) setBatches(await bt.json());
-    if (c.ok) setApiCameras(await c.json());
-    if (lb.ok) setLogbook(await lb.json());
+    if (i.ok) {
+      const data = await i.json();
+      // Bolt Optimization: Prevent unnecessary React re-renders by skipping state updates if the polled API data is identical.
+      setImmobility(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+    }
+    if (bt.ok) {
+      const data = await bt.json();
+      // Bolt Optimization: Prevent unnecessary React re-renders by skipping state updates if the polled API data is identical.
+      setBatches(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+    }
+    if (c.ok) {
+      const data = await c.json();
+      // Bolt Optimization: Prevent unnecessary React re-renders by skipping state updates if the polled API data is identical.
+      setApiCameras(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+    }
+    if (lb.ok) {
+      const data = await lb.json();
+      // Bolt Optimization: Prevent unnecessary React re-renders by skipping state updates if the polled API data is identical.
+      setLogbook(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+    }
     if (sum.ok) {
       const d = await sum.json();
       const prev = dadosRef.current;

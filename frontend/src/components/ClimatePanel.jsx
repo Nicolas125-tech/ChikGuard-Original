@@ -38,7 +38,8 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
       const r = await fetch(`${baseUrl}/api/weather/forecast`, { headers: { Authorization: `Bearer ${token}` } });
       if (r.ok) {
         const data = await r.json();
-        setWeather(data);
+        // Bolt Optimization: Prevent unnecessary React re-renders by skipping state updates if the polled API data is identical.
+        setWeather(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
       }
     } catch {
       // ignore
