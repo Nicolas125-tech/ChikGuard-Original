@@ -16,7 +16,8 @@ export default function IoTBridgePanel({ token, serverIP }) {
       });
       if (res.ok) {
         const data = await res.json();
-        setIotStatus(data);
+        // Bolt Optimization: Prevent unnecessary React re-renders by skipping state updates if the polled API data is identical.
+        setIotStatus(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
       }
     } catch (err) {
       console.error("Erro ao buscar status do IoT Bridge:", err);
