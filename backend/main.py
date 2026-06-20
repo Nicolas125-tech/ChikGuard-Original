@@ -41,6 +41,7 @@ from src.api.fastapi_birds import router_birds, router_weight
 from src.api.fastapi_webrtc import router as webrtc_router
 from src.api.fastapi_iot import router as iot_router
 from src.api.fastapi_ws import socket_app
+from src.security.headers import ALLOWED_ORIGINS
 
 fastapi_app = FastAPI(
     title="ChikGuard API",
@@ -57,10 +58,10 @@ fastapi_app.include_router(webrtc_router)
 fastapi_app.include_router(iot_router)
 
 # CORS middleware
-# No futuro, ajustaremos os ALLOWED_ORIGINS buscando de src.security.headers
+# Prevencao de CSWSH e CORS vulneravel ajustando allow_origins
 fastapi_app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Modificar para ambiente de prod
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
