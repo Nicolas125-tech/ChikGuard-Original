@@ -71,12 +71,17 @@
 **Learning:** Manual JWT decoding bypasses critical centralized checks (such as verifying if an account is `ACTIVE`, blacklisted, or possesses the required role definitions). Streaming endpoints relying on tokens via query parameters often make this mistake.
 **Prevention:** To secure API endpoints that require authentication via URL query parameters, extend the centralized `@require_auth` decorator (e.g., `@require_auth(allow_query_token=True)`) to ensure all security guards execute uniformly.
 
-## $(date +%Y-%m-%d) - [Safe Role Extraction for Missing Middleware Context in Auth Routes]
+## 2026-06-20 - [Safe Role Extraction for Missing Middleware Context in Auth Routes]
 **Vulnerability:** Endpoints using `guard_critical_action` instead of `@require_auth()` do not explicitly inject `request.user_role` if the JWT middleware context is stripped or bypassing standard parsing due to structural differences. Direct extraction of `request.user_role` can raise an `AttributeError` or return `None`, leading to runtime errors instead of secure denial.
 **Learning:** Even if `guard_critical_action` checks global endpoint permissions, checking explicit user roles dynamically requires robust fallback extraction (`getattr(request, "user_role", "viewer")`).
 **Prevention:** When implementing Role-Based Access Control (RBAC) in Flask routes protected by custom guards, safely extract the role using a secure fallback before performing level arithmetic using dictionaries like `ROLE_LEVELS`.
 
-## $(date +%Y-%m-%d) - [Fix Missing JWT Validation in FastAPI MJPEG Stream Endpoint]
+## 2026-06-20 - [Fix Missing JWT Validation in FastAPI MJPEG Stream Endpoint]
 **Vulnerability:** In the FastAPI migration (`backend/src/api/fastapi_webrtc.py`), the `/api/webrtc/video` endpoint expected a query parameter `token` for authentication, but only validated its presence (`if not token:`). It did not perform cryptographic validation (JWT decoding) to ensure the token was valid, signed by the application, or hadn't expired. This allowed unauthenticated users to access the live video stream by simply providing any string as a token.
 **Learning:** `OAuth2PasswordBearer` (used by `get_current_user` in FastAPI) does not natively extract tokens from query parameters out of the box. Simply asking for `token: str = None` bypasses middleware validation. If you do not explicitly invoke `jwt.decode` on query-based tokens, you introduce an authentication bypass.
 **Prevention:** To secure FastAPI endpoints requiring authentication via URL query parameters (e.g., streaming video feeds where `Bearer` headers aren't feasible via `<img src="..." />`), you must explicitly validate the token within the endpoint using `jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=['HS256'], audience='authenticated')` or build a custom `Depends` that extracts and validates the token from the request query.
+
+## 2026-06-20 - [Fix CORS Wildcard Vulnerability in FastAPI and WebSocket Services]
+**Vulnerability:** The FastAPI middleware (`backend/main.py`) and the SocketIO ASGI app (`backend/src/api/fastapi_ws.py`) were configured with `allow_origins=["*"]` and `cors_allowed_origins='*'` respectively. This wildcard configuration allowed any external domain to make cross-origin requests or establish WebSocket connections.
+**Learning:** Using a wildcard `'*'` for CORS circumvents strict HTTP CORS policies. For WebSocket specifically, it exposes the application to Cross-Site WebSocket Hijacking (CSWSH), allowing malicious pages to establish authenticated WebSocket connections if the user's session is active, or at the very least interact with APIs bypassing Same-Origin Policy.
+**Prevention:** Always restrict CORS allowed origins to a centrally defined, explicit list of trusted domains (e.g., `ALLOWED_ORIGINS` in `src.security.headers`) instead of using wildcards in both HTTP middleware and WebSocket server initialization.
