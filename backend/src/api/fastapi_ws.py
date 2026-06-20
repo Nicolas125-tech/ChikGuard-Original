@@ -3,13 +3,15 @@ import logging
 import jwt
 import os
 
+from src.security.headers import ALLOWED_ORIGINS
+
 logger = logging.getLogger(__name__)
 
 # O mesmo segredo JWT da autenticacao FastAPI
 SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "default_secret_for_local_dev")
 
-# Usamos AsyncServer com allowed_origins="*" para dev
-sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
+# Usamos AsyncServer com allowed_origins restritas para seguranca
+sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins=ALLOWED_ORIGINS)
 
 # Esta app ASGI envolvera o FastAPI no main.py
 socket_app = socketio.ASGIApp(sio)
