@@ -106,6 +106,7 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
       {/* ── View Selectors ── */}
       <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-900/60 border border-slate-800 rounded-2xl w-fit">
         <button
+          aria-pressed={activeLayer === 'sensors'}
           onClick={() => setActiveLayer('sensors')}
           className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition-all duration-200 ${
             activeLayer === 'sensors'
@@ -113,9 +114,10 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
               : 'text-slate-400 hover:text-slate-200 border border-transparent'
           }`}
         >
-          <Thermometer size={14} /><span>Mapa Térmico</span>
+          <Thermometer size={14} aria-hidden="true" /><span>Mapa Térmico</span>
         </button>
         <button
+          aria-pressed={activeLayer === 'birds'}
           onClick={() => setActiveLayer('birds')}
           className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition-all duration-200 ${
             activeLayer === 'birds'
@@ -123,9 +125,10 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
               : 'text-slate-400 hover:text-slate-200 border border-transparent'
           }`}
         >
-          <Bird size={14} /><span>Densidade de Aves</span>
+          <Bird size={14} aria-hidden="true" /><span>Densidade de Aves</span>
         </button>
         <button
+          aria-pressed={activeLayer === 'devices'}
           onClick={() => setActiveLayer('devices')}
           className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition-all duration-200 ${
             activeLayer === 'devices'
@@ -133,9 +136,10 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
               : 'text-slate-400 hover:text-slate-200 border border-transparent'
           }`}
         >
-          <Cpu size={14} /><span>Status Equipamentos</span>
+          <Cpu size={14} aria-hidden="true" /><span>Status Equipamentos</span>
         </button>
         <button
+          aria-pressed={activeLayer === 'alerts'}
           onClick={() => setActiveLayer('alerts')}
           className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition-all duration-200 ${
             activeLayer === 'alerts'
@@ -143,7 +147,7 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
               : 'text-slate-400 hover:text-slate-200 border border-transparent'
           }`}
         >
-          <AlertTriangle size={14} /><span>Alertas Clínicos ({thermalAnomalies.length})</span>
+          <AlertTriangle size={14} aria-hidden="true" /><span>Alertas Clínicos ({thermalAnomalies.length})</span>
         </button>
       </div>
 
