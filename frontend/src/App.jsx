@@ -116,10 +116,10 @@ function AppCore() {
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
         let accessToken = session.access_token;
-        let nextRole = String(session.user.app_metadata?.role || 'superadmin').toLowerCase();
+        let nextRole = String(session.user.app_metadata?.role || 'viewer').toLowerCase();
         let nextUser = session.user.email;
-        // Default: ACTIVE (PENDING somente quando profile diz explicitamente)
-        let nextStatus = 'ACTIVE';
+        // Default: PENDING (ACTIVE somente quando profile diz explicitamente)
+        let nextStatus = 'PENDING';
 
         // Buscar role/status real da tabela profiles
         try {
