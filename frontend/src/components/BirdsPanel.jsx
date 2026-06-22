@@ -101,7 +101,8 @@ export default function BirdsPanel({ token, serverIP, prefs, cameras = [], activ
   );
 }
 
-function LiveBirdMap({ items }) {
+// Bolt Optimization: Memoize LiveBirdMap to prevent unnecessary re-renders when parent polls
+const LiveBirdMap = React.memo(function LiveBirdMap({ items }) {
   const feedWidth = 1920;
   const feedHeight = 1080;
 
@@ -141,4 +142,4 @@ function LiveBirdMap({ items }) {
        </div>
     </div>
   );
-}
+});

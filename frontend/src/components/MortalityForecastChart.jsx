@@ -3,7 +3,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Skull, AlertTriangle, Activity } from 'lucide-react';
 import { getBaseUrl } from '../utils/config';
 
-const CustomTooltip = ({ active, payload }) => {
+// Bolt Optimization: Memoize CustomTooltip to prevent unnecessary re-renders
+const CustomTooltip = React.memo(({ active, payload }) => {
   if (active && payload && payload.length) {
     const dataPoint = payload[0].payload;
     return (
@@ -22,7 +23,7 @@ const CustomTooltip = ({ active, payload }) => {
     );
   }
   return null;
-};
+});
 
 export default function MortalityForecastChart({ token, serverIP }) {
   const [data, setData] = useState(null);

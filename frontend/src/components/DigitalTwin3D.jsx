@@ -3,7 +3,8 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { Activity, Thermometer, Wind } from 'lucide-react';
 
-function Fan({ position, isRunning }) {
+// Bolt Optimization: Memoize Fan to prevent unnecessary re-renders when DigitalTwin3D updates
+const Fan = React.memo(function Fan({ position, isRunning }) {
   const meshRef = useRef();
   
   useFrame((state, delta) => {
@@ -24,9 +25,10 @@ function Fan({ position, isRunning }) {
       </mesh>
     </group>
   );
-}
+});
 
-function Heater({ position, isOn }) {
+// Bolt Optimization: Memoize Heater to prevent unnecessary re-renders when DigitalTwin3D updates
+const Heater = React.memo(function Heater({ position, isOn }) {
   return (
     <group position={position}>
       <mesh>
@@ -42,9 +44,10 @@ function Heater({ position, isOn }) {
       )}
     </group>
   );
-}
+});
 
-function Shed({ sensors, devices, birds, width, length }) {
+// Bolt Optimization: Memoize Shed to prevent unnecessary re-renders when DigitalTwin3D updates
+const Shed = React.memo(function Shed({ sensors, devices, birds, width, length }) {
   const isFanOn = devices?.ventilacao === true;
   const isHeaterOn = devices?.aquecedor === true;
   
@@ -124,7 +127,7 @@ function Shed({ sensors, devices, birds, width, length }) {
       
     </group>
   );
-}
+});
 
 export default function DigitalTwin3D({ sensors, devices, birds }) {
   const [width, setWidth] = useState(12);
