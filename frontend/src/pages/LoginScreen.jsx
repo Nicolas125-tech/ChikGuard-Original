@@ -31,13 +31,13 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
         });
         if (error) throw error;
         
-        let role = 'superadmin';
-        let status = 'ACTIVE';
+        let role = 'viewer';
+        let status = 'PENDING';
         if (data.session) {
            const { data: profile } = await supabase.from('profiles').select('role, status').eq('id', data.session.user.id).single();
            if (profile) {
               role = profile.role || role;
-              status = profile.status || 'ACTIVE';
+              status = profile.status || 'PENDING';
            }
            // Hardcode superadmin for specific emails
            const safeEmail = (email || '').toLowerCase().trim();
