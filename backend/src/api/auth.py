@@ -1,9 +1,12 @@
 import os
+import logging
 
 from flask import Blueprint, jsonify, request
 from supabase import create_client
 
 from src.security.rate_limiter import limiter
+
+logger = logging.getLogger(__name__)
 
 ROLE_LEVELS = {"viewer": 1, "operator": 2, "admin": 3, "superadmin": 4}
 
@@ -56,7 +59,8 @@ def create_auth_blueprint(deps):
             response = supabase.table("profiles").select("*").execute()
             return jsonify({"count": len(response.data or []), "items": response.data or []})
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            logger.error("Auth API error: %s", e)
+            return jsonify({"error": "Ocorreu um erro interno no servidor."}), 500
 
     @bp.route("/api/accounts/users/<string:account_id>", methods=["PATCH"])
     def accounts_user_update(account_id):
@@ -105,7 +109,8 @@ def create_auth_blueprint(deps):
             )
             return jsonify({"msg": "Conta atualizada via Supabase"})
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            logger.error("Auth API error: %s", e)
+            return jsonify({"error": "Ocorreu um erro interno no servidor."}), 500
 
     @bp.route("/api/accounts/users/<string:account_id>", methods=["DELETE"])
     def accounts_user_delete(account_id):
@@ -139,7 +144,8 @@ def create_auth_blueprint(deps):
             )
             return jsonify({"msg": "Conta excluida com sucesso do Supabase Auth"})
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            logger.error("Auth API error: %s", e)
+            return jsonify({"error": "Ocorreu um erro interno no servidor."}), 500
 
     @bp.route("/api/accounts/permissions", methods=["GET", "POST"])
     def accounts_permissions():
@@ -191,7 +197,8 @@ def create_auth_blueprint(deps):
             response = supabase.table("profiles").select("*").eq("status", "PENDING").execute()
             return jsonify({"items": response.data or []}), 200
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            logger.error("Auth API error: %s", e)
+            return jsonify({"error": "Ocorreu um erro interno no servidor."}), 500
 
     @bp.route("/api/admin/approve-user", methods=["POST"])
     @limiter.limit("10 per minute")
@@ -236,7 +243,8 @@ def create_auth_blueprint(deps):
             )
             return jsonify({"message": "User approved successfully", "data": response.data}), 200
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            logger.error("Auth API error: %s", e)
+            return jsonify({"error": "Ocorreu um erro interno no servidor."}), 500
 
     @bp.route("/api/admin/notify-new-user", methods=["POST"])
     @limiter.limit("10 per minute")
