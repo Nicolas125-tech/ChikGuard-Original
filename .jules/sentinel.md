@@ -85,3 +85,8 @@
 **Vulnerability:** The FastAPI middleware (`backend/main.py`) and the SocketIO ASGI app (`backend/src/api/fastapi_ws.py`) were configured with `allow_origins=["*"]` and `cors_allowed_origins='*'` respectively. This wildcard configuration allowed any external domain to make cross-origin requests or establish WebSocket connections.
 **Learning:** Using a wildcard `'*'` for CORS circumvents strict HTTP CORS policies. For WebSocket specifically, it exposes the application to Cross-Site WebSocket Hijacking (CSWSH), allowing malicious pages to establish authenticated WebSocket connections if the user's session is active, or at the very least interact with APIs bypassing Same-Origin Policy.
 **Prevention:** Always restrict CORS allowed origins to a centrally defined, explicit list of trusted domains (e.g., `ALLOWED_ORIGINS` in `src.security.headers`) instead of using wildcards in both HTTP middleware and WebSocket server initialization.
+
+## 2026-06-22 - [🛡️ Sentinel: Fix Information Exposure in Auth Error Handling]
+**Vulnerability:** The Flask auth API endpoints (`backend/src/api/auth.py`) returned raw exception strings to clients via `str(e)` in `500` error handlers.
+**Learning:** Returning unhandled exception strings exposes internal architecture, database schema constraints, or potential connection strings, causing Information Exposure (CWE-209).
+**Prevention:** Always log the actual raw exception server-side using the `logging` module and return a safe, generic fallback message (e.g., "Erro interno do servidor") in the JSON response payload.
