@@ -94,7 +94,7 @@ export default function ProfilePanel({ role, cameras = [] }) {
               </span>
               <button
                 aria-label="Alterar foto de perfil"
-                className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none transition-opacity duration-300 rounded-full"
               >
                 <Camera className="w-8 h-8 text-white/80" />
               </button>

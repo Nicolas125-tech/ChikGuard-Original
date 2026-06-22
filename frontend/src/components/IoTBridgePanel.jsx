@@ -161,7 +161,7 @@ void loop() {
                  navigator.clipboard.writeText(arduinoCode);
                  toast.success('Código copiado para a área de transferência!');
                }}
-               className="absolute top-4 right-4 bg-slate-800 hover:bg-slate-700 text-slate-300 p-2 rounded-lg text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity"
+               className="absolute top-4 right-4 bg-slate-800 hover:bg-slate-700 text-slate-300 p-2 rounded-lg text-xs font-semibold opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none transition-opacity"
             >
                Copiar Código
             </button>
