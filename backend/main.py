@@ -40,6 +40,7 @@ from src.api.fastapi_sensors import router as sensors_router
 from src.api.fastapi_birds import router_birds, router_weight
 from src.api.fastapi_webrtc import router as webrtc_router
 from src.api.fastapi_iot import router as iot_router
+from src.api.fastapi_climate import router as climate_router
 from src.api.fastapi_ws import socket_app
 from src.security.headers import ALLOWED_ORIGINS
 
@@ -56,6 +57,7 @@ fastapi_app.include_router(router_birds)
 fastapi_app.include_router(router_weight)
 fastapi_app.include_router(webrtc_router)
 fastapi_app.include_router(iot_router)
+fastapi_app.include_router(climate_router)
 
 # CORS middleware
 # Ajustando os ALLOWED_ORIGINS buscando de src.security.headers para seguranca
