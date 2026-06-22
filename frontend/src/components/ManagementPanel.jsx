@@ -340,7 +340,8 @@ export default function ManagementPanel({ serverIP, prefs, token, cameras = [], 
   );
 }
 
-function CalculadoraCA() {
+// Bolt Optimization: Memoize CalculadoraCA to prevent unnecessary re-renders when ManagementPanel polls
+const CalculadoraCA = React.memo(function CalculadoraCA() {
   const [racao, setRacao] = useState('');
   const [peso, setPeso] = useState('');
   
@@ -398,9 +399,10 @@ function CalculadoraCA() {
       </div>
     </div>
   );
-}
+});
 
-function CalculadoraLucro() {
+// Bolt Optimization: Memoize CalculadoraLucro to prevent unnecessary re-renders when ManagementPanel polls
+const CalculadoraLucro = React.memo(function CalculadoraLucro() {
   const [lote, setLote] = useState('');
   const [mortalidade, setMortalidade] = useState('');
   const [pesoAbate, setPesoAbate] = useState('');
@@ -449,4 +451,4 @@ function CalculadoraLucro() {
       </div>
     </div>
   );
-}
+});

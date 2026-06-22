@@ -196,7 +196,8 @@ export default function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServ
   );
 }
 
-function Field({ label, id, description, children }) {
+// Bolt Optimization: Memoize Field to prevent unnecessary re-renders
+const Field = React.memo(function Field({ label, id, description, children }) {
   return (
     <div className="flex flex-col gap-1.5">
       <label htmlFor={id} className="text-sm font-bold text-slate-200 tracking-wide">{label}</label>
@@ -204,4 +205,4 @@ function Field({ label, id, description, children }) {
       {children}
     </div>
   );
-}
+});
