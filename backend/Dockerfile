@@ -11,13 +11,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY --chown=appuser:appuser requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt psutil
 
-COPY . .
+COPY --chown=appuser:appuser . .
 
-# Ensure appuser owns the application files
-RUN chown -R appuser:appuser /app
 USER appuser
 
 ENV PYTHONPATH=/app

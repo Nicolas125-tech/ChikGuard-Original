@@ -1,5 +1,7 @@
 services:
   backend:
+    networks:
+      - backend-network
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -23,8 +25,11 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    networks:
+      - backend-network
+      - frontend-network
     ports:
-      - "80:80"
+      - "80:8080"
     depends_on:
       - backend
     restart: unless-stopped
@@ -32,6 +37,8 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
+    networks:
+      - frontend-network
     restart: unless-stopped
 
   sync_worker:
@@ -39,7 +46,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     command: python scripts/sync_worker.py
-    restart: always
+    restart: unless-stopped
+    networks:
+      - backend-network
     depends_on:
       - backend
     environment:
@@ -48,3 +57,10 @@ services:
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     volumes:
       - ./data:/app/data
+
+networks:
+  frontend-network:
+    driver: bridge
+  backend-network:
+    driver: bridge
+    internal: true

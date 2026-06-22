@@ -81,10 +81,8 @@ def _box_area(box: List) -> float:
 
 def _iou(a: List, b: List) -> float:
     """Intersection-over-Union entre dois bounding boxes [x1,y1,x2,y2]."""
-    ix1 = max(a[0], b[0])
-    iy1 = max(a[1], b[1])
-    ix2 = min(a[2], b[2])
-    iy2 = min(a[3], b[3])
+    ix1, iy1 = max(a[0], b[0]), max(a[1], b[1])
+    ix2, iy2 = min(a[2], b[2]), min(a[3], b[3])
     inter = max(0.0, float(ix2 - ix1)) * max(0.0, float(iy2 - iy1))
     if inter == 0.0:
         return 0.0
@@ -92,35 +90,53 @@ def _iou(a: List, b: List) -> float:
     return inter / max(union, 1e-6)
 
 
+def _compute_iou_matrix(boxes_a: np.ndarray, boxes_b: np.ndarray) -> np.ndarray:
+    """Calcula matriz de IoU vetorizada (N x M) em NumPy para máxima performance."""
+    if len(boxes_a) == 0 or len(boxes_b) == 0:
+        return np.zeros((len(boxes_a), len(boxes_b)), dtype=np.float32)
+    
+    tl = np.maximum(boxes_a[:, None, :2], boxes_b[None, :, :2])
+    br = np.minimum(boxes_a[:, None, 2:], boxes_b[None, :, 2:])
+    wh = np.maximum(0.0, br - tl)
+    inter = wh[:, :, 0] * wh[:, :, 1]
+    
+    area_a = (boxes_a[:, 2] - boxes_a[:, 0]) * (boxes_a[:, 3] - boxes_a[:, 1])
+    area_b = (boxes_b[:, 2] - boxes_b[:, 0]) * (boxes_b[:, 3] - boxes_b[:, 1])
+    union = area_a[:, None] + area_b[None, :] - inter
+    
+    return (inter / np.maximum(union, 1e-6)).astype(np.float32)
+
+
 def _nms_detections(detections: List[Dict], iou_thresh: float = 0.45) -> List[Dict]:
     """
-    Non-Maximum Suppression sobre lista de detecções.
-    Mantém a detecção de maior confiança quando IoU entre dois boxes >= iou_thresh.
+    Non-Maximum Suppression vetorizado com OpenCV (DNN)
+    para ganho extremo de performance (evita loop O(N^2) no Python puro).
     """
     if not detections:
         return []
 
-    # Ordena por confiança decrescente
-    dets = sorted(detections, key=lambda d: float(d.get("confidence", 0.0)), reverse=True)
+    from collections import defaultdict
+    class_to_dets = defaultdict(list)
+    boxes = []
+    scores = []
+    
+    for i, d in enumerate(detections):
+        x1, y1, x2, y2 = d["box"]
+        boxes.append([int(x1), int(y1), int(max(0, x2 - x1)), int(max(0, y2 - y1))])
+        scores.append(float(d.get("confidence", 0.0)))
+        class_to_dets[d.get("class_id", 0)].append(i)
+
     kept = []
-    suppressed = [False] * len(dets)
+    for cls_id, indices in class_to_dets.items():
+        cls_boxes = [boxes[i] for i in indices]
+        cls_scores = [scores[i] for i in indices]
+        # OpenCV NMSBoxes é altamente otimizado em C++
+        indices_kept = cv2.dnn.NMSBoxes(cls_boxes, cls_scores, score_threshold=0.0, nms_threshold=iou_thresh)
+        if len(indices_kept) > 0:
+            for idx in indices_kept.flatten():
+                kept.append(detections[indices[idx]])
 
-    for i, det_i in enumerate(dets):
-        if suppressed[i]:
-            continue
-        kept.append(det_i)
-        box_i = list(det_i["box"])
-        for j in range(i + 1, len(dets)):
-            if suppressed[j]:
-                continue
-            box_j = list(dets[j]["box"])
-            # Só suprimir se mesma classe (evitar suprimir pintinho por galinha)
-            if det_i.get("class_id") != dets[j].get("class_id"):
-                continue
-            if _iou(box_i, box_j) >= iou_thresh:
-                suppressed[j] = True
-
-    return kept
+    return sorted(kept, key=lambda x: float(x.get("confidence", 0.0)), reverse=True)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -202,10 +218,10 @@ class AdvancedTrackerWrapper:
         track_boxes = [t[:4] for t in tracks]
         track_ids = [int(t[4]) for t in tracks]
 
-        ious = np.zeros((len(boxes), len(track_boxes)), dtype=np.float32)
-        for i, b in enumerate(boxes):
-            for j, t in enumerate(track_boxes):
-                ious[i, j] = _iou(list(b), list(t))
+        # Operação de Numpy Broadcasting (vetorizada) em vez de nested loops Python
+        boxes_arr = np.array(boxes, dtype=np.float32)
+        tracks_arr = np.array(track_boxes, dtype=np.float32)
+        ious = _compute_iou_matrix(boxes_arr, tracks_arr)
 
         unassigned_dets = list(range(len(boxes)))
         unassigned_tracks = list(range(len(track_boxes)))
