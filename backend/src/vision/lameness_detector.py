@@ -53,7 +53,7 @@ class LamenessDetector:
 
                 # Análise profunda após preencher a janela temporal
                 if len(self.track_history[track_id]) >= (self.history_size * 0.8):
-                    is_lame, conf_score, details = self.analyze_gait_advanced(track_id)
+                    is_lame, conf_score, details = self.analyze_gait(track_id)
                     if is_lame:
                         events.append(self._emit_event(camera_id, track_id, conf_score, details))
                         self.track_history[track_id].clear()
@@ -101,73 +101,77 @@ class LamenessDetector:
 
         return float(np.degrees(angle_rad))
 
-    def analyze_gait_advanced(self, track_id: int) -> tuple[bool, float, dict]:
+    def analyze_gait(self, track_id: int) -> tuple[bool, float, dict]:
         """
         Heurística rigorosa de detecção de claudicação (Lameness).
 
-        Baseia-se na biometria do Ângulo Tibiotársico.
-        Regra de Negócio:
-        - Ave sentada/agachada: Média do ângulo < 60°
-        - Perna travada/baixa mobilidade: Variância do ângulo < 5.0
+        Baseia-se na biometria do Ângulo Tibiotársico (Hock Angle) calculado ao longo do tempo.
+        
+        Regra de Negócio Biomecânica:
+        - Ave sentada/agachada (agachamento crônico): Média histórica do ângulo < 60°
+        - Perna travada/rigidez articular (baixa mobilidade): Variância do ângulo < 5.0
+
+        Ambos os critérios devem ser satisfeitos simultaneamente para disparar o diagnóstico positivo.
 
         Args:
-            track_id (int): ID da ave sendo rastreada.
+            track_id (int): ID da ave rastreada pelo ByteTrack.
 
         Returns:
             tuple[bool, float, dict]: (is_lame, confidence_score, details_dict)
         """
         history = list(self.track_history[track_id])
 
-        # Índices esperados pelo modelo
-        HIP = 2  # Quadril / Pélvis
-        HOCK = 3  # Articulação Tibiotársica (Jarrete)
-        FOOT = 5  # Pata
+        # Mapeamento biomecânico dos Keypoints YOLOv8-pose
+        HIP = 2   # Quadril/Pélvis (ponto de fixação superior da coxa)
+        HOCK = 3  # Jarrete/Articulação Tibiotársica (articulação intermediária da perna)
+        FOOT = 5  # Pata (ponto de apoio ao solo)
 
         angles = []
 
         for curr_kp in history:
-            # Pula frames onde a confiança/coordenada da perna falhou (oclusão)
+            # Garante que os keypoints foram detectados com confiança razoável (evita oclusão)
             if curr_kp[HIP][0] > 0 and curr_kp[HOCK][0] > 0 and curr_kp[FOOT][0] > 0:
                 p1 = np.array(curr_kp[HIP][:2])
                 p2 = np.array(curr_kp[HOCK][:2])
                 p3 = np.array(curr_kp[FOOT][:2])
 
                 angle = self.calculate_hock_angle(p1, p2, p3)
-                if angle > 0:  # 0.0 é retorno de erro da função
+                if angle > 0:  # Descarta retornos de erro da função geométrica (0.0)
                     angles.append(angle)
 
-        # Exige histórico mínimo com visibilidade desobstruída
+        # Exige amostragem temporal mínima representativa (mínimo de 15 frames válidos)
         if len(angles) < 15:
             return False, 0.0, {}
 
-        # Cálculos estatísticos da série temporal
-        avg_angle = np.mean(angles)
-        var_angle = np.var(angles)
+        # Métricas estatísticas da série temporal do Hock Angle
+        avg_angle = float(np.mean(angles))
+        var_angle = float(np.var(angles))
 
         is_lame = False
         conf_score = 0.0
         symptom = None
 
-        # Aplicação da Regra de Negócio (Gatilho)
+        # Avaliação de claudicação conforme os limites fisiológicos
         if avg_angle < 60.0 and var_angle < 5.0:
             is_lame = True
-
-            # Cálculo de confiança:
-            # Quanto MENOR a variância (mais rígida/imóvel está a perna), maior a confiança.
-            # Normalizamos a confiança assumindo que 5.0 é o limiar inferior (0% conf) e 0.0 é certeza absoluta (100% conf)
-            conf_score = max(0.5, 1.0 - (var_angle / 5.0))
-
+            # Confiança baseada na imobilidade da articulação: variância mais baixa indica
+            # maior certeza de travamento articular. Normalizado com piso de 0.5.
+            conf_score = float(max(0.5, 1.0 - (var_angle / 5.0)))
             symptom = (
-                "Claudicação severa: Ângulo agachado (<60) e articulação travada (Variância baixa)"
+                "Claudicação crônica: Agachamento severo (ângulo médio <60) E rigidez articular (variância <5.0)"
             )
 
         details = {
-            "avg_hock_angle": round(float(avg_angle), 2),
-            "angle_variance": round(float(var_angle), 2),
+            "avg_hock_angle": round(avg_angle, 2),
+            "angle_variance": round(var_angle, 2),
             "symptom": symptom,
         }
 
         return is_lame, conf_score, details
+
+    def analyze_gait_advanced(self, track_id: int) -> tuple[bool, float, dict]:
+        """Método legado. Delega para a nova implementação estrita analyze_gait."""
+        return self.analyze_gait(track_id)
 
     def _emit_event(self, camera_id, track_id, confidence, details):
         event = {
