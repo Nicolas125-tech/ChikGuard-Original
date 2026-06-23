@@ -171,6 +171,25 @@ def register():
     return FireDetectionPlugin()
 ```
 
+### 🛂 Biosafety Audit Plugin (Heimdall)
+The **Biosafety Audit Plugin** monitors compliance of mandatory Personal Protective Equipment (EPIs) and audits vehicle presence in critical perimeter cameras (`ENTRANCE` and `SANITARY_BARRIER` zones).
+
+* **How it works:**
+  - Runs pure inference using a custom YOLOv8 model (`yolov8n-epi.engine`) without overhead on bird-tracking pipelines.
+  - Automatically targets only restricted entry zones (`ENTRANCE` or `SANITARY_BARRIER`).
+  - Matches detected people with required EPI categories (e.g. `helmet`, `vest`, `boots`) through bounding box containment/overlap analysis.
+  - Generates JSON event logs with `CRITICAL` severity to the database if any requirement is violated.
+
+* **Configuration (via context settings):**
+  - `BIOSAFETY_MODEL_PATH`: Path to the custom trained YOLOv8 weight file.
+  - `BIOSAFETY_REQUIRED_EPIS`: List of mandatory items to monitor (e.g. `["helmet", "vest", "boots"]`).
+
+* **Running tests:**
+  ```bash
+  cd backend
+  .venv\Scripts\pytest tests/plugins/
+  ```
+
 ---
 
 ## 📡 Key API Endpoints
