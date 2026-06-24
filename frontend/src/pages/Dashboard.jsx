@@ -28,6 +28,72 @@ import RulesPanel from '../components/RulesPanel';
 import BatchPassport from '../components/BatchPassport';
 import { getBaseUrl } from '../utils/config';
 
+// ── Sub-componente de Renderização do Conteúdo da Sidebar ──
+const SidebarContent = React.memo(({ tabs, tab, handleTabChange, role, onLogout }) => (
+  <>
+    <div className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+      {tabs.map((section, si) => (
+        <div key={si} className={si > 0 ? 'mt-6' : ''}>
+          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.15em] px-3 mb-2">
+            {section.title}
+          </div>
+          {section.items.map((item) => {
+            const Icon = item.icon;
+            const isActive = tab === item.id;
+
+            return (
+              <button
+                key={item.id}
+                data-tour={item.id}
+                onClick={() => handleTabChange(item.id)}
+                className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium flex items-center gap-3 transition-all duration-200 group relative ${
+                  isActive
+                    ? 'bg-emerald-500/12 text-emerald-400 shadow-sm shadow-emerald-500/5'
+                    : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
+                }`}
+              >
+                <Icon
+                  size={17}
+                  className={`transition-colors ${isActive ? 'text-emerald-400' : 'text-slate-500 group-hover:text-slate-400'}`}
+                />
+                <span className="flex-1">{item.label}</span>
+                {item.badge > 0 && (
+                  <span className="bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-tight animate-pulse-glow shadow-md shadow-rose-500/20">
+                    {item.badge}
+                  </span>
+                )}
+                {isActive && (
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-emerald-400 rounded-r-full" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+
+    <div className="p-3 border-t border-slate-800/60 tour-user-menu">
+      <div className="flex items-center gap-3 mb-3 px-2">
+        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-xs font-bold text-white uppercase shadow-md">
+          {role[0]}
+        </div>
+        <div className="flex flex-col min-w-0">
+          <span className="text-xs font-semibold text-slate-200 uppercase truncate">{role}</span>
+          <span className="text-[10px] text-slate-500 truncate">
+            {localStorage.getItem('cg_username') || 'Sistema'}
+          </span>
+        </div>
+      </div>
+      <button
+        onClick={onLogout}
+        className="w-full bg-red-500/8 hover:bg-red-500/15 text-red-400 font-medium px-3 py-2.5 rounded-xl transition-all border border-transparent hover:border-red-500/20 flex justify-center items-center gap-2 text-sm"
+      >
+        <LogOut size={15} /><span>Desconectar</span>
+      </button>
+    </div>
+  </>
+));
+
 export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, onSaveServer, onLogout }) {
   const [tab, setTab] = useState(() => {
     const hash = window.location.hash.replace('#', '');
@@ -314,72 +380,6 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
   const currentTab = allItems.find(t => t.id === tab);
   const activeCameraData = cameras.find(c => c.camera_id === activeCamera) || null;
 
-  // ── Sub-componente de Renderização do Conteúdo da Sidebar ──
-  const SidebarContent = () => (
-    <>
-      <div className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-        {tabs.map((section, si) => (
-          <div key={si} className={si > 0 ? 'mt-6' : ''}>
-            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.15em] px-3 mb-2">
-              {section.title}
-            </div>
-            {section.items.map((item) => {
-              const Icon = item.icon;
-              const isActive = tab === item.id;
-
-              return (
-                <button
-                  key={item.id}
-                  data-tour={item.id}
-                  onClick={() => handleTabChange(item.id)}
-                  className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium flex items-center gap-3 transition-all duration-200 group relative ${
-                    isActive
-                      ? 'bg-emerald-500/12 text-emerald-400 shadow-sm shadow-emerald-500/5'
-                      : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
-                  }`}
-                >
-                  <Icon
-                    size={17}
-                    className={`transition-colors ${isActive ? 'text-emerald-400' : 'text-slate-500 group-hover:text-slate-400'}`}
-                  />
-                  <span className="flex-1">{item.label}</span>
-                  {item.badge > 0 && (
-                    <span className="bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-tight animate-pulse-glow shadow-md shadow-rose-500/20">
-                      {item.badge}
-                    </span>
-                  )}
-                  {isActive && (
-                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-emerald-400 rounded-r-full" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-
-      <div className="p-3 border-t border-slate-800/60 tour-user-menu">
-        <div className="flex items-center gap-3 mb-3 px-2">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-xs font-bold text-white uppercase shadow-md">
-            {role[0]}
-          </div>
-          <div className="flex flex-col min-w-0">
-            <span className="text-xs font-semibold text-slate-200 uppercase truncate">{role}</span>
-            <span className="text-[10px] text-slate-500 truncate">
-              {localStorage.getItem('cg_username') || 'Sistema'}
-            </span>
-          </div>
-        </div>
-        <button
-          onClick={onLogout}
-          className="w-full bg-red-500/8 hover:bg-red-500/15 text-red-400 font-medium px-3 py-2.5 rounded-xl transition-all border border-transparent hover:border-red-500/20 flex justify-center items-center gap-2 text-sm"
-        >
-          <LogOut size={15} /><span>Desconectar</span>
-        </button>
-      </div>
-    </>
-  );
-
   // ── Métodos de Renderização Secundários (Clean Code Layout) ──
 
   const renderDesktopSidebar = () => (
@@ -392,7 +392,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
           ChickGuard
         </h1>
       </div>
-      <SidebarContent />
+      <SidebarContent tabs={tabs} tab={tab} handleTabChange={handleTabChange} role={role} onLogout={onLogout} />
     </aside>
   );
 
@@ -413,7 +413,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
               <X size={20} />
             </button>
           </div>
-          <SidebarContent />
+          <SidebarContent tabs={tabs} tab={tab} handleTabChange={handleTabChange} role={role} onLogout={onLogout} />
         </aside>
       </div>
     );
