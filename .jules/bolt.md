@@ -23,3 +23,7 @@
 ## 2024-06-21 - [Presentational Components Unnecessary Re-renders]
 **Learning:** Found an inefficiency in several components (`BirdsPanel`, `DigitalTwin3D`, `ManagementPanel`, `MortalityForecastChart`, `SettingsPanel`) where presentational child components defined inside the file but outside the main component (`LiveBirdMap`, `Fan`, `Heater`, `Shed`, `CalculadoraCA`, `CalculadoraLucro`, `CustomTooltip`, `Field`) were not memoized. As a result, they unnecessarily re-rendered every time the parent component polled the backend or updated its state.
 **Action:** Wrapped these leaf functional components with `React.memo()`. This leverages React's shallow comparison of props to bypass rendering when the props haven't changed, significantly reducing Virtual DOM diffing during high-frequency polling intervals or parent updates.
+
+## 2024-07-28 - [Sidebar Unnecessary Re-renders]
+**Learning:** Found an inefficiency in `Dashboard.jsx` where `SidebarContent` was defined inside the `Dashboard` component. This caused `SidebarContent` to be completely re-created on every render cycle triggered by dashboard polling states (like time or alerts), forcing expensive unmounts and remounts of the entire sidebar component tree.
+**Action:** Always extract functional sub-components out of parent render functions. Wrap these extracted components in `React.memo()` to prevent re-renders when their props haven't changed.
