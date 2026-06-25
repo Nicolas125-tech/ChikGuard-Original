@@ -1,0 +1,48 @@
+--- frontend/src/components/IoTBridgePanel.jsx
++++ frontend/src/components/IoTBridgePanel.jsx
+@@ -1,5 +1,5 @@
+ import React, { useState, useEffect, useCallback } from 'react';
+-import { Cpu, Wind, Zap, SlidersHorizontal, Radio, Activity } from 'lucide-react';
++import { Cpu, Wind, Zap, SlidersHorizontal, Radio, Activity, Copy, Check } from 'lucide-react';
+ import { getBaseUrl } from '../utils/config';
+ import { toast } from 'sonner';
+
+@@ -8,6 +8,7 @@
+   const [iotStatus, setIotStatus] = useState(null);
+   const [loading, setLoading] = useState(true);
+   const [showCode, setShowCode] = useState(false);
++  const [isCopied, setIsCopied] = useState(false);
+   const baseUrl = getBaseUrl(serverIP);
+
+   const fetchStatus = useCallback(async () => {
+@@ -148,22 +149,26 @@
+       {/* Arduino Code Generator Section */}
+       <div className="mt-6 border-t border-slate-800 pt-6">
+         <button
++          aria-expanded={showCode}
+           onClick={() => setShowCode(!showCode)}
+-          className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold py-2 px-4 rounded-xl transition-colors flex items-center gap-2 mb-4"
++          className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold py-2 px-4 rounded-xl transition-colors flex items-center gap-2 mb-4 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none"
+         >
+-          <Cpu size={16} />
++          <Cpu size={16} aria-hidden="true" />
+           {showCode ? 'Ocultar Código C++ (ESP32/Arduino)' : 'Conectar novo Arduino/ESP32'}
+         </button>
+
+         {showCode && (
+           <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 overflow-hidden relative group">
+             <button
+                onClick={() => {
+                  navigator.clipboard.writeText(arduinoCode);
++                 setIsCopied(true);
+                  toast.success('Código copiado para a área de transferência!');
++                 setTimeout(() => setIsCopied(false), 2000);
+                }}
+-               className="absolute top-4 right-4 bg-slate-800 hover:bg-slate-700 text-slate-300 p-2 rounded-lg text-xs font-semibold opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none transition-opacity"
++               className="absolute top-4 right-4 bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-lg text-xs font-semibold opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none transition-opacity flex items-center gap-1.5"
+             >
+-               Copiar Código
++               {isCopied ? <Check size={14} className="text-emerald-400" aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
++               {isCopied ? <span className="text-emerald-400">Copiado!</span> : 'Copiar Código'}
+             </button>
+             <div className="text-emerald-400 text-xs font-mono mb-2">/* Firmware para ESP32 - ChikGuard IoT Node */</div>
