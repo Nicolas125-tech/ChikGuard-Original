@@ -4,6 +4,7 @@ import { getBaseUrl } from '../utils/config';
 import { RefreshCw, TrendingUp } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import MortalityForecastChart from './MortalityForecastChart';
+import { isDeepEqual } from '../utils/performance';
 
 const growthDataMock = [
   { day: 'Dia 1', ideal: 45, real: 46 },
@@ -47,28 +48,27 @@ export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], ac
     if (i.ok) {
       const data = await i.json();
       // Bolt Optimization: Prevent unnecessary React re-renders by skipping state updates if the polled API data is identical.
-      setImmobility(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+      setImmobility(prev => isDeepEqual(prev, data) ? prev : data);
     }
     if (bt.ok) {
       const data = await bt.json();
       // Bolt Optimization: Prevent unnecessary React re-renders by skipping state updates if the polled API data is identical.
-      setBatches(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+      setBatches(prev => isDeepEqual(prev, data) ? prev : data);
     }
     if (c.ok) {
       const data = await c.json();
       // Bolt Optimization: Prevent unnecessary React re-renders by skipping state updates if the polled API data is identical.
-      setApiCameras(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+      setApiCameras(prev => isDeepEqual(prev, data) ? prev : data);
     }
     if (lb.ok) {
       const data = await lb.json();
       // Bolt Optimization: Prevent unnecessary React re-renders by skipping state updates if the polled API data is identical.
-      setLogbook(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+      setLogbook(prev => isDeepEqual(prev, data) ? prev : data);
     }
     if (sum.ok) {
       const d = await sum.json();
       const prev = dadosRef.current;
-      const newStr = JSON.stringify(d);
-      if (!prev || JSON.stringify(prev) !== newStr) {
+      if (!prev || !isDeepEqual(prev, d)) {
         setBehavior(d.behavior);
         setSensors(d.sensors);
         setAutoMode(d.automation);

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { getBaseUrl } from '../utils/config';
+import { isDeepEqual } from '../utils/performance';
 
 export default function AlertsPanel({ serverIP, prefs, token, cameras = [], activeCamera }) {
   const [alerts, setAlerts] = useState([]);
@@ -14,7 +15,7 @@ export default function AlertsPanel({ serverIP, prefs, token, cameras = [], acti
       const r = await fetch(`${baseUrl}/api/alerts`, { headers: { Authorization: `Bearer ${token}` } });
       if (!r.ok) throw new Error('Alerts fetch failed');
       const data = await r.json();
-      setAlerts(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+      setAlerts(prev => isDeepEqual(prev, data) ? prev : data);
     } finally {
       setLoading(false);
     }

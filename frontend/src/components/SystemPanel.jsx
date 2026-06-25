@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Activity, Database, Server, Clock, Cpu, HardDrive } from 'lucide-react';
+import { isDeepEqual } from '../utils/performance';
 
 const MetricBar = React.memo(({ label, percent, icon, colorClass }) => (
   <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
@@ -43,7 +44,7 @@ export default function SystemPanel({ serverIP, prefs, token }) {
       // Bolt Optimization: Prevent unnecessary re-renders when polling data is identical.
       if (res.ok) {
         const data = await res.json();
-        setHealth(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+        setHealth(prev => isDeepEqual(prev, data) ? prev : data);
       }
     } catch (err) {
       console.error('Error fetching system health:', err);

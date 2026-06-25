@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Cpu, Wind, Zap, SlidersHorizontal } from 'lucide-react';
 import { getBaseUrl } from '../utils/config';
 import { toast } from 'sonner';
+import { isDeepEqual } from '../utils/performance';
 
 export default function DevicesPanel({ token, serverIP, canControlDevices, cameras = [], activeCamera }) {
   const [dispositivos, setDispositivos] = useState({ ventilacao: false, aquecedor: false });
@@ -15,12 +16,12 @@ export default function DevicesPanel({ token, serverIP, canControlDevices, camer
       const r = await fetch(`${baseUrl}/api/estado-dispositivos`, { headers: { Authorization: `Bearer ${token}` } });
       if (!r.ok) throw new Error('Device state fetch failed');
       const dispData = await r.json();
-      setDispositivos(prev => JSON.stringify(prev) === JSON.stringify(dispData) ? prev : dispData);
+      setDispositivos(prev => isDeepEqual(prev, dispData) ? prev : dispData);
 
       const auto = await fetch(`${baseUrl}/api/auto-mode`, { headers: { Authorization: `Bearer ${token}` } });
       if (auto.ok) {
         const autoData = await auto.json();
-        setAutoMode(prev => JSON.stringify(prev) === JSON.stringify(autoData) ? prev : autoData);
+        setAutoMode(prev => isDeepEqual(prev, autoData) ? prev : autoData);
       }
 
       const l = await fetch(`${baseUrl}/api/luz-dimmer`, { headers: { Authorization: `Bearer ${token}` } });

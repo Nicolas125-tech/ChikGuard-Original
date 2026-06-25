@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import SystemCard from './SystemCard';
 import { getBaseUrl } from '../utils/config';
+import { isDeepEqual } from '../utils/performance';
 
 export default function BirdsPanel({ token, serverIP, prefs, cameras = [], activeCamera }) {
   const [live, setLive] = useState({ count: 0, items: [] });
@@ -21,15 +22,15 @@ export default function BirdsPanel({ token, serverIP, prefs, cameras = [], activ
       // Bolt Optimization: Prevent unnecessary re-renders when polling data is identical.
       if (liveRes.ok) {
         const liveData = await liveRes.json();
-        setLive(prev => JSON.stringify(prev) === JSON.stringify(liveData) ? prev : liveData);
+        setLive(prev => isDeepEqual(prev, liveData) ? prev : liveData);
       }
       if (regRes.ok) {
         const regData = await regRes.json();
-        setRegistry(prev => JSON.stringify(prev) === JSON.stringify(regData) ? prev : regData);
+        setRegistry(prev => isDeepEqual(prev, regData) ? prev : regData);
       }
       if (historyRes.ok) {
         const historyData = await historyRes.json();
-        setHistory(prev => JSON.stringify(prev) === JSON.stringify(historyData) ? prev : historyData);
+        setHistory(prev => isDeepEqual(prev, historyData) ? prev : historyData);
       }
     } finally {
       setLoading(false);

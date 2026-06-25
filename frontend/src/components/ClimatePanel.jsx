@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Wind, Zap, Thermometer, LayoutDashboard, Download, CloudLightning, RefreshCw } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { getBaseUrl } from '../utils/config';
+import { isDeepEqual } from '../utils/performance';
 
 export default function ClimatePanel({ token, serverIP, prefs, canControlDevices, cameras = [], activeCamera }) {
   const [dispositivos, setDispositivos] = useState({ ventilacao: false, aquecedor: false });
@@ -17,7 +18,7 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
       const r = await fetch(`${baseUrl}/api/estado-dispositivos`, { headers: { Authorization: `Bearer ${token}` } });
       if (!r.ok) throw new Error('Device state fetch failed');
       const data = await r.json() || { ventilacao: false, aquecedor: false };
-      setDispositivos(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+      setDispositivos(prev => isDeepEqual(prev, data) ? prev : data);
     } catch {
       setErro(true);
     }
@@ -28,7 +29,7 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
       const r = await fetch(`${baseUrl}/api/history`, { headers: { Authorization: `Bearer ${token}` } });
       if (!r.ok) throw new Error('History fetch failed');
       const data = await r.json() || [];
-      setHistorico(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+      setHistorico(prev => isDeepEqual(prev, data) ? prev : data);
     } catch {
       setErro(true);
     }
@@ -40,7 +41,7 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
       if (r.ok) {
         const data = await r.json();
         // Bolt Optimization: Prevent unnecessary React re-renders by skipping state updates if the polled API data is identical.
-        setWeather(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+        setWeather(prev => isDeepEqual(prev, data) ? prev : data);
       }
     } catch {
       // ignore
