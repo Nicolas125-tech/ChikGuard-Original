@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, Database } from 'lucide-react';
 import { getBaseUrl } from '../utils/config';
 import { toast } from 'sonner';
+import { isDeepEqual } from '../utils/performance';
 
 export default function HistoryPanel({ serverIP, prefs, token, cameras = [], activeCamera }) {
   const [history, setHistory] = useState([]);
@@ -13,7 +14,7 @@ export default function HistoryPanel({ serverIP, prefs, token, cameras = [], act
       const r = await fetch(`${baseUrl}/api/history`, { headers: { Authorization: `Bearer ${token}` } });
       if (!r.ok) throw new Error('History fetch failed');
       const data = await r.json();
-      setHistory(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+      setHistory(prev => isDeepEqual(prev, data) ? prev : data);
     } finally {
       setLoading(false);
     }

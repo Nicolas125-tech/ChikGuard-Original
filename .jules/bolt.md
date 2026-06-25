@@ -27,3 +27,7 @@
 ## 2024-07-28 - [Sidebar Unnecessary Re-renders]
 **Learning:** Found an inefficiency in `Dashboard.jsx` where `SidebarContent` was defined inside the `Dashboard` component. This caused `SidebarContent` to be completely re-created on every render cycle triggered by dashboard polling states (like time or alerts), forcing expensive unmounts and remounts of the entire sidebar component tree.
 **Action:** Always extract functional sub-components out of parent render functions. Wrap these extracted components in `React.memo()` to prevent re-renders when their props haven't changed.
+
+## 2024-06-25 - React Component Re-render Performance Issue
+**Learning:** Found deep equality checks `JSON.stringify(prev) === JSON.stringify(data)` inside React setter functions on state hook updates used in polling API calls (`setInterval`). The serialization inside the setter function stringifies the state on every poll response to compare it against the old state to avoid updating state if the JSON representation of data is the same. While this prevents unnecessary re-renders in the child tree, this is a terrible anti-pattern as JSON serialization is synchronous and blocks the main thread, negating its performance benefits, and it's especially bad on large payloads or fast poll rates, performing O(N) operations every tick.
+**Action:** Replace `JSON.stringify` comparisons with a more performant utility check or rely on React's natural rendering/reconciliation, or identify the minimal specific fields that identify a state change instead of serializing the full payload.

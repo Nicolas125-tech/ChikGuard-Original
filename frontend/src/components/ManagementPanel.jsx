@@ -3,6 +3,7 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YA
 import SystemCard from './SystemCard';
 import { getBaseUrl } from '../utils/config';
 import { RefreshCw, Download } from 'lucide-react';
+import { isDeepEqual } from '../utils/performance';
 
 export default function ManagementPanel({ serverIP, prefs, token, cameras = [], activeCamera }) {
   const baseUrl = getBaseUrl(serverIP);
@@ -35,33 +36,32 @@ export default function ManagementPanel({ serverIP, prefs, token, cameras = [], 
     ]);
     if (wCurve.ok) {
       const data = (await wCurve.json()).items || [];
-      setWeightCurve(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+      setWeightCurve(prev => isDeepEqual(prev, data) ? prev : data);
     }
     if (th.ok) {
       const data = await th.json();
-      setThermal(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+      setThermal(prev => isDeepEqual(prev, data) ? prev : data);
     }
     if (en.ok) {
       const data = await en.json();
-      setEnergy(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+      setEnergy(prev => isDeepEqual(prev, data) ? prev : data);
     }
     if (au.ok) {
       const data = await au.json();
-      setAudit(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+      setAudit(prev => isDeepEqual(prev, data) ? prev : data);
     }
     if (sy.ok) {
       const data = await sy.json();
-      setSync(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+      setSync(prev => isDeepEqual(prev, data) ? prev : data);
     }
     if (sh.ok) {
       const data = (await sh.json()).items || [];
-      setSensorHistory(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+      setSensorHistory(prev => isDeepEqual(prev, data) ? prev : data);
     }
     if (sum.ok) {
       const d = await sum.json();
       const prev = dadosRef.current;
-      const newStr = JSON.stringify(d);
-      if (!prev || JSON.stringify(prev) !== newStr) {
+      if (!prev || !isDeepEqual(prev, d)) {
         setWeightLive(d.weight);
         setAcoustic(d.acoustic);
         setAcousticModel({ loaded: d.acoustic.trained_model_loaded });

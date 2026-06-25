@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Cpu, Wind, Zap, SlidersHorizontal, Radio, Activity, Copy, Check } from 'lucide-react';
 import { getBaseUrl } from '../utils/config';
 import { toast } from 'sonner';
+import { isDeepEqual } from '../utils/performance';
 
 export default function IoTBridgePanel({ token, serverIP }) {
   const [iotStatus, setIotStatus] = useState(null);
@@ -18,7 +19,7 @@ export default function IoTBridgePanel({ token, serverIP }) {
       if (res.ok) {
         const data = await res.json();
         // Bolt Optimization: Prevent unnecessary React re-renders by skipping state updates if the polled API data is identical.
-        setIotStatus(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+        setIotStatus(prev => isDeepEqual(prev, data) ? prev : data);
       }
     } catch (err) {
       console.error("Erro ao buscar status do IoT Bridge:", err);

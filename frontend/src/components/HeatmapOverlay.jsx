@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getBaseUrl } from '../utils/config';
+import { isDeepEqual } from '../utils/performance';
 
 export default function HeatmapOverlay({ serverIP, token }) {
   const [points, setPoints] = useState([]);
@@ -14,7 +15,7 @@ export default function HeatmapOverlay({ serverIP, token }) {
       if (response.ok) {
         const data = await response.json();
         const newPoints = data.points || [];
-        setPoints(prev => JSON.stringify(prev) === JSON.stringify(newPoints) ? prev : newPoints);
+        setPoints(prev => isDeepEqual(prev, newPoints) ? prev : newPoints);
       }
     } catch (err) {
       console.error('Heatmap fetch error:', err);

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Layers, Thermometer, Bird, Cpu, AlertTriangle, Fan, Flame, Activity } from 'lucide-react';
 import { getBaseUrl } from '../utils/config';
 import DigitalTwin3D from './DigitalTwin3D';
+import { isDeepEqual } from '../utils/performance';
 
 export default function DigitalTwinPanel({ token, serverIP, cameras = [], activeCamera }) {
   const [activeLayer, setActiveLayer] = useState('sensors'); // 'sensors' | 'birds' | 'devices' | 'alerts'
@@ -29,24 +30,24 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
       // Bolt Optimization: Prevent unnecessary re-renders when polling data is identical.
       if (rSensors.ok) {
         const sData = await rSensors.json();
-        setSensorLive(prev => JSON.stringify(prev) === JSON.stringify(sData) ? prev : sData);
+        setSensorLive(prev => isDeepEqual(prev, sData) ? prev : sData);
       }
 
       if (rDevices.ok) {
         const dData = await rDevices.json();
-        setDeviceState(prev => JSON.stringify(prev) === JSON.stringify(dData) ? prev : dData);
+        setDeviceState(prev => isDeepEqual(prev, dData) ? prev : dData);
       }
 
       if (rHeatmap.ok) {
         const hData = await rHeatmap.json();
         const newPoints = hData.points || [];
-        setHeatmapPoints(prev => JSON.stringify(prev) === JSON.stringify(newPoints) ? prev : newPoints);
+        setHeatmapPoints(prev => isDeepEqual(prev, newPoints) ? prev : newPoints);
       }
 
       if (rAnomalies.ok) {
         const aData = await rAnomalies.json();
         const newItems = aData.items || [];
-        setThermalAnomalies(prev => JSON.stringify(prev) === JSON.stringify(newItems) ? prev : newItems);
+        setThermalAnomalies(prev => isDeepEqual(prev, newItems) ? prev : newItems);
       }
     } catch (err) {
       console.error('Error fetching digital twin data:', err);
