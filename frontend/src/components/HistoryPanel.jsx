@@ -57,8 +57,13 @@ export default function HistoryPanel({ serverIP, prefs, token, cameras = [], act
     <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm h-[calc(100vh-12rem)] min-h-[500px] flex flex-col">
       <div className="p-4 border-b border-slate-800 bg-slate-950/50 flex justify-between items-center z-10 sticky top-0 backdrop-blur-sm">
         <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">Histórico de Leituras - <span className="text-emerald-400">{farmName}</span></h2>
-        <button onClick={exportHistoryCSV} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold px-4 py-2 sm:py-2.5 rounded-xl shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 whitespace-nowrap flex items-center gap-2">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="hidden sm:inline-block"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+        <button
+          onClick={exportHistoryCSV}
+          disabled={history.length === 0}
+          title={history.length === 0 ? "Nenhum histórico disponível para exportar" : "Exportar Excel (CSV)"}
+          className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold px-4 py-2 sm:py-2.5 rounded-xl shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 whitespace-nowrap flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+        >
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="hidden sm:inline-block"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
           Exportar Excel (CSV)
         </button>
       </div>
@@ -73,7 +78,7 @@ export default function HistoryPanel({ serverIP, prefs, token, cameras = [], act
       <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent bg-slate-950/20">
         {history.length === 0 && (
           <div className="p-12 text-slate-500 text-center flex flex-col items-center justify-center h-full">
-            <Database size={40} className="mb-3 opacity-30" />
+            <Database aria-hidden="true" size={40} className="mb-3 opacity-30" />
             <p className="font-semibold text-slate-400">Nenhuma leitura registrada.</p>
           </div>
         )}
