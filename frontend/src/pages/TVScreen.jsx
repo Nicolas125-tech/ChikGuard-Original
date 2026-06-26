@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { getBaseUrl } from '../utils/config';
+import { isDeepEqual } from '../utils/performance';
 
 export default function TVScreen({ serverIP, showHeader = false, onLogout }) {
   const [summary, setSummary] = useState(null);
@@ -17,15 +18,15 @@ export default function TVScreen({ serverIP, showHeader = false, onLogout }) {
     ]);
     if (s.ok) {
       const data = await s.json();
-      setSummary(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+      setSummary(prev => isDeepEqual(prev, data) ? prev : data);
     }
     if (a.ok) {
       const data = await a.json();
-      setAlerts(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+      setAlerts(prev => isDeepEqual(prev, data) ? prev : data);
     }
     if (w.ok) {
       const data = await w.json();
-      setWeather(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+      setWeather(prev => isDeepEqual(prev, data) ? prev : data);
     }
   }, [baseUrl]);
 
