@@ -120,6 +120,79 @@ async def get_cameras():
     }
 
 
+@fastapi_app.get("/api/status")
+async def get_status():
+    import time
+    from src.core.state import sensor_state, active_camera_id
+    temp = sensor_state.get("temperature_c", 28.5)
+    return {
+        "temperatura": temp,
+        "status": "NORMAL" if temp < 32 else "CALOR",
+        "active_camera": active_camera_id,
+    }
+
+
+@fastapi_app.get("/api/alerts")
+async def get_alerts():
+    return []
+
+
+@fastapi_app.get("/api/history")
+async def get_history():
+    import time
+    from src.core.state import sensor_state
+    temp = sensor_state.get("temperature_c", 28.5)
+    return [
+        {
+            "hora": time.strftime("%H:%M:%S"),
+            "temp": temp,
+            "status": "NORMAL" if temp < 32 else "CALOR",
+        }
+    ]
+
+
+@fastapi_app.get("/api/estado-dispositivos")
+async def get_estado_dispositivos():
+    from src.core.fsm_task import actuator_state
+    from src.core.state import active_camera_id
+    return {
+        "ventilacao": actuator_state.get("ventilacao_on", False),
+        "aquecedor": actuator_state.get("aquecedor_on", False),
+        "modo_automatico": True,
+        "luz_intensidade_pct": 0,
+        "camera_id": active_camera_id,
+    }
+
+
+@fastapi_app.post("/api/auto-mode")
+async def set_auto_mode(request: Request):
+    return {"msg": "Modo automático atualizado", "status": "ok"}
+
+
+@fastapi_app.post("/api/ventilacao")
+async def control_ventilacao(request: Request):
+    from src.core.fsm_task import actuator_state
+    try:
+        data = await request.json()
+        power = bool(data.get("power", False))
+        actuator_state["ventilacao_on"] = power
+        return {"status": "ok", "ventilacao": power}
+    except Exception:
+        return {"status": "error", "message": "Payload inválido"}
+
+
+@fastapi_app.post("/api/aquecedor")
+async def control_aquecedor(request: Request):
+    from src.core.fsm_task import actuator_state
+    try:
+        data = await request.json()
+        power = bool(data.get("power", False))
+        actuator_state["aquecedor_on"] = power
+        return {"status": "ok", "aquecedor": power}
+    except Exception:
+        return {"status": "error", "message": "Payload inválido"}
+
+
 @fastapi_app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     LOGGER.error(f"Erro nao tratado na rota {request.url.path}: {exc}")
