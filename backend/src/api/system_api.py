@@ -4,6 +4,8 @@ from flask import Blueprint, jsonify, request
 
 from database import AuditLog, BirdIdentity, EnergyUsageDaily, EventLog, Reading, SyncQueueItem
 from src.security.auth import require_auth
+from src.api.system_api_extra import add_remaining_routes
+
 
 
 def create_system_blueprint(deps):

@@ -67,8 +67,13 @@ class BiosafetyAuditPlugin(PluginBase):
         from ultralytics import YOLO
 
         settings = context.get("settings", {})
-        self.model_path = settings.get("BIOSAFETY_MODEL_PATH", "yolov8n-epi.engine")
-        self.required_epis = settings.get("BIOSAFETY_REQUIRED_EPIS", ["helmet", "vest", "boots"])
+        if hasattr(settings, "get"):
+            self.model_path = settings.get("BIOSAFETY_MODEL_PATH", "yolov8n-epi.engine")
+            self.required_epis = settings.get("BIOSAFETY_REQUIRED_EPIS", ["helmet", "vest", "boots"])
+        else:
+            self.model_path = getattr(settings, "biosafety_model_path", None) or getattr(settings, "BIOSAFETY_MODEL_PATH", "yolov8n-epi.engine")
+            self.required_epis = getattr(settings, "biosafety_required_epis", None) or getattr(settings, "BIOSAFETY_REQUIRED_EPIS", ["helmet", "vest", "boots"])
+
 
         # Carrega o modelo com fallback
         try:
