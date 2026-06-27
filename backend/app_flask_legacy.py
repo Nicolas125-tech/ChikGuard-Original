@@ -20,6 +20,9 @@ from flask import Flask, has_request_context, jsonify, request
 from flask_socketio import SocketIO
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
 from database import (
     AcousticReading,
     AuditLog,
@@ -208,14 +211,14 @@ CRITICAL_ALLOWED_CIDRS = [
 LOGIN_RATE_WINDOW_SEC = int(os.getenv("LOGIN_RATE_WINDOW_SEC", "300"))
 LOGIN_RATE_MAX_ATTEMPTS = int(os.getenv("LOGIN_RATE_MAX_ATTEMPTS", "10"))
 COUGH_MODEL_PATH = os.getenv(
-    "COUGH_MODEL_PATH", os.path.join(os.path.dirname(__file__), "models", "cough_classifier.joblib")
+    "COUGH_MODEL_PATH", os.path.join(CURRENT_DIR, "models", "cough_classifier.joblib")
 )
 COUGH_MODEL_FEATURES = int(os.getenv("COUGH_MODEL_FEATURES", "48"))
 SIM_VIDEO_PATH = os.getenv("SIM_VIDEO_PATH", "video_granja.mp4").strip()
 VIEWER_USERNAME = os.getenv("VIEWER_USERNAME", "").strip()
 VIEWER_PASSWORD = os.getenv("VIEWER_PASSWORD", "").strip()
 
-REPORTS_DIR = os.path.join(os.path.dirname(__file__), "reports")
+REPORTS_DIR = os.path.join(CURRENT_DIR, "reports")
 HEATMAP_DIR = os.path.join(REPORTS_DIR, "heatmaps")
 os.makedirs(HEATMAP_DIR, exist_ok=True)
 STREAM_JPEG_QUALITY = max(40, min(STREAM_JPEG_QUALITY, 95))
@@ -353,7 +356,7 @@ setup_rate_limiting(app)
 socketio = SocketIO(app, cors_allowed_origins=ALLOWED_ORIGINS, async_mode="threading")
 db.init_app(app)
 ALERT_PROVIDER = build_alert_provider(SETTINGS)
-PLUGINS_ROOT = os.getenv("PLUGINS_DIR", os.path.join(os.path.dirname(__file__), "plugins"))
+PLUGINS_ROOT = os.getenv("PLUGINS_DIR", os.path.join(CURRENT_DIR, "plugins"))
 PLUGIN_MANAGER = PluginManager(plugins_root=PLUGINS_ROOT, logger=LOGGER)
 PLUGIN_MANAGER.load_all({"logger": LOGGER, "settings": SETTINGS})
 
@@ -2604,7 +2607,7 @@ def camera_loop():
                         sim_path = (
                             sim_path
                             if os.path.isabs(sim_path)
-                            else os.path.join(os.path.dirname(__file__), sim_path)
+                            else os.path.join(CURRENT_DIR, sim_path)
                         )
                     if VideoProcessor is not None and sim_path and os.path.exists(sim_path):
                         if video_sim is None:
@@ -2771,7 +2774,7 @@ def camera_loop():
                 sim_path = (
                     sim_path
                     if os.path.isabs(sim_path)
-                    else os.path.join(os.path.dirname(__file__), sim_path)
+                    else os.path.join(CURRENT_DIR, sim_path)
                 )
                 if VideoProcessor is not None and os.path.exists(sim_path):
                     sim_msg = "Camera real nao encontrada. Simulacao em video ativada."
@@ -2804,7 +2807,7 @@ def camera_loop():
                         sim_path = (
                             sim_path
                             if os.path.isabs(sim_path)
-                            else os.path.join(os.path.dirname(__file__), sim_path)
+                            else os.path.join(CURRENT_DIR, sim_path)
                         )
                         if VideoProcessor is not None and os.path.exists(sim_path):
                             if video_sim is None:
