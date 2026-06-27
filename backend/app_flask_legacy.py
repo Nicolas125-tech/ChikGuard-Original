@@ -38,7 +38,6 @@ from database import (
     SyncQueueItem,
     Tenant,
     ThermalAnomaly,
-    User,
     WeightEstimate,
     db,
 )
@@ -3043,7 +3042,7 @@ api_deps = {
     "request_ip": _request_ip,
     "audit": _audit,
     "utcnow": _utcnow,
-    "User": User,
+    "User": None,
     "Reading": Reading,
     "lock": lock,
     "get_global_frame": lambda: global_frame,
