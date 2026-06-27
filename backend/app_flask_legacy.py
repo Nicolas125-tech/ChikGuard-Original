@@ -2967,6 +2967,12 @@ def _get_current_account():
         return None
 
 
+def _get_global_frame_on_demand():
+    global last_video_request_time
+    last_video_request_time = time.time()
+    return global_frame
+
+
 api_deps = {
 
     "time": time,
@@ -2978,7 +2984,7 @@ api_deps = {
     "User": None,
     "Reading": Reading,
     "lock": lock,
-    "get_global_frame": lambda: global_frame,
+    "get_global_frame": _get_global_frame_on_demand,
     "get_object_count": lambda: object_count,
     "stream_jpeg_quality": STREAM_JPEG_QUALITY,
     "stream_frame_interval_sec": STREAM_FRAME_INTERVAL_SEC,
@@ -3013,7 +3019,7 @@ api_deps = {
     "io": io,
     "np": np,
     "perf_metrics": _perf_metrics,
-    "camera_capture": _camera_capture,
+    "camera_capture": lambda: _camera_capture,
     "CV_ENGINE_AVAILABLE": _CV_ENGINE_AVAILABLE,
     "species_counts": species_counts,
     "BIRD_CLASS_NAME": BIRD_CLASS_NAME,
