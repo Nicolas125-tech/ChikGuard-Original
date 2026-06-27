@@ -19,6 +19,25 @@ async def lifespan(fastapi_app: FastAPI):
     # Setup de inicializacao do backend (conexao com DB, modelos AI, etc)
     LOGGER.info("Iniciando o servidor FastAPI - ChikGuard")
     
+    # Inicializa o banco de dados SQLite
+    try:
+        from database import db, Camera
+        from src.db.session import engine, SessionLocal
+        db.metadata.create_all(bind=engine)
+        
+        db_session = SessionLocal()
+        try:
+            if not db_session.query(Camera).filter_by(camera_id="galpao-1").first():
+                db_session.add(Camera(camera_id="galpao-1", name="Câmera 1", status="online"))
+                db_session.commit()
+                LOGGER.info("Banco de dados SQLite inicializado e semeado com câmera padrão.")
+        except Exception as db_err:
+            LOGGER.error(f"Erro ao semear banco de dados SQLite: {db_err}")
+        finally:
+            db_session.close()
+    except Exception as db_init_err:
+        LOGGER.error(f"Erro ao inicializar tabelas do banco de dados SQLite: {db_init_err}")
+
     # Inicia a Ponte IoT (MQTT)
     mqtt_client = await start_mqtt_bridge()
     
@@ -41,6 +60,8 @@ from src.api.fastapi_birds import router_birds, router_weight
 from src.api.fastapi_webrtc import router as webrtc_router
 from src.api.fastapi_iot import router as iot_router
 from src.api.fastapi_climate import router as climate_router
+from src.api.fastapi_accounts import router as accounts_router
+from src.api.fastapi_cameras import router as cameras_router
 from src.api.fastapi_ws import socket_app
 from src.security.headers import ALLOWED_ORIGINS
 
@@ -58,6 +79,8 @@ fastapi_app.include_router(router_weight)
 fastapi_app.include_router(webrtc_router)
 fastapi_app.include_router(iot_router)
 fastapi_app.include_router(climate_router)
+fastapi_app.include_router(accounts_router)
+fastapi_app.include_router(cameras_router)
 
 # CORS middleware
 # Ajustando os ALLOWED_ORIGINS buscando de src.security.headers para seguranca
@@ -105,19 +128,6 @@ async def get_summary():
         "comfort_score": 95
     }
 
-@fastapi_app.get("/api/cameras")
-async def get_cameras():
-    return {
-        "active_camera_id": "galpao-1",
-        "items": [
-            {
-                "camera_id": "galpao-1",
-                "name": "Câmera 1",
-                "status": "online",
-                "connection_type": "usb"
-            }
-        ]
-    }
 
 
 @fastapi_app.get("/api/status")
