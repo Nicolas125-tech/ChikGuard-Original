@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 
-export default function WebRTCVideo({ url, className, onConnectionStateChange }) {
+export default function WebRTCVideo({ url, token, className, onConnectionStateChange }) {
   const videoRef = useRef(null);
   const callbackRef = useRef(onConnectionStateChange);
 
@@ -79,6 +79,7 @@ export default function WebRTCVideo({ url, className, onConnectionStateChange })
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({
             sdp: pc.localDescription.sdp,
