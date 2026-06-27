@@ -77,6 +77,49 @@ async def root():
         "version": "2.0.0"
     }
 
+@fastapi_app.get("/api/summary")
+async def get_summary():
+    return {
+        "temperatura_atual": 28.5,
+        "status_atual": "NORMAL",
+        "media_temperatura": 28.0,
+        "contagem_aves": 150,
+        "aves_vivas_individuais": 150,
+        "total_aves_vistas": 150,
+        "metodo_temperatura_ave": "estimada_rgb_proxy",
+        "dispositivos": {"ventilacao": "desligado", "aquecedor": "desligado", "modo_automatico": True},
+        "total_alertas": 0,
+        "camera_id": "galpao-1",
+        "behavior": {"status": "NORMAL", "message": "", "dispersion_ratio": 0.5, "edge_ratio": 0.1},
+        "sensors": {"humidity_pct": 60, "ammonia_ppm": 5, "feed_level_pct": 80, "water_level_pct": 90},
+        "automation": {"enabled": True, "targets": {}},
+        "batch": {"name": "Lote 1"},
+        "weight": {"avg_weight_g": 1200, "ideal_weight_g": 1250, "confidence": 0.9, "method": "segmentation_area"},
+        "acoustic": {"respiratory_health_index": 0.95, "cough_index": 0.05, "stress_audio_index": 0.1, "source": "sensor", "trained_model_loaded": True},
+        "energy_today": {"ventilacao_seconds": 120, "aquecedor_seconds": 0},
+        "smart_grid_forecast_12h": {"projected_total_cost": 0.0, "projected_heater_cost": 0.0, "estimated_optimization_savings": 0.0, "suggest_optimize_airflow": False, "message": "Ok"},
+        "sync": {"pending": 0},
+        "weather": {},
+        "tamper": {"last_alert_ts": 0, "last_causes": [], "alerts_count": 0},
+        "carcass": {"count": 0, "audio_alert": False},
+        "comfort_score": 95
+    }
+
+@fastapi_app.get("/api/cameras")
+async def get_cameras():
+    return {
+        "active_camera_id": "galpao-1",
+        "cameras": [
+            {
+                "camera_id": "galpao-1",
+                "name": "Câmera 1",
+                "status": "online",
+                "connection_type": "usb"
+            }
+        ]
+    }
+
+
 @fastapi_app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     LOGGER.error(f"Erro nao tratado na rota {request.url.path}: {exc}")
