@@ -14,7 +14,7 @@ def create_vision_blueprint(deps):
 
     _utcnow = deps.get("utcnow")
     _perf_metrics = deps.get("perf_metrics")
-    _camera_capture = deps.get("camera_capture")
+    _camera_capture_dep = deps.get("camera_capture")
     _CV_ENGINE_AVAILABLE = deps.get("CV_ENGINE_AVAILABLE")
     species_counts = deps.get("species_counts")
     BIRD_CLASS_NAME = deps.get("BIRD_CLASS_NAME")
@@ -46,9 +46,8 @@ def create_vision_blueprint(deps):
             if _perf_metrics
             else {"fps_camera": 0.0, "fps_inference": 0.0, "latency_ms": 0.0}
         )
-        camera_live = (
-            bool(_camera_capture and _camera_capture.is_live) if _camera_capture else False
-        )
+        cc = _camera_capture_dep() if callable(_camera_capture_dep) else _camera_capture_dep
+        camera_live = bool(cc and cc.is_live) if cc else False
         return jsonify(
             {
                 "cv_engine_active": bool(_CV_ENGINE_AVAILABLE),

@@ -114,7 +114,11 @@ def create_cameras_blueprint(deps):
             return jsonify({"msg": "Camera not found"}), 404
 
         # We update the global active camera directly in the app namespace
-        import app as main_app
+        try:
+            import app as main_app
+        except ModuleNotFoundError:
+            import app_flask_legacy as main_app
+
         from src.core.cv_engine import CameraCapture
 
         main_app.ACTIVE_CAMERA_ID = cid
@@ -126,18 +130,14 @@ def create_cameras_blueprint(deps):
         else:
             main_app.CAMERA_INDEX = c.connection_url or cid
 
-        # Restart the capture thread if using v2 engine
+        # Stop the current capture thread if running. The loop will restart it on-demand.
         if getattr(main_app, "_camera_capture", None) is not None:
-            main_app._camera_capture.stop()
-            main_app._camera_capture = CameraCapture(
-                camera_index=main_app.CAMERA_INDEX,
-                target_fps=main_app.CAMERA_TARGET_FPS,
-                width=1280,
-                height=720,
-                backend=main_app.CAMERA_BACKEND_ID,
-                metrics=main_app._perf_metrics,
-            )
-            main_app._camera_capture.start()
+            try:
+                main_app._camera_capture.stop()
+            except Exception:
+                pass
+            main_app._camera_capture = None
+
 
         return jsonify({"msg": "Camera switched successfully", "active_camera": cid})
 
