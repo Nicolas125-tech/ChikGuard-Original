@@ -2558,29 +2558,8 @@ def camera_loop():
 
     # ── Ramo: CV Engine v2 Desacoplado ────────────────────────────────────────
     if _CV_ENGINE_AVAILABLE and CameraCapture is not None and InferencePipeline is not None:
-        _camera_capture = CameraCapture(
-            camera_index=CAMERA_INDEX,
-            target_fps=CAMERA_TARGET_FPS,
-            width=1280,
-            height=720,
-            backend=CAMERA_BACKEND_ID,
-            metrics=_perf_metrics,
-        )
-        _camera_capture.start()
-
-        _inference_pipeline = InferencePipeline(
-            detector=detector,
-            species_classifier=_species_classifier,
-            pose_analyzer=_pose_analyzer,
-            metrics=_perf_metrics,
-            imgsz=INFERENCE_IMGSZ,
-            class_name_fn=_class_name_by_id,
-        )
-        _inference_pipeline.start()
-        LOGGER.info("[camera_loop] CameraCapture + InferencePipeline iniciados.")
-
         video_sim = None
-        use_sim = not _camera_capture.is_live
+        use_sim = False
 
         _bg_subtractor = cv2.createBackgroundSubtractorMOG2(
             history=100, varThreshold=25, detectShadows=False
@@ -2588,6 +2567,66 @@ def camera_loop():
 
         while True:
             try:
+                # ── Controle On-Demand da Câmera ─────────────────────────────
+                is_watching = (time.time() - last_video_request_time) < 8.0
+
+                if is_watching:
+                    # Se alguém está assistindo e a câmera não está rodando, inicia
+                    if _camera_capture is None or not _camera_capture.is_live:
+                        LOGGER.info("[camera_loop] Ativacao da camera sob demanda.")
+                        _camera_capture = CameraCapture(
+                            camera_index=CAMERA_INDEX,
+                            target_fps=CAMERA_TARGET_FPS,
+                            width=1280,
+                            height=720,
+                            backend=CAMERA_BACKEND_ID,
+                            metrics=_perf_metrics,
+                        )
+                        _camera_capture.start()
+
+                    if _inference_pipeline is None or not _inference_pipeline.is_alive():
+                        _inference_pipeline = InferencePipeline(
+                            detector=detector,
+                            species_classifier=_species_classifier,
+                            pose_analyzer=_pose_analyzer,
+                            metrics=_perf_metrics,
+                            imgsz=INFERENCE_IMGSZ,
+                            class_name_fn=_class_name_by_id,
+                        )
+                        _inference_pipeline.start()
+                else:
+                    # Se ninguem está assistindo e a câmera está rodando, desativa
+                    if _camera_capture is not None:
+                        LOGGER.info("[camera_loop] Desativacao da camera por inatividade.")
+                        try:
+                            _camera_capture.stop()
+                        except Exception:
+                            pass
+                        _camera_capture = None
+
+                    if _inference_pipeline is not None:
+                        try:
+                            _inference_pipeline.stop()
+                        except Exception:
+                            pass
+                        _inference_pipeline = None
+
+                    # Gera o frame de espera e dorme
+                    idle_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+                    cv2.putText(
+                        idle_frame,
+                        "AGUARDANDO CONEXAO DA TELA AO VIVO...",
+                        (50, 240),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.7,
+                        (180, 180, 0),
+                        2,
+                    )
+                    with lock:
+                        global_frame = idle_frame
+                    time.sleep(0.2)
+                    continue
+
                 # ── Sincronizar idade do lote com SpeciesClassifier ────────────
                 now_ts = time.time()
                 if now_ts - last_batch_age_sync > 60.0 and _species_classifier is not None:
@@ -2600,10 +2639,9 @@ def camera_loop():
                     except Exception:
                         pass
 
-                # ── Obter frame da câmera ──────────────────────────────────────
+                # ── Obter frame da câmera ou simulador se a câmera falhar ──────
                 use_sim = not _camera_capture.is_live
                 if use_sim:
-                    # Fallback: vídeo de simulação ou frame em branco
                     sim_path = SIM_VIDEO_PATH
                     if sim_path:
                         sim_path = (
@@ -2629,11 +2667,11 @@ def camera_loop():
                         frame = np.zeros((480, 640, 3), dtype=np.uint8)
                         cv2.putText(
                             frame,
-                            "AGUARDANDO CAMERA...",
+                            "CAMERA OFFLINE - SEM VIDEO SIMULADOR",
                             (80, 240),
                             cv2.FONT_HERSHEY_SIMPLEX,
-                            1.0,
-                            (180, 180, 0),
+                            0.7,
+                            (0, 0, 255),
                             2,
                         )
                 else:
