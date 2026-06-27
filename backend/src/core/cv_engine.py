@@ -528,8 +528,12 @@ class InferencePipeline:
         self._thread.start()
         logger.info("[InferencePipeline] Thread de inferência iniciada. imgsz=%d", self._imgsz)
 
+    def is_alive(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()
+
     def stop(self):
         self._running = False
+
 
     def submit_frame(self, frame: np.ndarray):
         """Submete frame para inferência (descarta se fila cheia — mantém latência baixa)."""
