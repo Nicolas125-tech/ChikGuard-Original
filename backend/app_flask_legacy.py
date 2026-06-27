@@ -2953,7 +2953,17 @@ mqtt_client = ChikGuardMQTTClient(app_context_fn=app.app_context)
 mqtt_client.start()
 automation_engine = AutomationEngine(mqtt_client, app_context_fn=app.app_context)
 
+
+def _get_current_account():
+    try:
+        from flask import request
+        return getattr(request, "user_id", None)
+    except Exception:
+        return None
+
+
 api_deps = {
+
     "time": time,
     "cv2": cv2,
     "db": db,
