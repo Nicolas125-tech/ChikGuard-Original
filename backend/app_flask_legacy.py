@@ -58,6 +58,8 @@ from src.api.sensors_api import create_sensors_blueprint
 from src.api.sync_api import create_sync_blueprint
 from src.api.system_api import create_system_blueprint
 from src.api.vision_api import create_vision_blueprint
+from src.api.cameras_api import create_cameras_blueprint
+
 from src.core.config import load_settings
 from src.core.logger import configure_logging
 from src.core.state_machine import BusinessStateMachine
@@ -3116,6 +3118,8 @@ app.register_blueprint(create_birds_blueprint(api_deps))
 app.register_blueprint(create_weight_blueprint(api_deps))
 app.register_blueprint(create_energy_blueprint(api_deps))
 app.register_blueprint(create_system_blueprint(api_deps))
+app.register_blueprint(create_cameras_blueprint(api_deps))
+
 
 
 if __name__ == "__main__":
