@@ -750,6 +750,8 @@ _pose_analyzer = BirdPoseAnalyzer() if _CV_ENGINE_AVAILABLE else None
 _camera_capture: "CameraCapture | None" = None
 # Thread de inferência desacoplada
 _inference_pipeline: "InferencePipeline | None" = None
+last_video_request_time = 0.0
+
 # Contagem por espécie (para HUD e endpoint)
 species_counts: dict = {"chicks": 0, "hens": 0, "total": 0}
 
