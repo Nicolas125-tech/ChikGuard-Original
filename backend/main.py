@@ -109,7 +109,7 @@ async def get_summary():
 async def get_cameras():
     return {
         "active_camera_id": "galpao-1",
-        "cameras": [
+        "items": [
             {
                 "camera_id": "galpao-1",
                 "name": "Câmera 1",
