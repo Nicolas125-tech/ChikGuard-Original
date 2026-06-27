@@ -63,6 +63,8 @@ XSS_COMPILED = [re.compile(p, re.IGNORECASE) for p in XSS_PATTERNS]
 
 def is_blacklisted(ip):
     """Determina se um IP está atualmente bloqueado no sistema."""
+    if ip in ("127.0.0.1", "::1"):
+        return False
     blocked_until = BLACKLISTED_IPS.get(ip, 0)
     if blocked_until > time.time():
         return True
@@ -75,12 +77,17 @@ def is_blacklisted(ip):
 
 def blacklist_ip(ip, reason):
     """Registra um IP na lista negra do sistema pelo tempo regulamentar."""
+    if ip in ("127.0.0.1", "::1"):
+        return
     BLACKLISTED_IPS[ip] = time.time() + BLOCK_DURATION_SEC
     logger.error(f"[SECURITY-ALERT] IP {ip} adicionado à lista negra. Motivo: {reason}")
 
 
 def check_rate_limiting(ip):
     """Controla o volume de requisições de um IP dentro da janela configurada."""
+    if ip in ("127.0.0.1", "::1"):
+        return True
+
     now = time.time()
     access_history = IP_REQUESTS.get(ip, [])
 
