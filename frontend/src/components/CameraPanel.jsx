@@ -11,7 +11,7 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
   
   const baseUrl = getBaseUrl(serverIP);
   const webrtcUrl = `${baseUrl}/api/webrtc/offer`;
-  const mjpegUrl = `${baseUrl}/api/video`;
+  const mjpegUrl = token ? `${baseUrl}/api/video?token=${token}` : `${baseUrl}/api/video`;
   const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Câmera Principal';
 
   return (
@@ -51,6 +51,7 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
             <>
               <WebRTCVideo 
                 url={webrtcUrl} 
+                token={token}
                 className="absolute inset-0 w-full h-full object-contain z-0" 
                 onConnectionStateChange={(state) => { 
                   if(state === 'failed' || state === 'disconnected' || state === 'closed') { 
