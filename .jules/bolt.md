@@ -34,3 +34,7 @@
 ## 2024-07-28 - [JSON.stringify Performance Bottleneck in TVScreen]
 **Learning:** Found deep equality checks `JSON.stringify(prev) === JSON.stringify(data)` inside React state setters in `frontend/src/pages/TVScreen.jsx`. Serializing large or frequently updated objects synchronously within a `setInterval` hook is a performance anti-pattern because it blocks the main thread with O(N) operations every tick, causing UI stuttering and unresponsiveness.
 **Action:** Replaced `JSON.stringify` serialization with a customized `isDeepEqual` check from `../utils/performance`. Ensure the utility functions being imported are fully implemented and available in the target scope.
+
+## 2024-07-31 - [Sequential Network Waterfall in DevicesPanel]
+**Learning:** Found sequential `await fetch` calls inside `loadDevices` in `DevicesPanel.jsx` which causes a network waterfall since the endpoints are independent.
+**Action:** Use `Promise.all()` to execute these independent API requests concurrently to reduce total network wait time and render cycle delay.

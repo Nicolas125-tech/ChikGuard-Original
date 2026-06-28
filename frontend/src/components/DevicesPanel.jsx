@@ -13,18 +13,24 @@ export default function DevicesPanel({ token, serverIP, canControlDevices, camer
 
   const loadDevices = useCallback(async () => {
     try {
-      const r = await fetch(`${baseUrl}/api/estado-dispositivos`, { headers: { Authorization: `Bearer ${token}` } });
+      const headers = { Authorization: `Bearer ${token}` };
+
+      // Bolt Optimization: Concurrent API fetching for independent endpoints to prevent network waterfall.
+      const [r, auto, l] = await Promise.all([
+        fetch(`${baseUrl}/api/estado-dispositivos`, { headers }),
+        fetch(`${baseUrl}/api/auto-mode`, { headers }),
+        fetch(`${baseUrl}/api/luz-dimmer`, { headers })
+      ]);
+
       if (!r.ok) throw new Error('Device state fetch failed');
       const dispData = await r.json();
       setDispositivos(prev => isDeepEqual(prev, dispData) ? prev : dispData);
 
-      const auto = await fetch(`${baseUrl}/api/auto-mode`, { headers: { Authorization: `Bearer ${token}` } });
       if (auto.ok) {
         const autoData = await auto.json();
         setAutoMode(prev => isDeepEqual(prev, autoData) ? prev : autoData);
       }
 
-      const l = await fetch(`${baseUrl}/api/luz-dimmer`, { headers: { Authorization: `Bearer ${token}` } });
       if (l.ok) {
         const j = await l.json();
         const newLightPct = Number(j.luz_intensidade_pct || 0);
