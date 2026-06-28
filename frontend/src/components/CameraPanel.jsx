@@ -71,6 +71,7 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
   // Trigger stream start when device or source changes
   useEffect(() => {
     if (source === 'local' && cameraPermission === 'granted' && selectedDeviceId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       startStream(selectedDeviceId);
     } else {
       if (localStream) {

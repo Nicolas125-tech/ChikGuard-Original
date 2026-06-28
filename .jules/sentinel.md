@@ -90,3 +90,7 @@
 **Vulnerability:** The Flask auth API endpoints (`backend/src/api/auth.py`) returned raw exception strings to clients via `str(e)` in `500` error handlers.
 **Learning:** Returning unhandled exception strings exposes internal architecture, database schema constraints, or potential connection strings, causing Information Exposure (CWE-209).
 **Prevention:** Always log the actual raw exception server-side using the `logging` module and return a safe, generic fallback message (e.g., "Erro interno do servidor") in the JSON response payload.
+## 2026-06-28 - [Fix Missing Authentication on Location Forecast API]
+**Vulnerability:** The `/api/climate/location-forecast` endpoint in `backend/src/api/fastapi_climate.py` lacked the `Depends(get_current_user)` dependency, making it publicly accessible without any authentication.
+**Learning:** Any endpoint exposing external integrations or system context (like location based on IP) can be abused for reconnaissance or to exhaust external API quotas (e.g. Open-Meteo, ip-api.com). Failing to apply global dependency injection or route-specific protection leaves these endpoints exposed.
+**Prevention:** Always ensure every new FastAPI route includes an explicit authentication dependency (e.g. `user: UserContext = Depends(get_current_user)`) unless it is intentionally designed as a public endpoint.
