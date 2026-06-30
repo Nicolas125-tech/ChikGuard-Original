@@ -1,6 +1,6 @@
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -64,6 +64,8 @@ from src.api.fastapi_accounts import router as accounts_router
 from src.api.fastapi_cameras import router as cameras_router
 from src.api.fastapi_ws import socket_app
 from src.security.headers import ALLOWED_ORIGINS
+from src.security.fastapi_auth import get_current_user, UserContext
+from fastapi import Depends
 
 fastapi_app = FastAPI(
     title="ChikGuard API",
@@ -101,7 +103,7 @@ async def root():
     }
 
 @fastapi_app.get("/api/summary")
-async def get_summary():
+async def get_summary(user: UserContext = Depends(get_current_user)):
     return {
         "temperatura_atual": 28.5,
         "status_atual": "NORMAL",
@@ -131,7 +133,7 @@ async def get_summary():
 
 
 @fastapi_app.get("/api/status")
-async def get_status():
+async def get_status(user: UserContext = Depends(get_current_user)):
     import time
     from src.core.state import sensor_state, active_camera_id
     temp = sensor_state.get("temperature_c", 28.5)
@@ -143,12 +145,12 @@ async def get_status():
 
 
 @fastapi_app.get("/api/alerts")
-async def get_alerts():
+async def get_alerts(user: UserContext = Depends(get_current_user)):
     return []
 
 
 @fastapi_app.get("/api/history")
-async def get_history():
+async def get_history(user: UserContext = Depends(get_current_user)):
     import time
     from src.core.state import sensor_state
     temp = sensor_state.get("temperature_c", 28.5)
@@ -162,7 +164,7 @@ async def get_history():
 
 
 @fastapi_app.get("/api/estado-dispositivos")
-async def get_estado_dispositivos():
+async def get_estado_dispositivos(user: UserContext = Depends(get_current_user)):
     from src.core.fsm_task import actuator_state
     from src.core.state import active_camera_id
     return {
@@ -175,12 +177,12 @@ async def get_estado_dispositivos():
 
 
 @fastapi_app.post("/api/auto-mode")
-async def set_auto_mode(request: Request):
+async def set_auto_mode(request: Request, user: UserContext = Depends(get_current_user)):
     return {"msg": "Modo automático atualizado", "status": "ok"}
 
 
 @fastapi_app.post("/api/ventilacao")
-async def control_ventilacao(request: Request):
+async def control_ventilacao(request: Request, user: UserContext = Depends(get_current_user)):
     from src.core.fsm_task import actuator_state
     try:
         data = await request.json()
@@ -192,7 +194,7 @@ async def control_ventilacao(request: Request):
 
 
 @fastapi_app.post("/api/aquecedor")
-async def control_aquecedor(request: Request):
+async def control_aquecedor(request: Request, user: UserContext = Depends(get_current_user)):
     from src.core.fsm_task import actuator_state
     try:
         data = await request.json()
