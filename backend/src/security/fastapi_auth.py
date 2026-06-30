@@ -31,13 +31,9 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserContext:
     
     try:
         # Validate JWT
-        try:
-            decoded = jwt.decode(
-                token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated"
-            )
-        except Exception:
-            # Fallback for ES256 or other algorithms used by Supabase cloud
-            decoded = jwt.decode(token, options={"verify_signature": False})
+        decoded = jwt.decode(
+            token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated"
+        )
 
         user_id = decoded.get("sub")
         if not user_id:

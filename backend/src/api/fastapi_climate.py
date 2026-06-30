@@ -70,7 +70,7 @@ async def get_location_forecast(user: UserContext = Depends(get_current_user)):
                 }
             }
     except Exception as e:
-        logger.error(f"Erro na rota location-forecast: {e}")
+        logger.error(f"Erro na rota location-forecast:  {str(e)}")
         # Retorna mock estruturado como fallback de segurança para a FSM
         return {
             "location": {

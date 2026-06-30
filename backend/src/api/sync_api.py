@@ -20,7 +20,7 @@ def create_sync_blueprint(deps):
         except Exception as e:
             import logging
 
-            logging.getLogger(__name__).error("Erro na API de sync: %s", e)
+            logging.getLogger(__name__).error("Erro na API de sync: %s", str(e))
             return jsonify(
                 {"status": "error", "message": "Ocorreu um erro interno de sincronizacao."}
             ), 500

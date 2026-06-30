@@ -59,7 +59,7 @@ def create_auth_blueprint(deps):
             response = supabase.table("profiles").select("*").execute()
             return jsonify({"count": len(response.data or []), "items": response.data or []})
         except Exception as e:
-            logger.error("Erro interno do servidor: %s", e)
+            logger.error("Erro interno do servidor: %s", str(e))
             return jsonify({"error": "Erro interno do servidor"}), 500
 
     @bp.route("/api/accounts/users/<string:account_id>", methods=["PATCH"])
@@ -109,7 +109,7 @@ def create_auth_blueprint(deps):
             )
             return jsonify({"msg": "Conta atualizada via Supabase"})
         except Exception as e:
-            logger.error("Erro interno do servidor: %s", e)
+            logger.error("Erro interno do servidor: %s", str(e))
             return jsonify({"error": "Erro interno do servidor"}), 500
 
     @bp.route("/api/accounts/users/<string:account_id>", methods=["DELETE"])
@@ -144,7 +144,7 @@ def create_auth_blueprint(deps):
             )
             return jsonify({"msg": "Conta excluida com sucesso do Supabase Auth"})
         except Exception as e:
-            logger.error("Erro interno do servidor: %s", e)
+            logger.error("Erro interno do servidor: %s", str(e))
             return jsonify({"error": "Erro interno do servidor"}), 500
 
     @bp.route("/api/accounts/permissions", methods=["GET", "POST"])
@@ -197,7 +197,7 @@ def create_auth_blueprint(deps):
             response = supabase.table("profiles").select("*").eq("status", "PENDING").execute()
             return jsonify({"items": response.data or []}), 200
         except Exception as e:
-            logger.error("Erro interno do servidor: %s", e)
+            logger.error("Erro interno do servidor: %s", str(e))
             return jsonify({"error": "Erro interno do servidor"}), 500
 
     @bp.route("/api/admin/approve-user", methods=["POST"])
@@ -243,7 +243,7 @@ def create_auth_blueprint(deps):
             )
             return jsonify({"message": "User approved successfully", "data": response.data}), 200
         except Exception as e:
-            logger.error("Erro interno do servidor: %s", e)
+            logger.error("Erro interno do servidor: %s", str(e))
             return jsonify({"error": "Erro interno do servidor"}), 500
 
     @bp.route("/api/admin/notify-new-user", methods=["POST"])
