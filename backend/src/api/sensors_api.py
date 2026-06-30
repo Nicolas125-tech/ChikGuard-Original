@@ -205,7 +205,7 @@ def create_sensors_blueprint(deps):
         except Exception as exc:
             import logging
 
-            logging.getLogger(__name__).error("Falha ao processar audio: %s", exc)
+            logging.getLogger(__name__).error("Falha ao processar audio: %s", str(exc))
             return jsonify({"msg": "Falha interna ao processar audio"}), 500
 
     @bp.route("/api/sensors/anomaly", methods=["GET"])

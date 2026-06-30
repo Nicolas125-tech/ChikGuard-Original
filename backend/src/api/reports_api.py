@@ -31,7 +31,7 @@ def create_reports_blueprint(deps):
         except Exception as exc:
             import logging
 
-            logging.getLogger(__name__).error("Falha ao gerar PDF ESG: %s", exc)
+            logging.getLogger(__name__).error("Falha ao gerar PDF ESG: %s", str(exc))
             return jsonify({"msg": "Falha interna ao gerar PDF ESG"}), 500
 
         email_status = None
@@ -65,7 +65,7 @@ def create_reports_blueprint(deps):
         except Exception as exc:
             import logging
 
-            logging.getLogger(__name__).error("Falha ao gerar/exportar PDF ESG: %s", exc)
+            logging.getLogger(__name__).error("Falha ao gerar/exportar PDF ESG: %s", str(exc))
             return jsonify({"msg": "Falha interna ao gerar/exportar PDF ESG"}), 500
 
     @bp.route("/api/reports/passport", methods=["GET"])
@@ -129,7 +129,7 @@ def create_reports_blueprint(deps):
         except Exception as exc:
             import logging
 
-            logging.getLogger(__name__).error("Falha ao gerar PDF: %s", exc)
+            logging.getLogger(__name__).error("Falha ao gerar PDF: %s", str(exc))
             return jsonify({"msg": "Falha interna ao gerar PDF"}), 500
 
         email_status = None
@@ -166,7 +166,7 @@ def create_reports_blueprint(deps):
         except Exception as exc:
             import logging
 
-            logging.getLogger(__name__).error("Falha ao gerar/exportar PDF: %s", exc)
+            logging.getLogger(__name__).error("Falha ao gerar/exportar PDF: %s", str(exc))
             return jsonify({"msg": "Falha interna ao gerar/exportar PDF"}), 500
 
     @bp.route("/api/forecast/weight", methods=["GET"])

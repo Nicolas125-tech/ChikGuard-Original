@@ -37,13 +37,9 @@ def require_auth(roles=None, allow_query_token=False):
                 return jsonify({"error": "Missing or invalid token"}), 401
             try:
                 # Validate JWT
-                try:
-                    decoded = jwt.decode(
-                        token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated"
-                    )
-                except Exception:
-                    # Fallback for ES256 or other algorithms used by Supabase cloud
-                    decoded = jwt.decode(token, options={"verify_signature": False})
+                decoded = jwt.decode(
+                    token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated"
+                )
 
                 user_id = decoded.get("sub")
                 if not user_id:

@@ -158,7 +158,7 @@ def create_api_blueprint(deps):
             answer = future.result(timeout=10)
             return jsonify({"sdp": answer.sdp, "type": answer.type})
         except Exception as e:
-            logger.error("Failed to process offer: %s", e)
+            logger.error("Failed to process offer: %s", str(e))
             return jsonify({"error": "Ocorreu um erro interno ao processar a oferta WebRTC"}), 500
 
     @bp.route("/api/webrtc/pcs", methods=["GET"])

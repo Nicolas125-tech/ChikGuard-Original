@@ -32,7 +32,7 @@ def write_audit_log(db: Session, actor: str, action: str, details: dict):
         db.add(row)
         db.commit()
     except Exception as e:
-        logger.error("Failed to write audit log: %s", e)
+        logger.error("Failed to write audit log: %s", str(e))
 
 @router.get("/accounts/me")
 async def accounts_me(user: UserContext = Depends(get_current_user)):
@@ -42,7 +42,7 @@ async def accounts_me(user: UserContext = Depends(get_current_user)):
             if response.data:
                 return response.data
         except Exception as e:
-            logger.error("Error fetching profiles: %s", e)
+            logger.error("Error fetching profiles: %s", str(e))
     return {"id": user.user_id, "role": user.role, "active": True}
 
 @router.get("/accounts/users")
@@ -53,7 +53,7 @@ async def accounts_users(user: UserContext = Depends(RequireRole(["admin", "supe
         response = supabase_client.table("profiles").select("*").execute()
         return {"count": len(response.data or []), "items": response.data or []}
     except Exception as e:
-        logger.error("Error fetching users: %s", e)
+        logger.error("Error fetching users: %s", str(e))
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 @router.patch("/accounts/users/{account_id}")
@@ -101,7 +101,7 @@ async def accounts_user_update(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Error updating user: %s", e)
+        logger.error("Error updating user: %s", str(e))
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 @router.delete("/accounts/users/{account_id}")
@@ -133,7 +133,7 @@ async def accounts_user_delete(
         write_audit_log(db, user.user_id, "account_deleted_supabase", {"account_id": account_id})
         return {"msg": "Conta excluida com sucesso do Supabase Auth"}
     except Exception as e:
-        logger.error("Error deleting user: %s", e)
+        logger.error("Error deleting user: %s", str(e))
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 @router.get("/admin/pending-users")
@@ -144,7 +144,7 @@ async def admin_pending_users(user: UserContext = Depends(RequireRole(["admin", 
         response = supabase_client.table("profiles").select("*").eq("status", "PENDING").execute()
         return {"items": response.data or []}
     except Exception as e:
-        logger.error("Error fetching pending users: %s", e)
+        logger.error("Error fetching pending users: %s", str(e))
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 @router.post("/admin/approve-user")
@@ -179,5 +179,5 @@ async def admin_approve_user(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Error approving user: %s", e)
+        logger.error("Error approving user: %s", str(e))
         raise HTTPException(status_code=500, detail="Erro interno do servidor")

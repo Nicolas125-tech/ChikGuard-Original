@@ -43,7 +43,7 @@ async def connect(sid, environ, auth):
         logger.info(f"Cliente SocketIO conectado - SID: {sid} (User: {user_id})")
         return True
     except Exception as e:
-        logger.error(f"Conexao SocketIO rejeitada (Token invalido) - SID: {sid} - {e}")
+        logger.error(f"Conexao SocketIO rejeitada (Token invalido) - SID: {sid} -  {str(e)}")
         return False
 
 @sio.event
