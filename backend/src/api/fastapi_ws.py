@@ -8,7 +8,12 @@ from src.security.headers import ALLOWED_ORIGINS
 logger = logging.getLogger(__name__)
 
 # O mesmo segredo JWT da autenticacao FastAPI
-SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "default_secret_for_local_dev")
+SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET")
+
+if not SUPABASE_JWT_SECRET:
+    raise RuntimeError(
+        "SUPABASE_JWT_SECRET environment variable is required for secure authentication."
+    )
 
 # Usamos AsyncServer com allowed_origins restritas para seguranca
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins=ALLOWED_ORIGINS)
