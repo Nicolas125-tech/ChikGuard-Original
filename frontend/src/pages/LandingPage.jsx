@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { LogIn, ArrowRight, ShieldCheck, Activity, BrainCircuit, Eye, Zap, BarChart3 } from 'lucide-react';
 
-function AnimatedCounter({ target, suffix = '', duration = 2000 }) {
+// Bolt Optimization: Added React.memo to prevent unnecessary re-renders when parent states change,
+// avoiding O(n) re-renders for static UI elements.
+const AnimatedCounter = React.memo(function AnimatedCounter({ target, suffix = '', duration = 2000 }) {
   const [count, setCount] = useState(0);
   const ref = useRef(null);
   const started = useRef(false);
@@ -27,7 +29,7 @@ function AnimatedCounter({ target, suffix = '', duration = 2000 }) {
   }, [target, duration]);
 
   return <span ref={ref}>{count}{suffix}</span>;
-}
+});
 
 export default function LandingPage({ onLoginClick }) {
   return (
