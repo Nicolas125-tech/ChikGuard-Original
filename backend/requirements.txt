@@ -31,3 +31,4 @@ uvicorn[standard]
 python-multipart
 pydantic
 python-socketio[asyncio]
+Flask-JWT-Extended
