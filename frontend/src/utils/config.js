@@ -24,7 +24,7 @@ export const getBaseUrl = (ipOrUrl) => {
     return 'http://127.0.0.1:5000';
   }
 
-  const target = ipOrUrl || import.meta.env.VITE_API_URL;
+  const target = ipOrUrl || (import.meta.env || {}).VITE_API_URL;
   if (!target) return 'http://127.0.0.1:5000';
   const clean = target.replace(/\/$/, '');
   
