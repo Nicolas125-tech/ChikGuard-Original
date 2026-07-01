@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from src.db.session import get_db
+from src.core.sensors_utils import persist_sensor_reading, evaluate_sensor_alerts
 from src.core.state import active_camera_id, sensor_state, sensor_thresholds
 from src.schemas.sensors import SensorIngest, SensorLiveResponse
 from src.security.fastapi_auth import get_current_user, UserContext
@@ -41,6 +42,7 @@ def ingest_sensor_data(
         "updated_at": time.time(),
     })
     
-    # TODO: Integrar persist_sensor_reading(db) e evaluate_sensor_alerts()
+    persist_sensor_reading(db, source=payload.source)
+    evaluate_sensor_alerts(db)
     
     return {"msg": "Leitura de sensores recebida", "state": sensor_state}
