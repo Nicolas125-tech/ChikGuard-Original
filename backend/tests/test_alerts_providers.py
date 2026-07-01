@@ -1,4 +1,5 @@
 import logging
+import os
 from unittest.mock import MagicMock, patch
 
 from src.alerts.providers import AlertProvider, build_alert_provider
@@ -124,3 +125,63 @@ def test_build_alert_provider():
     settings = MagicMock()
     provider = build_alert_provider(settings)
     assert isinstance(provider, AlertProvider)
+
+def test_alert_provider_init_with_settings():
+    settings = MagicMock()
+    settings.telegram_bot_token = "tel_token"
+    settings.telegram_chat_id = "tel_chat"
+    settings.twilio_account_sid = "tw_sid"
+    settings.twilio_auth_token = "tw_auth"
+    settings.twilio_from_number = "tw_from"
+    settings.twilio_to_number = "tw_to"
+    settings.smtp_server = "smtp_serv"
+    settings.smtp_port = 465
+    settings.smtp_user = "smtp_usr"
+    settings.smtp_password = "smtp_pwd"
+    settings.smtp_to = "smtp_dest"
+
+    provider = AlertProvider(settings)
+
+    assert provider.telegram_bot_token == "tel_token"
+    assert provider.telegram_chat_id == "tel_chat"
+    assert provider.twilio_account_sid == "tw_sid"
+    assert provider.twilio_auth_token == "tw_auth"
+    assert provider.twilio_from_number == "tw_from"
+    assert provider.twilio_to_number == "tw_to"
+    assert provider.smtp_server == "smtp_serv"
+    assert provider.smtp_port == 465
+    assert provider.smtp_user == "smtp_usr"
+    assert provider.smtp_password == "smtp_pwd"
+    assert provider.smtp_to == "smtp_dest"
+
+@patch.dict(os.environ, {
+    "TELEGRAM_BOT_TOKEN": "env_tel_token",
+    "TELEGRAM_CHAT_ID": "env_tel_chat",
+    "TWILIO_ACCOUNT_SID": "env_tw_sid",
+    "TWILIO_AUTH_TOKEN": "env_tw_auth",
+    "TWILIO_FROM_NUMBER": "env_tw_from",
+    "TWILIO_TO_NUMBER": "env_tw_to",
+    "SMTP_SERVER": "env_smtp_serv",
+    "SMTP_USER": "env_smtp_usr",
+    "SMTP_PASSWORD": "env_smtp_pwd",
+    "SMTP_TO": "env_smtp_dest"
+})
+def test_alert_provider_init_with_env_vars():
+    class DummySettings:
+        pass
+
+    settings = DummySettings()
+
+    provider = AlertProvider(settings)
+
+    assert provider.telegram_bot_token == "env_tel_token"
+    assert provider.telegram_chat_id == "env_tel_chat"
+    assert provider.twilio_account_sid == "env_tw_sid"
+    assert provider.twilio_auth_token == "env_tw_auth"
+    assert provider.twilio_from_number == "env_tw_from"
+    assert provider.twilio_to_number == "env_tw_to"
+    assert provider.smtp_server == "env_smtp_serv"
+    assert provider.smtp_port == 587
+    assert provider.smtp_user == "env_smtp_usr"
+    assert provider.smtp_password == "env_smtp_pwd"
+    assert provider.smtp_to == "env_smtp_dest"
