@@ -22,7 +22,7 @@ os.environ["JWT_SECRET_KEY"] = "testsecret"
 os.environ["CORS_ALLOWED_ORIGINS"] = "*"
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
-from app import app
+from app_flask_legacy import app
 from database import AcousticReading, Batch, BatchLogbook, EventLog, SensorReading, db
 from src.agents.base import VetWelfareAgent
 
