@@ -11,7 +11,9 @@ def _retrieve_knowledge_base(query: str) -> str:
     try:
         # Tenta carregar o arquivo a partir da raiz do backend ou local relativo
         handbook_path = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "../../../backend/data/handling_handbook.txt")
+            os.path.join(
+                os.path.dirname(__file__), "../../../backend/data/handling_handbook.txt"
+            )
         )
         if not os.path.exists(handbook_path):
             handbook_path = "data/handling_handbook.txt"
@@ -57,7 +59,12 @@ def create_agents_blueprint(api_deps):
         if not user_message:
             return jsonify({"error": "Mensagem vazia"}), 400
         if len(str(user_message)) > 2000:
-            return jsonify({"error": "Tamanho da mensagem excede o limite (2000 caracteres)"}), 400
+            return (
+                jsonify(
+                    {"error": "Tamanho da mensagem excede o limite (2000 caracteres)"}
+                ),
+                400,
+            )
 
         # Obtém a chave da API do Gemini a partir do ambiente (.env)
         api_key = os.getenv("GEMINI_API_KEY")
@@ -69,7 +76,9 @@ def create_agents_blueprint(api_deps):
             )
 
         # 1. Coleta dados de sensores recentes
-        last_sensor = SensorReading.query.order_by(SensorReading.timestamp.desc()).first()
+        last_sensor = SensorReading.query.order_by(
+            SensorReading.timestamp.desc()
+        ).first()
         sensor_text = "Sem leituras de sensores recentes nas últimas horas."
         if last_sensor:
             sensor_text = (
@@ -81,7 +90,9 @@ def create_agents_blueprint(api_deps):
             )
 
         # 2. Coleta dados acústicos recentes
-        last_acoustic = AcousticReading.query.order_by(AcousticReading.timestamp.desc()).first()
+        last_acoustic = AcousticReading.query.order_by(
+            AcousticReading.timestamp.desc()
+        ).first()
         acoustic_text = "Sem dados de áudio recentes."
         if last_acoustic:
             acoustic_text = (
@@ -99,7 +110,9 @@ def create_agents_blueprint(api_deps):
             })"
 
         # 4. Coleta os alertas e logs de visão mais recentes
-        recent_events = EventLog.query.order_by(EventLog.timestamp.desc()).limit(5).all()
+        recent_events = (
+            EventLog.query.order_by(EventLog.timestamp.desc()).limit(5).all()
+        )
         events_text = "Nenhum alerta ou evento recente cadastrado."
         if recent_events:
             events_text = "\n".join(
@@ -112,13 +125,19 @@ def create_agents_blueprint(api_deps):
         # 5. Obtém status dos atuadores
         estado_dispositivos = api_deps.get("estado_dispositivos", {})
         fan_status = "LIGADA" if estado_dispositivos.get("ventilacao") else "DESLIGADA"
-        heater_status = "LIGADO" if estado_dispositivos.get("aquecedor") else "DESLIGADO"
-        devices_text = f"Ventilação (Exaustores): {fan_status}, Aquecedor: {heater_status}"
+        heater_status = (
+            "LIGADO" if estado_dispositivos.get("aquecedor") else "DESLIGADO"
+        )
+        devices_text = (
+            f"Ventilação (Exaustores): {fan_status}, Aquecedor: {heater_status}"
+        )
 
         # 6. Recupera contexto do manual de manejo (RAG local)
         kb_context = _retrieve_knowledge_base(user_message)
         kb_text = (
-            f"- Diretrizes do Manual de Manejo Relevantes:\n{kb_context}\n\n" if kb_context else ""
+            f"- Diretrizes do Manual de Manejo Relevantes:\n{kb_context}\n\n"
+            if kb_context
+            else ""
         )
 
         # Criação do prompt do sistema embutido com contexto em tempo real do galpão e RAG
@@ -141,8 +160,8 @@ def create_agents_blueprint(api_deps):
         )
 
         # Faz requisição direta para a API REST do Gemini 2.5 Flash
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
-        headers = {"Content-Type": "application/json"}
+        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+        headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
         payload = {
             "contents": [
                 {
@@ -162,23 +181,31 @@ def create_agents_blueprint(api_deps):
         try:
             res = requests.post(url, headers=headers, json=payload, timeout=12)
             if res.status_code != 200:
-                return jsonify(
-                    {"error": f"Erro na API do Gemini (Código {res.status_code}): {res.text}"}
-                ), 500
+                return (
+                    jsonify(
+                        {
+                            "error": f"Erro na API do Gemini (Código {res.status_code}): {res.text}"
+                        }
+                    ),
+                    500,
+                )
 
             res_data = res.json()
             candidate = res_data.get("candidates", [{}])[0]
             content = candidate.get("content", {})
             parts = content.get("parts", [{}])
             reply = parts[0].get(
-                "text", "Desculpe, não obtive uma resposta válida da inteligência artificial."
+                "text",
+                "Desculpe, não obtive uma resposta válida da inteligência artificial.",
             )
 
             return jsonify({"response": reply})
         except Exception as e:
             import logging
 
-            logging.getLogger(__name__).error("Erro na requisição externa de IA: %s", str(e))
+            logging.getLogger(__name__).error(
+                "Erro na requisição externa de IA: %s", str(e)
+            )
             return jsonify({"error": "Falha interna na requisição de IA"}), 500
 
     return bp
