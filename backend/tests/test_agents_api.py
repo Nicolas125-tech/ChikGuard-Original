@@ -24,7 +24,7 @@ os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 import jwt
 
-from app import app
+from app_flask_legacy import app
 from database import Batch, SensorReading, db
 
 
