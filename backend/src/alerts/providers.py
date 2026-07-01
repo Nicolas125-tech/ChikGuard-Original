@@ -83,7 +83,8 @@ class AlertProvider:
                     f"[ALERT] Falha no Telegram (Status {response.status_code}): {response.text}"
                 )
         except Exception as exc:
-            logger.error(f"[ALERT] Erro de rede ao enviar alerta para o Telegram: {exc}")
+            safe_msg = str(exc).replace(self.telegram_bot_token, "***") if self.telegram_bot_token else str(exc)
+            logger.error(f"[ALERT] Erro de rede ao enviar alerta para o Telegram: {safe_msg}")
 
     def _send_to_twilio(self, message):
         """Envia o alerta por SMS ou WhatsApp via serviço Twilio."""

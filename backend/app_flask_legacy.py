@@ -8,8 +8,6 @@ import json
 import math
 import os
 import queue
-import secrets
-import string
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -49,6 +47,7 @@ from src.api.agents_api import create_agents_blueprint
 from src.api.auth import create_auth_blueprint
 from src.api.batch_api import create_batch_blueprint
 from src.api.birds_api import create_birds_blueprint, create_weight_blueprint
+from src.api.cameras_api import create_cameras_blueprint
 from src.api.devices import create_devices_blueprint
 from src.api.energy_api import create_energy_blueprint
 from src.api.health_api import create_health_blueprint
@@ -58,8 +57,6 @@ from src.api.sensors_api import create_sensors_blueprint
 from src.api.sync_api import create_sync_blueprint
 from src.api.system_api import create_system_blueprint
 from src.api.vision_api import create_vision_blueprint
-from src.api.cameras_api import create_cameras_blueprint
-
 from src.core.config import load_settings
 from src.core.logger import configure_logging
 from src.core.state_machine import BusinessStateMachine
@@ -1551,7 +1548,8 @@ def _telegram_send(frame_bgr, caption):
             return True, "sent"
         return False, f"http_{response.status_code}"
     except Exception as exc:
-        LOGGER.exception("Error sending photo to Telegram: %s", exc)
+        safe_msg = str(exc).replace(token, "***") if token else str(exc)
+        LOGGER.error("Error sending photo to Telegram: %s", safe_msg)
         return False, "Failed to communicate with Telegram API"
 
 
@@ -1565,7 +1563,8 @@ def _telegram_send_text(message):
         response = requests.post(url, data={"chat_id": chat_id, "text": message}, timeout=10)
         return (response.ok, f"http_{response.status_code}" if not response.ok else "sent")
     except Exception as exc:
-        LOGGER.exception("Error sending text to Telegram: %s", exc)
+        safe_msg = str(exc).replace(token, "***") if token else str(exc)
+        LOGGER.error("Error sending text to Telegram: %s", safe_msg)
         return False, "Failed to communicate with Telegram API"
 
 
