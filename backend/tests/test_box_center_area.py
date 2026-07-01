@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../s
 sys.modules["cv2"] = mock.MagicMock()
 os.environ["ADMIN_PASSWORD"] = "dummy_password"
 
-from app import _box_center_area
+from app_flask_legacy import _box_center_area
 
 
 def test_box_center_area_basic():

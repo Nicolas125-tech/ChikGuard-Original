@@ -23,7 +23,7 @@ os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 from weather_forecast.plugin import WeatherForecastPlugin
 
-from app import app
+from app_flask_legacy import app
 from database import Batch, db
 from src.agents.base import ClimateAgent
 from src.core.state_machine import BusinessStateMachine

@@ -9,7 +9,7 @@ os.environ["JWT_SECRET_KEY"] = "testsecret"
 os.environ["CORS_ALLOWED_ORIGINS"] = "*"
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
-from app import _safe_json
+from app_flask_legacy import _safe_json
 
 
 def test_safe_json_happy_path():
