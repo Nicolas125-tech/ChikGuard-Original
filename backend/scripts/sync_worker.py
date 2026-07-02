@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import requests
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 # Configuração de Logs
@@ -57,7 +57,7 @@ def get_pending_records(session, table_name, limit):
     # Remove timezone info para SQLite datetime string compatibility
     cutoff_str = cutoff.replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S")
 
-    result = session.execute(sql, {"cutoff_time": cutoff_str, "limit": limit}).mappings().all()
+    result = session.execute(text(sql), {"cutoff_time": cutoff_str, "limit": limit}).mappings().all()
     return [dict(r) for r in result]
 
 
@@ -66,14 +66,20 @@ def mark_records(session, table_name, ids, status):
     if not ids:
         return
     now_str = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S")
-    ids_str = ",".join(map(str, ids))
+    params = {"status": status, "now_str": now_str}
+    id_params = []
+    for i, id_val in enumerate(ids):
+        p_name = f"id_{i}"
+        id_params.append(f":{p_name}")
+        params[p_name] = id_val
+    ids_str_params = ",".join(id_params)
 
     sql = f"""
         UPDATE {table_name} 
-        SET sync_status = '{status}', last_sync_attempt = '{now_str}'
-        WHERE id IN ({ids_str})
+        SET sync_status = :status, last_sync_attempt = :now_str
+        WHERE id IN ({ids_str_params})
     """
-    session.execute(sql)
+    session.execute(text(sql), params)
     session.commit()
 
 
