@@ -414,21 +414,32 @@ def anomaly_storage_worker():
                 try:
                     with app.app_context():
                         tokens = PushToken.query.all()
+                        payloads = []
                         for token_obj in tokens:
-                            payload = {
-                                "to": token_obj.token,
-                                "title": f"Alerta {level.upper()}: {event_type}",
-                                "body": message,
-                                "data": {
-                                    "event_type": event_type,
-                                    "level": level,
-                                    "camera_id": camera_id,
-                                },
-                            }
-                            if "requests" in globals() and requests is not None:
+                            payloads.append(
+                                {
+                                    "to": token_obj.token,
+                                    "title": f"Alerta {level.upper()}: {event_type}",
+                                    "body": message,
+                                    "data": {
+                                        "event_type": event_type,
+                                        "level": level,
+                                        "camera_id": camera_id,
+                                    },
+                                }
+                            )
+
+                        if (
+                            "requests" in globals()
+                            and requests is not None
+                            and payloads
+                        ):
+                            batch_size = 100
+                            for i in range(0, len(payloads), batch_size):
+                                batch = payloads[i : i + batch_size]
                                 requests.post(
                                     "https://exp.host/--/api/v2/push/send",
-                                    json=payload,
+                                    json=batch,
                                     timeout=5,
                                 )
                 except Exception as e:
@@ -1357,7 +1368,6 @@ def _apply_automatic_control(temp_atual):
         )
 
 
-
 def _calculate_spatial_ratios(selected, frame_shape):
     h, w = frame_shape[:2]
     frame_area = max(1, h * w)
@@ -1388,6 +1398,7 @@ def _calculate_spatial_ratios(selected, frame_shape):
 
     return dispersion_ratio, edge_ratio
 
+
 def _calculate_immobility_ratios(count, now):
     immobile_count = 0
     prostrated_count = 0
@@ -1400,6 +1411,7 @@ def _calculate_immobility_ratios(count, now):
     immobility_ratio = immobile_count / max(1, count)
     prostration_ratio = prostrated_count / max(1, count)
     return immobility_ratio, prostration_ratio
+
 
 def _calculate_panic_ratio(selected, frame_shape):
     h, w = frame_shape[:2]
@@ -1417,7 +1429,17 @@ def _calculate_panic_ratio(selected, frame_shape):
 
     return high_velocity_count / max(1, total_velocity_measured)
 
-def _determine_behavior_status(count, dispersion_ratio, edge_ratio, immobility_ratio, prostration_ratio, panic_ratio, current_temp, target_temp):
+
+def _determine_behavior_status(
+    count,
+    dispersion_ratio,
+    edge_ratio,
+    immobility_ratio,
+    prostration_ratio,
+    panic_ratio,
+    current_temp,
+    target_temp,
+):
     is_cold_environment = current_temp < (target_temp - 1.5)
     is_hot_environment = current_temp > (target_temp + 1.5)
 
@@ -1450,6 +1472,7 @@ def _determine_behavior_status(count, dispersion_ratio, edge_ratio, immobility_r
 
     return status, message
 
+
 def _analyze_behavior(selected, frame_shape):
     now = time.time()
     count = len(selected)
@@ -1477,7 +1500,14 @@ def _analyze_behavior(selected, frame_shape):
     panic_ratio = _calculate_panic_ratio(selected, frame_shape)
 
     status, message = _determine_behavior_status(
-        count, dispersion_ratio, edge_ratio, immobility_ratio, prostration_ratio, panic_ratio, current_temp, target_temp
+        count,
+        dispersion_ratio,
+        edge_ratio,
+        immobility_ratio,
+        prostration_ratio,
+        panic_ratio,
+        current_temp,
+        target_temp,
     )
 
     behavior_state.update(
