@@ -185,6 +185,74 @@ def create_system_blueprint(deps):
             count = object_count.get() if callable(object_count) else object_count
         return jsonify({"count": count})
 
+
+    def _build_behavior_data(behavior_state):
+        return {
+            "status": behavior_state.get("status", ""),
+            "message": behavior_state.get("message", ""),
+            "dispersion_ratio": behavior_state.get("dispersion_ratio", 0.0),
+            "edge_ratio": behavior_state.get("edge_ratio", 0.0),
+        }
+
+    def _build_sensors_data(sensor_state):
+        return {
+            "humidity_pct": sensor_state.get("humidity_pct", 0),
+            "ammonia_ppm": sensor_state.get("ammonia_ppm", 0),
+            "feed_level_pct": sensor_state.get("feed_level_pct", 0),
+            "water_level_pct": sensor_state.get("water_level_pct", 0),
+        }
+
+    def _build_automation_data(estado_dispositivos, targets):
+        return {
+            "enabled": (
+                bool(estado_dispositivos.get("modo_automatico", False))
+                if estado_dispositivos
+                else False
+            ),
+            "targets": targets,
+        }
+
+    def _build_weight_data(weight_state, detector):
+        return {
+            "avg_weight_g": weight_state.get("avg_weight_g", 0),
+            "ideal_weight_g": weight_state.get("ideal_weight_g", 0),
+            "confidence": weight_state.get("confidence", 0),
+            "method": (
+                "segmentation_area"
+                if (
+                    detector
+                    and getattr(detector, "supports_segmentation", False)
+                )
+                else "bbox_area_fallback"
+            ),
+        }
+
+    def _build_acoustic_data(acoustic_state, audio_classifier):
+        return {
+            "respiratory_health_index": acoustic_state.get(
+                "respiratory_health_index", 0
+            ),
+            "cough_index": acoustic_state.get("cough_index", 0),
+            "stress_audio_index": acoustic_state.get("stress_audio_index", 0),
+            "source": acoustic_state.get("source", ""),
+            "trained_model_loaded": (
+                bool(audio_classifier.loaded) if audio_classifier else False
+            ),
+        }
+
+    def _build_tamper_data(tamper_state):
+        return {
+            "last_alert_ts": float(tamper_state.get("last_alert_ts", 0.0)),
+            "last_causes": tamper_state.get("last_causes", []),
+            "alerts_count": int(tamper_state.get("alerts_count", 0)),
+        }
+
+    def _build_carcass_data(carcass_state):
+        return {
+            "count": len(carcass_state.get("items", [])),
+            "audio_alert": len(carcass_state.get("items", [])) > 0,
+        }
+
     @bp.route("/api/summary", methods=["GET"])
     @require_auth()
     def get_summary():
@@ -248,51 +316,12 @@ def create_system_blueprint(deps):
                 "total_alertas": len(alertas),
                 "modo_deteccao": MODO_DETECCAO,
                 "camera_id": ACTIVE_CAMERA_ID,
-                "behavior": {
-                    "status": behavior_state.get("status", ""),
-                    "message": behavior_state.get("message", ""),
-                    "dispersion_ratio": behavior_state.get("dispersion_ratio", 0.0),
-                    "edge_ratio": behavior_state.get("edge_ratio", 0.0),
-                },
-                "sensors": {
-                    "humidity_pct": sensor_state.get("humidity_pct", 0),
-                    "ammonia_ppm": sensor_state.get("ammonia_ppm", 0),
-                    "feed_level_pct": sensor_state.get("feed_level_pct", 0),
-                    "water_level_pct": sensor_state.get("water_level_pct", 0),
-                },
-                "automation": {
-                    "enabled": (
-                        bool(estado_dispositivos.get("modo_automatico", False))
-                        if estado_dispositivos
-                        else False
-                    ),
-                    "targets": targets,
-                },
+                "behavior": _build_behavior_data(behavior_state),
+                "sensors": _build_sensors_data(sensor_state),
+                "automation": _build_automation_data(estado_dispositivos, targets),
                 "batch": batch.to_dict() if batch else None,
-                "weight": {
-                    "avg_weight_g": weight_state.get("avg_weight_g", 0),
-                    "ideal_weight_g": weight_state.get("ideal_weight_g", 0),
-                    "confidence": weight_state.get("confidence", 0),
-                    "method": (
-                        "segmentation_area"
-                        if (
-                            detector
-                            and getattr(detector, "supports_segmentation", False)
-                        )
-                        else "bbox_area_fallback"
-                    ),
-                },
-                "acoustic": {
-                    "respiratory_health_index": acoustic_state.get(
-                        "respiratory_health_index", 0
-                    ),
-                    "cough_index": acoustic_state.get("cough_index", 0),
-                    "stress_audio_index": acoustic_state.get("stress_audio_index", 0),
-                    "source": acoustic_state.get("source", ""),
-                    "trained_model_loaded": (
-                        bool(audio_classifier.loaded) if audio_classifier else False
-                    ),
-                },
+                "weight": _build_weight_data(weight_state, detector),
+                "acoustic": _build_acoustic_data(acoustic_state, audio_classifier),
                 "energy_today": {
                     "ventilacao_seconds": round(vent_sec_today, 2),
                     "aquecedor_seconds": round(aq_sec_today, 2),
@@ -302,15 +331,8 @@ def create_system_blueprint(deps):
                 ),
                 "sync": {"pending": pending_sync},
                 "weather": weather_state,
-                "tamper": {
-                    "last_alert_ts": float(tamper_state.get("last_alert_ts", 0.0)),
-                    "last_causes": tamper_state.get("last_causes", []),
-                    "alerts_count": int(tamper_state.get("alerts_count", 0)),
-                },
-                "carcass": {
-                    "count": len(carcass_state.get("items", [])),
-                    "audio_alert": len(carcass_state.get("items", [])) > 0,
-                },
+                "tamper": _build_tamper_data(tamper_state),
+                "carcass": _build_carcass_data(carcass_state),
                 "comfort_score": _comfort_score() if _comfort_score else 0,
             }
         )
