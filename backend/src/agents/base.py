@@ -1,10 +1,21 @@
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Tuple
+from dataclasses import dataclass
 
 from database import AcousticReading, Batch, BatchLogbook, EventLog, SensorReading, db
 
 
+
+@dataclass
+class VisualCounts:
+    carcass: int
+    prostration: int
+    immobility: int
+    behavior: int
+
+
 class ChikGuardAgent:
+
     """Classe base abstrata para os agentes de decisão inteligente do ChikGuard."""
 
     def __init__(self, name: str, description: str):
@@ -103,28 +114,25 @@ class VetWelfareAgent(ChikGuardAgent):
 
     def _diagnose_visual_anomalies(
         self,
-        carcass_count: int,
-        prostration_count: int,
-        immobility_count: int,
-        behavior_count: int,
+        counts: VisualCounts,
         recommendations: List[str],
         anomalies: List[str],
     ) -> str:
         """Avalia anomalias visuais como mortalidade, apatia e amontoamento."""
         status = "NORMAL"
 
-        if carcass_count > 0:
+        if counts.carcass > 0:
             anomalies.append(
-                f"Detecção de {carcass_count} alerta(s) de carcaça (aves mortas) recente."
+                f"Detecção de {counts.carcass} alerta(s) de carcaça (aves mortas) recente."
             )
             recommendations.append(
                 "Realizar remoção manual imediata das aves mortas para evitar contaminações."
             )
             status = "CRITICAL"
 
-        if (prostration_count + immobility_count) > 5:
+        if (counts.prostration + counts.immobility) > 5:
             anomalies.append(
-                f"Alto índice de aves prostradas/imóveis: {prostration_count + immobility_count} avistamentos."
+                f"Alto índice de aves prostradas/imóveis: {counts.prostration + counts.immobility} avistamentos."
             )
             recommendations.append(
                 "Verificar o conforto térmico local ou possíveis sintomas de apatia infecciosa."
@@ -132,9 +140,9 @@ class VetWelfareAgent(ChikGuardAgent):
             if status != "CRITICAL":
                 status = "WARNING"
 
-        if behavior_count > 3:
+        if counts.behavior > 3:
             anomalies.append(
-                f"Anomalias de comportamento espacial/agrupamento recorrentes ({behavior_count} alertas)."
+                f"Anomalias de comportamento espacial/agrupamento recorrentes ({counts.behavior} alertas)."
             )
             recommendations.append(
                 "Verificar a uniformidade térmica do galpão (bolsões de frio ou correntes de vento)."
@@ -215,11 +223,14 @@ class VetWelfareAgent(ChikGuardAgent):
         resp_status = self._diagnose_respiratory_health(
             averages["cough"], averages["resp"], averages["stress"], recommendations, anomalies
         )
+        visual_counts = VisualCounts(
+            carcass=counts["carcass"],
+            prostration=counts["prostration"],
+            immobility=counts["immobility"],
+            behavior=counts["behavior"],
+        )
         visual_status = self._diagnose_visual_anomalies(
-            counts["carcass"],
-            counts["prostration"],
-            counts["immobility"],
-            counts["behavior"],
+            visual_counts,
             recommendations,
             anomalies,
         )
