@@ -1870,7 +1870,6 @@ def _save_bird_snapshots(frame, ambient_temp):
                         last_temp_estimada=row.temperatura_estimada,
                     )
                     db.session.add(identity)
-                    id_map[row.bird_uid] = identity
                 else:
                     identity.last_seen = now_dt
                     identity.sightings = int(identity.sightings) + 1
