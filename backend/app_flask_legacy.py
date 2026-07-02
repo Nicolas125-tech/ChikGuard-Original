@@ -136,7 +136,9 @@ ACTIVE_CAMERA_ID = os.getenv("ACTIVE_CAMERA_ID", "galpao-1")
 INFERENCE_IMGSZ = int(os.getenv("INFERENCE_IMGSZ", "640"))
 DETECTION_CONF = float(os.getenv("DETECTION_CONF", "0.20"))
 DETECTION_IOU = float(os.getenv("DETECTION_IOU", "0.35"))
-MIN_BIRD_AREA_RATIO = float(os.getenv("MIN_BIRD_AREA_RATIO", "0.00002"))  # pintinhos sao pequenos
+MIN_BIRD_AREA_RATIO = float(
+    os.getenv("MIN_BIRD_AREA_RATIO", "0.00002")
+)  # pintinhos sao pequenos
 YOLO_MODEL_PATH = os.getenv("YOLO_MODEL_PATH", "yolov8n.pt")
 YOLO_SEG_MODEL_PATH = os.getenv("YOLO_SEG_MODEL_PATH", "yolov8n-seg.pt")
 BIRD_CLASS_NAME = os.getenv("BIRD_CLASS_NAME", "bird")
@@ -176,7 +178,9 @@ INTRUSION_END_HOUR = int(os.getenv("INTRUSION_END_HOUR", "5"))
 INTRUSION_COOLDOWN_SEC = int(os.getenv("INTRUSION_COOLDOWN_SEC", "180"))
 
 WEIGHT_SAVE_INTERVAL = int(os.getenv("WEIGHT_SAVE_INTERVAL", "600"))
-WEIGHT_CALIBRATION_G_PER_SQRT_PX = float(os.getenv("WEIGHT_CALIBRATION_G_PER_SQRT_PX", "1.85"))
+WEIGHT_CALIBRATION_G_PER_SQRT_PX = float(
+    os.getenv("WEIGHT_CALIBRATION_G_PER_SQRT_PX", "1.85")
+)
 THERMAL_ANOMALY_COOLDOWN_SEC = int(os.getenv("THERMAL_ANOMALY_COOLDOWN_SEC", "180"))
 ACOUSTIC_SAVE_INTERVAL = int(os.getenv("ACOUSTIC_SAVE_INTERVAL", "60"))
 
@@ -184,7 +188,9 @@ VENTILACAO_POWER_KW = float(os.getenv("VENTILACAO_POWER_KW", "0.35"))
 AQUECEDOR_POWER_KW = float(os.getenv("AQUECEDOR_POWER_KW", "1.80"))
 ENERGY_TARIFF_PER_KWH = float(os.getenv("ENERGY_TARIFF_PER_KWH", "0.95"))
 CAMERA_DISTANCE_M = float(os.getenv("CAMERA_DISTANCE_M", "2.2"))
-VIRTUAL_SCALE_CM_PER_PX_AT_1M = float(os.getenv("VIRTUAL_SCALE_CM_PER_PX_AT_1M", "0.09"))
+VIRTUAL_SCALE_CM_PER_PX_AT_1M = float(
+    os.getenv("VIRTUAL_SCALE_CM_PER_PX_AT_1M", "0.09")
+)
 
 SYNC_PUSH_INTERVAL_SEC = int(os.getenv("SYNC_PUSH_INTERVAL_SEC", "45"))
 CLOUD_SYNC_URL = os.getenv("CLOUD_SYNC_URL", "").strip()
@@ -201,7 +207,9 @@ STREAM_JPEG_QUALITY = int(os.getenv("STREAM_JPEG_QUALITY", "82"))
 TAMPER_ALERT_COOLDOWN_SEC = int(os.getenv("TAMPER_ALERT_COOLDOWN_SEC", "180"))
 TAMPER_SENSOR_STALE_SEC = int(os.getenv("TAMPER_SENSOR_STALE_SEC", "180"))
 TAMPER_DARK_MEAN_THRESHOLD = float(os.getenv("TAMPER_DARK_MEAN_THRESHOLD", "24.0"))
-TAMPER_LOW_TEXTURE_STD_THRESHOLD = float(os.getenv("TAMPER_LOW_TEXTURE_STD_THRESHOLD", "8.0"))
+TAMPER_LOW_TEXTURE_STD_THRESHOLD = float(
+    os.getenv("TAMPER_LOW_TEXTURE_STD_THRESHOLD", "8.0")
+)
 TAMPER_FREEZE_DIFF_THRESHOLD = float(os.getenv("TAMPER_FREEZE_DIFF_THRESHOLD", "1.2"))
 TAMPER_FREEZE_MIN_FRAMES = int(os.getenv("TAMPER_FREEZE_MIN_FRAMES", "45"))
 CRITICAL_ALLOWED_CIDRS = [
@@ -244,7 +252,9 @@ def _configure_camera_capture(cap):
 try:
     from src.vision.enhanced_detector import EnhancedObjectDetector as ObjectDetector
 except ImportError as e:
-    LOGGER.error("Failed to load EnhancedObjectDetector, falling back to None. Error: %s", e)
+    LOGGER.error(
+        "Failed to load EnhancedObjectDetector, falling back to None. Error: %s", e
+    )
     ObjectDetector = None
 
 
@@ -344,7 +354,11 @@ app.config["JWT_SECRET_KEY"] = SETTINGS.jwt_secret_key
 proxy_depth = int(os.getenv("PROXY_DEPTH", "1"))
 if proxy_depth > 0:
     app.wsgi_app = ProxyFix(
-        app.wsgi_app, x_for=proxy_depth, x_proto=proxy_depth, x_host=proxy_depth, x_prefix=0
+        app.wsgi_app,
+        x_for=proxy_depth,
+        x_proto=proxy_depth,
+        x_host=proxy_depth,
+        x_prefix=0,
     )
 
 
@@ -393,7 +407,9 @@ def anomaly_storage_worker():
             if str(level).lower() in {"high", "critical"}:
                 sent = ALERT_PROVIDER.send(f"[{event_type}] {message}")
                 if not sent:
-                    LOGGER.warning("Alert provider failed for event_type=%s", event_type)
+                    LOGGER.warning(
+                        "Alert provider failed for event_type=%s", event_type
+                    )
 
                 try:
                     with app.app_context():
@@ -411,7 +427,9 @@ def anomaly_storage_worker():
                             }
                             if "requests" in globals() and requests is not None:
                                 requests.post(
-                                    "https://exp.host/--/api/v2/push/send", json=payload, timeout=5
+                                    "https://exp.host/--/api/v2/push/send",
+                                    json=payload,
+                                    timeout=5,
                                 )
                 except Exception as e:
                     LOGGER.exception("Failed to send async push: %s", e)
@@ -419,11 +437,18 @@ def anomaly_storage_worker():
             LOGGER.exception("Error in anomaly storage worker: %s", e)
 
 
-threading.Thread(target=anomaly_storage_worker, daemon=True, name="anomaly-storage").start()
+threading.Thread(
+    target=anomaly_storage_worker, daemon=True, name="anomaly-storage"
+).start()
 
 
 def _log_event(
-    event_type, level="info", message="", metadata=None, camera_id=ACTIVE_CAMERA_ID, frame=None
+    event_type,
+    level="info",
+    message="",
+    metadata=None,
+    camera_id=ACTIVE_CAMERA_ID,
+    frame=None,
 ):
     try:
         with app.app_context():
@@ -441,7 +466,9 @@ def _log_event(
         if str(level).lower() in {"high", "critical"} or frame is not None:
             # Enviar para a thread em background para não bloquear o loop de vídeo
             frame_copy = frame.copy() if frame is not None else None
-            anomaly_storage_queue.put((event_type, level, message, frame_copy, camera_id))
+            anomaly_storage_queue.put(
+                (event_type, level, message, frame_copy, camera_id)
+            )
 
         event_payload = {
             "camera_id": camera_id,
@@ -461,7 +488,9 @@ def _enqueue_sync_item(item_type, payload):
         with app.app_context():
             db.session.add(
                 SyncQueueItem(
-                    item_type=item_type, payload_json=_safe_json(payload), status="pending"
+                    item_type=item_type,
+                    payload_json=_safe_json(payload),
+                    status="pending",
                 )
             )
             db.session.commit()
@@ -509,7 +538,11 @@ def _guard_critical_action(action_name, permission=None):
     try:
         verify_jwt_in_request(optional=False)
     except Exception:
-        _audit("critical_action_denied_no_jwt", source="security", details={"action": action_name})
+        _audit(
+            "critical_action_denied_no_jwt",
+            source="security",
+            details={"action": action_name},
+        )
         return False, (jsonify({"msg": "JWT obrigatorio para comando critico"}), 401)
     ip = _request_ip()
     if not _ip_allowed_for_critical(ip):
@@ -684,7 +717,9 @@ with app.app_context():
     db.session.commit()
 
     if not Camera.query.filter_by(camera_id=ACTIVE_CAMERA_ID).first():
-        db.session.add(Camera(camera_id=ACTIVE_CAMERA_ID, name="Câmera 1", status="online"))
+        db.session.add(
+            Camera(camera_id=ACTIVE_CAMERA_ID, name="Câmera 1", status="online")
+        )
         db.session.commit()
 
     if not Batch.query.filter_by(camera_id=ACTIVE_CAMERA_ID, active=True).first():
@@ -863,7 +898,9 @@ def _init_bird_uid_counter():
     with app.app_context():
         max_identity = db.session.query(db.func.max(BirdIdentity.bird_uid)).scalar()
         max_snapshot = db.session.query(db.func.max(BirdSnapshot.bird_uid)).scalar()
-    max_seen = max(filter(lambda v: v is not None, [max_identity, max_snapshot]), default=0)
+    max_seen = max(
+        filter(lambda v: v is not None, [max_identity, max_snapshot]), default=0
+    )
     next_bird_uid = int(max_seen) + 1
 
 
@@ -917,7 +954,9 @@ def _resolve_stable_bird_uid(track_id, box, now_ts, frame, used_uids):
         size_norm = min(1.0, abs(area_ratio - 1.0))
         appear_norm = 1.0 - appear_sim
         score = (
-            (REID_W_DIST * dist_norm) + (REID_W_SIZE * size_norm) + (REID_W_APPEAR * appear_norm)
+            (REID_W_DIST * dist_norm)
+            + (REID_W_SIZE * size_norm)
+            + (REID_W_APPEAR * appear_norm)
         )
         if best_score is None or score < best_score:
             best_score = score
@@ -999,7 +1038,9 @@ def _estimate_weight_from_live_birds(frame_shape):
     now = time.time()
     with lock:
         birds = [
-            v for v in live_birds.values() if (now - float(v["last_seen"])) <= BIRD_LIVE_TTL_SEC
+            v
+            for v in live_birds.values()
+            if (now - float(v["last_seen"])) <= BIRD_LIVE_TTL_SEC
         ]
     if not birds:
         return None
@@ -1019,7 +1060,9 @@ def _estimate_weight_from_live_birds(frame_shape):
         scale = VIRTUAL_SCALE_CM_PER_PX_AT_1M * max(0.5, CAMERA_DISTANCE_M)
         body_area_cm2 = max(1.0, area_px * (scale**2))
         # Approximate mass relation from projected body area.
-        base_weight = WEIGHT_CALIBRATION_G_PER_SQRT_PX * math.sqrt(body_area_cm2 * 100.0)
+        base_weight = WEIGHT_CALIBRATION_G_PER_SQRT_PX * math.sqrt(
+            body_area_cm2 * 100.0
+        )
         # Minor perspective correction using vertical position.
         cy = (y1 + y2) / 2.0
         perspective = 0.92 + (0.16 * (cy / float(max(1, fh))))
@@ -1029,7 +1072,9 @@ def _estimate_weight_from_live_birds(frame_shape):
 
     avg_weight_from_area = float(sum(weights) / len(weights))
     batch = _active_batch(ACTIVE_CAMERA_ID)
-    age_day = max(1, (_utcnow().date() - batch.start_date.date()).days + 1) if batch else 21
+    age_day = (
+        max(1, (_utcnow().date() - batch.start_date.date()).days + 1) if batch else 21
+    )
     ideal = _ideal_weight_for_age_day(age_day)
 
     # Blend between area-based estimate and age-based expected curve.
@@ -1152,7 +1197,9 @@ def _update_energy_runtime():
         return
     day_start = _utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     with app.app_context():
-        row = EnergyUsageDaily.query.filter_by(camera_id=ACTIVE_CAMERA_ID, day=day_start).first()
+        row = EnergyUsageDaily.query.filter_by(
+            camera_id=ACTIVE_CAMERA_ID, day=day_start
+        ).first()
         if row is None:
             row = EnergyUsageDaily(camera_id=ACTIVE_CAMERA_ID, day=day_start)
             db.session.add(row)
@@ -1377,9 +1424,7 @@ def _analyze_behavior(selected, frame_shape):
 
     if panic_ratio > 0.30 and count >= 4:
         status = "PANICO_AGITACAO"
-        message = (
-            "ALERTA CRITICO: Agitacao extrema (possivel ataque de predador ou barulho assustador)."
-        )
+        message = "ALERTA CRITICO: Agitacao extrema (possivel ataque de predador ou barulho assustador)."
     elif prostration_ratio > 0.15 and count >= 4:
         status = "PASSANDO_MAL"
         message = "ALERTA CRITICO: Aves prostradas (possivel doenca, falta de ar ou exaustao)."
@@ -1414,15 +1459,23 @@ def _analyze_behavior(selected, frame_shape):
 
     if (
         status != "NORMAL"
-        and (now - float(behavior_state["last_alert_ts"])) >= BEHAVIOR_ALERT_COOLDOWN_SEC
+        and (now - float(behavior_state["last_alert_ts"]))
+        >= BEHAVIOR_ALERT_COOLDOWN_SEC
     ):
         behavior_state["last_alert_ts"] = now
         _log_event(
             event_type="behavior_alert",
-            level="high"
-            if status
-            in ["PASSANDO_MAL", "PANICO_AGITACAO", "PRECISA_VENTILACAO", "PRECISA_AQUECIMENTO"]
-            else "medium",
+            level=(
+                "high"
+                if status
+                in [
+                    "PASSANDO_MAL",
+                    "PANICO_AGITACAO",
+                    "PRECISA_VENTILACAO",
+                    "PRECISA_AQUECIMENTO",
+                ]
+                else "medium"
+            ),
             message=message,
             metadata={
                 "status": status,
@@ -1560,8 +1613,13 @@ def _telegram_send_text(message):
         return False, "telegram_not_configured"
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     try:
-        response = requests.post(url, data={"chat_id": chat_id, "text": message}, timeout=10)
-        return (response.ok, f"http_{response.status_code}" if not response.ok else "sent")
+        response = requests.post(
+            url, data={"chat_id": chat_id, "text": message}, timeout=10
+        )
+        return (
+            response.ok,
+            f"http_{response.status_code}" if not response.ok else "sent",
+        )
     except Exception as exc:
         safe_msg = str(exc).replace(token, "***") if token else str(exc)
         LOGGER.error("Error sending text to Telegram: %s", safe_msg)
@@ -1587,7 +1645,8 @@ def _check_tampering(frame):
     mean_luma = float(np.mean(gray))
     std_luma = float(np.std(gray))
     visible_ok = (
-        mean_luma >= TAMPER_DARK_MEAN_THRESHOLD and std_luma >= TAMPER_LOW_TEXTURE_STD_THRESHOLD
+        mean_luma >= TAMPER_DARK_MEAN_THRESHOLD
+        and std_luma >= TAMPER_LOW_TEXTURE_STD_THRESHOLD
     )
 
     if visible_ok:
@@ -1602,7 +1661,9 @@ def _check_tampering(frame):
     else:
         diff = float(np.mean(cv2.absdiff(gray, _tamper_prev_gray)))
         if diff < TAMPER_FREEZE_DIFF_THRESHOLD:
-            tamper_state["freeze_frames"] = int(tamper_state.get("freeze_frames", 0)) + 1
+            tamper_state["freeze_frames"] = (
+                int(tamper_state.get("freeze_frames", 0)) + 1
+            )
         else:
             tamper_state["freeze_frames"] = 0
         _tamper_prev_gray = gray
@@ -1688,7 +1749,9 @@ def _update_carcass_detection(selected):
                 "x": cx,
                 "y": cy,
                 "sector": _sector_from_point(
-                    cx, cy, global_frame.shape if global_frame is not None else (720, 1280, 3)
+                    cx,
+                    cy,
+                    global_frame.shape if global_frame is not None else (720, 1280, 3),
                 ),
                 "still_seconds": round(still_seconds, 1),
             }
@@ -1701,7 +1764,12 @@ def _update_carcass_detection(selected):
                     message=f"Atencao: Possivel ave morta no setor {item['sector']}",
                     metadata=item,
                 )
-                _audit("carcass_alert_triggered", source="ai", actor="chikguard-ai", details=item)
+                _audit(
+                    "carcass_alert_triggered",
+                    source="ai",
+                    actor="chikguard-ai",
+                    details=item,
+                )
     carcass_state["items"] = carcasses
     carcass_state["uids"] = set([c["bird_uid"] for c in carcasses])
 
@@ -1730,7 +1798,11 @@ def _fetch_weather_forecast_once():
             if "00:" in dt_txt or "03:" in dt_txt or "06:" in dt_txt:
                 mins.append(float(temp))
         if not mins:
-            mins = [float(e.get("main", {}).get("temp_min", 99)) for e in entries if e.get("main")]
+            mins = [
+                float(e.get("main", {}).get("temp_min", 99))
+                for e in entries
+                if e.get("main")
+            ]
         next_min = min(mins) if mins else None
         if next_min is None:
             return
@@ -1750,7 +1822,10 @@ def _fetch_weather_forecast_once():
         )
         if preheat:
             _log_event(
-                "weather_cold_front", "medium", weather_state["message"], metadata=weather_state
+                "weather_cold_front",
+                "medium",
+                weather_state["message"],
+                metadata=weather_state,
             )
     except Exception as exc:
         LOGGER.exception("[WEATHER] fetch error: %s", exc)
@@ -1771,7 +1846,9 @@ def _comfort_score():
         elif ultima.status == "FRIO":
             temp_status_score = 72
     intrusion_penalty = (
-        25 if (time.time() - float(intrusion_state.get("last_alert_ts", 0.0))) < 3600 else 0
+        25
+        if (time.time() - float(intrusion_state.get("last_alert_ts", 0.0))) < 3600
+        else 0
     )
     movement_bonus = 8 if behavior_state.get("status") == "NORMAL" else -8
     carcass_penalty = min(30, len(carcass_state.get("items", [])) * 10)
@@ -1809,7 +1886,10 @@ def _detect_intrusion(all_detections, frame):
         event_type="intrusion_alert",
         level="high",
         message="Intrusao detectada na camera",
-        metadata={"detections": len(person_dets), "telegram": {"sent": sent, "detail": detail}},
+        metadata={
+            "detections": len(person_dets),
+            "telegram": {"sent": sent, "detail": detail},
+        },
     )
     _audit(
         "intrusion_alert_triggered",
@@ -1855,7 +1935,9 @@ def _save_bird_snapshots(frame, ambient_temp):
             db.session.bulk_save_objects(rows)
 
             bird_uids = [r.bird_uid for r in rows]
-            existing_identities = BirdIdentity.query.filter(BirdIdentity.bird_uid.in_(bird_uids)).all()
+            existing_identities = BirdIdentity.query.filter(
+                BirdIdentity.bird_uid.in_(bird_uids)
+            ).all()
             id_map = {idx.bird_uid: idx for idx in existing_identities}
 
             for row in rows:
@@ -1924,7 +2006,9 @@ def _draw_overlays(draw_frame, frame, selected, tracked):
                     _cname = _class_name_by_id(_cid)
                     _mask_area = float(det.get("mask_area_px", 0.0))
                     if "species" not in det:
-                        _sp = _species_classifier.classify(frame, _box, _cname, _mask_area)
+                        _sp = _species_classifier.classify(
+                            frame, _box, _cname, _mask_area
+                        )
                         det.update(_sp)
                     if "pose" not in det:
                         _ps = _pose_analyzer.analyze(_box, _mask_area, frame.shape)
@@ -1935,18 +2019,26 @@ def _draw_overlays(draw_frame, frame, selected, tracked):
 
             # Atualizar contagem de espécies
             now_sc = time.time()
-            species_counts = count_by_species(live_birds, selected, now_sc, BIRD_LIVE_TTL_SEC)
+            species_counts = count_by_species(
+                live_birds, selected, now_sc, BIRD_LIVE_TTL_SEC
+            )
 
             # SOTA Overlay
             if MODO_DETECCAO == "aves" and sv is not None and box_annotator is not None:
                 if tracked is not None and len(tracked) > 0:
                     labels = []
                     for i in range(len(tracked)):
-                        tracker_id = tracked.tracker_id[i] if tracked.tracker_id is not None else -1
+                        tracker_id = (
+                            tracked.tracker_id[i]
+                            if tracked.tracker_id is not None
+                            else -1
+                        )
                         conf = tracked.confidence[i]
                         labels.append(f"#{tracker_id} {conf:.2f}")
 
-                    draw_frame = box_annotator.annotate(scene=draw_frame, detections=tracked)
+                    draw_frame = box_annotator.annotate(
+                        scene=draw_frame, detections=tracked
+                    )
                     draw_frame = label_annotator.annotate(
                         scene=draw_frame, detections=tracked, labels=labels
                     )
@@ -1982,18 +2074,30 @@ def _draw_overlays(draw_frame, frame, selected, tracked):
                 if tracked is not None and len(tracked) > 0:
                     labels = []
                     for i in range(len(tracked)):
-                        tracker_id = tracked.tracker_id[i] if tracked.tracker_id is not None else -1
+                        tracker_id = (
+                            tracked.tracker_id[i]
+                            if tracked.tracker_id is not None
+                            else -1
+                        )
                         conf = tracked.confidence[i]
                         labels.append(f"#{tracker_id} {conf:.2f}")
 
-                    draw_frame = box_annotator.annotate(scene=draw_frame, detections=tracked)
+                    draw_frame = box_annotator.annotate(
+                        scene=draw_frame, detections=tracked
+                    )
                     draw_frame = label_annotator.annotate(
                         scene=draw_frame, detections=tracked, labels=labels
                     )
                     draw_frame = behavior_engine.annotate_heatmap(draw_frame, tracked)
 
                 cv2.putText(
-                    draw_frame, f"Aves visiveis: {object_count}", (10, 30), font, 2, (0, 255, 0), 2
+                    draw_frame,
+                    f"Aves visiveis: {object_count}",
+                    (10, 30),
+                    font,
+                    2,
+                    (0, 255, 0),
+                    2,
                 )
                 btxt = f"Comportamento: {behavior_state['status']}"
                 cv2.putText(draw_frame, btxt, (10, 55), font, 1.5, (30, 220, 255), 2)
@@ -2005,7 +2109,9 @@ def _draw_overlays(draw_frame, frame, selected, tracked):
                     confidence = float(det["confidence"])
                     is_carcass = tid in carcass_state.get("uids", set())
                     color = (0, 0, 0) if is_carcass else (0, 255, 0)
-                    cv2.rectangle(draw_frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
+                    cv2.rectangle(
+                        draw_frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2
+                    )
                     if is_carcass:
                         label = f"POSSIVEL CARCACA ID:{tid}"
                     else:
@@ -2015,7 +2121,13 @@ def _draw_overlays(draw_frame, frame, selected, tracked):
                             else f"{class_name} ({confidence:.2f})"
                         )
                     cv2.putText(
-                        draw_frame, label, (int(x1), max(20, int(y1) - 5)), font, 1.2, color, 2
+                        draw_frame,
+                        label,
+                        (int(x1), max(20, int(y1) - 5)),
+                        font,
+                        1.2,
+                        color,
+                        2,
                     )
 
                 if MODO_DETECCAO == "aves":
@@ -2030,15 +2142,35 @@ def _draw_overlays(draw_frame, frame, selected, tracked):
                     )
                     btxt = f"Comportamento: {behavior_state['status']}"
                     cv2.putText(
-                        draw_frame, btxt, (10, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (30, 220, 255), 1
+                        draw_frame,
+                        btxt,
+                        (10, 55),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5,
+                        (30, 220, 255),
+                        1,
                     )
                 else:
                     cv2.putText(
-                        draw_frame, f"Objetos: {object_count}", (10, 30), font, 2, (0, 255, 0), 2
+                        draw_frame,
+                        f"Objetos: {object_count}",
+                        (10, 30),
+                        font,
+                        2,
+                        (0, 255, 0),
+                        2,
                     )
 
             cfg = f"tracker={TRACKER_CONFIG} conf={DETECTION_CONF:.2f} classe={BIRD_CLASS_NAME}"
-            cv2.putText(draw_frame, cfg, (10, 78), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 0), 1)
+            cv2.putText(
+                draw_frame,
+                cfg,
+                (10, 78),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.45,
+                (255, 255, 0),
+                1,
+            )
 
     return draw_frame
 
@@ -2085,7 +2217,9 @@ def detectar_objetos(frame, pre_detections=None):
                 x2 = max(0, min(x2, w))
                 y2 = max(0, min(y2, h))
                 if x2 > x1 and y2 > y1:
-                    frame[y1:y2, x1:x2] = cv2.GaussianBlur(frame[y1:y2, x1:x2], (99, 99), 30)
+                    frame[y1:y2, x1:x2] = cv2.GaussianBlur(
+                        frame[y1:y2, x1:x2], (99, 99), 30
+                    )
                     draw_frame[y1:y2, x1:x2] = cv2.GaussianBlur(
                         draw_frame[y1:y2, x1:x2], (99, 99), 30
                     )
@@ -2126,7 +2260,9 @@ def detectar_objetos(frame, pre_detections=None):
             xyxy = np.array([det["box"] for det in selected])
             confidence = np.array([det["confidence"] for det in selected])
             class_id = np.array([det["class_id"] for det in selected])
-            sv_detections = sv.Detections(xyxy=xyxy, confidence=confidence, class_id=class_id)
+            sv_detections = sv.Detections(
+                xyxy=xyxy, confidence=confidence, class_id=class_id
+            )
         else:
             sv_detections = sv.Detections.empty()
 
@@ -2174,9 +2310,11 @@ def detectar_objetos(frame, pre_detections=None):
                         "conf": conf,
                         "last_seen": now,
                         "class_name": _class_name_by_id(cid),
-                        "is_carcass": tid in behavior_engine.dead_or_sick_ids
-                        if behavior_engine
-                        else False,
+                        "is_carcass": (
+                            tid in behavior_engine.dead_or_sick_ids
+                            if behavior_engine
+                            else False
+                        ),
                     }
         else:
             for det in selected:
@@ -2304,7 +2442,9 @@ def _heatmap_points_3d(hours=24, grid_size=24):
             intensity = float(norm[gy, gx])
             if intensity < 0.05:
                 continue
-            ammonia_local = float(sensor_state.get("ammonia_ppm", 0.0)) * (0.7 + 0.6 * intensity)
+            ammonia_local = float(sensor_state.get("ammonia_ppm", 0.0)) * (
+                0.7 + 0.6 * intensity
+            )
             points.append(
                 {
                     "x": round(gx / max(1, w - 1), 4),
@@ -2367,7 +2507,9 @@ def _energy_forecast(hours=12):
     fan_today = float(today_row.ventilacao_seconds) if today_row else 0.0
     heater_today = float(today_row.aquecedor_seconds) if today_row else 0.0
 
-    fan_today = max(fan_today, float(energy_runtime_state.get("ventilacao_seconds_today", 0.0)))
+    fan_today = max(
+        fan_today, float(energy_runtime_state.get("ventilacao_seconds_today", 0.0))
+    )
     heater_today = max(
         heater_today, float(energy_runtime_state.get("aquecedor_seconds_today", 0.0))
     )
@@ -2397,7 +2539,9 @@ def _energy_forecast(hours=12):
     total_kwh = fan_kwh + heater_kwh
     heating_cost = heater_kwh * ENERGY_TARIFF_PER_KWH
     total_cost = total_kwh * ENERGY_TARIFF_PER_KWH
-    estimated_saving = (heating_cost * 0.20) + ((fan_kwh * ENERGY_TARIFF_PER_KWH) * 0.08)
+    estimated_saving = (heating_cost * 0.20) + (
+        (fan_kwh * ENERGY_TARIFF_PER_KWH) * 0.08
+    )
 
     message = (
         f"Previsao de gasto de R$ {heating_cost:.2f} em aquecimento nas proximas {hours}h. "
@@ -2452,7 +2596,8 @@ def _process_data_lifecycle(now):
         pending_syncs = SyncQueueItem.query.filter_by(status="pending").count()
         if pending_syncs > 1000:
             LOGGER.warning(
-                "[data-lifecycle] Skipping cleanup. Too many pending syncs: %d", pending_syncs
+                "[data-lifecycle] Skipping cleanup. Too many pending syncs: %d",
+                pending_syncs,
             )
             return
 
@@ -2469,7 +2614,9 @@ def _process_data_lifecycle(now):
                 db.session.delete(record)
             total_deleted += count
             LOGGER.info(
-                "[data-lifecycle] Deleted %d records from %s (older than 3 days)", count, name
+                "[data-lifecycle] Deleted %d records from %s (older than 3 days)",
+                count,
+                name,
             )
 
         db.session.commit()
@@ -2490,7 +2637,9 @@ def _process_data_lifecycle(now):
                         os.remove(filepath)
                         files_deleted += 1
                     except Exception:
-                        LOGGER.error("[data-lifecycle] Failed to delete file %s: %s", filepath, e)
+                        LOGGER.error(
+                            "[data-lifecycle] Failed to delete file %s: %s", filepath, e
+                        )
 
         if total_deleted > 0 or files_deleted > 0:
             LOGGER.info(
@@ -2502,7 +2651,10 @@ def _process_data_lifecycle(now):
                 event_type="data_lifecycle_cleanup",
                 level="info",
                 message=f"Limpeza de Hot Storage Edge: apagados {total_deleted} registros DB e {files_deleted} arquivos.",
-                metadata={"db_deleted_count": total_deleted, "files_deleted": files_deleted},
+                metadata={
+                    "db_deleted_count": total_deleted,
+                    "files_deleted": files_deleted,
+                },
             )
 
 
@@ -2544,6 +2696,441 @@ def _weekly_report_scheduler():
         time.sleep(60)
 
 
+def _run_cv_engine_v2_loop():
+    global global_frame, db_last_save_time, fps_last_time, last_temp_emergency_notification_ts
+    global _camera_capture, _inference_pipeline
+    last_error_print_time = 0.0
+    last_batch_age_sync = 0.0
+
+    video_sim = None
+    use_sim = False
+
+    _bg_subtractor = cv2.createBackgroundSubtractorMOG2(
+        history=100, varThreshold=25, detectShadows=False
+    )
+
+    while True:
+        try:
+            # ── Controle On-Demand da Câmera ─────────────────────────────
+            is_watching = (time.time() - last_video_request_time) < 8.0
+
+            if is_watching:
+                # Se alguém está assistindo e a câmera não está rodando, inicia
+                if _camera_capture is None or not _camera_capture.is_live:
+                    LOGGER.info("[camera_loop] Ativacao da camera sob demanda.")
+                    _camera_capture = CameraCapture(
+                        camera_index=CAMERA_INDEX,
+                        target_fps=CAMERA_TARGET_FPS,
+                        width=1280,
+                        height=720,
+                        backend=CAMERA_BACKEND_ID,
+                        metrics=_perf_metrics,
+                    )
+                    _camera_capture.start()
+
+                if _inference_pipeline is None or not _inference_pipeline.is_alive():
+                    _inference_pipeline = InferencePipeline(
+                        detector=detector,
+                        species_classifier=_species_classifier,
+                        pose_analyzer=_pose_analyzer,
+                        metrics=_perf_metrics,
+                        imgsz=INFERENCE_IMGSZ,
+                        class_name_fn=_class_name_by_id,
+                    )
+                    _inference_pipeline.start()
+            else:
+                # Se ninguem está assistindo e a câmera está rodando, desativa
+                if _camera_capture is not None:
+                    LOGGER.info("[camera_loop] Desativacao da camera por inatividade.")
+                    try:
+                        _camera_capture.stop()
+                    except Exception:
+                        pass
+                    _camera_capture = None
+
+                if _inference_pipeline is not None:
+                    try:
+                        _inference_pipeline.stop()
+                    except Exception:
+                        pass
+                    _inference_pipeline = None
+
+                # Gera o frame de espera e dorme
+                idle_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+                cv2.putText(
+                    idle_frame,
+                    "AGUARDANDO CONEXAO DA TELA AO VIVO...",
+                    (50, 240),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (180, 180, 0),
+                    2,
+                )
+                with lock:
+                    global_frame = idle_frame
+                time.sleep(0.2)
+                continue
+
+            # ── Sincronizar idade do lote com SpeciesClassifier ────────────
+            now_ts = time.time()
+            if now_ts - last_batch_age_sync > 60.0 and _species_classifier is not None:
+                last_batch_age_sync = now_ts
+                try:
+                    batch = _active_batch(ACTIVE_CAMERA_ID)
+                    if batch is not None:
+                        age = max(
+                            1, (_utcnow().date() - batch.start_date.date()).days + 1
+                        )
+                        _species_classifier.set_batch_age(age)
+                except Exception:
+                    pass
+
+            # ── Obter frame da câmera ou simulador se a câmera falhar ──────
+            use_sim = not _camera_capture.is_live
+            if use_sim:
+                sim_path = SIM_VIDEO_PATH
+                if sim_path:
+                    sim_path = (
+                        sim_path
+                        if os.path.isabs(sim_path)
+                        else os.path.join(CURRENT_DIR, sim_path)
+                    )
+                if VideoProcessor is not None and sim_path and os.path.exists(sim_path):
+                    if video_sim is None:
+                        try:
+                            video_sim = VideoProcessor(sim_path)
+                        except Exception:
+                            video_sim = None
+                    frame = None
+                    if video_sim is not None:
+                        try:
+                            frame = video_sim.get_next_frame()
+                        except Exception:
+                            video_sim = None
+                    if frame is None:
+                        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+                else:
+                    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+                    cv2.putText(
+                        frame,
+                        "CAMERA OFFLINE - SEM VIDEO SIMULADOR",
+                        (80, 240),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.7,
+                        (0, 0, 255),
+                        2,
+                    )
+            else:
+                frame = _camera_capture.latest_frame(timeout=0.05)
+                if frame is None:
+                    time.sleep(0.005)
+                    continue
+
+            # ── Motion Heuristics (Frame Skipping) ──────────────────────────
+            fg_mask = _bg_subtractor.apply(frame)
+            motion_pixels = cv2.countNonZero(fg_mask)
+            total_pixels = frame.shape[0] * frame.shape[1]
+            motion_ratio = float(motion_pixels) / float(total_pixels)
+
+            if motion_ratio >= 0.005:
+                # ── Submeter para inferência apenas se houver movimento significativo ──
+                _inference_pipeline.submit_frame(frame)
+
+            # ── Obter último resultado de inferência ───────────────────────
+            result = _inference_pipeline.get_result(timeout=0.04)
+            if result is not None:
+                detections = result.get("detections", [])
+                # Executar análise de comportamento/imobilidade no frame
+                if MODO_DETECCAO == "aves":
+                    _check_tampering(frame)
+                    # Passa detecções já calculadas — NÃO chama detector.detect() novamente
+                    draw_frame = detectar_objetos(frame, pre_detections=detections)
+                else:
+                    draw_frame = detectar_objetos(frame, pre_detections=detections)
+            else:
+                # Sem resultado ainda: exibir frame bruto com HUD parcial
+                draw_frame = frame.copy()
+                if _perf_metrics and _CV_ENGINE_AVAILABLE and CVOverlay is not None:
+                    _md = _perf_metrics.get()
+                    draw_frame = CVOverlay.draw_hud(
+                        draw_frame,
+                        _md,
+                        counts=species_counts,
+                        behavior_status=behavior_state.get("status", "AGUARDANDO"),
+                    )
+
+            # ── Temperatura estimada ───────────────────────────────────────
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            temp_atual = 20.0 + (float(np.mean(gray)) / 255.0) * 20.0
+
+            _apply_automatic_control(temp_atual)
+            _update_energy_runtime()
+
+            if (
+                temp_atual >= 35.0
+                and (now_ts - float(last_temp_emergency_notification_ts)) > 600
+            ):
+                last_temp_emergency_notification_ts = now_ts
+                txt = (
+                    f"Temperatura subiu para {temp_atual:.1f}C! Intervencao necessaria."
+                )
+                sent, detail = _telegram_send_text(txt)
+                _log_event(
+                    "temperature_critical_alert",
+                    "high",
+                    txt,
+                    metadata={"telegram_sent": sent, "telegram_detail": detail},
+                )
+
+            # ── FPS overlay (posição superior direita) ─────────────────────
+            new_time = time.time()
+            fps = 1.0 / max(1e-6, new_time - fps_last_time)
+            fps_last_time = new_time
+            h_fr, w_fr = draw_frame.shape[:2]
+            cv2.putText(
+                draw_frame,
+                f"LOOP:{int(fps)}fps",
+                (w_fr - 155, h_fr - 12),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.45,
+                (160, 160, 255),
+                1,
+                cv2.LINE_AA,
+            )
+
+            with lock:
+                global_frame = draw_frame
+
+            if MODO_DETECCAO == "aves" and not use_sim:
+                _save_bird_snapshots(frame, temp_atual)
+                _save_bird_track_points()
+
+            current_time = time.time()
+            if current_time - db_last_save_time > 30:
+                with app.app_context():
+                    status = "NORMAL"
+                    if temp_atual < 26:
+                        status = "FRIO"
+                    elif temp_atual > 32:
+                        status = "CALOR"
+                    reading = Reading(temperatura=round(temp_atual, 1), status=status)
+                    db.session.add(reading)
+                    db.session.commit()
+                    _enqueue_sync_item("reading", reading.to_dict())
+                db_last_save_time = current_time
+
+        except Exception as exc:
+            current_time = time.time()
+            if current_time - last_error_print_time > 5:
+                LOGGER.exception("[camera_loop:v2] ERRO: %s", exc)
+                last_error_print_time = current_time
+            with lock:
+                if global_frame is None:
+                    err_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+                    cv2.putText(
+                        err_frame,
+                        "THREAD ERROR",
+                        (50, 240),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        2,
+                        (0, 0, 255),
+                        3,
+                    )
+                    global_frame = err_frame
+            time.sleep(1)
+
+
+def _run_legacy_camera_loop():
+    global global_frame, db_last_save_time, fps_last_time, last_temp_emergency_notification_ts
+    last_error_print_time = 0.0
+
+    cap = None
+    use_basic_simulation = False
+    video_sim = None
+    consecutive_read_failures = 0
+    last_reopen_attempt_ts = 0.0
+    camera_lost_logged = False
+
+    LOGGER.info(
+        f"[camera_loop:legacy] CV Engine indisponivel, usando pipeline monolitico. Backend: {CAMERA_BACKEND_ID}"
+    )
+    cap = cv2.VideoCapture(CAMERA_INDEX, CAMERA_BACKEND_ID)
+    if cap.isOpened():
+        _configure_camera_capture(cap)
+    else:
+        use_basic_simulation = True
+        sim_msg = "Camera real nao encontrada. Simulacao basica ativada."
+        sim_path = SIM_VIDEO_PATH
+        if sim_path:
+            sim_path = (
+                sim_path
+                if os.path.isabs(sim_path)
+                else os.path.join(CURRENT_DIR, sim_path)
+            )
+            if VideoProcessor is not None and os.path.exists(sim_path):
+                sim_msg = "Camera real nao encontrada. Simulacao em video ativada."
+        _log_event("camera_fallback", "medium", sim_msg)
+
+    while True:
+        try:
+            if use_basic_simulation:
+                now_ts = time.time()
+                if (now_ts - last_reopen_attempt_ts) >= CAMERA_REOPEN_INTERVAL_SEC:
+                    last_reopen_attempt_ts = now_ts
+                    try:
+                        if cap is not None:
+                            cap.release()
+                    except Exception:
+                        pass
+                    cap = cv2.VideoCapture(CAMERA_INDEX, CAMERA_BACKEND_ID)
+                    if cap.isOpened():
+                        _configure_camera_capture(cap)
+                        use_basic_simulation = False
+                        consecutive_read_failures = 0
+                        camera_lost_logged = False
+                        _log_event(
+                            "camera_reconnected",
+                            "info",
+                            "Camera reconectada com sucesso.",
+                        )
+                        continue
+                frame = None
+                sim_path = SIM_VIDEO_PATH
+                if sim_path:
+                    sim_path = (
+                        sim_path
+                        if os.path.isabs(sim_path)
+                        else os.path.join(CURRENT_DIR, sim_path)
+                    )
+                    if VideoProcessor is not None and os.path.exists(sim_path):
+                        if video_sim is None:
+                            try:
+                                video_sim = VideoProcessor(sim_path)
+                            except Exception:
+                                video_sim = None
+                        if video_sim is not None:
+                            try:
+                                frame = video_sim.get_next_frame()
+                            except Exception:
+                                video_sim = None
+                if frame is None:
+                    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+                    cv2.rectangle(frame, (200, 150), (350, 300), (0, 255, 0), 2)
+                    cv2.putText(
+                        frame,
+                        "TEST_OBJECT",
+                        (200, 140),
+                        cv2.FONT_HERSHEY_PLAIN,
+                        2,
+                        (0, 255, 0),
+                        2,
+                    )
+                    processed_frame = frame
+                    temp_atual = 0.0
+                else:
+                    processed_frame = (
+                        detectar_objetos(frame) if MODO_DETECCAO == "aves" else frame
+                    )
+                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                    temp_atual = 0.0
+            else:
+                ret, frame = cap.read()
+                if not ret:
+                    consecutive_read_failures += 1
+                    if consecutive_read_failures < CAMERA_FAIL_THRESHOLD:
+                        time.sleep(0.03)
+                        continue
+                    use_basic_simulation = True
+                    consecutive_read_failures = 0
+                    if not camera_lost_logged:
+                        _log_event(
+                            "camera_signal_lost",
+                            "high",
+                            "Perda de sinal prolongada. Simulacao ativada.",
+                        )
+                        camera_lost_logged = True
+                    continue
+                consecutive_read_failures = 0
+                _check_tampering(frame)
+                processed_frame = detectar_objetos(frame)
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                temp_atual = 20 + (float(np.mean(gray)) / 255.0) * 20
+
+            _apply_automatic_control(temp_atual)
+            _update_energy_runtime()
+            if (
+                temp_atual >= 35.0
+                and (time.time() - float(last_temp_emergency_notification_ts)) > 600
+            ):
+                last_temp_emergency_notification_ts = time.time()
+                txt = (
+                    f"Temperatura subiu para {temp_atual:.1f}C! Intervencao necessaria."
+                )
+                sent, detail = _telegram_send_text(txt)
+                _log_event(
+                    "temperature_critical_alert",
+                    "high",
+                    txt,
+                    metadata={"telegram_sent": sent, "telegram_detail": detail},
+                )
+
+            new_time = time.time()
+            fps = (
+                1 / (new_time - fps_last_time) if (new_time - fps_last_time) > 0 else 0
+            )
+            fps_last_time = new_time
+            cv2.putText(
+                processed_frame,
+                f"FPS: {int(fps)}",
+                (processed_frame.shape[1] - 120, 30),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (255, 0, 255),
+                2,
+            )
+
+            with lock:
+                global_frame = processed_frame
+
+            if MODO_DETECCAO == "aves" and not use_basic_simulation:
+                _save_bird_snapshots(frame, temp_atual)
+                _save_bird_track_points()
+
+            current_time = time.time()
+            if current_time - db_last_save_time > 30:
+                with app.app_context():
+                    status = "NORMAL"
+                    if temp_atual < 26:
+                        status = "FRIO"
+                    elif temp_atual > 32:
+                        status = "CALOR"
+                    reading = Reading(temperatura=round(temp_atual, 1), status=status)
+                    db.session.add(reading)
+                    db.session.commit()
+                    _enqueue_sync_item("reading", reading.to_dict())
+                db_last_save_time = current_time
+
+        except Exception as exc:
+            current_time = time.time()
+            if current_time - last_error_print_time > 5:
+                LOGGER.exception("CRITICAL ERROR IN CAMERA THREAD: %s", exc)
+                last_error_print_time = current_time
+            with lock:
+                if global_frame is None:
+                    error_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+                    cv2.putText(
+                        error_frame,
+                        "THREAD ERROR",
+                        (50, 240),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        2,
+                        (0, 0, 255),
+                        3,
+                    )
+                    global_frame = error_frame
+            time.sleep(1)
+
+
 def camera_loop():
     """
     Loop principal de visão computacional — versão CV Engine v2.
@@ -2555,430 +3142,19 @@ def camera_loop():
 
     Fallback (sem cv_engine): comportamento original monolítico.
     """
-    global global_frame, db_last_save_time, fps_last_time, last_temp_emergency_notification_ts
-    global _camera_capture, _inference_pipeline
+    LOGGER.info(
+        "[camera_loop] Iniciando pipeline de video CV Engine v2=%s",
+        _CV_ENGINE_AVAILABLE,
+    )
 
-    last_error_print_time = 0.0
-    last_batch_age_sync = 0.0
-
-    LOGGER.info("[camera_loop] Iniciando pipeline de video CV Engine v2=%s", _CV_ENGINE_AVAILABLE)
-
-    # ── Ramo: CV Engine v2 Desacoplado ────────────────────────────────────────
-    if _CV_ENGINE_AVAILABLE and CameraCapture is not None and InferencePipeline is not None:
-        video_sim = None
-        use_sim = False
-
-        _bg_subtractor = cv2.createBackgroundSubtractorMOG2(
-            history=100, varThreshold=25, detectShadows=False
-        )
-
-        while True:
-            try:
-                # ── Controle On-Demand da Câmera ─────────────────────────────
-                is_watching = (time.time() - last_video_request_time) < 8.0
-
-                if is_watching:
-                    # Se alguém está assistindo e a câmera não está rodando, inicia
-                    if _camera_capture is None or not _camera_capture.is_live:
-                        LOGGER.info("[camera_loop] Ativacao da camera sob demanda.")
-                        _camera_capture = CameraCapture(
-                            camera_index=CAMERA_INDEX,
-                            target_fps=CAMERA_TARGET_FPS,
-                            width=1280,
-                            height=720,
-                            backend=CAMERA_BACKEND_ID,
-                            metrics=_perf_metrics,
-                        )
-                        _camera_capture.start()
-
-                    if _inference_pipeline is None or not _inference_pipeline.is_alive():
-                        _inference_pipeline = InferencePipeline(
-                            detector=detector,
-                            species_classifier=_species_classifier,
-                            pose_analyzer=_pose_analyzer,
-                            metrics=_perf_metrics,
-                            imgsz=INFERENCE_IMGSZ,
-                            class_name_fn=_class_name_by_id,
-                        )
-                        _inference_pipeline.start()
-                else:
-                    # Se ninguem está assistindo e a câmera está rodando, desativa
-                    if _camera_capture is not None:
-                        LOGGER.info("[camera_loop] Desativacao da camera por inatividade.")
-                        try:
-                            _camera_capture.stop()
-                        except Exception:
-                            pass
-                        _camera_capture = None
-
-                    if _inference_pipeline is not None:
-                        try:
-                            _inference_pipeline.stop()
-                        except Exception:
-                            pass
-                        _inference_pipeline = None
-
-                    # Gera o frame de espera e dorme
-                    idle_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                    cv2.putText(
-                        idle_frame,
-                        "AGUARDANDO CONEXAO DA TELA AO VIVO...",
-                        (50, 240),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7,
-                        (180, 180, 0),
-                        2,
-                    )
-                    with lock:
-                        global_frame = idle_frame
-                    time.sleep(0.2)
-                    continue
-
-                # ── Sincronizar idade do lote com SpeciesClassifier ────────────
-                now_ts = time.time()
-                if now_ts - last_batch_age_sync > 60.0 and _species_classifier is not None:
-                    last_batch_age_sync = now_ts
-                    try:
-                        batch = _active_batch(ACTIVE_CAMERA_ID)
-                        if batch is not None:
-                            age = max(1, (_utcnow().date() - batch.start_date.date()).days + 1)
-                            _species_classifier.set_batch_age(age)
-                    except Exception:
-                        pass
-
-                # ── Obter frame da câmera ou simulador se a câmera falhar ──────
-                use_sim = not _camera_capture.is_live
-                if use_sim:
-                    sim_path = SIM_VIDEO_PATH
-                    if sim_path:
-                        sim_path = (
-                            sim_path
-                            if os.path.isabs(sim_path)
-                            else os.path.join(CURRENT_DIR, sim_path)
-                        )
-                    if VideoProcessor is not None and sim_path and os.path.exists(sim_path):
-                        if video_sim is None:
-                            try:
-                                video_sim = VideoProcessor(sim_path)
-                            except Exception:
-                                video_sim = None
-                        frame = None
-                        if video_sim is not None:
-                            try:
-                                frame = video_sim.get_next_frame()
-                            except Exception:
-                                video_sim = None
-                        if frame is None:
-                            frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                    else:
-                        frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                        cv2.putText(
-                            frame,
-                            "CAMERA OFFLINE - SEM VIDEO SIMULADOR",
-                            (80, 240),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            0.7,
-                            (0, 0, 255),
-                            2,
-                        )
-                else:
-                    frame = _camera_capture.latest_frame(timeout=0.05)
-                    if frame is None:
-                        time.sleep(0.005)
-                        continue
-
-                # ── Motion Heuristics (Frame Skipping) ──────────────────────────
-                fg_mask = _bg_subtractor.apply(frame)
-                motion_pixels = cv2.countNonZero(fg_mask)
-                total_pixels = frame.shape[0] * frame.shape[1]
-                motion_ratio = float(motion_pixels) / float(total_pixels)
-
-                if motion_ratio >= 0.005:
-                    # ── Submeter para inferência apenas se houver movimento significativo ──
-                    _inference_pipeline.submit_frame(frame)
-
-                # ── Obter último resultado de inferência ───────────────────────
-                result = _inference_pipeline.get_result(timeout=0.04)
-                if result is not None:
-                    detections = result.get("detections", [])
-                    # Executar análise de comportamento/imobilidade no frame
-                    if MODO_DETECCAO == "aves":
-                        _check_tampering(frame)
-                        # Passa detecções já calculadas — NÃO chama detector.detect() novamente
-                        draw_frame = detectar_objetos(frame, pre_detections=detections)
-                    else:
-                        draw_frame = detectar_objetos(frame, pre_detections=detections)
-                else:
-                    # Sem resultado ainda: exibir frame bruto com HUD parcial
-                    draw_frame = frame.copy()
-                    if _perf_metrics and _CV_ENGINE_AVAILABLE and CVOverlay is not None:
-                        _md = _perf_metrics.get()
-                        draw_frame = CVOverlay.draw_hud(
-                            draw_frame,
-                            _md,
-                            counts=species_counts,
-                            behavior_status=behavior_state.get("status", "AGUARDANDO"),
-                        )
-
-                # ── Temperatura estimada ───────────────────────────────────────
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                temp_atual = 20.0 + (float(np.mean(gray)) / 255.0) * 20.0
-
-                _apply_automatic_control(temp_atual)
-                _update_energy_runtime()
-
-                if (
-                    temp_atual >= 35.0
-                    and (now_ts - float(last_temp_emergency_notification_ts)) > 600
-                ):
-                    last_temp_emergency_notification_ts = now_ts
-                    txt = f"Temperatura subiu para {temp_atual:.1f}C! Intervencao necessaria."
-                    sent, detail = _telegram_send_text(txt)
-                    _log_event(
-                        "temperature_critical_alert",
-                        "high",
-                        txt,
-                        metadata={"telegram_sent": sent, "telegram_detail": detail},
-                    )
-
-                # ── FPS overlay (posição superior direita) ─────────────────────
-                new_time = time.time()
-                fps = 1.0 / max(1e-6, new_time - fps_last_time)
-                fps_last_time = new_time
-                h_fr, w_fr = draw_frame.shape[:2]
-                cv2.putText(
-                    draw_frame,
-                    f"LOOP:{int(fps)}fps",
-                    (w_fr - 155, h_fr - 12),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.45,
-                    (160, 160, 255),
-                    1,
-                    cv2.LINE_AA,
-                )
-
-                with lock:
-                    global_frame = draw_frame
-
-                if MODO_DETECCAO == "aves" and not use_sim:
-                    _save_bird_snapshots(frame, temp_atual)
-                    _save_bird_track_points()
-
-                current_time = time.time()
-                if current_time - db_last_save_time > 30:
-                    with app.app_context():
-                        status = "NORMAL"
-                        if temp_atual < 26:
-                            status = "FRIO"
-                        elif temp_atual > 32:
-                            status = "CALOR"
-                        reading = Reading(temperatura=round(temp_atual, 1), status=status)
-                        db.session.add(reading)
-                        db.session.commit()
-                        _enqueue_sync_item("reading", reading.to_dict())
-                    db_last_save_time = current_time
-
-            except Exception as exc:
-                current_time = time.time()
-                if current_time - last_error_print_time > 5:
-                    LOGGER.exception("[camera_loop:v2] ERRO: %s", exc)
-                    last_error_print_time = current_time
-                with lock:
-                    if global_frame is None:
-                        err_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                        cv2.putText(
-                            err_frame,
-                            "THREAD ERROR",
-                            (50, 240),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            2,
-                            (0, 0, 255),
-                            3,
-                        )
-                        global_frame = err_frame
-                time.sleep(1)
-
-    # ── Ramo: Fallback Legado (sem cv_engine) ─────────────────────────────────
+    if (
+        _CV_ENGINE_AVAILABLE
+        and CameraCapture is not None
+        and InferencePipeline is not None
+    ):
+        _run_cv_engine_v2_loop()
     else:
-        cap = None
-        use_basic_simulation = False
-        video_sim = None
-        consecutive_read_failures = 0
-        last_reopen_attempt_ts = 0.0
-        camera_lost_logged = False
-
-        LOGGER.info(
-            f"[camera_loop:legacy] CV Engine indisponivel, usando pipeline monolitico. Backend: {CAMERA_BACKEND_ID}"
-        )
-        cap = cv2.VideoCapture(CAMERA_INDEX, CAMERA_BACKEND_ID)
-        if cap.isOpened():
-            _configure_camera_capture(cap)
-        else:
-            use_basic_simulation = True
-            sim_msg = "Camera real nao encontrada. Simulacao basica ativada."
-            sim_path = SIM_VIDEO_PATH
-            if sim_path:
-                sim_path = (
-                    sim_path
-                    if os.path.isabs(sim_path)
-                    else os.path.join(CURRENT_DIR, sim_path)
-                )
-                if VideoProcessor is not None and os.path.exists(sim_path):
-                    sim_msg = "Camera real nao encontrada. Simulacao em video ativada."
-            _log_event("camera_fallback", "medium", sim_msg)
-
-        while True:
-            try:
-                if use_basic_simulation:
-                    now_ts = time.time()
-                    if (now_ts - last_reopen_attempt_ts) >= CAMERA_REOPEN_INTERVAL_SEC:
-                        last_reopen_attempt_ts = now_ts
-                        try:
-                            if cap is not None:
-                                cap.release()
-                        except Exception:
-                            pass
-                        cap = cv2.VideoCapture(CAMERA_INDEX, CAMERA_BACKEND_ID)
-                        if cap.isOpened():
-                            _configure_camera_capture(cap)
-                            use_basic_simulation = False
-                            consecutive_read_failures = 0
-                            camera_lost_logged = False
-                            _log_event(
-                                "camera_reconnected", "info", "Camera reconectada com sucesso."
-                            )
-                            continue
-                    frame = None
-                    sim_path = SIM_VIDEO_PATH
-                    if sim_path:
-                        sim_path = (
-                            sim_path
-                            if os.path.isabs(sim_path)
-                            else os.path.join(CURRENT_DIR, sim_path)
-                        )
-                        if VideoProcessor is not None and os.path.exists(sim_path):
-                            if video_sim is None:
-                                try:
-                                    video_sim = VideoProcessor(sim_path)
-                                except Exception:
-                                    video_sim = None
-                            if video_sim is not None:
-                                try:
-                                    frame = video_sim.get_next_frame()
-                                except Exception:
-                                    video_sim = None
-                    if frame is None:
-                        frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                        cv2.rectangle(frame, (200, 150), (350, 300), (0, 255, 0), 2)
-                        cv2.putText(
-                            frame,
-                            "TEST_OBJECT",
-                            (200, 140),
-                            cv2.FONT_HERSHEY_PLAIN,
-                            2,
-                            (0, 255, 0),
-                            2,
-                        )
-                        processed_frame = frame
-                        temp_atual = 0.0
-                    else:
-                        processed_frame = (
-                            detectar_objetos(frame) if MODO_DETECCAO == "aves" else frame
-                        )
-                        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                        temp_atual = 0.0
-                else:
-                    ret, frame = cap.read()
-                    if not ret:
-                        consecutive_read_failures += 1
-                        if consecutive_read_failures < CAMERA_FAIL_THRESHOLD:
-                            time.sleep(0.03)
-                            continue
-                        use_basic_simulation = True
-                        consecutive_read_failures = 0
-                        if not camera_lost_logged:
-                            _log_event(
-                                "camera_signal_lost",
-                                "high",
-                                "Perda de sinal prolongada. Simulacao ativada.",
-                            )
-                            camera_lost_logged = True
-                        continue
-                    consecutive_read_failures = 0
-                    _check_tampering(frame)
-                    processed_frame = detectar_objetos(frame)
-                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                    temp_atual = 20 + (float(np.mean(gray)) / 255.0) * 20
-
-                _apply_automatic_control(temp_atual)
-                _update_energy_runtime()
-                if (
-                    temp_atual >= 35.0
-                    and (time.time() - float(last_temp_emergency_notification_ts)) > 600
-                ):
-                    last_temp_emergency_notification_ts = time.time()
-                    txt = f"Temperatura subiu para {temp_atual:.1f}C! Intervencao necessaria."
-                    sent, detail = _telegram_send_text(txt)
-                    _log_event(
-                        "temperature_critical_alert",
-                        "high",
-                        txt,
-                        metadata={"telegram_sent": sent, "telegram_detail": detail},
-                    )
-
-                new_time = time.time()
-                fps = 1 / (new_time - fps_last_time) if (new_time - fps_last_time) > 0 else 0
-                fps_last_time = new_time
-                cv2.putText(
-                    processed_frame,
-                    f"FPS: {int(fps)}",
-                    (processed_frame.shape[1] - 120, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.7,
-                    (255, 0, 255),
-                    2,
-                )
-
-                with lock:
-                    global_frame = processed_frame
-
-                if MODO_DETECCAO == "aves" and not use_basic_simulation:
-                    _save_bird_snapshots(frame, temp_atual)
-                    _save_bird_track_points()
-
-                current_time = time.time()
-                if current_time - db_last_save_time > 30:
-                    with app.app_context():
-                        status = "NORMAL"
-                        if temp_atual < 26:
-                            status = "FRIO"
-                        elif temp_atual > 32:
-                            status = "CALOR"
-                        reading = Reading(temperatura=round(temp_atual, 1), status=status)
-                        db.session.add(reading)
-                        db.session.commit()
-                        _enqueue_sync_item("reading", reading.to_dict())
-                    db_last_save_time = current_time
-
-            except Exception as exc:
-                current_time = time.time()
-                if current_time - last_error_print_time > 5:
-                    LOGGER.exception("CRITICAL ERROR IN CAMERA THREAD: %s", exc)
-                    last_error_print_time = current_time
-                with lock:
-                    if global_frame is None:
-                        error_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                        cv2.putText(
-                            error_frame,
-                            "THREAD ERROR",
-                            (50, 240),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            2,
-                            (0, 0, 255),
-                            3,
-                        )
-                        global_frame = error_frame
-                time.sleep(1)
+        _run_legacy_camera_loop()
 
 
 _init_bird_uid_counter()
@@ -3007,6 +3183,7 @@ automation_engine = AutomationEngine(mqtt_client, app_context_fn=app.app_context
 def _get_current_account():
     try:
         from flask import request
+
         return getattr(request, "user_id", None)
     except Exception:
         return None
@@ -3019,7 +3196,6 @@ def _get_global_frame_on_demand():
 
 
 api_deps = {
-
     "time": time,
     "cv2": cv2,
     "db": db,
@@ -3124,7 +3300,6 @@ app.register_blueprint(create_weight_blueprint(api_deps))
 app.register_blueprint(create_energy_blueprint(api_deps))
 app.register_blueprint(create_system_blueprint(api_deps))
 app.register_blueprint(create_cameras_blueprint(api_deps))
-
 
 
 if __name__ == "__main__":
