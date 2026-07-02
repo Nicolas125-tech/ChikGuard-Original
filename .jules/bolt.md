@@ -41,3 +41,6 @@
 ## 2026-07-01 - [N+1 Query in app_flask_legacy.py]
 **Learning:** Optimizing a DB loop from O(N) to O(1) via a pre-fetched dictionary lookup requires updating the local dictionary when new objects are inserted, preventing duplicate-key `IntegrityError` if the batch has duplicate keys.
 **Action:** When eliminating N+1 DB loops with in-memory ID maps, always add `id_map[key] = new_obj` immediately following `db.session.add(new_obj)`.
+## 2024-07-28 - [Too Many Parameters Refactoring]
+**Learning:** Found a code health issue where a method `_diagnose_visual_anomalies` had six parameters, four of which were closely related integer counts (`carcass_count`, `prostration_count`, `immobility_count`, `behavior_count`). Passing many individual primitive parameters degrades readability and increases the chance of positional argument errors.
+**Action:** Introduced a `VisualCounts` dataclass to encapsulate the related integer counts, reducing the method signature to three arguments and improving maintainability. This follows clean code practices for parameter grouping.
