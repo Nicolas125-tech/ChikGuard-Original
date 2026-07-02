@@ -2,10 +2,20 @@ import time
 
 from flask import Blueprint, jsonify, request
 
-from database import AuditLog, BirdIdentity, EnergyUsageDaily, EventLog, Reading, SyncQueueItem
+from database import (
+    AuditLog,
+    BirdIdentity,
+    EnergyUsageDaily,
+    EventLog,
+    Reading,
+    SyncQueueItem,
+)
 from src.security.auth import require_auth
 from src.api.system_api_extra import add_remaining_routes
 
+# Cache para evitar count() repetitivo em tabela grande
+_cached_total_vistas = None
+_cached_total_vistas_time = 0
 
 
 def create_system_blueprint(deps):
@@ -65,16 +75,24 @@ def create_system_blueprint(deps):
             {
                 "uptime_seconds": uptime_seconds,
                 "camera_thread_alive": t.is_alive() if t else False,
-                "weekly_scheduler_alive": weekly_thread.is_alive() if weekly_thread else False,
-                "mlops_scheduler_alive": mlops_thread.is_alive() if mlops_thread else False,
+                "weekly_scheduler_alive": (
+                    weekly_thread.is_alive() if weekly_thread else False
+                ),
+                "mlops_scheduler_alive": (
+                    mlops_thread.is_alive() if mlops_thread else False
+                ),
                 "sync_thread_alive": sync_thread.is_alive() if sync_thread else False,
-                "weather_thread_alive": weather_thread.is_alive() if weather_thread else False,
-                "data_lifecycle_thread_alive": data_lifecycle_thread.is_alive()
-                if data_lifecycle_thread
-                else False,
+                "weather_thread_alive": (
+                    weather_thread.is_alive() if weather_thread else False
+                ),
+                "data_lifecycle_thread_alive": (
+                    data_lifecycle_thread.is_alive() if data_lifecycle_thread else False
+                ),
                 "modo_deteccao": MODO_DETECCAO,
                 "yolo_loaded": detector.yolo_loaded if detector else False,
-                "yolo_segmentation": bool(detector.supports_segmentation) if detector else False,
+                "yolo_segmentation": (
+                    bool(detector.supports_segmentation) if detector else False
+                ),
                 "tracker": TRACKER_CONFIG,
                 "modelo_ia": YOLO_MODEL_PATH,
                 "modelo_ia_resolvido": _resolved_model_path,
@@ -85,7 +103,9 @@ def create_system_blueprint(deps):
                 "server_time": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "camera_index": CAMERA_INDEX,
                 "active_camera_id": ACTIVE_CAMERA_ID,
-                "cough_model_loaded": bool(audio_classifier.loaded) if audio_classifier else False,
+                "cough_model_loaded": (
+                    bool(audio_classifier.loaded) if audio_classifier else False
+                ),
                 "cough_model_path": COUGH_MODEL_PATH,
             }
         )
@@ -94,7 +114,9 @@ def create_system_blueprint(deps):
     @require_auth()
     def get_plugins():
         items = PLUGIN_MANAGER.list_plugins() if PLUGIN_MANAGER else []
-        return jsonify({"count": len(items), "plugins": items, "plugins_root": PLUGINS_ROOT})
+        return jsonify(
+            {"count": len(items), "plugins": items, "plugins_root": PLUGINS_ROOT}
+        )
 
     @bp.route("/api/plugins/reload", methods=["POST"])
     def reload_plugins():
@@ -109,7 +131,9 @@ def create_system_blueprint(deps):
             items = []
         if _audit:
             _audit("plugins_reloaded", source="backend", details={"count": len(items)})
-        return jsonify({"msg": "Plugins recarregados", "count": len(items), "plugins": items})
+        return jsonify(
+            {"msg": "Plugins recarregados", "count": len(items), "plugins": items}
+        )
 
     @bp.route("/api/audit/logs", methods=["GET"])
     def audit_logs():
@@ -168,9 +192,15 @@ def create_system_blueprint(deps):
         recentes = Reading.query.order_by(Reading.id.desc()).limit(30).all()
         temperaturas = [item.temperatura for item in recentes]
         alertas = [item for item in recentes if item.status != "NORMAL"]
-        total_vistas = BirdIdentity.query.count()
 
         now = time.time()
+
+        global _cached_total_vistas, _cached_total_vistas_time
+        if _cached_total_vistas is None or (now - _cached_total_vistas_time) > 60:
+            _cached_total_vistas = BirdIdentity.query.count()
+            _cached_total_vistas_time = now
+
+        total_vistas = _cached_total_vistas
         count = 0
         alive_count = 0
         if lock:
@@ -203,9 +233,11 @@ def create_system_blueprint(deps):
             {
                 "temperatura_atual": ultima.temperatura if ultima else 0,
                 "status_atual": ultima.status if ultima else "INICIANDO",
-                "media_temperatura": round(sum(temperaturas) / len(temperaturas), 1)
-                if temperaturas
-                else 0,
+                "media_temperatura": (
+                    round(sum(temperaturas) / len(temperaturas), 1)
+                    if temperaturas
+                    else 0
+                ),
                 "contagem_aves": count,
                 "aves_vivas_individuais": alive_count,
                 "total_aves_vistas": total_vistas,
@@ -229,9 +261,11 @@ def create_system_blueprint(deps):
                     "water_level_pct": sensor_state.get("water_level_pct", 0),
                 },
                 "automation": {
-                    "enabled": bool(estado_dispositivos.get("modo_automatico", False))
-                    if estado_dispositivos
-                    else False,
+                    "enabled": (
+                        bool(estado_dispositivos.get("modo_automatico", False))
+                        if estado_dispositivos
+                        else False
+                    ),
                     "targets": targets,
                 },
                 "batch": batch.to_dict() if batch else None,
@@ -239,24 +273,33 @@ def create_system_blueprint(deps):
                     "avg_weight_g": weight_state.get("avg_weight_g", 0),
                     "ideal_weight_g": weight_state.get("ideal_weight_g", 0),
                     "confidence": weight_state.get("confidence", 0),
-                    "method": "segmentation_area"
-                    if (detector and getattr(detector, "supports_segmentation", False))
-                    else "bbox_area_fallback",
+                    "method": (
+                        "segmentation_area"
+                        if (
+                            detector
+                            and getattr(detector, "supports_segmentation", False)
+                        )
+                        else "bbox_area_fallback"
+                    ),
                 },
                 "acoustic": {
-                    "respiratory_health_index": acoustic_state.get("respiratory_health_index", 0),
+                    "respiratory_health_index": acoustic_state.get(
+                        "respiratory_health_index", 0
+                    ),
                     "cough_index": acoustic_state.get("cough_index", 0),
                     "stress_audio_index": acoustic_state.get("stress_audio_index", 0),
                     "source": acoustic_state.get("source", ""),
-                    "trained_model_loaded": bool(audio_classifier.loaded)
-                    if audio_classifier
-                    else False,
+                    "trained_model_loaded": (
+                        bool(audio_classifier.loaded) if audio_classifier else False
+                    ),
                 },
                 "energy_today": {
                     "ventilacao_seconds": round(vent_sec_today, 2),
                     "aquecedor_seconds": round(aq_sec_today, 2),
                 },
-                "smart_grid_forecast_12h": _energy_forecast(hours=12) if _energy_forecast else [],
+                "smart_grid_forecast_12h": (
+                    _energy_forecast(hours=12) if _energy_forecast else []
+                ),
                 "sync": {"pending": pending_sync},
                 "weather": weather_state,
                 "tamper": {
@@ -322,11 +365,11 @@ def create_system_blueprint(deps):
                 {
                     "id": f"event-{ev.id}",
                     "tipo": ev.event_type.upper(),
-                    "nivel": "alto"
-                    if ev.level == "high"
-                    else "medio"
-                    if ev.level == "medium"
-                    else "baixo",
+                    "nivel": (
+                        "alto"
+                        if ev.level == "high"
+                        else "medio" if ev.level == "medium" else "baixo"
+                    ),
                     "mensagem": ev.message,
                     "temperatura": None,
                     "hora": ev.timestamp.strftime("%H:%M:%S"),

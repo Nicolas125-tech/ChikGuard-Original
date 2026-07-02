@@ -38,3 +38,6 @@
 ## 2024-07-31 - [Sequential Network Waterfall in DevicesPanel]
 **Learning:** Found sequential `await fetch` calls inside `loadDevices` in `DevicesPanel.jsx` which causes a network waterfall since the endpoints are independent.
 **Action:** Use `Promise.all()` to execute these independent API requests concurrently to reduce total network wait time and render cycle delay.
+## 2024-07-31 - [Repeated COUNT Queries in System Summary API]
+**Learning:** Found a repeated `BirdIdentity.query.count()` call inside `get_summary()` in `backend/src/api/system_api.py`. Since `get_summary` is called frequently by the frontend polling mechanism, running a `COUNT(*)` over a constantly growing table causes severe database and CPU bottlenecks.
+**Action:** Implemented a file-level cache with a 60-second TTL (`_cached_total_vistas` and `_cached_total_vistas_time`) to memoize the total count. This reduces a potentially heavy database aggregation to a fast O(1) memory lookup while maintaining acceptable accuracy for dashboard displays.
