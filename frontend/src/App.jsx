@@ -63,8 +63,8 @@ function AppCore() {
   const [booting, setBooting] = useState(true);
   const [isSetupComplete, setIsSetupComplete] = useState(localStorage.getItem('cg_setup_complete') === 'true');
   const [token, setToken] = useState(localStorage.getItem(STORAGE.token));
-  const [role, setRole] = useState(localStorage.getItem(STORAGE.role) || 'admin');
-  const [status, setStatus] = useState(localStorage.getItem('cg_status') || 'ACTIVE');
+  const [role, setRole] = useState(localStorage.getItem(STORAGE.role) || 'viewer');
+  const [status, setStatus] = useState(localStorage.getItem('cg_status') || 'PENDING');
   const [serverIP, setServerIP] = useState(localStorage.getItem(STORAGE.server) || '127.0.0.1');
   const [showLogin, setShowLogin] = useState(false);
   const [prefs, setPrefs] = useState(readPrefs);
@@ -99,15 +99,6 @@ function AppCore() {
     return () => clearTimeout(t);
   }, []);
 
-  // Corrigir cache stale: admin/superadmin nunca devem ficar em PENDING
-  useEffect(() => {
-    const cachedRole = localStorage.getItem(STORAGE.role) || '';
-    const cachedStatus = localStorage.getItem('cg_status') || '';
-    if (['superadmin', 'admin'].includes(cachedRole) && cachedStatus === 'PENDING') {
-      localStorage.setItem('cg_status', 'ACTIVE');
-      setTimeout(() => setStatus('ACTIVE'), 0);
-    }
-  }, []);
 
   // Listener do Supabase Auth (OAuth redirect, session refresh, etc.)
   useEffect(() => {
@@ -136,17 +127,7 @@ function AppCore() {
           // Profile ainda não existe — usar valores padrão
         }
 
-        // Hardcode superadmin for the owner
-        const safeUser = (nextUser || '').toLowerCase().trim();
-        if (['nicolasbissoqui@gmail.com', 'admin@chikguard.com', 'gordosparasempre@gmail.com'].includes(safeUser) || safeUser.includes('gordos') || safeUser.includes('sempre')) {
-          nextRole = 'superadmin';
-          nextStatus = 'ACTIVE';
-        }
 
-        // Superadmin e admin são sempre ACTIVE, nunca ficam em PENDING
-        if (['superadmin', 'admin'].includes(nextRole)) {
-          nextStatus = 'ACTIVE';
-        }
 
         localStorage.setItem(STORAGE.token, accessToken);
         localStorage.setItem(STORAGE.role, nextRole);
@@ -164,8 +145,8 @@ function AppCore() {
         localStorage.removeItem(STORAGE.username);
         localStorage.removeItem('cg_status');
         setToken(null);
-        setRole('admin');
-        setStatus('ACTIVE');
+        setRole('viewer');
+        setStatus('PENDING');
       }
     });
 
@@ -198,8 +179,8 @@ function AppCore() {
     localStorage.removeItem('cg_status');
     localStorage.removeItem(STORAGE.username);
     setToken(null);
-    setRole('admin');
-    setStatus('ACTIVE');
+    setRole('viewer');
+    setStatus('PENDING');
     setShowLogin(false);
   };
 
@@ -258,14 +239,14 @@ function AppCore() {
         setServerIP={saveServer}
         onBack={() => setShowLogin(false)}
         onLogin={({ accessToken, role: nextRole, username: nextUser, status: nextStatus }) => {
-          const safeRole = String(nextRole || 'admin').toLowerCase();
+          const safeRole = String(nextRole || 'viewer').toLowerCase();
           localStorage.setItem(STORAGE.token, accessToken);
           localStorage.setItem(STORAGE.role, safeRole);
           localStorage.setItem(STORAGE.username, nextUser || '');
-          localStorage.setItem('cg_status', nextStatus || 'ACTIVE');
+          localStorage.setItem('cg_status', nextStatus || 'PENDING');
           setToken(accessToken);
           setRole(safeRole);
-          setStatus(nextStatus || 'ACTIVE');
+          setStatus(nextStatus || 'PENDING');
         }}
       />
     );

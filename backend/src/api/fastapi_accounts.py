@@ -184,10 +184,25 @@ async def admin_approve_user(
     target_role_level = ROLE_LEVELS.get(target_role_lower, 0)
 
     if target_role_level >= current_level and current_user_role != "superadmin":
-        raise HTTPException(status_code=403, detail="Não é possível aprovar um usuário com nível igual ou superior ao seu")
+        raise HTTPException(status_code=403, detail="Não é possível aprovar um usuário para um nível igual ou superior ao seu")
 
     if not supabase_client:
         raise HTTPException(status_code=500, detail="Supabase não configurado")
+
+    try:
+        def _get_profile_role():
+            return supabase_client.table("profiles").select("role").eq("id", data.target_user_id).single().execute()
+
+        profile_response = await run_in_threadpool(_get_profile_role)
+        if not profile_response.data:
+            raise HTTPException(status_code=404, detail="Usuário não encontrado")
+        target_user_current_role = str(profile_response.data.get("role", "viewer")).lower()
+        target_user_current_level = ROLE_LEVELS.get(target_user_current_role, 0)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado ou erro de acesso")
+
+    if current_level <= target_user_current_level and current_user_role != "superadmin":
+        raise HTTPException(status_code=403, detail="Não é possível modificar um usuário com nível igual ou superior ao seu")
 
     try:
         def _approve_user():
