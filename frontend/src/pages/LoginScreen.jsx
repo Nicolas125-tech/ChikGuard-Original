@@ -39,17 +39,6 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
               role = profile.role || role;
               status = profile.status || 'PENDING';
            }
-           // Hardcode superadmin for specific emails
-           const safeEmail = (email || '').toLowerCase().trim();
-           if (['nicolasbissoqui@gmail.com', 'admin@chikguard.com', 'gordosparasempre@gmail.com'].includes(safeEmail) || safeEmail.includes('gordos') || safeEmail.includes('sempre')) {
-              role = 'superadmin';
-              status = 'ACTIVE';
-           }
-
-           // Superadmin e admin sao sempre ACTIVE
-           if (['superadmin', 'admin'].includes(role)) {
-              status = 'ACTIVE';
-           }
            onLogin({ accessToken: data.session.access_token, role, username: email, status });
         }
       } else {

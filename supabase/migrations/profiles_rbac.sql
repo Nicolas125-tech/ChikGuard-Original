@@ -43,7 +43,7 @@ BEGIN
   VALUES (
     NEW.id,
     COALESCE(NEW.email, ''),
-    COALESCE(NEW.raw_user_meta_data->>'role', 'viewer'),
+    'viewer',
     'PENDING',
     NEW.raw_user_meta_data->>'full_name',
     NEW.raw_user_meta_data->>'phone',

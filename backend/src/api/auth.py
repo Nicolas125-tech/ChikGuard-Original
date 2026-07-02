@@ -220,11 +220,21 @@ def create_auth_blueprint(deps):
         target_role_level = ROLE_LEVELS.get(target_role_lower, 0)
 
         if target_role_level >= current_level and current_user_role != "superadmin":
-            return jsonify({"msg": "Não é possível aprovar um usuário com nível igual ou superior ao seu"}), 403
+            return jsonify({"msg": "Não é possível aprovar um usuário para um nível igual ou superior ao seu"}), 403
 
         supabase = _get_supabase_client()
         if not supabase:
             return jsonify({"msg": "Supabase não configurado"}), 500
+
+        try:
+            profile_response = supabase.table("profiles").select("role").eq("id", target_user_id).single().execute()
+            target_user_current_role = str(profile_response.data.get("role", "viewer")).lower()
+            target_user_current_level = ROLE_LEVELS.get(target_user_current_role, 0)
+        except Exception:
+            return jsonify({"msg": "Usuário não encontrado ou erro de acesso"}), 404
+
+        if current_level <= target_user_current_level and current_user_role != "superadmin":
+            return jsonify({"msg": "Não é possível modificar um usuário com nível igual ou superior ao seu"}), 403
 
         try:
             response = (
