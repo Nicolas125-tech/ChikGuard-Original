@@ -38,3 +38,7 @@
 ## 2024-07-31 - [Sequential Network Waterfall in DevicesPanel]
 **Learning:** Found sequential `await fetch` calls inside `loadDevices` in `DevicesPanel.jsx` which causes a network waterfall since the endpoints are independent.
 **Action:** Use `Promise.all()` to execute these independent API requests concurrently to reduce total network wait time and render cycle delay.
+
+## 2026-07-01 - Non-blocking Supabase I/O in Async Endpoints
+**Learning:** Synchronous network calls, such as those made by the Supabase Python client, block the async event loop in FastAPI, severely degrading concurrency (O(N) sequential blocking).
+**Action:** Always wrap synchronous client calls (e.g., Supabase `.execute()`) within `fastapi.concurrency.run_in_threadpool` in async endpoints to maintain non-blocking behavior and maximize concurrent request handling.
