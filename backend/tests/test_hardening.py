@@ -34,7 +34,7 @@ def client(secure_app):
 
 def test_server_header_masking(client):
     """Verifica se o cabeçalho 'Server' é mascarado para evitar banner grabbing."""
-    response = client.get("/api/test-route")
+    response = client.get("/api/test-route", environ_base={"REMOTE_ADDR": "192.168.1.100"})
     assert response.headers.get("Server") == "Secure-Gateway"
     assert "X-Powered-By" not in response.headers
 
@@ -42,18 +42,18 @@ def test_server_header_masking(client):
 def test_honeypot_path_blocking(client):
     """Verifica se caminhos de honeypot bloqueiam o IP e retornam 403."""
     # 1. Tentar acessar um caminho honeypot típico (ex: /wp-admin)
-    response = client.get("/wp-admin")
+    response = client.get("/wp-admin", environ_base={"REMOTE_ADDR": "192.168.1.100"})
     assert response.status_code == 403
     data = json.loads(response.data)
     assert data["code"] == "HONEYPOT_TRIGGERED"
 
     # 2. Verificar se o IP foi incluído na blacklist
     # O cliente de teste do Flask tem remote_addr = '127.0.0.1' por padrão
-    assert "127.0.0.1" in BLACKLISTED_IPS
+    assert "192.168.1.100" in BLACKLISTED_IPS
 
     # 3. Próxima requisição normal do mesmo IP deve ser rejeitada imediatamente
     with patch("time.sleep") as mock_sleep:
-        response2 = client.get("/api/test-route")
+        response2 = client.get("/api/test-route", environ_base={"REMOTE_ADDR": "192.168.1.100"})
         assert response2.status_code == 403
         data2 = json.loads(response2.data)
         assert data2["code"] == "IP_BLACKLISTED"
@@ -62,7 +62,7 @@ def test_honeypot_path_blocking(client):
 
 def test_sqli_query_parameter_blocking(client):
     """Verifica se tentativas de SQL Injection nos parâmetros da query são rejeitadas."""
-    response = client.get("/api/test-route?search='+OR+'1'='1")
+    response = client.get("/api/test-route?search='+OR+'1'='1", environ_base={"REMOTE_ADDR": "192.168.1.100"})
     assert response.status_code == 400
     data = json.loads(response.data)
     assert data["code"] == "SUSPICIOUS_PAYLOAD"
@@ -72,7 +72,7 @@ def test_xss_json_payload_blocking(client):
     """Verifica se tentativas de XSS no corpo do JSON são rejeitadas."""
     payload = {"comment": "<script>alert('hack')</script>"}
     response = client.post(
-        "/api/test-route", data=json.dumps(payload), content_type="application/json"
+        "/api/test-route", environ_base={"REMOTE_ADDR": "192.168.1.100"}, data=json.dumps(payload), content_type="application/json"
     )
     assert response.status_code == 400
     data = json.loads(response.data)
@@ -84,12 +84,12 @@ def test_rate_limiting_trigger(client):
     """Verifica se o rate limiter temporário bloqueia acessos rápidos de um mesmo IP."""
     # Fazer 3 requisições normais (dentro do limite mockado de 3)
     for _ in range(3):
-        response = client.get("/api/test-route")
+        response = client.get("/api/test-route", environ_base={"REMOTE_ADDR": "192.168.1.100"})
         assert response.status_code == 200
 
     # A 4ª requisição deve violar o limite, gerando bloqueio
     with patch("time.sleep") as mock_sleep:
-        response_blocked = client.get("/api/test-route")
+        response_blocked = client.get("/api/test-route", environ_base={"REMOTE_ADDR": "192.168.1.100"})
         assert response_blocked.status_code == 429
         data = json.loads(response_blocked.data)
         assert data["code"] == "RATE_LIMIT_EXCEEDED"
