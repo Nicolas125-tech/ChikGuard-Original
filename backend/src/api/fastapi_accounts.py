@@ -5,6 +5,7 @@ from src.security.fastapi_auth import get_current_user, UserContext, RequireRole
 from pydantic import BaseModel
 from typing import Optional, List
 import logging
+from fastapi.concurrency import run_in_threadpool
 import json
 
 router = APIRouter(prefix="/api", tags=["accounts", "admin"])
@@ -38,7 +39,13 @@ def write_audit_log(db: Session, actor: str, action: str, details: dict):
 async def accounts_me(user: UserContext = Depends(get_current_user)):
     if supabase_client:
         try:
-            response = supabase_client.table("profiles").select("*").eq("id", user.user_id).single().execute()
+            def _get_profile():
+                return (
+                    supabase_client.table("profiles")
+                    .select("*").eq("id", user.user_id).single().execute()
+                )
+
+            response = await run_in_threadpool(_get_profile)
             if response.data:
                 return response.data
         except Exception as e:
@@ -50,7 +57,10 @@ async def accounts_users(user: UserContext = Depends(RequireRole(["admin", "supe
     if not supabase_client:
         raise HTTPException(status_code=500, detail="Supabase não configurado")
     try:
-        response = supabase_client.table("profiles").select("*").execute()
+        def _get_users():
+            return supabase_client.table("profiles").select("*").execute()
+
+        response = await run_in_threadpool(_get_users)
         return {"count": len(response.data or []), "items": response.data or []}
     except Exception as e:
         logger.error("Error fetching users: %s", str(e))
@@ -70,7 +80,10 @@ async def accounts_user_update(
     current_level = ROLE_LEVELS.get(current_user_role, 0)
 
     try:
-        profile_response = supabase_client.table("profiles").select("role").eq("id", account_id).single().execute()
+        def _get_profile_role():
+            return supabase_client.table("profiles").select("role").eq("id", account_id).single().execute()
+
+        profile_response = await run_in_threadpool(_get_profile_role)
         if not profile_response.data:
             raise HTTPException(status_code=404, detail="Usuário não encontrado")
         target_user_role = str(profile_response.data.get("role", "viewer")).lower()
@@ -94,7 +107,10 @@ async def accounts_user_update(
             update_data["status"] = "ACTIVE" if data.active else "SUSPENDED"
 
         if update_data:
-            supabase_client.table("profiles").update(update_data).eq("id", account_id).execute()
+            def _update_profile():
+                return supabase_client.table("profiles").update(update_data).eq("id", account_id).execute()
+
+            await run_in_threadpool(_update_profile)
 
         write_audit_log(db, user.user_id, "account_updated_supabase", {"account_id": account_id, "payload_keys": list(update_data.keys())})
         return {"msg": "Conta atualizada via Supabase"}
@@ -117,7 +133,10 @@ async def accounts_user_delete(
     current_level = ROLE_LEVELS.get(current_user_role, 0)
 
     try:
-        profile_response = supabase_client.table("profiles").select("role").eq("id", account_id).single().execute()
+        def _get_profile_role():
+            return supabase_client.table("profiles").select("role").eq("id", account_id).single().execute()
+
+        profile_response = await run_in_threadpool(_get_profile_role)
         if not profile_response.data:
             raise HTTPException(status_code=404, detail="Usuário não encontrado")
         target_user_role = str(profile_response.data.get("role", "viewer")).lower()
@@ -129,7 +148,10 @@ async def accounts_user_delete(
         raise HTTPException(status_code=403, detail="Não é possível excluir usuários com nível igual ou superior")
 
     try:
-        supabase_client.auth.admin.delete_user(account_id)
+        def _delete_user():
+            return supabase_client.auth.admin.delete_user(account_id)
+
+        await run_in_threadpool(_delete_user)
         write_audit_log(db, user.user_id, "account_deleted_supabase", {"account_id": account_id})
         return {"msg": "Conta excluida com sucesso do Supabase Auth"}
     except Exception as e:
@@ -141,7 +163,10 @@ async def admin_pending_users(user: UserContext = Depends(RequireRole(["admin", 
     if not supabase_client:
         raise HTTPException(status_code=500, detail="Supabase não configurado")
     try:
-        response = supabase_client.table("profiles").select("*").eq("status", "PENDING").execute()
+        def _get_pending_users():
+            return supabase_client.table("profiles").select("*").eq("status", "PENDING").execute()
+
+        response = await run_in_threadpool(_get_pending_users)
         return {"items": response.data or []}
     except Exception as e:
         logger.error("Error fetching pending users: %s", str(e))
@@ -165,12 +190,14 @@ async def admin_approve_user(
         raise HTTPException(status_code=500, detail="Supabase não configurado")
 
     try:
-        response = (
-            supabase_client.table("profiles")
-            .update({"status": "ACTIVE", "role": data.target_role.upper(), "approved_at": "now()"})
-            .eq("id", data.target_user_id)
-            .execute()
-        )
+        def _approve_user():
+            return (
+                supabase_client.table("profiles")
+                .update({"status": "ACTIVE", "role": data.target_role.upper(), "approved_at": "now()"})
+                .eq("id", data.target_user_id)
+                .execute()
+            )
+        response = await run_in_threadpool(_approve_user)
         if not response.data:
             raise HTTPException(status_code=400, detail="Falha ao atualizar no Supabase")
 
