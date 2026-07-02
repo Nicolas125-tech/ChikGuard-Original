@@ -44,3 +44,6 @@
 ## 2024-07-28 - [Too Many Parameters Refactoring]
 **Learning:** Found a code health issue where a method `_diagnose_visual_anomalies` had six parameters, four of which were closely related integer counts (`carcass_count`, `prostration_count`, `immobility_count`, `behavior_count`). Passing many individual primitive parameters degrades readability and increases the chance of positional argument errors.
 **Action:** Introduced a `VisualCounts` dataclass to encapsulate the related integer counts, reducing the method signature to three arguments and improving maintainability. This follows clean code practices for parameter grouping.
+## 2026-07-02 - Optimized bird state iteration
+**Learning:** Iterating over a global dictionary (`bird_last_state`) without periodically cleaning up stale or inactive entries causes the dictionary to grow indefinitely, turning an initially fast O(N) loop into a severe performance bottleneck.
+**Action:** When tracking transient state in long-running processes (like object tracking), explicitly introduce periodic pruning (e.g., deleting entries older than a threshold) to bound the dictionary size and maintain predictable O(1) or small O(N) execution times.
