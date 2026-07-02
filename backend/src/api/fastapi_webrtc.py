@@ -102,7 +102,7 @@ def video_feed(token: str = None):
         logger.error(f"Erro de autenticacao de video (Token invalido): {str(e)}")
         raise HTTPException(status_code=401, detail="Token JWT invalido")
 
-    def generate():
+    async def generate():
         encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
         stream_interval = 1.0 / 30
         try:
@@ -118,7 +118,7 @@ def video_feed(token: str = None):
                 elapsed = time.perf_counter() - t0
                 sleep_t = stream_interval - elapsed
                 if sleep_t > 0.001:
-                    time.sleep(sleep_t)
+                    await asyncio.sleep(sleep_t)
         except GeneratorExit:
             pass
 
