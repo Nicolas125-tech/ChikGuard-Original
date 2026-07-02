@@ -782,6 +782,7 @@ audio_classifier = RespiratoryAudioClassifier(COUGH_MODEL_PATH)
 live_birds = {}
 track_to_bird_uid = {}
 bird_last_state = {}
+_last_bird_state_cleanup_ts = 0.0
 next_bird_uid = 1
 
 # ── CV Engine v2 ─────────────────────────────────────────────────────────────
@@ -935,6 +936,16 @@ def _resolve_stable_bird_uid(track_id, box, now_ts, frame, used_uids):
 
     best_uid = None
     best_score = None
+    global _last_bird_state_cleanup_ts
+    if now_ts - _last_bird_state_cleanup_ts > 10.0:
+        stale_uids = [
+            k for k, v in bird_last_state.items()
+            if (now_ts - float(v["last_seen"])) > REID_MAX_GAP_SEC
+        ]
+        for k in stale_uids:
+            del bird_last_state[k]
+        _last_bird_state_cleanup_ts = now_ts
+
     for uid, state in bird_last_state.items():
         if uid in used_uids:
             continue
