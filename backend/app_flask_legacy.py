@@ -1299,24 +1299,11 @@ def _apply_automatic_control(temp_atual):
         )
 
 
-def _analyze_behavior(selected, frame_shape):
-    now = time.time()
-    count = len(selected)
+
+def _calculate_spatial_ratios(selected, frame_shape):
     h, w = frame_shape[:2]
     frame_area = max(1, h * w)
-
-    if count < 4:
-        behavior_state.update(
-            {
-                "status": "NORMAL",
-                "message": "Poucas aves no quadro para inferencia",
-                "dispersion_ratio": 0.0,
-                "edge_ratio": 0.0,
-                "count": count,
-                "updated_at": now,
-            }
-        )
-        return
+    count = len(selected)
 
     centers = []
     for det in selected:
@@ -1325,6 +1312,10 @@ def _analyze_behavior(selected, frame_shape):
 
     xs = [c[0] for c in centers]
     ys = [c[1] for c in centers]
+
+    if not xs or not ys:
+        return 0.0, 0.0
+
     spread_w = max(1, max(xs) - min(xs))
     spread_h = max(1, max(ys) - min(ys))
     spread_area = spread_w * spread_h
@@ -1337,18 +1328,9 @@ def _analyze_behavior(selected, frame_shape):
             edge_count += 1
     edge_ratio = float(edge_count) / float(max(1, count))
 
-    status = "NORMAL"
-    message = "Aves ativas e com distribuicao saudavel."
+    return dispersion_ratio, edge_ratio
 
-    # Cross-reference with IoT sensors to generate logical heatmap/predictive alerts
-    current_temp = float(sensor_state.get("temperature_c", 25.0))
-    targets = _temperature_targets(ACTIVE_CAMERA_ID)
-    target_temp = float(targets.get("target_temp") or 28.0)
-
-    is_cold_environment = current_temp < (target_temp - 1.5)
-    is_hot_environment = current_temp > (target_temp + 1.5)
-
-    # Calculate proportion of immobile/prostrated birds to detect "passando mal"
+def _calculate_immobility_ratios(count, now):
     immobile_count = 0
     prostrated_count = 0
     for uid, state in immobility_state.items():
@@ -1359,8 +1341,10 @@ def _analyze_behavior(selected, frame_shape):
 
     immobility_ratio = immobile_count / max(1, count)
     prostration_ratio = prostrated_count / max(1, count)
+    return immobility_ratio, prostration_ratio
 
-    # Calculate Panic / Flocking Rate (Sudden high velocity movement)
+def _calculate_panic_ratio(selected, frame_shape):
+    h, w = frame_shape[:2]
     high_velocity_count = 0
     total_velocity_measured = 0
     PANIC_VELOCITY_THRESHOLD = max(w, h) * 0.10  # e.g., moving 10% of frame per second
@@ -1373,13 +1357,18 @@ def _analyze_behavior(selected, frame_shape):
                 high_velocity_count += 1
             total_velocity_measured += 1
 
-    panic_ratio = high_velocity_count / max(1, total_velocity_measured)
+    return high_velocity_count / max(1, total_velocity_measured)
+
+def _determine_behavior_status(count, dispersion_ratio, edge_ratio, immobility_ratio, prostration_ratio, panic_ratio, current_temp, target_temp):
+    is_cold_environment = current_temp < (target_temp - 1.5)
+    is_hot_environment = current_temp > (target_temp + 1.5)
+
+    status = "NORMAL"
+    message = "Aves ativas e com distribuicao saudavel."
 
     if panic_ratio > 0.30 and count >= 4:
         status = "PANICO_AGITACAO"
-        message = (
-            "ALERTA CRITICO: Agitacao extrema (possivel ataque de predador ou barulho assustador)."
-        )
+        message = "ALERTA CRITICO: Agitacao extrema (possivel ataque de predador ou barulho assustador)."
     elif prostration_ratio > 0.15 and count >= 4:
         status = "PASSANDO_MAL"
         message = "ALERTA CRITICO: Aves prostradas (possivel doenca, falta de ar ou exaustao)."
@@ -1400,6 +1389,38 @@ def _analyze_behavior(selected, frame_shape):
         else:
             status = "FOME_SEDE"
             message = "IA: Aves se espalhando erraticamente nas bordas e bicos buscando recursos."
+
+    return status, message
+
+def _analyze_behavior(selected, frame_shape):
+    now = time.time()
+    count = len(selected)
+
+    if count < 4:
+        behavior_state.update(
+            {
+                "status": "NORMAL",
+                "message": "Poucas aves no quadro para inferencia",
+                "dispersion_ratio": 0.0,
+                "edge_ratio": 0.0,
+                "count": count,
+                "updated_at": now,
+            }
+        )
+        return
+
+    dispersion_ratio, edge_ratio = _calculate_spatial_ratios(selected, frame_shape)
+
+    current_temp = float(sensor_state.get("temperature_c", 25.0))
+    targets = _temperature_targets(ACTIVE_CAMERA_ID)
+    target_temp = float(targets.get("target_temp") or 28.0)
+
+    immobility_ratio, prostration_ratio = _calculate_immobility_ratios(count, now)
+    panic_ratio = _calculate_panic_ratio(selected, frame_shape)
+
+    status, message = _determine_behavior_status(
+        count, dispersion_ratio, edge_ratio, immobility_ratio, prostration_ratio, panic_ratio, current_temp, target_temp
+    )
 
     behavior_state.update(
         {
