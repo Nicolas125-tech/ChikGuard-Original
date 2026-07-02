@@ -40,6 +40,42 @@ def _retrieve_knowledge_base(query: str) -> str:
         return ""
 
 
+def _call_gemini_api(api_key: str, system_prompt: str, user_message: str):
+    """Faz requisição direta para a API REST do Gemini 2.5 Flash."""
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+    headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {
+                        "text": f"Instruções do Sistema:\n{system_prompt}\n\nPergunta do Produtor: {user_message}"
+                    }
+                ]
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.2,  # Baixa temperatura para manter respostas determinísticas e precisas nos dados
+            "maxOutputTokens": 800,
+        },
+    }
+
+    res = requests.post(url, headers=headers, json=payload, timeout=12)
+    if res.status_code != 200:
+        return None, f"Erro na API do Gemini (Código {res.status_code}): {res.text}"
+
+    res_data = res.json()
+    candidate = res_data.get("candidates", [{}])[0]
+    content = candidate.get("content", {})
+    parts = content.get("parts", [{}])
+    reply = parts[0].get(
+        "text",
+        "Desculpe, não obtive uma resposta válida da inteligência artificial.",
+    )
+
+    return reply, None
+
+
 def create_agents_blueprint(api_deps):
     bp = Blueprint("agents_api", __name__, url_prefix="/api/agents")
     SensorReading = api_deps["SensorReading"]
@@ -49,32 +85,8 @@ def create_agents_blueprint(api_deps):
     from database import Batch, EventLog
     from src.security.rate_limiter import limiter
 
-    @bp.route("/chat", methods=["POST"])
-    @require_auth()
-    @limiter.limit("10 per minute")
-    def chat():
-        """Endpoint de chat conversacional com o co-piloto do ChikGuard usando a API do Gemini."""
-        data = request.json or {}
-        user_message = data.get("message", "")
-        if not user_message:
-            return jsonify({"error": "Mensagem vazia"}), 400
-        if len(str(user_message)) > 2000:
-            return (
-                jsonify(
-                    {"error": "Tamanho da mensagem excede o limite (2000 caracteres)"}
-                ),
-                400,
-            )
-
-        # Obtém a chave da API do Gemini a partir do ambiente (.env)
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            return jsonify(
-                {
-                    "response": "Olá! Sou o assistente de IA do ChikGuard. No momento, a chave da API do Gemini não está configurada no servidor (variável `GEMINI_API_KEY`), então não consigo responder usando inteligência artificial avançada na nuvem. Contudo, todos os sensores locais e algoritmos de visão continuam protegendo o galpão perfeitamente."
-                }
-            )
-
+    def _build_system_prompt(user_message: str) -> str:
+        """Coleta dados de telemetria e cria o prompt do sistema embutido com contexto em tempo real."""
         # 1. Coleta dados de sensores recentes
         last_sensor = SensorReading.query.order_by(
             SensorReading.timestamp.desc()
@@ -141,7 +153,7 @@ def create_agents_blueprint(api_deps):
         )
 
         # Criação do prompt do sistema embutido com contexto em tempo real do galpão e RAG
-        system_prompt = (
+        return (
             "Você é o Co-Piloto IA do ChikGuard, um especialista virtual em avicultura de precisão.\n"
             "Seu dever é responder a perguntas do produtor sobre o estado do aviário de forma concisa, "
             "clara e profissional, fornecendo insights agronômicos e práticos se detectar problemas.\n\n"
@@ -159,45 +171,38 @@ def create_agents_blueprint(api_deps):
             "comunique isso claramente ao produtor e sugira a ação preventiva adequada imediatamente."
         )
 
-        # Faz requisição direta para a API REST do Gemini 2.5 Flash
-        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
-        headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
-        payload = {
-            "contents": [
+    @bp.route("/chat", methods=["POST"])
+    @require_auth()
+    @limiter.limit("10 per minute")
+    def chat():
+        """Endpoint de chat conversacional com o co-piloto do ChikGuard usando a API do Gemini."""
+        data = request.json or {}
+        user_message = data.get("message", "")
+        if not user_message:
+            return jsonify({"error": "Mensagem vazia"}), 400
+        if len(str(user_message)) > 2000:
+            return (
+                jsonify(
+                    {"error": "Tamanho da mensagem excede o limite (2000 caracteres)"}
+                ),
+                400,
+            )
+
+        # Obtém a chave da API do Gemini a partir do ambiente (.env)
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            return jsonify(
                 {
-                    "parts": [
-                        {
-                            "text": f"Instruções do Sistema:\n{system_prompt}\n\nPergunta do Produtor: {user_message}"
-                        }
-                    ]
+                    "response": "Olá! Sou o assistente de IA do ChikGuard. No momento, a chave da API do Gemini não está configurada no servidor (variável `GEMINI_API_KEY`), então não consigo responder usando inteligência artificial avançada na nuvem. Contudo, todos os sensores locais e algoritmos de visão continuam protegendo o galpão perfeitamente."
                 }
-            ],
-            "generationConfig": {
-                "temperature": 0.2,  # Baixa temperatura para manter respostas determinísticas e precisas nos dados
-                "maxOutputTokens": 800,
-            },
-        }
+            )
 
         try:
-            res = requests.post(url, headers=headers, json=payload, timeout=12)
-            if res.status_code != 200:
-                return (
-                    jsonify(
-                        {
-                            "error": f"Erro na API do Gemini (Código {res.status_code}): {res.text}"
-                        }
-                    ),
-                    500,
-                )
+            system_prompt = _build_system_prompt(user_message)
+            reply, error = _call_gemini_api(api_key, system_prompt, user_message)
 
-            res_data = res.json()
-            candidate = res_data.get("candidates", [{}])[0]
-            content = candidate.get("content", {})
-            parts = content.get("parts", [{}])
-            reply = parts[0].get(
-                "text",
-                "Desculpe, não obtive uma resposta válida da inteligência artificial.",
-            )
+            if error:
+                return jsonify({"error": error}), 500
 
             return jsonify({"response": reply})
         except Exception as e:
