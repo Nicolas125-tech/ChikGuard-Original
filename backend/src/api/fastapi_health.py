@@ -6,6 +6,7 @@ from sqlalchemy import text
 
 from src.db.session import get_db
 from src.security.fastapi_auth import get_current_user, UserContext
+from src.core.state import get_global_frame
 
 router = APIRouter(prefix="/api/health", tags=["health"])
 
@@ -37,8 +38,7 @@ def system_health(
     except Exception:
         db_status = "Offline"
         
-    # TODO: Integrar status do pipeline CV com o novo motor FastAPI
-    cv_status = "Migrating"
+    cv_status = "Online" if get_global_frame is not None else "Offline"
     
     return {
         "cpu": cpu_percent,
