@@ -2239,28 +2239,8 @@ def _draw_overlays(draw_frame, frame, selected, tracked):
     return draw_frame
 
 
-def detectar_objetos(frame, pre_detections=None):
-    """
-    Processa detecções e atualiza o estado global de aves.
 
-    Args:
-        frame          : frame BGR atual
-        pre_detections : lista de detecções já calculadas (da InferencePipeline).
-                         Quando fornecidas, **não** chama detector.detect() novamente,
-                         evitando dupla inferência SAHI que causa 0 FPS.
-    """
-    global object_count
-    draw_frame = frame.copy()
-
-    # ── Inferência ─────────────────────────────────────────────────────────────
-    # Se detecções foram pré-calculadas (InferencePipeline / SAHI async), usa-as.
-    # Caso contrário cai para inferência síncrona direta (modo legado ou debug).
-    if pre_detections is not None:
-        detections = pre_detections
-    else:
-        detections = detector.detect(draw_frame)
-
-    # Active Learning Pipeline: Capture uncertain detections for retraining
+def _process_active_learning(detections, frame):
     try:
         from src.mlops import active_learning_pipeline
 
@@ -2270,7 +2250,8 @@ def detectar_objetos(frame, pre_detections=None):
     except Exception:
         LOGGER.error("Failed to process active learning: ")
 
-    # LGPD / GDPR by Design: Anonimizacao no Edge
+
+def _anonymize_persons(detections, frame, draw_frame):
     h, w = frame.shape[:2]
     for det in detections:
         try:
@@ -2290,8 +2271,8 @@ def detectar_objetos(frame, pre_detections=None):
         except Exception as exc:
             LOGGER.error("Error anonymizing person detection: %s", exc)
 
-    _detect_intrusion(detections, frame)
 
+def _filter_detections(detections, frame):
     frame_area = frame.shape[0] * frame.shape[1]
     min_bird_area = frame_area * MIN_BIRD_AREA_RATIO
 
@@ -2309,10 +2290,11 @@ def detectar_objetos(frame, pre_detections=None):
             selected.append(det)
     else:
         selected = detections
+    return selected
 
-    now = time.time()
 
-    # Processamento leve: conversão e update de tracking sem segurar o lock do frame global
+def _update_tracking_and_behavior(selected):
+    global behavior_state
     tracked = None
     if (
         MODO_DETECCAO == "aves"
@@ -2342,65 +2324,99 @@ def detectar_objetos(frame, pre_detections=None):
             and not behavior_engine.dead_or_sick_ids
         ):
             behavior_state["status"] = "NORMAL"
+    return tracked
+
+
+def _update_live_birds_state(selected, tracked, now):
+    if MODO_DETECCAO == "aves" and sv is not None and spy_tracker is not None:
+        # Reconstroi live_birds e injeta o stable_bird_uid
+        if tracked is not None and len(tracked) > 0:
+            for i in range(len(tracked)):
+                if tracked.tracker_id is None:
+                    continue
+                tid = int(tracked.tracker_id[i])
+                box = tracked.xyxy[i].tolist()
+                conf = float(tracked.confidence[i])
+                cid = int(tracked.class_id[i])
+
+                # Atualiza o "selected" com o UID estável para as funções de enriquecimento pegarem.
+                # Relaxando a margem para 30 pixels de centroide (Kalman filter smoothing drift).
+                tcx = (box[0] + box[2]) / 2.0
+                tcy = (box[1] + box[3]) / 2.0
+                for det in selected:
+                    dx1, dy1, dx2, dy2 = det["box"]
+                    dcx = (dx1 + dx2) / 2.0
+                    dcy = (dy1 + dy2) / 2.0
+                    if math.hypot(tcx - dcx, tcy - dcy) < 30.0:
+                        det["stable_bird_uid"] = tid
+                        break
+
+                live_birds[tid] = {
+                    "box": [int(v) for v in box],
+                    "conf": conf,
+                    "last_seen": now,
+                    "class_name": _class_name_by_id(cid),
+                    "is_carcass": (
+                        tid in behavior_engine.dead_or_sick_ids
+                        if behavior_engine
+                        else False
+                    ),
+                }
+    else:
+        for det in selected:
+            tid = int(det["track_id"])
+            if tid >= 0:
+                live_birds[tid] = {
+                    "box": [int(v) for v in det["box"]],
+                    "conf": float(det["confidence"]),
+                    "last_seen": now,
+                    "class_name": _class_name_by_id(det["class_id"]),
+                    "is_carcass": False,
+                }
+
+    # Cleanup legacy TTL
+    to_del = [
+        uid
+        for uid, data in live_birds.items()
+        if now - float(data["last_seen"]) > BIRD_LIVE_TTL_SEC
+    ]
+    for uid in to_del:
+        del live_birds[uid]
+
+
+def detectar_objetos(frame, pre_detections=None):
+    """
+    Processa detecções e atualiza o estado global de aves.
+
+    Args:
+        frame          : frame BGR atual
+        pre_detections : lista de detecções já calculadas (da InferencePipeline).
+                         Quando fornecidas, **não** chama detector.detect() novamente,
+                         evitando dupla inferência SAHI que causa 0 FPS.
+    """
+    global object_count
+    draw_frame = frame.copy()
+
+    # ── Inferência ─────────────────────────────────────────────────────────────
+    # Se detecções foram pré-calculadas (InferencePipeline / SAHI async), usa-as.
+    # Caso contrário cai para inferência síncrona direta (modo legado ou debug).
+    if pre_detections is not None:
+        detections = pre_detections
+    else:
+        detections = detector.detect(draw_frame)
+
+    _process_active_learning(detections, frame)
+    _anonymize_persons(detections, frame, draw_frame)
+    _detect_intrusion(detections, frame)
+
+    selected = _filter_detections(detections, frame)
+
+    now = time.time()
+    tracked = _update_tracking_and_behavior(selected)
 
     with lock:
         global object_count
-
-        if MODO_DETECCAO == "aves" and sv is not None and spy_tracker is not None:
-            # Reconstroi live_birds e injeta o stable_bird_uid
-            if tracked is not None and len(tracked) > 0:
-                for i in range(len(tracked)):
-                    if tracked.tracker_id is None:
-                        continue
-                    tid = int(tracked.tracker_id[i])
-                    box = tracked.xyxy[i].tolist()
-                    conf = float(tracked.confidence[i])
-                    cid = int(tracked.class_id[i])
-
-                    # Atualiza o "selected" com o UID estável para as funções de enriquecimento pegarem.
-                    # Relaxando a margem para 30 pixels de centroide (Kalman filter smoothing drift).
-                    tcx = (box[0] + box[2]) / 2.0
-                    tcy = (box[1] + box[3]) / 2.0
-                    for det in selected:
-                        dx1, dy1, dx2, dy2 = det["box"]
-                        dcx = (dx1 + dx2) / 2.0
-                        dcy = (dy1 + dy2) / 2.0
-                        if math.hypot(tcx - dcx, tcy - dcy) < 30.0:
-                            det["stable_bird_uid"] = tid
-                            break
-
-                    live_birds[tid] = {
-                        "box": [int(v) for v in box],
-                        "conf": conf,
-                        "last_seen": now,
-                        "class_name": _class_name_by_id(cid),
-                        "is_carcass": (
-                            tid in behavior_engine.dead_or_sick_ids
-                            if behavior_engine
-                            else False
-                        ),
-                    }
-        else:
-            for det in selected:
-                tid = int(det["track_id"])
-                if tid >= 0:
-                    live_birds[tid] = {
-                        "box": [int(v) for v in det["box"]],
-                        "conf": float(det["confidence"]),
-                        "last_seen": now,
-                        "class_name": _class_name_by_id(det["class_id"]),
-                        "is_carcass": False,
-                    }
-
-        # Cleanup legacy TTL
-        to_del = [
-            uid
-            for uid, data in live_birds.items()
-            if now - float(data["last_seen"]) > BIRD_LIVE_TTL_SEC
-        ]
-        for uid in to_del:
-            del live_birds[uid]
-
+        _update_live_birds_state(selected, tracked, now)
         object_count = len(live_birds)
 
     if MODO_DETECCAO == "aves":
