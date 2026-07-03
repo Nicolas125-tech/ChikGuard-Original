@@ -43,11 +43,17 @@ async def lifespan(fastapi_app: FastAPI):
     
     # Inicia o FSM em background
     fsm_task = asyncio.create_task(fsm_loop())
+
+    # Inicia o Worker de Sincronização offline-first de Sensores com o Supabase
+    from src.services.sensor_sync_worker import SensorSyncWorker
+    sync_worker = SensorSyncWorker()
+    sync_task = asyncio.create_task(sync_worker.run())
     
     yield
     
     # Cleanup na finalizacao
     fsm_task.cancel()
+    sync_task.cancel()
     if mqtt_client:
         mqtt_client.loop_stop()
         mqtt_client.disconnect()

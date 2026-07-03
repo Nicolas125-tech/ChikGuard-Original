@@ -6,6 +6,7 @@ import asyncio
 import paho.mqtt.client as mqtt
 from src.core.state import sensor_state
 from src.api.fastapi_iot import iot_bridge_state
+from src.services.mqtt_gateway import LoRaMqttGateway
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +14,9 @@ logger = logging.getLogger(__name__)
 MQTT_BROKER = os.environ.get("MQTT_BROKER", "localhost")
 MQTT_PORT = int(os.environ.get("MQTT_PORT", 1883))
 MQTT_TOPIC = os.environ.get("MQTT_TOPIC", "chikguard/farm/+/sensors")
+
+# Instancia o gateway global para decodificação LoRaWAN
+lora_gateway = LoRaMqttGateway()
 
 def on_connect(client, userdata, flags, rc):
     iot_bridge_state["broker_address"] = f"{MQTT_BROKER}:{MQTT_PORT}"
@@ -22,21 +26,27 @@ def on_connect(client, userdata, flags, rc):
         iot_bridge_state["mqtt_connected"] = True
         logger.info(f"Conectado ao Broker MQTT em {MQTT_BROKER}:{MQTT_PORT} com sucesso.")
         client.subscribe(MQTT_TOPIC)
-        logger.info(f"Inscrito no tópico IoT: {MQTT_TOPIC}")
+        client.subscribe("chikguard/farm/+/sensors/lora")
+        logger.info(f"Inscrito nos tópicos IoT: {MQTT_TOPIC} e chikguard/farm/+/sensors/lora")
     else:
         iot_bridge_state["mqtt_connected"] = False
         logger.error(f"Falha na conexão MQTT. Código de retorno: {rc}")
 
 def on_message(client, userdata, msg):
     """
-    Callback disparado quando um ESP32/Arduino publica dados de sensores.
-    Exemplo de payload esperado:
-    {
-       "temperature_c": 28.5,
-       "humidity_pct": 65.0,
-       "ammonia_ppm": 12.0
-    }
+    Callback disparado quando um dispositivo IoT publica dados de sensores.
+    Faz o roteamento inteligente: se for no tópico /lora, decodifica o binário.
+    Caso contrário, processa o JSON padrão (retrocompatibilidade).
     """
+    if msg.topic.endswith("/lora"):
+        try:
+            lora_gateway.process_message(msg)
+            iot_bridge_state["messages_received"] += 1
+            iot_bridge_state["last_message_at"] = time.time()
+        except Exception as e:
+            logger.error(f"Erro na decodificação de telemetria LoRa no tópico {msg.topic}: {e}")
+        return
+
     try:
         payload = msg.payload.decode('utf-8')
         data = json.loads(payload)
