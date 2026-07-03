@@ -63,10 +63,22 @@ def test_system_health_online(mock_psutil):
     assert data["disk_used"] == 1200
     assert "uptime_seconds" in data
     assert data["database"] == "Online"
-    # cv_pipeline depends on get_global_frame
-    assert data["cv_pipeline"] in ["Online", "Offline"]
+    import src.core.state as state
 
-    mock_db.execute.assert_called_once()
+    # Test Offline
+    state.get_global_frame = state._default_get_global_frame
+    response_offline = client.get("/api/health/system")
+    assert response_offline.json()["cv_pipeline"] == "Offline"
+
+    # Test Online
+    state.get_global_frame = lambda: "Real Frame"
+    response_online = client.get("/api/health/system")
+    assert response_online.json()["cv_pipeline"] == "Online"
+
+    # Cleanup
+    state.get_global_frame = state._default_get_global_frame
+
+    assert mock_db.execute.call_count == 3
 
 @patch('src.api.fastapi_health.psutil')
 def test_system_health_db_offline(mock_psutil):

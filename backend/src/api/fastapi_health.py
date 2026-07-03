@@ -6,7 +6,7 @@ from sqlalchemy import text
 
 from src.db.session import get_db
 from src.security.fastapi_auth import get_current_user, UserContext
-from src.core.state import get_global_frame
+from src.core import state
 
 router = APIRouter(prefix="/api/health", tags=["health"])
 
@@ -38,7 +38,7 @@ def system_health(
     except Exception:
         db_status = "Offline"
         
-    cv_status = "Online" if get_global_frame is not None else "Offline"
+    cv_status = "Offline" if state.get_global_frame is state._default_get_global_frame else "Online"
     
     return {
         "cpu": cpu_percent,
