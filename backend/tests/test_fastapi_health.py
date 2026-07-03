@@ -101,3 +101,23 @@ def test_system_health_db_offline(mock_psutil):
 
     data = response.json()
     assert data["database"] == "Offline"
+
+@patch('src.api.fastapi_health.psutil')
+def test_system_health_db_check_error_path(mock_psutil):
+    # Setup mock for psutil
+    mock_psutil.cpu_percent.return_value = 20.0
+    mock_psutil.virtual_memory.return_value = MagicMock(percent=40.0, total=1000, used=400)
+    mock_psutil.disk_usage.return_value = MagicMock(percent=50.0, total=2000, used=1000)
+
+    # Mock DB session to raise an exception upon execute()
+    mock_db = MagicMock()
+    mock_db.execute.side_effect = Exception("Simulated DB Connection Failure")
+
+    def override_get_db_failure():
+        yield mock_db
+
+    app.dependency_overrides[get_db] = override_get_db_failure
+
+    response = client.get("/api/health/system")
+    assert response.status_code == 200
+    assert response.json()["database"] == "Offline"
