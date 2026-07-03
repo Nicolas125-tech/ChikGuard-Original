@@ -76,6 +76,92 @@ def _call_gemini_api(api_key: str, system_prompt: str, user_message: str):
     return reply, None
 
 
+def _build_system_prompt(user_message: str, SensorReading, AcousticReading, Batch, EventLog, estado_dispositivos) -> str:
+    """Coleta dados de telemetria e cria o prompt do sistema embutido com contexto em tempo real."""
+    # 1. Coleta dados de sensores recentes
+    last_sensor = SensorReading.query.order_by(
+        SensorReading.timestamp.desc()
+    ).first()
+    sensor_text = "Sem leituras de sensores recentes nas últimas horas."
+    if last_sensor:
+        sensor_text = (
+            f"Temperatura: {last_sensor.temperature_c:.1f}°C, "
+            f"Umidade: {last_sensor.humidity_pct:.1f}%, "
+            f"Amônia: {last_sensor.ammonia_ppm:.1f} ppm, "
+            f"Nível de Ração: {last_sensor.feed_level_pct:.1f}%, "
+            f"Nível de Água: {last_sensor.water_level_pct:.1f}%"
+        )
+
+    # 2. Coleta dados acústicos recentes
+    last_acoustic = AcousticReading.query.order_by(
+        AcousticReading.timestamp.desc()
+    ).first()
+    acoustic_text = "Sem dados de áudio recentes."
+    if last_acoustic:
+        acoustic_text = (
+            f"Saúde Respiratória: {last_acoustic.respiratory_health_index:.2f} (ideal é 1.0), "
+            f"Índice de Tosse: {last_acoustic.cough_index:.2f} (ideal é 0.0), "
+            f"Estresse Sonoro: {last_acoustic.stress_audio_index:.2f}"
+        )
+
+    # 3. Coleta dados do lote ativo
+    active_batch = Batch.query.filter(Batch.active).first()
+    batch_text = "Nenhum lote ativo registrado."
+    if active_batch:
+        batch_text = f"Lote Ativo: {active_batch.name} (Iniciado em: {
+            active_batch.start_date.strftime('%d/%m/%Y')
+        })"
+
+    # 4. Coleta os alertas e logs de visão mais recentes
+    recent_events = (
+        EventLog.query.order_by(EventLog.timestamp.desc()).limit(5).all()
+    )
+    events_text = "Nenhum alerta ou evento recente cadastrado."
+    if recent_events:
+        events_text = "\n".join(
+            [
+                f"[{e.timestamp.strftime('%H:%M:%S')}] {e.event_type} ({e.level}): {e.message}"
+                for e in recent_events
+            ]
+        )
+
+    # 5. Obtém status dos atuadores
+    fan_status = "LIGADA" if estado_dispositivos.get("ventilacao") else "DESLIGADA"
+    heater_status = (
+        "LIGADO" if estado_dispositivos.get("aquecedor") else "DESLIGADO"
+    )
+    devices_text = (
+        f"Ventilação (Exaustores): {fan_status}, Aquecedor: {heater_status}"
+    )
+
+    # 6. Recupera contexto do manual de manejo (RAG local)
+    kb_context = _retrieve_knowledge_base(user_message)
+    kb_text = (
+        f"- Diretrizes do Manual de Manejo Relevantes:\n{kb_context}\n\n"
+        if kb_context
+        else ""
+    )
+
+    # Criação do prompt do sistema embutido com contexto em tempo real do galpão e RAG
+    return (
+        "Você é o Co-Piloto IA do ChikGuard, um especialista virtual em avicultura de precisão.\n"
+        "Seu dever é responder a perguntas do produtor sobre o estado do aviário de forma concisa, "
+        "clara e profissional, fornecendo insights agronômicos e práticos se detectar problemas.\n\n"
+        "ESTADO ATUAL DO AVIÁRIO:\n"
+        f"- Lote: {batch_text}\n"
+        f"- Telemetria de Sensores: {sensor_text}\n"
+        f"- Saúde por Áudio (Acoustics): {acoustic_text}\n"
+        f"- Status dos Equipamentos: {devices_text}\n"
+        f"- Alertas e Histórico Recente de Visão/Eventos:\n{events_text}\n\n"
+        f"{kb_text}"
+        "DIRETRIZES DE RESPOSTA:\n"
+        "1. Responda em Português do Brasil.\n"
+        "2. Utilize os dados de telemetria fornecidos para basear e enriquecer as suas respostas.\n"
+        "3. Se houver qualquer leitura de alerta ativo (como amônia > 20ppm, tosse > 0.5 ou carcaça de aves detectadas), "
+        "comunique isso claramente ao produtor e sugira a ação preventiva adequada imediatamente."
+    )
+
+
 def create_agents_blueprint(api_deps):
     bp = Blueprint("agents_api", __name__, url_prefix="/api/agents")
     SensorReading = api_deps["SensorReading"]
@@ -84,92 +170,6 @@ def create_agents_blueprint(api_deps):
     # Imports locais de tabelas adicionais para evitar dependências circulares
     from database import Batch, EventLog
     from src.security.rate_limiter import limiter
-
-    def _build_system_prompt(user_message: str) -> str:
-        """Coleta dados de telemetria e cria o prompt do sistema embutido com contexto em tempo real."""
-        # 1. Coleta dados de sensores recentes
-        last_sensor = SensorReading.query.order_by(
-            SensorReading.timestamp.desc()
-        ).first()
-        sensor_text = "Sem leituras de sensores recentes nas últimas horas."
-        if last_sensor:
-            sensor_text = (
-                f"Temperatura: {last_sensor.temperature_c:.1f}°C, "
-                f"Umidade: {last_sensor.humidity_pct:.1f}%, "
-                f"Amônia: {last_sensor.ammonia_ppm:.1f} ppm, "
-                f"Nível de Ração: {last_sensor.feed_level_pct:.1f}%, "
-                f"Nível de Água: {last_sensor.water_level_pct:.1f}%"
-            )
-
-        # 2. Coleta dados acústicos recentes
-        last_acoustic = AcousticReading.query.order_by(
-            AcousticReading.timestamp.desc()
-        ).first()
-        acoustic_text = "Sem dados de áudio recentes."
-        if last_acoustic:
-            acoustic_text = (
-                f"Saúde Respiratória: {last_acoustic.respiratory_health_index:.2f} (ideal é 1.0), "
-                f"Índice de Tosse: {last_acoustic.cough_index:.2f} (ideal é 0.0), "
-                f"Estresse Sonoro: {last_acoustic.stress_audio_index:.2f}"
-            )
-
-        # 3. Coleta dados do lote ativo
-        active_batch = Batch.query.filter(Batch.active).first()
-        batch_text = "Nenhum lote ativo registrado."
-        if active_batch:
-            batch_text = f"Lote Ativo: {active_batch.name} (Iniciado em: {
-                active_batch.start_date.strftime('%d/%m/%Y')
-            })"
-
-        # 4. Coleta os alertas e logs de visão mais recentes
-        recent_events = (
-            EventLog.query.order_by(EventLog.timestamp.desc()).limit(5).all()
-        )
-        events_text = "Nenhum alerta ou evento recente cadastrado."
-        if recent_events:
-            events_text = "\n".join(
-                [
-                    f"[{e.timestamp.strftime('%H:%M:%S')}] {e.event_type} ({e.level}): {e.message}"
-                    for e in recent_events
-                ]
-            )
-
-        # 5. Obtém status dos atuadores
-        estado_dispositivos = api_deps.get("estado_dispositivos", {})
-        fan_status = "LIGADA" if estado_dispositivos.get("ventilacao") else "DESLIGADA"
-        heater_status = (
-            "LIGADO" if estado_dispositivos.get("aquecedor") else "DESLIGADO"
-        )
-        devices_text = (
-            f"Ventilação (Exaustores): {fan_status}, Aquecedor: {heater_status}"
-        )
-
-        # 6. Recupera contexto do manual de manejo (RAG local)
-        kb_context = _retrieve_knowledge_base(user_message)
-        kb_text = (
-            f"- Diretrizes do Manual de Manejo Relevantes:\n{kb_context}\n\n"
-            if kb_context
-            else ""
-        )
-
-        # Criação do prompt do sistema embutido com contexto em tempo real do galpão e RAG
-        return (
-            "Você é o Co-Piloto IA do ChikGuard, um especialista virtual em avicultura de precisão.\n"
-            "Seu dever é responder a perguntas do produtor sobre o estado do aviário de forma concisa, "
-            "clara e profissional, fornecendo insights agronômicos e práticos se detectar problemas.\n\n"
-            "ESTADO ATUAL DO AVIÁRIO:\n"
-            f"- Lote: {batch_text}\n"
-            f"- Telemetria de Sensores: {sensor_text}\n"
-            f"- Saúde por Áudio (Acoustics): {acoustic_text}\n"
-            f"- Status dos Equipamentos: {devices_text}\n"
-            f"- Alertas e Histórico Recente de Visão/Eventos:\n{events_text}\n\n"
-            f"{kb_text}"
-            "DIRETRIZES DE RESPOSTA:\n"
-            "1. Responda em Português do Brasil.\n"
-            "2. Utilize os dados de telemetria fornecidos para basear e enriquecer as suas respostas.\n"
-            "3. Se houver qualquer leitura de alerta ativo (como amônia > 20ppm, tosse > 0.5 ou carcaça de aves detectadas), "
-            "comunique isso claramente ao produtor e sugira a ação preventiva adequada imediatamente."
-        )
 
     @bp.route("/chat", methods=["POST"])
     @require_auth()
@@ -198,7 +198,7 @@ def create_agents_blueprint(api_deps):
             )
 
         try:
-            system_prompt = _build_system_prompt(user_message)
+            system_prompt = _build_system_prompt(user_message, SensorReading, AcousticReading, Batch, EventLog, api_deps.get("estado_dispositivos", {}))
             reply, error = _call_gemini_api(api_key, system_prompt, user_message)
 
             if error:
