@@ -41,3 +41,22 @@ def test_predict_slaughter_date_not_reached():
     assert result["target_weight"] == 2800.0
     assert len(result["equation_coeffs"]) == 3
     assert len(result["projections"]) == 70  # 90 - 20 = 70 projections
+
+def test_failure_to_reach_target_weight_in_90_days():
+    start_date = datetime(2023, 1, 1)
+    weight_data = [
+        {"day": 10, "avg_weight": 190.0},
+        {"day": 20, "avg_weight": 310.0},
+        {"day": 40, "avg_weight": 490.0},
+        {"day": 60, "avg_weight": 590.0}
+    ]
+    result = predict_slaughter_date(weight_data, start_date, target_weight=2800.0)
+    assert result is not None
+    assert result["target_date"] is None
+    assert result["target_day"] is None
+    assert result["target_weight"] == 2800.0
+    assert len(result["equation_coeffs"]) == 3
+    assert len(result["projections"]) > 0
+    # Make sure we actually didn't reach the target weight within the projected timeframe
+    max_weight_in_projections = max(p["estimated_weight_g"] for p in result["projections"])
+    assert max_weight_in_projections < 2800.0
