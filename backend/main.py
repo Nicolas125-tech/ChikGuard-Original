@@ -64,7 +64,7 @@ from src.api.fastapi_accounts import router as accounts_router
 from src.api.fastapi_cameras import router as cameras_router
 from src.api.fastapi_ws import socket_app
 from src.security.headers import ALLOWED_ORIGINS
-from src.security.fastapi_auth import get_current_user, UserContext
+from src.security.fastapi_auth import get_current_user, UserContext, RequireRole
 from fastapi import Depends
 
 fastapi_app = FastAPI(
@@ -177,12 +177,12 @@ async def get_estado_dispositivos(user: UserContext = Depends(get_current_user))
 
 
 @fastapi_app.post("/api/auto-mode")
-async def set_auto_mode(request: Request, user: UserContext = Depends(get_current_user)):
+async def set_auto_mode(request: Request, user: UserContext = Depends(RequireRole(["operator", "admin", "superadmin"]))):
     return {"msg": "Modo automático atualizado", "status": "ok"}
 
 
 @fastapi_app.post("/api/ventilacao")
-async def control_ventilacao(request: Request, user: UserContext = Depends(get_current_user)):
+async def control_ventilacao(request: Request, user: UserContext = Depends(RequireRole(["operator", "admin", "superadmin"]))):
     from src.core.fsm_task import actuator_state
     try:
         data = await request.json()
@@ -194,7 +194,7 @@ async def control_ventilacao(request: Request, user: UserContext = Depends(get_c
 
 
 @fastapi_app.post("/api/aquecedor")
-async def control_aquecedor(request: Request, user: UserContext = Depends(get_current_user)):
+async def control_aquecedor(request: Request, user: UserContext = Depends(RequireRole(["operator", "admin", "superadmin"]))):
     from src.core.fsm_task import actuator_state
     try:
         data = await request.json()
