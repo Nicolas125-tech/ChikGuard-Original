@@ -1,13 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+// Safe check for import.meta.env
+const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {};
+const supabaseUrl = env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY || '';
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
 // Stub seguro: nunca lança TypeError, sempre retorna a estrutura esperada
 // quando as variáveis de ambiente estão ausentes ou inválidas.
-const supabaseStub = {
+export const supabaseStub = {
   supabaseUrl: null,
   auth: {
     signUp: async () => ({ data: null, error: { message: 'Supabase não configurado neste ambiente.' } }),
