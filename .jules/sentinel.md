@@ -104,3 +104,7 @@
 **Vulnerability:** The database trigger `handle_new_user` in `profiles_rbac.sql` trusted user-provided metadata (`NEW.raw_user_meta_data->>'role'`) for role assignment upon account creation, allowing malicious users to assign themselves administrative roles. Additionally, frontend fallbacks explicitly hardcoded `superadmin` elevation and `ACTIVE` statuses for specific email overrides and cached roles.
 **Learning:** Security mechanisms must rely on the backend and hardcoded defaults rather than trusting client-provided inputs or raw user metadata during the registration flow.
 **Prevention:** Hardcode default roles (like 'viewer') and statuses (like 'PENDING') directly in the database trigger and frontend logic, ensuring administrative approval is required for elevation.
+## 2026-07-02 - [Fix Missing RBAC on Device Control Endpoints]
+**Vulnerability:** The migrated device control endpoints in FastAPI (`/api/auto-mode`, `/api/ventilacao`, `/api/aquecedor`) only enforced basic authentication via `Depends(get_current_user)`. This allowed any authenticated user (such as a 'viewer') to manipulate the physical hardware state.
+**Learning:** During migration to FastAPI, replacing `@require_auth(roles=...)` with a basic `Depends(get_current_user)` leads to privilege escalation. You must explicitly chain or use role-checking dependencies.
+**Prevention:** When securing FastAPI endpoints that modify physical hardware state, always use explicit role checks, for example: `Depends(RequireRole(["operator", "admin", "superadmin"]))`.
