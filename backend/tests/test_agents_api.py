@@ -125,6 +125,16 @@ def test_knowledge_base_retrieval():
     assert "32°C a 34°C" in res_temp
 
 
+def test_knowledge_base_retrieval_fallback(monkeypatch):
+    """Valida o comportamento de fallback quando o arquivo da base de conhecimento não existe."""
+    from src.api.agents_api import _retrieve_knowledge_base
+
+    monkeypatch.setattr("os.path.exists", lambda path: False)
+
+    res = _retrieve_knowledge_base("amônia")
+    assert res == ""
+
+
 @pytest.fixture
 def auth_headers():
     token = jwt.encode(
