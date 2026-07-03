@@ -144,15 +144,14 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
             <h3 className="text-slate-400 text-sm font-semibold uppercase flex items-center gap-2 tracking-widest">
               <LayoutDashboard size={16} className="text-amber-400" /> Histórico Térmico
             </h3>
-            {historico.length > 0 && (
-              <button 
-                onClick={exportHistoryToCSV}
-                className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg border border-slate-700 transition-colors"
-                title="Baixar em Excel/CSV"
-              >
-                <Download size={14} /> Exportar CSV
-              </button>
-            )}
+            <button
+              onClick={exportHistoryToCSV}
+              disabled={historico.length === 0}
+              className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg border border-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+              title={historico.length === 0 ? "Nenhum histórico disponível para exportar" : "Baixar em Excel/CSV"}
+            >
+              <Download size={14} aria-hidden="true" /> Exportar CSV
+            </button>
           </div>
           <div className="h-64 w-full -ml-2">
             {historico.length > 0 ? (
