@@ -44,17 +44,18 @@ export default function AdminPanel({ token, serverIP }) {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     setError('');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
     try {
       const authToken = await getAuthToken();
 
-      // Aba "Pendentes" usa endpoint específico (lista apenas PENDING via Supabase service_role)
-      // Aba "Todos" usa o endpoint interno de Accounts do Flask
       const endpoint = activeTab === 'pending'
         ? `${getBaseUrl(serverIP)}/api/admin/pending-users`
         : `${getBaseUrl(serverIP)}/api/accounts/users`;
 
       const res = await fetch(endpoint, {
         headers: { Authorization: `Bearer ${authToken}` },
+        signal: controller.signal,
       });
 
       if (res.status === 401) {
@@ -73,9 +74,14 @@ export default function AdminPanel({ token, serverIP }) {
 
       const d = await res.json();
       setUsers(d.items || []);
-    } catch {
-      setError('Falha de conexão. Verifique se o servidor está online e acessível.');
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        setError('Tempo limite excedido. Verifique se o servidor backend está acessível.');
+      } else {
+        setError('Falha de conexão. Verifique se o servidor está online e acessível.');
+      }
     } finally {
+      clearTimeout(timeout);
       setLoading(false);
     }
   }, [serverIP, getAuthToken, activeTab]);
@@ -97,7 +103,7 @@ export default function AdminPanel({ token, serverIP }) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${authToken}`,
         },
-        body: JSON.stringify({ target_user_id: userId, target_role: targetRole }),
+        body: JSON.stringify({ target_user_id: userId, target_role: targetRole.toLowerCase() }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
