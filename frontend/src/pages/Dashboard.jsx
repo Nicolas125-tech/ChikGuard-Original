@@ -313,13 +313,15 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
   // ── Monitor de Contagem de Alertas ──
   const fetchAlertCount = useCallback(async () => {
     try {
-      const response = await fetch(`${baseUrl}/api/alerts`);
+      const response = await fetch(`${baseUrl}/api/alerts`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (response.ok) {
         const data = await response.json();
         setAlertCount(Array.isArray(data) ? data.length : 0);
       }
     } catch (err) { console.error(err); }
-  }, [baseUrl]);
+  }, [baseUrl, token]);
 
   useEffect(() => {
     setTimeout(() => fetchAlertCount(), 0);
