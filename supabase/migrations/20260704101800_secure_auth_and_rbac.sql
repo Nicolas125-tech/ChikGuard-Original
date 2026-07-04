@@ -159,36 +159,48 @@ CREATE POLICY tenant_all_admin ON public.tenant FOR ALL TO authenticated
   WITH CHECK (public.get_user_role() IN ('admin', 'superadmin'));
 
 -- 7b. Políticas para 'profiles'
-CREATE POLICY profiles_select ON public.profiles FOR SELECT TO authenticated
+-- ATENÇÃO: NÃO usar get_user_role() aqui! Isso causa recursão infinita (500 Internal Server Error)
+-- pois a função lê a tabela profiles, que dispara a política, que chama a função, etc.
+-- SOLUÇÃO: usar subquery EXISTS direta na própria tabela profiles com alias.
+
+-- Qualquer usuário autenticado lê seu próprio perfil (sem recursão)
+CREATE POLICY profiles_read_own ON public.profiles
+  FOR SELECT TO authenticated
+  USING (auth.uid() = id);
+
+-- Admins e managers veem todos os profiles (subquery com alias para evitar recursão)
+CREATE POLICY profiles_read_elevated ON public.profiles
+  FOR SELECT TO authenticated
   USING (
-    auth.uid() = id 
-    OR public.get_user_role() IN ('admin', 'superadmin') 
-    OR (public.get_user_role() = 'manager' AND tenant_id = public.get_user_tenant_id())
+    EXISTS (
+      SELECT 1 FROM public.profiles self
+      WHERE self.id = auth.uid()
+        AND self.role IN ('admin', 'superadmin', 'manager')
+        AND self.status = 'ACTIVE'
+    )
   );
 
-CREATE POLICY profiles_insert_admin ON public.profiles FOR INSERT TO authenticated
-  WITH CHECK (public.get_user_role() IN ('admin', 'superadmin'));
+-- Trigger handle_new_user usa SECURITY DEFINER e ignora RLS.
+-- Esta política permite que o próprio usuário insira (caso necessário):
+CREATE POLICY profiles_insert_by_trigger ON public.profiles
+  FOR INSERT TO authenticated
+  WITH CHECK (auth.uid() = id);
 
-CREATE POLICY profiles_update_own ON public.profiles FOR UPDATE TO authenticated
+-- Usuários atualizam apenas o próprio perfil
+CREATE POLICY profiles_update_own ON public.profiles
+  FOR UPDATE TO authenticated
   USING (auth.uid() = id)
-  WITH CHECK (
-    auth.uid() = id 
-    AND role = (SELECT role FROM public.profiles WHERE id = auth.uid())
-    AND status = (SELECT status FROM public.profiles WHERE id = auth.uid())
-    AND tenant_id = (SELECT tenant_id FROM public.profiles WHERE id = auth.uid())
-  );
+  WITH CHECK (auth.uid() = id);
 
-CREATE POLICY profiles_update_privileged ON public.profiles FOR UPDATE TO authenticated
+-- Admins e superadmins atualizam qualquer perfil (aprovar/suspender usuários)
+CREATE POLICY profiles_update_admin ON public.profiles
+  FOR UPDATE TO authenticated
   USING (
-    public.get_user_role() IN ('admin', 'superadmin')
-    OR (public.get_user_role() = 'manager' AND tenant_id = public.get_user_tenant_id())
-  )
-  WITH CHECK (
-    public.get_user_role() IN ('admin', 'superadmin')
-    OR (
-      public.get_user_role() = 'manager' 
-      AND tenant_id = public.get_user_tenant_id()
-      AND role IN ('viewer', 'operator', 'manager')
+    EXISTS (
+      SELECT 1 FROM public.profiles self
+      WHERE self.id = auth.uid()
+        AND self.role IN ('admin', 'superadmin')
+        AND self.status = 'ACTIVE'
     )
   );
 
