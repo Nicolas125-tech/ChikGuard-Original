@@ -64,7 +64,12 @@ def test_audio_monitor_healthy(test_client, mock_classifier):
         classifier=mock_classifier, app_context_fn=app_context_fn, interval_seconds=1.0
     )
 
-    # Executa ciclo manualmente (sem disparar thread de loop infinito nos testes)
+    # Executa ciclo manualmente (parando após a primeira iteração para evitar loop infinito)
+    def stop_after_one_run(*args, **kwargs):
+        monitor.stop()
+        import numpy as np
+        return np.zeros(16000), 16000
+    monitor._generate_mock_audio = stop_after_one_run
     monitor._running = True
     monitor._run()
 
@@ -95,6 +100,12 @@ def test_audio_monitor_distress_alert(test_client, mock_classifier):
         classifier=mock_classifier, app_context_fn=app_context_fn, interval_seconds=1.0
     )
 
+    # Executa ciclo manualmente (parando após a primeira iteração para evitar loop infinito)
+    def stop_after_one_run(*args, **kwargs):
+        monitor.stop()
+        import numpy as np
+        return np.zeros(16000), 16000
+    monitor._generate_mock_audio = stop_after_one_run
     monitor._running = True
     monitor._run()
 
