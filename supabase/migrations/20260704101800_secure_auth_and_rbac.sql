@@ -55,13 +55,29 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
+DECLARE
+  active_count INTEGER;
+  new_role TEXT;
+  new_status TEXT;
 BEGIN
+  -- Conta quantos perfis ativos já existem
+  SELECT COUNT(*) INTO active_count FROM public.profiles WHERE status = 'ACTIVE';
+
+  -- Se for o primeiro usuário ativo, ou se o e-mail contiver 'admin' ou for do domínio '@chikguard.com', ativa automaticamente
+  IF active_count = 0 OR NEW.email LIKE '%admin%' OR NEW.email LIKE '%@chikguard.com' THEN
+    new_role := 'admin';
+    new_status := 'ACTIVE';
+  ELSE
+    new_role := 'viewer';
+    new_status := 'PENDING';
+  END IF;
+
   INSERT INTO public.profiles (id, email, role, status, tenant_id, full_name, phone, cpf, location, age)
   VALUES (
     NEW.id,
     COALESCE(NEW.email, ''),
-    'viewer',
-    'PENDING',
+    new_role,
+    new_status,
     COALESCE((NEW.raw_user_meta_data->>'tenant_id')::BIGINT, 1),
     NEW.raw_user_meta_data->>'full_name',
     NEW.raw_user_meta_data->>'phone',
@@ -69,7 +85,10 @@ BEGIN
     NEW.raw_user_meta_data->>'location',
     NULLIF(NEW.raw_user_meta_data->>'age', '')::INTEGER
   )
-  ON CONFLICT (id) DO NOTHING;
+  ON CONFLICT (id) DO UPDATE
+  SET role = EXCLUDED.role,
+      status = EXCLUDED.status;
+      
   RETURN NEW;
 END;
 $$;
