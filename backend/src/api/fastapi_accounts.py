@@ -208,7 +208,7 @@ async def admin_approve_user(
         def _approve_user():
             return (
                 supabase_client.table("profiles")
-                .update({"status": "ACTIVE", "role": data.target_role.upper(), "approved_at": "now()"})
+                .update({"status": "ACTIVE", "role": data.target_role.lower(), "approved_at": "now()"})
                 .eq("id", data.target_user_id)
                 .execute()
             )
