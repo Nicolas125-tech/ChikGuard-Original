@@ -71,33 +71,55 @@ function AppCore() {
   const [prefs, setPrefs] = useState(readPrefs);
 
   // Fetch initial session and delay booting
+  // CRITICAL: Always re-fetch the real profile from Supabase on boot
+  // to avoid stale PENDING status from previous sessions in localStorage.
   useEffect(() => {
-    let t;
     const hasAuthCallback = (window.location.hash && window.location.hash.includes('access_token')) || 
                             (window.location.search && window.location.search.includes('code='));
     
     if (hasAuthCallback) {
       // Se tivermos na URL de callback do OAuth (Google), damos mais tempo
       // para o Supabase processar a troca de código/token em background
-      t = setTimeout(() => setBooting(false), 4000); 
-    } else {
-      // Normal boot
-      const checkSession = async () => {
-        if (isSupabaseConfigured) {
-          try {
-            await Promise.race([
-              supabase.auth.getSession(),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase Timeout')), 4000))
-            ]);
-          } catch (e) {
-            console.error('Erro ao conectar ao Supabase:', e);
-          }
-        }
-        t = setTimeout(() => setBooting(false), 1600);
-      };
-      checkSession();
+      setTimeout(() => setBooting(false), 4000);
+      return;
     }
-    return () => clearTimeout(t);
+
+    // Normal boot: busca sessão E perfil real do Supabase
+    const checkSession = async () => {
+      if (isSupabaseConfigured) {
+        try {
+          const { data: sessionData } = await Promise.race([
+            supabase.auth.getSession(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase Timeout')), 5000))
+          ]);
+          
+          if (sessionData?.session) {
+            const session = sessionData.session;
+            // Sempre buscar o perfil real — não confiar no localStorage para status/role
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('role, status')
+              .eq('id', session.user.id)
+              .single();
+            
+            const realRole = profile?.role || 'viewer';
+            const realStatus = profile?.status || 'PENDING';
+            
+            // Atualizar localStorage e state com os valores reais
+            localStorage.setItem(STORAGE.token, session.access_token);
+            localStorage.setItem(STORAGE.role, realRole);
+            localStorage.setItem('cg_status', realStatus);
+            setToken(session.access_token);
+            setRole(realRole);
+            setStatus(realStatus);
+          }
+        } catch (e) {
+          console.error('Erro ao conectar ao Supabase:', e);
+        }
+      }
+      setTimeout(() => setBooting(false), 800);
+    };
+    checkSession();
   }, []);
 
 
@@ -108,21 +130,20 @@ function AppCore() {
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
         let accessToken = session.access_token;
-        let nextRole = String(session.user.app_metadata?.role || 'viewer').toLowerCase();
+        let nextRole = 'viewer';
         let nextUser = session.user.email;
-        // Default: PENDING (ACTIVE somente quando profile diz explicitamente)
         let nextStatus = 'PENDING';
 
-        // Buscar role/status real da tabela profiles
+        // SEMPRE buscar role/status real da tabela profiles (não confiar em app_metadata do JWT)
         try {
-          const { data: profile } = await supabase
+          const { data: profile, error: profileErr } = await supabase
             .from('profiles')
             .select('role, status')
             .eq('id', session.user.id)
             .single();
-          if (profile) {
-            if (profile.role) nextRole = String(profile.role).toLowerCase();
-            if (profile.status) nextStatus = profile.status;
+          if (profile && !profileErr) {
+            nextRole = String(profile.role || 'viewer').toLowerCase();
+            nextStatus = profile.status || 'PENDING';
           }
         } catch {
           // Profile ainda não existe — usar valores padrão
