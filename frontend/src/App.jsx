@@ -90,7 +90,7 @@ function AppCore() {
         try {
           const { data: sessionData } = await Promise.race([
             supabase.auth.getSession(),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase Timeout')), 5000))
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase Timeout')), 12000))
           ]);
           
           if (sessionData?.session) {
