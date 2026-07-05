@@ -453,15 +453,27 @@ threading.Thread(
 ).start()
 
 
-def _log_event(
-    event_type,
-    level="info",
-    message="",
-    metadata=None,
-    camera_id=ACTIVE_CAMERA_ID,
-    frame=None,
-):
+from dataclasses import dataclass, field
+from typing import Optional, Dict, Any
+
+@dataclass
+class LogEventDetails:
+    event_type: str
+    level: str = "info"
+    message: str = ""
+    metadata: Optional[Dict[str, Any]] = None
+    camera_id: Optional[str] = None
+    frame: Any = None
+
+def _log_event(details: LogEventDetails):
     try:
+        event_type = details.event_type
+        level = details.level
+        message = details.message
+        metadata = details.metadata
+        camera_id = details.camera_id or ACTIVE_CAMERA_ID
+        frame = details.frame
+
         with app.app_context():
             row = EventLog(
                 camera_id=camera_id,
@@ -1196,12 +1208,12 @@ def _detect_thermal_anomalies(gray_frame, ambient_temp, frame_shape):
     if (now - last_thermal_alert_ts) >= THERMAL_ANOMALY_COOLDOWN_SEC:
         last_thermal_alert_ts = now
         sectors = sorted(list({a["sector"] for a in anomalies if a.get("sector")}))
-        _log_event(
+        _log_event(LogEventDetails(
             event_type="thermal_anomaly_alert",
             level="high",
             message=f"Aves com temperatura anomala: {len(anomalies)} detectadas em {', '.join(sectors)}",
             metadata={"count": len(anomalies), "sectors": sectors},
-        )
+        ))
 
 
 def _update_energy_runtime():
@@ -1295,12 +1307,12 @@ def _maybe_alert_sensor(kind, value, message):
     if now - last_ts < SENSOR_ALERT_COOLDOWN_SEC:
         return
     sensor_alert_state[kind] = now
-    _log_event(
+    _log_event(LogEventDetails(
         event_type="sensor_alert",
         level="high" if kind in ("ammonia", "water_low", "feed_low") else "medium",
         message=message,
         metadata={"kind": kind, "value": value},
-    )
+    ))
 
 
 def _evaluate_sensor_alerts():
@@ -1347,16 +1359,16 @@ def _apply_automatic_control(temp_atual):
     state = result["state"]
 
     if "aquecedor ligado" in changes and state == "NOITE_POUPANCA_ENERGIA_PREHEAT":
-        _log_event(
+        _log_event(LogEventDetails(
             event_type="weather_preheat",
             level="medium",
             message="Frente fria a chegar esta noite. O aquecedor foi pre-ativado.",
             metadata=weather_state,
-        )
+        ))
         changes.remove("aquecedor ligado")
 
     if changes:
-        _log_event(
+        _log_event(LogEventDetails(
             event_type="automation_action",
             level="info",
             message=f"Acionamento automatico: {', '.join(changes)} | Estado: {state}",
@@ -1365,7 +1377,7 @@ def _apply_automatic_control(temp_atual):
                 "thresholds": targets,
                 "state": state,
             },
-        )
+        ))
 
 
 def _calculate_spatial_ratios(selected, frame_shape):
@@ -1527,7 +1539,7 @@ def _analyze_behavior(selected, frame_shape):
         >= BEHAVIOR_ALERT_COOLDOWN_SEC
     ):
         behavior_state["last_alert_ts"] = now
-        _log_event(
+        _log_event(LogEventDetails(
             event_type="behavior_alert",
             level=(
                 "high"
@@ -1547,7 +1559,7 @@ def _analyze_behavior(selected, frame_shape):
                 "edge_ratio": behavior_state["edge_ratio"],
                 "count": count,
             },
-        )
+        ))
 
 
 def _update_immobility(selected):
@@ -1617,7 +1629,7 @@ def _update_immobility(selected):
 
             state["alerted"] = True
             state["last_alert_ts"] = now
-            _log_event(
+            _log_event(LogEventDetails(
                 event_type="prostration_alert" if is_prostrated else "immobility_alert",
                 level=level,
                 message=f"{msg_prefix} detectada na ave UID {uid}.",
@@ -1629,7 +1641,7 @@ def _update_immobility(selected):
                     "aspect_ratio": round(aspect_ratio, 2),
                     "is_prostrated": is_prostrated,
                 },
-            )
+            ))
 
     stale_uids = []
     for uid, state in immobility_state.items():
@@ -1760,7 +1772,7 @@ def _check_tampering(frame):
         f"({datetime.now().strftime('%Y-%m-%d %H:%M:%S')}) - causas: {', '.join(causes)}"
     )
     sent, detail = _telegram_send(proof, caption)
-    _log_event(
+    _log_event(LogEventDetails(
         event_type="tamper_alert",
         level="high",
         message="Possivel sabotagem detectada (anti-tampering)",
@@ -1772,7 +1784,7 @@ def _check_tampering(frame):
             "freeze_frames": int(tamper_state["freeze_frames"]),
             "sensor_stale": bool(sensor_stale),
         },
-    )
+    ))
     _audit(
         "tamper_alert_triggered",
         source="security",
@@ -1822,12 +1834,12 @@ def _update_carcass_detection(selected):
             carcasses.append(item)
             if not state.get("carcass_alerted", False):
                 state["carcass_alerted"] = True
-                _log_event(
+                _log_event(LogEventDetails(
                     event_type="carcass_alert",
                     level="high",
                     message=f"Atencao: Possivel ave morta no setor {item['sector']}",
                     metadata=item,
-                )
+                ))
                 _audit(
                     "carcass_alert_triggered",
                     source="ai",
@@ -1885,12 +1897,12 @@ def _fetch_weather_forecast_once():
             }
         )
         if preheat:
-            _log_event(
+            _log_event(LogEventDetails(
                 "weather_cold_front",
                 "medium",
                 weather_state["message"],
                 metadata=weather_state,
-            )
+            ))
     except Exception as exc:
         LOGGER.exception("[WEATHER] fetch error: %s", exc)
 
@@ -1946,7 +1958,7 @@ def _detect_intrusion(all_detections, frame):
     intrusion_state["last_alert_ts"] = now
     caption = f"ALERTA CHIKGUARD: pessoa detectada de madrugada ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})"
     sent, detail = _telegram_send(frame, caption)
-    _log_event(
+    _log_event(LogEventDetails(
         event_type="intrusion_alert",
         level="high",
         message="Intrusao detectada na camera",
@@ -1954,7 +1966,7 @@ def _detect_intrusion(all_detections, frame):
             "detections": len(person_dets),
             "telegram": {"sent": sent, "detail": detail},
         },
-    )
+    ))
     _audit(
         "intrusion_alert_triggered",
         source="ai",
@@ -2727,7 +2739,7 @@ def _process_data_lifecycle(now):
                 total_deleted,
                 files_deleted,
             )
-            _log_event(
+            _log_event(LogEventDetails(
                 event_type="data_lifecycle_cleanup",
                 level="info",
                 message=f"Limpeza de Hot Storage Edge: apagados {total_deleted} registros DB e {files_deleted} arquivos.",
@@ -2735,7 +2747,7 @@ def _process_data_lifecycle(now):
                     "db_deleted_count": total_deleted,
                     "files_deleted": files_deleted,
                 },
-            )
+            ))
 
 
 def _mlops_sync_scheduler():
@@ -2765,12 +2777,12 @@ def _weekly_report_scheduler():
                     app.app_context, ACTIVE_CAMERA_ID, _utcnow, week_end=now
                 )
                 last_weekly_report_key = key
-                _log_event(
+                _log_event(LogEventDetails(
                     event_type="weekly_report",
                     level="info",
                     message="Relatorio semanal gerado automaticamente",
                     metadata={"file": path},
-                )
+                ))
         except Exception as exc:
             LOGGER.exception("[weekly-report] scheduler error: %s", exc)
         time.sleep(60)
@@ -2955,12 +2967,12 @@ def _run_cv_engine_v2_loop():
                     f"Temperatura subiu para {temp_atual:.1f}C! Intervencao necessaria."
                 )
                 sent, detail = _telegram_send_text(txt)
-                _log_event(
+                _log_event(LogEventDetails(
                     "temperature_critical_alert",
                     "high",
                     txt,
                     metadata={"telegram_sent": sent, "telegram_detail": detail},
-                )
+                ))
 
             # ── FPS overlay (posição superior direita) ─────────────────────
             new_time = time.time()
@@ -3049,7 +3061,7 @@ def _run_legacy_camera_loop():
             )
             if VideoProcessor is not None and os.path.exists(sim_path):
                 sim_msg = "Camera real nao encontrada. Simulacao em video ativada."
-        _log_event("camera_fallback", "medium", sim_msg)
+        _log_event(LogEventDetails("camera_fallback", "medium", sim_msg))
 
     while True:
         try:
@@ -3068,11 +3080,11 @@ def _run_legacy_camera_loop():
                         use_basic_simulation = False
                         consecutive_read_failures = 0
                         camera_lost_logged = False
-                        _log_event(
+                        _log_event(LogEventDetails(
                             "camera_reconnected",
                             "info",
                             "Camera reconectada com sucesso.",
-                        )
+                        ))
                         continue
                 frame = None
                 sim_path = SIM_VIDEO_PATH
@@ -3123,11 +3135,11 @@ def _run_legacy_camera_loop():
                     use_basic_simulation = True
                     consecutive_read_failures = 0
                     if not camera_lost_logged:
-                        _log_event(
+                        _log_event(LogEventDetails(
                             "camera_signal_lost",
                             "high",
                             "Perda de sinal prolongada. Simulacao ativada.",
-                        )
+                        ))
                         camera_lost_logged = True
                     continue
                 consecutive_read_failures = 0
@@ -3147,12 +3159,12 @@ def _run_legacy_camera_loop():
                     f"Temperatura subiu para {temp_atual:.1f}C! Intervencao necessaria."
                 )
                 sent, detail = _telegram_send_text(txt)
-                _log_event(
+                _log_event(LogEventDetails(
                     "temperature_critical_alert",
                     "high",
                     txt,
                     metadata={"telegram_sent": sent, "telegram_detail": detail},
-                )
+                ))
 
             new_time = time.time()
             fps = (

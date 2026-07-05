@@ -21,8 +21,8 @@ def _log_event(
     Tenta delegar para o app_flask_legacy._log_event dinamicamente.
     """
     try:
-        from app_flask_legacy import _log_event as legacy_log
-        legacy_log(
+        from app_flask_legacy import _log_event as legacy_log, LogEventDetails
+        details = LogEventDetails(
             event_type=event_type,
             level=level,
             message=message,
@@ -30,6 +30,7 @@ def _log_event(
             camera_id=camera_id,
             frame=frame,
         )
+        legacy_log(details)
     except Exception as exc:
         logger.debug("Falha ao propagar evento para o core (fora do contexto web): %s", exc)
 
