@@ -1,0 +1,7 @@
+🛡️ [security fix] Fix path traversal in report downloads
+
+🎯 **What:** Replaced send_file with send_from_directory in /api/reports/esg/download and /api/reports/weekly/download.
+
+⚠️ **Risk:** The previous implementation used send_file with a dynamically generated path. While the report generator itself creates the path in a controlled manner, any subsequent changes or unexpected input could have potentially allowed an attacker to manipulate the path variable to read arbitrary files from the server's filesystem, leading to sensitive data exposure.
+
+🛡️ **Solution:** Used Flask's built-in send_from_directory utility, which is specifically designed to safely serve files from a designated directory and automatically protects against directory traversal attacks. Additionally, used os.path.basename(path) to ensure only the final filename is evaluated, stripping any path components.

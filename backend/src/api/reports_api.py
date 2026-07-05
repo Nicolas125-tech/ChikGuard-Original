@@ -1,10 +1,10 @@
 import os
 
-from flask import Blueprint, current_app, jsonify, request, send_file
+from flask import Blueprint, current_app, jsonify, request, send_file, send_from_directory
 
 from database import Batch, WeightEstimate
 from src.ai.forecast import predict_slaughter_date
-from src.reports.generator import _send_report_email, generate_esg_report, generate_weekly_report
+from src.reports.generator import _send_report_email, generate_esg_report, generate_weekly_report, REPORTS_DIR
 from src.security.auth import require_auth
 from src.security.rate_limiter import limiter
 
@@ -56,8 +56,9 @@ def create_reports_blueprint(deps):
             path = generate_esg_report(
                 current_app.app_context, active_camera_id, utcnow_func, days=days
             )
-            return send_file(
-                path,
+            return send_from_directory(
+                REPORTS_DIR,
+                os.path.basename(path),
                 mimetype="application/pdf",
                 as_attachment=True,
                 download_name=os.path.basename(path),
@@ -157,8 +158,9 @@ def create_reports_blueprint(deps):
                 message="Relatorio semanal exportado pelo painel",
                 metadata={"file": path},
             )
-            return send_file(
-                path,
+            return send_from_directory(
+                REPORTS_DIR,
+                os.path.basename(path),
                 mimetype="application/pdf",
                 as_attachment=True,
                 download_name=os.path.basename(path),
