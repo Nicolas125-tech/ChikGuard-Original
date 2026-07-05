@@ -1,0 +1,8 @@
+🎯 **What:**
+Removed `localhost` and a legacy Vercel app domain from the default `CORS_ORIGINS` environment variable fallback list in `backend/src/security/headers.py`. It now defaults only to `https://app.chikguard.com`. It also includes a defensive check inside the list comprehension to prevent accidentally allowing empty origins.
+
+⚠️ **Risk:**
+If left unfixed, attackers could potentially bypass Cross-Origin Resource Sharing (CORS) restrictions. If the production environment was deployed without explicitly overriding `CORS_ORIGINS` in `.env`, malicious scripts running on `localhost` (e.g., if a developer or user is tricked into running a local malicious page) or the legacy Vercel deployment could make unauthorized Ajax calls (like CSRF/XSS exploitation) to the API with credentials.
+
+🛡️ **Solution:**
+The default `CORS_ORIGINS` fallback string was narrowed strictly to the production `https://app.chikguard.com` domain. Local development requires developers to explicitly specify permissive origins via their local `.env` files. Furthermore, empty strings from accidental comma trailing in `.env` are now stripped out (`if origin.strip()`).

@@ -11,8 +11,9 @@ ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.environ.get(
         "CORS_ORIGINS",
-        "http://localhost:5173,http://localhost:5174,https://app.chikguard.com,https://chik-guard-original.vercel.app",
+        "https://app.chikguard.com",
     ).split(",")
+    if origin.strip()
 ]
 
 
@@ -57,7 +58,9 @@ def setup_security_headers(app):
         # Enforca HTTPS em browsers (HSTS). Impede downgrades para HTTP plano.
         # Valido por 1 ano. Inclui subdominios.
         if os.environ.get("FLASK_ENV") != "development":
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains"
+            )
 
         # Content Security Policy (CSP) rigoroso para respostas de API.
         # Restringe a origem de scripts, recursos embutidos (iframes) e object-tags,
@@ -72,6 +75,8 @@ def setup_security_headers(app):
         response.headers["Content-Security-Policy"] = "; ".join(csp_rules)
 
         # Header customizado para identificar a versao/instancia e auditoria
-        response.headers["X-Edge-Device"] = os.environ.get("DEVICE_ID", "ChikGuard-Cloud-API")
+        response.headers["X-Edge-Device"] = os.environ.get(
+            "DEVICE_ID", "ChikGuard-Cloud-API"
+        )
 
         return response
