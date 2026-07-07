@@ -158,12 +158,12 @@ export default function DigitalTwin3D({ sensors, devices, birds }) {
           
           <div className="flex items-center gap-2 bg-slate-800/50 p-2 rounded-xl border border-slate-700/50">
              <div className="flex items-center gap-1">
-               <label className="text-xs text-slate-400 font-medium ml-1">Largura (m):</label>
-               <input type="number" min="5" max="30" value={width} onChange={(e)=>setWidth(Number(e.target.value))} className="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white w-14 outline-none" />
+               <label htmlFor="dt-width" className="text-xs text-slate-400 font-medium ml-1">Largura (m):</label>
+               <input id="dt-width" type="number" min="5" max="30" value={width} onChange={(e)=>setWidth(Number(e.target.value))} className="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white w-14 outline-none" />
              </div>
              <div className="flex items-center gap-1">
-               <label className="text-xs text-slate-400 font-medium ml-1">Comprimento (m):</label>
-               <input type="number" min="10" max="60" value={length} onChange={(e)=>setLength(Number(e.target.value))} className="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white w-14 outline-none" />
+               <label htmlFor="dt-length" className="text-xs text-slate-400 font-medium ml-1">Comprimento (m):</label>
+               <input id="dt-length" type="number" min="10" max="60" value={length} onChange={(e)=>setLength(Number(e.target.value))} className="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white w-14 outline-none" />
              </div>
           </div>
         </div>

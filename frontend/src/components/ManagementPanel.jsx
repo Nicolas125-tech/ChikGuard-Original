@@ -371,8 +371,9 @@ const CalculadoraCA = React.memo(function CalculadoraCA() {
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-slate-950/60 p-4 sm:p-5 rounded-xl border border-slate-800 shadow-inner">
-          <label className="text-xs text-slate-400 uppercase tracking-wider font-bold mb-2 block">Ração Consumida (kg)</label>
+          <label htmlFor="calc-racao" className="text-xs text-slate-400 uppercase tracking-wider font-bold mb-2 block">Ração Consumida (kg)</label>
           <input 
+            id="calc-racao"
             type="number" 
             value={racao} 
             onChange={e=>setRacao(e.target.value)} 
@@ -381,8 +382,9 @@ const CalculadoraCA = React.memo(function CalculadoraCA() {
           />
         </div>
         <div className="bg-slate-950/60 p-4 sm:p-5 rounded-xl border border-slate-800 shadow-inner">
-          <label className="text-xs text-slate-400 uppercase tracking-wider font-bold mb-2 block">Peso Total do Lote (kg)</label>
+          <label htmlFor="calc-peso" className="text-xs text-slate-400 uppercase tracking-wider font-bold mb-2 block">Peso Total do Lote (kg)</label>
           <input 
+            id="calc-peso"
             type="number" 
             value={peso} 
             onChange={e=>setPeso(e.target.value)} 
