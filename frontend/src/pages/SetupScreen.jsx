@@ -124,8 +124,9 @@ export default function SetupScreen({ token, onComplete }) {
               <h3 className="text-lg font-semibold text-white mb-4">Informações do Servidor</h3>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-400 mb-1">IP do Servidor (Backend)</label>
+                  <label htmlFor="serverIP" className="block text-sm font-medium text-slate-400 mb-1">IP do Servidor (Backend)</label>
                   <input 
+                    id="serverIP"
                     type="text" 
                     name="serverIP"
                     value={formData.serverIP}
@@ -143,8 +144,9 @@ export default function SetupScreen({ token, onComplete }) {
               <h3 className="text-lg font-semibold text-white mb-4">Detalhes da Granja</h3>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-400 mb-1">Nome da Granja</label>
+                  <label htmlFor="farmName" className="block text-sm font-medium text-slate-400 mb-1">Nome da Granja</label>
                   <input 
+                    id="farmName"
                     type="text" 
                     name="farmName"
                     value={formData.farmName}
@@ -154,8 +156,9 @@ export default function SetupScreen({ token, onComplete }) {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-400 mb-1">Localização (Opcional)</label>
+                  <label htmlFor="location" className="block text-sm font-medium text-slate-400 mb-1">Localização (Opcional)</label>
                   <input 
+                    id="location"
                     type="text" 
                     name="location"
                     value={formData.location}
@@ -173,8 +176,9 @@ export default function SetupScreen({ token, onComplete }) {
               <h3 className="text-lg font-semibold text-white mb-4">Câmera (Opcional)</h3>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-400 mb-1">URL RTSP ou IP da Câmera</label>
+                  <label htmlFor="cameraUrl" className="block text-sm font-medium text-slate-400 mb-1">URL RTSP ou IP da Câmera</label>
                   <input 
+                    id="cameraUrl"
                     type="text" 
                     name="cameraUrl"
                     value={formData.cameraUrl}
