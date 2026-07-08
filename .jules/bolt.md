@@ -47,3 +47,6 @@
 ## 2026-07-02 - Optimized bird state iteration
 **Learning:** Iterating over a global dictionary (`bird_last_state`) without periodically cleaning up stale or inactive entries causes the dictionary to grow indefinitely, turning an initially fast O(N) loop into a severe performance bottleneck.
 **Action:** When tracking transient state in long-running processes (like object tracking), explicitly introduce periodic pruning (e.g., deleting entries older than a threshold) to bound the dictionary size and maintain predictable O(1) or small O(N) execution times.
+## 2024-03-24 - [Avoid Array Filtering in Render Loops]
+**Learning:** Filtering arrays (like thermalAnomalies) inside a .map() loop in the render function creates a severe O(N*M) bottleneck when rendering grid sectors, specifically when recalculating the same array length repeatedly across UI components.
+**Action:** Always pre-aggregate data into dictionary lookups using useMemo before the return statement to transform nested loops into O(1) lookups during rendering.

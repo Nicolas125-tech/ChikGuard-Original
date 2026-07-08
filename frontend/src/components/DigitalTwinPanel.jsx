@@ -99,6 +99,29 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
     return densities;
   }, [heatmapPoints]);
 
+
+  // Bolt Optimization: Pre-calculate thermal anomalies by sector in an O(N) pass
+  // using useMemo, replacing the O(N * 9) filter inside the render loop.
+  const anomaliesBySector = useMemo(() => {
+    const bySector = {
+      A1: 0, A2: 0, A3: 0,
+      B1: 0, B2: 0, B3: 0,
+      C1: 0, C2: 0, C3: 0,
+    };
+    thermalAnomalies.forEach(a => {
+      let sec = a.sector;
+      if (!sec && a.x && a.y) {
+        let col = a.x < 213 ? 1 : a.x < 426 ? 2 : 3;
+        let row = a.y < 160 ? 'A' : a.y < 320 ? 'B' : 'C';
+        sec = `${row}${col}`;
+      }
+      if (sec && bySector[sec] !== undefined) {
+        bySector[sec] += 1;
+      }
+    });
+    return bySector;
+  }, [thermalAnomalies]);
+
   const isVentActive = deviceState.ventilacao;
   const isHeatActive = deviceState.aquecedor;
 
@@ -414,15 +437,7 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
             <div className="space-y-3.5 max-h-[400px] overflow-y-auto pr-1">
               {['A1', 'A2', 'A3', 'B1', 'B2', 'B3', 'C1', 'C2', 'C3'].map((sec) => {
                 const birdCount = sectorDensities[sec];
-                const alertsInSec = thermalAnomalies.filter(a => {
-                  if (a.sector === sec) return true;
-                  if (a.x && a.y) {
-                    let col = a.x < 213 ? 1 : a.x < 426 ? 2 : 3;
-                    let row = a.y < 160 ? 'A' : a.y < 320 ? 'B' : 'C';
-                    return `${row}${col}` === sec;
-                  }
-                  return false;
-                });
+                const alertsCount = anomaliesBySector[sec] || 0;
 
                 let secTemp = temp;
 
@@ -440,9 +455,9 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
                     
                     <div className="flex flex-col items-end">
                       <span className="text-xs font-bold text-slate-300">{secTemp.toFixed(1)}°C</span>
-                      {alertsInSec.length > 0 ? (
+                      {alertsCount > 0 ? (
                         <span className="text-[8px] bg-rose-500/10 text-rose-400 font-semibold px-1 rounded border border-rose-500/20 mt-0.5 animate-pulse">
-                          {alertsInSec.length} Alertas
+                          {alertsCount} Alertas
                         </span>
                       ) : (
                         <span className="text-[8px] text-slate-500 mt-0.5">Estável</span>
