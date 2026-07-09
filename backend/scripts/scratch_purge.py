@@ -41,12 +41,9 @@ code = re.sub(
 code = re.sub(r"import random\n", "", code)
 
 # Fix missing/trailing sources
-code = code.replace('            "source": "simulated_fallback",\n', "")
-code = code.replace('"source": "simulated",', '"source": "sensor",')
-code = code.replace(
-    '_persist_sensor_reading(source="simulated")', '_persist_sensor_reading(source="sensor")'
-)
-code = code.replace('    "source": "simulated",', '    "source": "sensor",')
+code = re.sub(r'[ \t]*"source": "simulated_fallback",?\n?', "", code)
+code = re.sub(r'"source": "simulated"', '"source": "sensor"', code)
+code = code.replace('source="simulated"', 'source="sensor"')
 
 with open("c:/nic/ChikGuard-Original/backend/app.py", "w", encoding="utf-8") as f:
     f.write(code)
