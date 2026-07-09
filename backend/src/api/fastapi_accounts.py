@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from src.db.session import get_db
 from src.security.fastapi_auth import get_current_user, UserContext, RequireRole, supabase_client
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional
 import logging
 from fastapi.concurrency import run_in_threadpool
 import json
