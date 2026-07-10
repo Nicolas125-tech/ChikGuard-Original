@@ -430,20 +430,20 @@ const CalculadoraLucro = React.memo(function CalculadoraLucro() {
       
       <div className="grid grid-cols-2 gap-3 mb-4">
         <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-          <label className="text-[10px] text-slate-400 uppercase font-bold mb-1 block">Qtd de Aves</label>
-          <input type="number" value={lote} onChange={e=>setLote(e.target.value)} placeholder="Ex: 30000" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm outline-none focus:border-emerald-500" />
+          <label htmlFor="sim-qtd-aves" className="text-[10px] text-slate-400 uppercase font-bold mb-1 block">Qtd de Aves</label>
+          <input id="sim-qtd-aves" type="number" value={lote} onChange={e=>setLote(e.target.value)} placeholder="Ex: 30000" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm outline-none focus:border-emerald-500" />
         </div>
         <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-          <label className="text-[10px] text-slate-400 uppercase font-bold mb-1 block">Mortalidade (%)</label>
-          <input type="number" value={mortalidade} onChange={e=>setMortalidade(e.target.value)} placeholder="Ex: 3.5" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm outline-none focus:border-emerald-500" />
+          <label htmlFor="sim-mortalidade" className="text-[10px] text-slate-400 uppercase font-bold mb-1 block">Mortalidade (%)</label>
+          <input id="sim-mortalidade" type="number" step="0.1" value={mortalidade} onChange={e=>setMortalidade(e.target.value)} placeholder="Ex: 3.5" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm outline-none focus:border-emerald-500" />
         </div>
         <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-          <label className="text-[10px] text-slate-400 uppercase font-bold mb-1 block">Peso Abate (kg)</label>
-          <input type="number" value={pesoAbate} onChange={e=>setPesoAbate(e.target.value)} placeholder="Ex: 2.9" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm outline-none focus:border-emerald-500" />
+          <label htmlFor="sim-peso" className="text-[10px] text-slate-400 uppercase font-bold mb-1 block">Peso Abate (kg)</label>
+          <input id="sim-peso" type="number" step="0.1" value={pesoAbate} onChange={e=>setPesoAbate(e.target.value)} placeholder="Ex: 2.9" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm outline-none focus:border-emerald-500" />
         </div>
         <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-          <label className="text-[10px] text-slate-400 uppercase font-bold mb-1 block">R$/kg de Carne</label>
-          <input type="number" value={precoKg} onChange={e=>setPrecoKg(e.target.value)} placeholder="Ex: 5.50" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm outline-none focus:border-emerald-500" />
+          <label htmlFor="sim-preco" className="text-[10px] text-slate-400 uppercase font-bold mb-1 block">R$/kg de Carne</label>
+          <input id="sim-preco" type="number" step="0.01" value={precoKg} onChange={e=>setPrecoKg(e.target.value)} placeholder="Ex: 5.50" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm outline-none focus:border-emerald-500" />
         </div>
       </div>
       
