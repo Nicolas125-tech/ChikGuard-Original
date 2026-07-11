@@ -1,4 +1,5 @@
 import os
+
 os.environ["SUPABASE_JWT_SECRET"] = "dummy_secret"
 os.environ["ADMIN_PASSWORD"] = "testpassword"
 os.environ["ADMIN_EMAIL"] = "test@example.com"
@@ -7,9 +8,9 @@ os.environ["CORS_ALLOWED_ORIGINS"] = "*"
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 import pytest
-from flask import Flask, jsonify
 
 from app_flask_legacy import app
+
 
 @pytest.fixture
 def client():
@@ -19,6 +20,7 @@ def client():
 
     with app.test_client() as client:
         yield client
+
 
 def test_accounts_me_invalid_session(client):
     """Testa a rota /api/accounts/me sem autenticacao para garantir que retorna 401."""
