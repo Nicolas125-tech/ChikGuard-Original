@@ -1,5 +1,5 @@
 import time
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from src.db.session import get_db
@@ -9,6 +9,7 @@ from src.schemas.sensors import SensorIngest, SensorLiveResponse
 from src.security.fastapi_auth import get_current_user, UserContext
 
 router = APIRouter(prefix="/api/sensors", tags=["sensors"])
+
 
 @router.get("/live", response_model=SensorLiveResponse)
 def get_sensors_live(user: UserContext = Depends(get_current_user)):
@@ -25,24 +26,27 @@ def get_sensors_live(user: UserContext = Depends(get_current_user)):
         "thresholds": sensor_thresholds,
     }
 
+
 @router.post("/ingest")
 def ingest_sensor_data(
-    payload: SensorIngest, 
+    payload: SensorIngest,
     db: Session = Depends(get_db),
-    user: UserContext = Depends(get_current_user)
+    user: UserContext = Depends(get_current_user),
 ):
     """Recebe novos dados de sensores via Edge/IoT e atualiza o estado."""
-    sensor_state.update({
-        "temperature_c": payload.temperature_c,
-        "humidity_pct": payload.humidity_pct,
-        "ammonia_ppm": payload.ammonia_ppm,
-        "feed_level_pct": payload.feed_level_pct,
-        "water_level_pct": payload.water_level_pct,
-        "source": payload.source,
-        "updated_at": time.time(),
-    })
-    
+    sensor_state.update(
+        {
+            "temperature_c": payload.temperature_c,
+            "humidity_pct": payload.humidity_pct,
+            "ammonia_ppm": payload.ammonia_ppm,
+            "feed_level_pct": payload.feed_level_pct,
+            "water_level_pct": payload.water_level_pct,
+            "source": payload.source,
+            "updated_at": time.time(),
+        }
+    )
+
     persist_sensor_reading(db, source=payload.source)
     evaluate_sensor_alerts(db)
-    
+
     return {"msg": "Leitura de sensores recebida", "state": sensor_state}
