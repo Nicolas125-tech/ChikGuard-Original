@@ -1,4 +1,3 @@
-import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,51 +13,61 @@ import asyncio
 SETTINGS = load_settings()
 LOGGER = configure_logging(SETTINGS.log_level)
 
+
 @asynccontextmanager
 async def lifespan(fastapi_app: FastAPI):
     # Setup de inicializacao do backend (conexao com DB, modelos AI, etc)
     LOGGER.info("Iniciando o servidor FastAPI - ChikGuard")
-    
+
     # Inicializa o banco de dados SQLite
     try:
         from database import db, Camera
         from src.db.session import engine, SessionLocal
+
         db.metadata.create_all(bind=engine)
-        
+
         db_session = SessionLocal()
         try:
             if not db_session.query(Camera).filter_by(camera_id="galpao-1").first():
-                db_session.add(Camera(camera_id="galpao-1", name="Câmera 1", status="online"))
+                db_session.add(
+                    Camera(camera_id="galpao-1", name="Câmera 1", status="online")
+                )
                 db_session.commit()
-                LOGGER.info("Banco de dados SQLite inicializado e semeado com câmera padrão.")
+                LOGGER.info(
+                    "Banco de dados SQLite inicializado e semeado com câmera padrão."
+                )
         except Exception as db_err:
             LOGGER.error(f"Erro ao semear banco de dados SQLite: {db_err}")
         finally:
             db_session.close()
     except Exception as db_init_err:
-        LOGGER.error(f"Erro ao inicializar tabelas do banco de dados SQLite: {db_init_err}")
+        LOGGER.error(
+            f"Erro ao inicializar tabelas do banco de dados SQLite: {db_init_err}"
+        )
 
     # Inicia a Ponte IoT (MQTT)
     mqtt_client = await start_mqtt_bridge()
-    
+
     # Inicia o FSM em background
     fsm_task = asyncio.create_task(fsm_loop())
 
     # Inicia o Worker de Sincronização offline-first de Sensores com o Supabase
     from src.services.sensor_sync_worker import SensorSyncWorker
+
     sync_worker = SensorSyncWorker()
     sync_task = asyncio.create_task(sync_worker.run())
-    
+
     yield
-    
+
     # Cleanup na finalizacao
     fsm_task.cancel()
     sync_task.cancel()
     if mqtt_client:
         mqtt_client.loop_stop()
         mqtt_client.disconnect()
-        
+
     LOGGER.info("Encerrando o servidor FastAPI - ChikGuard")
+
 
 from src.api.fastapi_health import router as health_router
 from src.api.fastapi_sensors import router as sensors_router
@@ -102,13 +111,15 @@ fastapi_app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @fastapi_app.get("/")
 async def root():
     return {
         "status": "online",
         "service": "ChikGuard FastAPI Edge Node",
-        "version": "2.0.0"
+        "version": "2.0.0",
     }
+
 
 @fastapi_app.get("/api/summary")
 async def get_summary(user: UserContext = Depends(get_current_user)):
@@ -120,30 +131,61 @@ async def get_summary(user: UserContext = Depends(get_current_user)):
         "aves_vivas_individuais": 150,
         "total_aves_vistas": 150,
         "metodo_temperatura_ave": "estimada_rgb_proxy",
-        "dispositivos": {"ventilacao": "desligado", "aquecedor": "desligado", "modo_automatico": True},
+        "dispositivos": {
+            "ventilacao": "desligado",
+            "aquecedor": "desligado",
+            "modo_automatico": True,
+        },
         "total_alertas": 0,
         "camera_id": "galpao-1",
-        "behavior": {"status": "NORMAL", "message": "", "dispersion_ratio": 0.5, "edge_ratio": 0.1},
-        "sensors": {"humidity_pct": 60, "ammonia_ppm": 5, "feed_level_pct": 80, "water_level_pct": 90},
+        "behavior": {
+            "status": "NORMAL",
+            "message": "",
+            "dispersion_ratio": 0.5,
+            "edge_ratio": 0.1,
+        },
+        "sensors": {
+            "humidity_pct": 60,
+            "ammonia_ppm": 5,
+            "feed_level_pct": 80,
+            "water_level_pct": 90,
+        },
         "automation": {"enabled": True, "targets": {}},
         "batch": {"name": "Lote 1"},
-        "weight": {"avg_weight_g": 1200, "ideal_weight_g": 1250, "confidence": 0.9, "method": "segmentation_area"},
-        "acoustic": {"respiratory_health_index": 0.95, "cough_index": 0.05, "stress_audio_index": 0.1, "source": "sensor", "trained_model_loaded": True},
+        "weight": {
+            "avg_weight_g": 1200,
+            "ideal_weight_g": 1250,
+            "confidence": 0.9,
+            "method": "segmentation_area",
+        },
+        "acoustic": {
+            "respiratory_health_index": 0.95,
+            "cough_index": 0.05,
+            "stress_audio_index": 0.1,
+            "source": "sensor",
+            "trained_model_loaded": True,
+        },
         "energy_today": {"ventilacao_seconds": 120, "aquecedor_seconds": 0},
-        "smart_grid_forecast_12h": {"projected_total_cost": 0.0, "projected_heater_cost": 0.0, "estimated_optimization_savings": 0.0, "suggest_optimize_airflow": False, "message": "Ok"},
+        "smart_grid_forecast_12h": {
+            "projected_total_cost": 0.0,
+            "projected_heater_cost": 0.0,
+            "estimated_optimization_savings": 0.0,
+            "suggest_optimize_airflow": False,
+            "message": "Ok",
+        },
         "sync": {"pending": 0},
         "weather": {},
         "tamper": {"last_alert_ts": 0, "last_causes": [], "alerts_count": 0},
         "carcass": {"count": 0, "audio_alert": False},
-        "comfort_score": 95
+        "comfort_score": 95,
     }
-
 
 
 @fastapi_app.get("/api/status")
 async def get_status(user: UserContext = Depends(get_current_user)):
     import time
     from src.core.state import sensor_state, active_camera_id
+
     temp = sensor_state.get("temperature_c", 28.5)
     return {
         "temperatura": temp,
@@ -161,6 +203,7 @@ async def get_alerts(user: UserContext = Depends(get_current_user)):
 async def get_history(user: UserContext = Depends(get_current_user)):
     import time
     from src.core.state import sensor_state
+
     temp = sensor_state.get("temperature_c", 28.5)
     return [
         {
@@ -175,6 +218,7 @@ async def get_history(user: UserContext = Depends(get_current_user)):
 async def get_estado_dispositivos(user: UserContext = Depends(get_current_user)):
     from src.core.fsm_task import actuator_state
     from src.core.state import active_camera_id
+
     return {
         "ventilacao": actuator_state.get("ventilacao_on", False),
         "aquecedor": actuator_state.get("aquecedor_on", False),
@@ -185,13 +229,20 @@ async def get_estado_dispositivos(user: UserContext = Depends(get_current_user))
 
 
 @fastapi_app.post("/api/auto-mode")
-async def set_auto_mode(request: Request, user: UserContext = Depends(RequireRole(["operator", "admin", "superadmin"]))):
+async def set_auto_mode(
+    request: Request,
+    user: UserContext = Depends(RequireRole(["operator", "admin", "superadmin"])),
+):
     return {"msg": "Modo automático atualizado", "status": "ok"}
 
 
 @fastapi_app.post("/api/ventilacao")
-async def control_ventilacao(request: Request, user: UserContext = Depends(RequireRole(["operator", "admin", "superadmin"]))):
+async def control_ventilacao(
+    request: Request,
+    user: UserContext = Depends(RequireRole(["operator", "admin", "superadmin"])),
+):
     from src.core.fsm_task import actuator_state
+
     try:
         data = await request.json()
         power = bool(data.get("power", False))
@@ -202,8 +253,12 @@ async def control_ventilacao(request: Request, user: UserContext = Depends(Requi
 
 
 @fastapi_app.post("/api/aquecedor")
-async def control_aquecedor(request: Request, user: UserContext = Depends(RequireRole(["operator", "admin", "superadmin"]))):
+async def control_aquecedor(
+    request: Request,
+    user: UserContext = Depends(RequireRole(["operator", "admin", "superadmin"])),
+):
     from src.core.fsm_task import actuator_state
+
     try:
         data = await request.json()
         power = bool(data.get("power", False))
@@ -220,6 +275,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         status_code=500,
         content={"message": "Ocorreu um erro interno no servidor."},
     )
+
 
 # O ASGI App final que uvicorn vai rodar e a composicao do SocketIO + FastAPI
 socket_app.other_asgi_app = fastapi_app
