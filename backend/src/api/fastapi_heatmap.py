@@ -2,10 +2,9 @@
 fastapi_heatmap.py - Endpoints de heatmap térmico e anomalias térmicas
 Retorna dados simulados/reais da tabela de sensores para o Gêmeo Digital 2D.
 """
+
 from fastapi import APIRouter, Depends, Query
 from src.security.fastapi_auth import get_current_user, UserContext
-from src.db.session import get_db
-from sqlalchemy.orm import Session
 from fastapi.concurrency import run_in_threadpool
 from datetime import datetime, timedelta
 import random
@@ -27,21 +26,28 @@ def _generate_heatmap_grid(hours: int, grid: int):
             base_temp = 36.0 - (dist / (grid / 2)) * 4.0
             noise = random.uniform(-0.5, 0.5)
             temp = round(base_temp + noise, 1)
-            cells.append({
-                "x": i,
-                "y": j,
-                "temp": temp,
-                "density": max(0, round(1.0 - (dist / (grid / 2)) + random.uniform(-0.1, 0.1), 2)),
-            })
+            cells.append(
+                {
+                    "x": i,
+                    "y": j,
+                    "temp": temp,
+                    "density": max(
+                        0,
+                        round(1.0 - (dist / (grid / 2)) + random.uniform(-0.1, 0.1), 2),
+                    ),
+                }
+            )
 
     # Pontos de referência de tempo (últimas `hours` horas)
     timeline = []
     for h in range(hours):
         ts = now - timedelta(hours=hours - h)
-        timeline.append({
-            "ts": ts.isoformat() + "Z",
-            "avg_temp": round(35.5 + random.uniform(-1.5, 1.5), 1),
-        })
+        timeline.append(
+            {
+                "ts": ts.isoformat() + "Z",
+                "avg_temp": round(35.5 + random.uniform(-1.5, 1.5), 1),
+            }
+        )
 
     return {
         "grid": grid,
@@ -88,7 +94,9 @@ def _anomaly_description(a: dict) -> str:
     if a["type"] == "hot_spot":
         return f"Zona {a['zone']}: temperatura acima do normal ({a.get('temp', '?')}°C)"
     if a["type"] == "cold_zone":
-        return f"Zona {a['zone']}: temperatura abaixo do esperado ({a.get('temp', '?')}°C)"
+        return (
+            f"Zona {a['zone']}: temperatura abaixo do esperado ({a.get('temp', '?')}°C)"
+        )
     if a["type"] == "overcrowding":
         return f"Zona {a['zone']}: concentração elevada de aves ({int(a.get('density', 0) * 100)}%)"
     return f"Anomalia detectada na zona {a.get('zone', '?')}"
