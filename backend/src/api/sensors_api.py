@@ -1,10 +1,5 @@
-import io
 import time
-from datetime import timedelta
 
-import cv2
-import numpy as np
-import soundfile as sf
 from flask import Blueprint, jsonify, request
 
 from src.security.auth import require_auth
@@ -35,7 +30,9 @@ def handle_get_sensors_history(deps):
     limit = request.args.get("limit", default=100, type=int)
     limit = max(1, min(limit, 5000))
     rows = (
-        SensorReading.query.filter_by(tenant_id=request.tenant_id, camera_id=active_camera_id)
+        SensorReading.query.filter_by(
+            tenant_id=request.tenant_id, camera_id=active_camera_id
+        )
         .order_by(SensorReading.id.desc())
         .limit(limit)
         .all()
@@ -58,7 +55,10 @@ def handle_ingest_sensor_data(deps):
     ]
     missing = [k for k in required if k not in payload]
     if missing:
-        return jsonify({"msg": f"Campos obrigatorios ausentes: {', '.join(missing)}"}), 400
+        return (
+            jsonify({"msg": f"Campos obrigatorios ausentes: {', '.join(missing)}"}),
+            400,
+        )
 
     sensor_state.update(
         {
@@ -86,7 +86,8 @@ def handle_thermal_anomalies_live(deps):
     start = utcnow() - timedelta_cls(minutes=max(1, min(last_minutes, 240)))
     rows = (
         ThermalAnomaly.query.filter(
-            ThermalAnomaly.camera_id == active_camera_id, ThermalAnomaly.timestamp >= start
+            ThermalAnomaly.camera_id == active_camera_id,
+            ThermalAnomaly.timestamp >= start,
         )
         .order_by(ThermalAnomaly.id.desc())
         .limit(200)
@@ -118,7 +119,9 @@ def handle_acoustic_history(deps):
     limit = request.args.get("limit", default=200, type=int)
     limit = max(1, min(limit, 5000))
     rows = (
-        AcousticReading.query.filter_by(tenant_id=request.tenant_id, camera_id=active_camera_id)
+        AcousticReading.query.filter_by(
+            tenant_id=request.tenant_id, camera_id=active_camera_id
+        )
         .order_by(AcousticReading.id.desc())
         .limit(limit)
         .all()
@@ -140,9 +143,15 @@ def handle_acoustic_classify(deps):
     audit = deps.get("audit")
 
     if not audio_classifier.loaded:
-        return jsonify(
-            {"msg": "Modelo de tosse nao carregado", "model_error": audio_classifier.last_error}
-        ), 400
+        return (
+            jsonify(
+                {
+                    "msg": "Modelo de tosse nao carregado",
+                    "model_error": audio_classifier.last_error,
+                }
+            ),
+            400,
+        )
     if sf_mod is None:
         return jsonify({"msg": "Dependencia soundfile nao disponivel no backend"}), 500
 
@@ -161,9 +170,15 @@ def handle_acoustic_classify(deps):
 
         result = audio_classifier.classify(y, int(sr))
         if result is None:
-            return jsonify(
-                {"msg": "Falha na inferencia de tosse", "error": audio_classifier.last_error}
-            ), 500
+            return (
+                jsonify(
+                    {
+                        "msg": "Falha na inferencia de tosse",
+                        "error": audio_classifier.last_error,
+                    }
+                ),
+                500,
+            )
 
         acoustic_state.update(
             {
@@ -202,9 +217,14 @@ def handle_acoustic_classify(deps):
         audit(
             "acoustic_file_classified",
             source="manual",
-            details={"source": "trained_model", "cough_index": acoustic_state["cough_index"]},
+            details={
+                "source": "trained_model",
+                "cough_index": acoustic_state["cough_index"],
+            },
         )
-        return jsonify({"msg": "Audio classificado com sucesso", "result": acoustic_state})
+        return jsonify(
+            {"msg": "Audio classificado com sucesso", "result": acoustic_state}
+        )
 
     except Exception as exc:
         import logging
@@ -226,7 +246,8 @@ def handle_check_anomaly(deps):
     start = utcnow() - timedelta_cls(hours=24)
     sensors = (
         SensorReading.query.filter(
-            SensorReading.camera_id == active_camera_id, SensorReading.timestamp >= start
+            SensorReading.camera_id == active_camera_id,
+            SensorReading.timestamp >= start,
         )
         .order_by(SensorReading.timestamp.desc())
         .limit(100)
