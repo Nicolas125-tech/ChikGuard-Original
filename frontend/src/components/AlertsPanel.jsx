@@ -81,7 +81,7 @@ export default function AlertsPanel({ serverIP, prefs, token, cameras = [], acti
         <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Alertas do Sistema - <span className="text-emerald-400">{farmName}</span></h2>
         <div className="flex items-center gap-3">
           {visibleAlerts.length > 0 && (
-            <button onClick={clearAll} className="text-xs font-semibold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-700">
+            <button aria-label="Limpar todos os alertas" onClick={clearAll} className="text-xs font-semibold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-700 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none">
               Limpar Todos
             </button>
           )}
