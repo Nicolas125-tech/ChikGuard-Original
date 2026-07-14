@@ -53,7 +53,7 @@ export default function TVScreen({ serverIP, showHeader = false, onLogout }) {
       {showHeader && (
         <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-800 bg-slate-950">
           <div className="font-bold text-base sm:text-lg">ChikGuard Visitante</div>
-          <button onClick={onLogout} className="text-sm text-slate-300 hover:text-white bg-slate-800 px-3 py-1 rounded-md">Sair</button>
+          <button aria-label="Sair da tela da TV" onClick={onLogout} className="text-sm text-slate-300 hover:text-white bg-slate-800 px-3 py-1 rounded-md focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none">Sair</button>
         </div>
       )}
       <div className="p-4 sm:p-6">

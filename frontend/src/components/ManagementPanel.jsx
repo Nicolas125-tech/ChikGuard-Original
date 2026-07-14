@@ -204,7 +204,7 @@ export default function ManagementPanel({ serverIP, prefs, token, cameras = [], 
                     {audioFile ? <span className="text-emerald-400 font-medium">{audioFile.name}</span> : 'Selecionar arquivo de áudio'}
                   </div>
                 </div>
-                <button onClick={classifyAudio} disabled={!audioFile || isClassifying} className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-lg font-bold shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap">
+                <button aria-label="Analisar áudio enviado" onClick={classifyAudio} disabled={!audioFile || isClassifying} className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-lg font-bold shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none">
                   {isClassifying ? <RefreshCw size={16} className="animate-spin" /> : 'Analisar'}
                 </button>
               </div>
