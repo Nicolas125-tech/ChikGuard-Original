@@ -50,3 +50,6 @@
 ## 2024-03-24 - [Avoid Array Filtering in Render Loops]
 **Learning:** Filtering arrays (like thermalAnomalies) inside a .map() loop in the render function creates a severe O(N*M) bottleneck when rendering grid sectors, specifically when recalculating the same array length repeatedly across UI components.
 **Action:** Always pre-aggregate data into dictionary lookups using useMemo before the return statement to transform nested loops into O(1) lookups during rendering.
+## 2025-05-19 - O(N*M) array.includes bottleneck in React components
+**Learning:** React components dealing with polling data frequently re-evaluate derived states on every render loop, exacerbating inefficiencies. Using `array.includes` inside `.filter` on arrays creates hidden O(N*M) bottlenecks.
+**Action:** When filtering a dataset against a list of excluded items, always pre-calculate a `Set` for O(1) lookups and wrap the calculation in `useMemo` so it only re-runs when the source data arrays actually change.

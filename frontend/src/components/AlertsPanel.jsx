@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { getBaseUrl } from '../utils/config';
@@ -61,7 +61,12 @@ export default function AlertsPanel({ serverIP, prefs, token, cameras = [], acti
 
   const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
   
-  const visibleAlerts = alerts.filter(a => !dismissed.includes(a.id));
+  // Bolt Optimization: Replace O(N*M) array.includes filter with O(N) Set lookup
+  // and memoize the result to prevent unnecessary recalculations on re-renders.
+  const visibleAlerts = useMemo(() => {
+    const dismissedSet = new Set(dismissed);
+    return alerts.filter(a => !dismissedSet.has(a.id));
+  }, [alerts, dismissed]);
 
   const dismissAlert = (id) => {
     const newDismissed = [...dismissed, id];
