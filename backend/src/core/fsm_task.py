@@ -2,7 +2,7 @@ import asyncio
 import time
 import logging
 from src.core.state_machine import BusinessStateMachine
-from src.core.state import sensor_state, sensor_thresholds
+from src.core.state import sensor_state, sensor_thresholds, intrusion_state
 from src.api.fastapi_ws import emit_new_alert
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ async def fsm_loop():
                     "heater_off_temp": sensor_thresholds["temp_min"] + 1.0,
                     "batch_age_day": 21 # Em prod buscaria do banco de dados (Batch)
                 },
-                "intrusion_active": False, # Placeholder
+                "intrusion_active": intrusion_state.get("active", False),
                 "preheat_recommended": False
             }
             

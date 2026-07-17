@@ -181,12 +181,13 @@ def camera_worker():
         # Executa inferência YOLO a cada 3 frames para evitar sobrecarga de CPU local
         if model is not None and frame_count % 3 == 0:
             try:
+                # Otimizado para identificar pontinhos amarelos (pintinhos pequenos a distância)
                 results = model.track(
                     frame_resized,
                     persist=True,
                     tracker="bytetrack.yaml",
-                    conf=0.25,
-                    imgsz=320,  # menor resolução de inferência para ganho substancial de FPS
+                    conf=0.15,
+                    imgsz=640,
                     verbose=False
                 )
                 
@@ -198,6 +199,7 @@ def camera_worker():
                     
                     chicks_count = 0
                     hens_count = 0
+                    person_detected = False
                     
                     for i in range(len(boxes)):
                         box = [int(v) for v in boxes[i]]
@@ -205,7 +207,28 @@ def camera_worker():
                         cid = int(clss[i])
                         uid = int(ids[i])
                         
-                        # Processa espécie e postura
+                        # 1. Trata detecção de pessoa (classe 0) -> Alerta de Intrusão
+                        if cid == 0:
+                            person_detected = True
+                            det = {
+                                "box": box,
+                                "confidence": conf,
+                                "class_id": cid,
+                                "track_id": uid,
+                                "stable_bird_uid": uid,
+                                "species": "person",
+                                "species_label": "INVASOR",
+                                "color": (0, 0, 255), # Vermelho neon
+                                "pose_label": "ATENCAO"
+                            }
+                            detections.append(det)
+                            continue
+                            
+                        # 2. Ignora qualquer classe que não seja ave (classe 14)
+                        if cid != 14:
+                            continue
+                        
+                        # 3. Processa ave (pintinho / galinha)
                         pose_info = pose_analyzer.analyze(box, 0.0, frame_resized.shape)
                         species_info = species_classifier.classify(frame_resized, box, "bird", 0.0)
                         
@@ -226,24 +249,40 @@ def camera_worker():
                             hens_count += 1
                             
                     # Atualiza os estados globais sob lock de forma thread-safe
+                    from src.core.state import intrusion_state
                     with cv_lock:
+                        # Atualiza alertas de segurança
+                        intrusion_state["active"] = person_detected
+                        if person_detected:
+                            intrusion_state["last_alert_ts"] = time.time()
+                            intrusion_state["alerts_count"] += 1
+                            
+                        # Atualiza aves ativas
                         live_birds.clear()
                         for d in detections:
-                            uid = d["track_id"]
-                            if uid >= 0:
-                                live_birds[uid] = {
-                                    "box": d["box"],
-                                    "last_seen": time.time(),
-                                    "mask_area_px": 0.0
-                                }
+                            # Apenas rastreia aves no live_birds
+                            if d["class_id"] == 14:
+                                uid = d["track_id"]
+                                if uid >= 0:
+                                    live_birds[uid] = {
+                                        "box": d["box"],
+                                        "conf": d["confidence"],
+                                        "track_id": uid,
+                                        "species": d["species"],
+                                        "species_label": d["species_label"],
+                                        "last_seen": time.time(),
+                                        "mask_area_px": 0.0
+                                    }
+                                    
                         species_counts["chicks"] = chicks_count
                         species_counts["hens"] = hens_count
-                        species_counts["total"] = len(detections)
+                        species_counts["total"] = chicks_count + hens_count
                         
                         # Estimativa dinâmica de peso
-                        if len(detections) > 0:
-                            weight_state["avg_weight_g"] = round(1180.0 + len(detections) * 2.8 + np.random.normal(0, 4), 1)
-                            weight_state["count"] = len(detections)
+                        bird_total = chicks_count + hens_count
+                        if bird_total > 0:
+                            weight_state["avg_weight_g"] = round(1180.0 + bird_total * 2.8 + np.random.normal(0, 4), 1)
+                            weight_state["count"] = bird_total
                             weight_state["confidence"] = 0.93
                             weight_state["updated_at"] = time.time()
             except Exception as cv_err:

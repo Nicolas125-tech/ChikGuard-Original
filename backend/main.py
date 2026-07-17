@@ -8,6 +8,7 @@ from src.core.logger import configure_logging
 from src.core.fsm_task import fsm_loop
 from src.core.mqtt_bridge import start_mqtt_bridge
 import asyncio
+import time
 
 # Configuracoes e Logger base
 SETTINGS = load_settings()

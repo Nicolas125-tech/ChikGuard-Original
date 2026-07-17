@@ -47,6 +47,12 @@ weight_state = {
     "updated_at": time.time(),
 }
 
+intrusion_state = {
+    "active": False,
+    "last_alert_ts": 0.0,
+    "alerts_count": 0
+}
+
 global_frame_data = np.zeros((480, 640, 3), dtype=np.uint8)
 
 def get_global_frame():
