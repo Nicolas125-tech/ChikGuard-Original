@@ -231,12 +231,18 @@ class SpeciesClassifier:
             species_label = "PINTINHO"
             color = COLOR_CHICK
         elif votes_hen >= 2:
-            species = "hen"
-            species_label = "GALINHA"
-            color = COLOR_HEN
+            # Se a cor detectada for especificamente amarelo-chick, mesmo que o tamanho seja grande (ex: perto da lente), é pintinho
+            if color_vote == "chick":
+                species = "chick"
+                species_label = "PINTINHO"
+                color = COLOR_CHICK
+            else:
+                species = "hen"
+                species_label = "GALINHA"
+                color = COLOR_HEN
         else:
-            # Tiebreak: usar age_prior
-            if age_chick_prior:
+            # Tiebreak: se for amarelo ou pequeno, classifica como pintinho
+            if color_vote == "chick" or size_vote == "chick" or age_chick_prior:
                 species = "chick"
                 species_label = "PINTINHO"
                 color = COLOR_CHICK

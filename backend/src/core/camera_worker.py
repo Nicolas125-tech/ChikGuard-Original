@@ -52,59 +52,249 @@ def simulate_telemetry_step():
     sensor_state["source"] = "telemetry_simulator"
     sensor_state["updated_at"] = time.time()
 
+# Variáveis globais compartilhadas entre as threads internas
+_raw_frame = None
+_latest_detections = []
+_cap = None
+_use_sim = False
+_camera_index = 0
+_cv_lock = threading.Lock()
+
+def _capture_thread_func():
+    """Thread de aquisição de imagem dedicada - lê o frame mais recente e limpa buffer."""
+    global _raw_frame, _cap, _use_sim, camera_running, _camera_index
+    
+    consecutive_failures = 0
+    while camera_running:
+        cap_instance = _cap
+        if cap_instance is None or not cap_instance.isOpened():
+            time.sleep(0.1)
+            continue
+            
+        ret, frame = cap_instance.read()
+        if not ret:
+            if _use_sim:
+                # Loop do vídeo de simulação
+                cap_instance.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            else:
+                consecutive_failures += 1
+                if consecutive_failures > 30:
+                    logger.warning("Conexão com a câmera real perdida no loop de captura.")
+                    # Tenta reabrir
+                    cap_instance.release()
+                    _cap = cv2.VideoCapture(_camera_index)
+                    consecutive_failures = 0
+                time.sleep(0.05)
+            continue
+            
+        consecutive_failures = 0
+        
+        # Redimensiona para resolução padrão
+        resized = cv2.resize(frame, (640, 480))
+        
+        with _cv_lock:
+            _raw_frame = resized
+            
+        # Pequena pausa para liberar a CPU
+        time.sleep(0.005)
+
+def _inference_thread_func(model, species_classifier, pose_analyzer):
+    """Thread dedicada de inferência YOLOv8 - processa frames de forma assíncrona."""
+    global _raw_frame, _latest_detections, camera_running
+    
+    last_batch_query_ts = 0.0
+    
+    while camera_running:
+        frame_to_process = None
+        with _cv_lock:
+            if _raw_frame is not None:
+                frame_to_process = _raw_frame.copy()
+                
+        if frame_to_process is None:
+            time.sleep(0.05)
+            continue
+            
+        # Consulta idade do lote do DB periodicamente
+        now_ts = time.time()
+        if now_ts - last_batch_query_ts >= 15.0:
+            last_batch_query_ts = now_ts
+            try:
+                from database import Batch
+                from src.db.session import SessionLocal
+                from datetime import datetime
+                db_session = SessionLocal()
+                active_batch = db_session.query(Batch).filter_by(active=True).first()
+                if active_batch:
+                    age_days = (datetime.utcnow() - active_batch.start_date.replace(tzinfo=None)).days
+                    age_days = max(1, age_days)
+                    species_classifier.set_batch_age(age_days)
+                    logger.info(f"Fator de idade do lote sincronizado: {age_days} dias.")
+                else:
+                    # Sem lote ativo no DB, default para pintinhos jovens para demonstrar localmente
+                    species_classifier.set_batch_age(5)
+                db_session.close()
+            except Exception as db_err:
+                logger.error(f"Erro ao consultar DB para idade do lote: {db_err}")
+
+        # Executa inferência YOLO com resolução e confiança otimizadas para pontinhos amarelos
+        try:
+            results = model.track(
+                frame_to_process,
+                persist=True,
+                tracker="bytetrack.yaml",
+                conf=0.12, # Aumenta sensibilidade para detecção de pintinhos distantes
+                imgsz=640,  # Resolução cheia para resolver pintinhos pequenos
+                verbose=False
+            )
+            
+            new_detections = []
+            chicks_count = 0
+            hens_count = 0
+            person_detected = False
+            
+            if results and results[0].boxes is not None:
+                boxes = results[0].boxes.xyxy.cpu().numpy()
+                confs = results[0].boxes.conf.cpu().numpy()
+                clss = results[0].boxes.cls.cpu().numpy()
+                ids = results[0].boxes.id.cpu().numpy() if results[0].boxes.id is not None else [-1] * len(boxes)
+                
+                for i in range(len(boxes)):
+                    box = [int(v) for v in boxes[i]]
+                    conf = float(confs[i])
+                    cid = int(clss[i])
+                    uid = int(ids[i])
+                    
+                    # 1. Trata detecção de pessoa (classe 0) -> Alerta de Intrusão
+                    if cid == 0:
+                        person_detected = True
+                        det = {
+                            "box": box,
+                            "confidence": conf,
+                            "class_id": cid,
+                            "track_id": uid,
+                            "stable_bird_uid": uid,
+                            "species": "person",
+                            "species_label": "INVASOR",
+                            "color": (0, 0, 255), # Vermelho neon
+                            "pose_label": "ATENCAO"
+                        }
+                        new_detections.append(det)
+                        continue
+                        
+                    # 2. Ignora qualquer classe que não seja ave (classe 14)
+                    if cid != 14:
+                        continue
+                    
+                    # 3. Processa ave (pintinho / galinha)
+                    pose_info = pose_analyzer.analyze(box, 0.0, frame_to_process.shape)
+                    species_info = species_classifier.classify(frame_to_process, box, "bird", 0.0)
+                    
+                    det = {
+                        "box": box,
+                        "confidence": conf,
+                        "class_id": cid,
+                        "track_id": uid,
+                        "stable_bird_uid": uid
+                    }
+                    det.update(pose_info)
+                    det.update(species_info)
+                    new_detections.append(det)
+                    
+                    if species_info["species"] == "chick":
+                        chicks_count += 1
+                    else:
+                        hens_count += 1
+
+            # Atualiza estados globais do sistema de forma thread-safe
+            from src.core.state import intrusion_state, live_birds, species_counts, weight_state, cv_lock
+            with cv_lock:
+                # Atualiza alertas de segurança
+                intrusion_state["active"] = person_detected
+                if person_detected:
+                    intrusion_state["last_alert_ts"] = time.time()
+                    intrusion_state["alerts_count"] += 1
+                    
+                # Atualiza aves ativas
+                live_birds.clear()
+                for d in new_detections:
+                    if d["class_id"] == 14:
+                        uid = d["track_id"]
+                        if uid >= 0:
+                            live_birds[uid] = {
+                                "box": d["box"],
+                                "conf": d["confidence"],
+                                "track_id": uid,
+                                "species": d["species"],
+                                "species_label": d["species_label"],
+                                "last_seen": time.time(),
+                                "mask_area_px": 0.0
+                            }
+                            
+                species_counts["chicks"] = chicks_count
+                species_counts["hens"] = hens_count
+                species_counts["total"] = chicks_count + hens_count
+                
+                # Estimativa dinâmica de peso
+                bird_total = chicks_count + hens_count
+                if bird_total > 0:
+                    weight_state["avg_weight_g"] = round(1180.0 + bird_total * 2.8 + np.random.normal(0, 4), 1)
+                    weight_state["count"] = bird_total
+                    weight_state["confidence"] = 0.93
+                    weight_state["updated_at"] = time.time()
+
+            with _cv_lock:
+                _latest_detections = new_detections
+                
+        except Exception as cv_err:
+            logger.error(f"Erro no processamento YOLO da thread: {cv_err}")
+            
+        # Pequena pausa para liberar a CPU
+        time.sleep(0.01)
+
 def camera_worker():
-    global camera_running
+    global camera_running, _cap, _use_sim, _camera_index, _raw_frame, _latest_detections
     from src.core.config import load_settings
-    from src.core.state import set_global_frame, sensor_state, live_birds, species_counts, weight_state, cv_lock
-    from src.core.cv_engine import SpeciesClassifier, BirdPoseAnalyzer, PerfMetrics, CVOverlay
+    from src.core.state import set_global_frame, sensor_state, species_counts
+    from src.core.cv_engine import SpeciesClassifier, BirdPoseAnalyzer, CVOverlay
     from ultralytics import YOLO
 
     settings = load_settings()
-    camera_index = settings.camera_index
+    _camera_index = settings.camera_index
     
-    logger.info(f"Iniciando camera_worker. Câmera Index configurado: {camera_index}")
+    logger.info(f"Iniciando camera_worker. Câmera Index: {_camera_index}")
     
-    cap = None
-    use_sim = False
+    _cap = None
+    _use_sim = False
     
-    # 1. Tenta conectar na webcam / câmera local
+    # 1. Tenta conectar na webcam
     try:
-        cap = cv2.VideoCapture(camera_index)
-        if cap.isOpened():
-            # Testa leitura de frame
-            ret, _ = cap.read()
+        _cap = cv2.VideoCapture(_camera_index)
+        if _cap.isOpened():
+            ret, _ = _cap.read()
             if ret:
-                logger.info(f"Câmera real (webcam) {camera_index} iniciada com sucesso.")
+                logger.info(f"Câmera real {_camera_index} iniciada com sucesso.")
             else:
-                logger.warning(f"Câmera real {camera_index} abriu, mas falhou ao ler frames.")
-                cap.release()
-                cap = None
+                _cap.release()
+                _cap = None
     except Exception as exc:
         logger.warning(f"Erro ao abrir câmera real: {exc}")
-        cap = None
+        _cap = None
         
-    # 2. Se a câmera real falhar, usa o vídeo de simulação como fallback
-    if cap is None:
-        use_sim = True
-        # Procura o arquivo na pasta raiz do backend
+    # 2. Fallback para vídeo de simulação
+    if _cap is None:
+        _use_sim = True
         sim_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "video_granja.mp4"))
-        logger.info(f"Câmera real indisponível. Iniciando simulador com vídeo: {sim_path}")
+        logger.info(f"Ativando simulador com vídeo: {sim_path}")
         if os.path.exists(sim_path):
-            cap = cv2.VideoCapture(sim_path)
-            if cap.isOpened():
-                logger.info("Vídeo de simulação 'video_granja.mp4' aberto com sucesso.")
-            else:
-                logger.error("Falha ao abrir vídeo de simulação.")
-                cap = None
+            _cap = cv2.VideoCapture(sim_path)
         else:
-            logger.error("Vídeo de simulação 'video_granja.mp4' não foi encontrado na raiz do backend.")
-            cap = None
+            logger.error("Vídeo de simulação 'video_granja.mp4' não encontrado.")
+            _cap = None
             
     # 3. Inicializa modelo YOLO
     model = None
     species_classifier = SpeciesClassifier()
     pose_analyzer = BirdPoseAnalyzer()
-    metrics = PerfMetrics()
     
     try:
         model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "yolov8n-seg.pt"))
@@ -112,18 +302,31 @@ def camera_worker():
             model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "yolov8n.pt"))
             
         if os.path.exists(model_path):
-            logger.info(f"Carregando modelo de detecção YOLO em CPU a partir de {model_path}...")
             model = YOLO(model_path)
             model.to("cpu")
             logger.info("YOLO carregado com sucesso.")
         else:
-            logger.error("Nenhum arquivo de pesos YOLO (yolov8n-seg.pt ou yolov8n.pt) encontrado para inferência local.")
+            logger.error("Nenhum arquivo de pesos YOLO encontrado.")
     except Exception as e:
         logger.error(f"Erro na inicialização do modelo YOLO: {e}")
 
-    frame_count = 0
+    # 4. Inicia as threads dedicadas de Captura e Inferência YOLO
+    capture_thread = threading.Thread(target=_capture_thread_func, name="CaptureThread", daemon=True)
+    capture_thread.start()
+    
+    inference_thread = None
+    if model is not None:
+        inference_thread = threading.Thread(
+            target=_inference_thread_func,
+            args=(model, species_classifier, pose_analyzer),
+            name="InferenceThread",
+            daemon=True
+        )
+        inference_thread.start()
+
     last_telemetry_sim_ts = 0.0
     
+    # 5. Loop do Coordenador Principal (Roda a 30 FPS estável, sem travar!)
     while camera_running:
         t_loop_start = time.perf_counter()
         
@@ -136,165 +339,38 @@ def camera_worker():
             except Exception as e:
                 logger.error(f"Erro na simulação de telemetria: {e}")
 
-        # Se não houver feed de vídeo aberto, gera frame preto com erro
-        if cap is None or not cap.isOpened():
+        # Recupera frame e detecções mais recentes sob lock
+        current_frame = None
+        current_detections = []
+        
+        with _cv_lock:
+            if _raw_frame is not None:
+                current_frame = _raw_frame.copy()
+            current_detections = list(_latest_detections)
+
+        # Se não houver frame ainda, exibe tela de carregamento/erro
+        if current_frame is None:
             err_frame = np.zeros((480, 640, 3), dtype=np.uint8)
             cv2.putText(
                 err_frame,
-                "ERRO: SEM DISPOSITIVO DE CAMERA",
-                (50, 240),
+                "CONECTANDO COM DISPOSITIVO DE VIDEO...",
+                (100, 240),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (0, 0, 255),
+                0.6,
+                (0, 200, 100),
                 2,
                 cv2.LINE_AA
             )
             set_global_frame(err_frame)
-            time.sleep(1)
-            # Tenta reconectar câmera ou reabrir simulador
-            if use_sim:
-                sim_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "video_granja.mp4"))
-                if os.path.exists(sim_path):
-                    cap = cv2.VideoCapture(sim_path)
-            else:
-                cap = cv2.VideoCapture(camera_index)
+            time.sleep(0.05)
             continue
             
-        ret, frame = cap.read()
-        if not ret:
-            if use_sim:
-                # Loop do vídeo
-                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                continue
-            else:
-                logger.warning("Falha ao ler frame da webcam real.")
-                time.sleep(0.5)
-                continue
-                
-        frame_count += 1
-        
-        # Redimensiona para resolução padrão de exibição
-        frame_resized = cv2.resize(frame, (640, 480))
-        
-        detections = []
-        
-        # Executa inferência YOLO a cada 3 frames para evitar sobrecarga de CPU local
-        if model is not None and frame_count % 3 == 0:
-            try:
-                # Otimizado para identificar pontinhos amarelos (pintinhos pequenos a distância)
-                results = model.track(
-                    frame_resized,
-                    persist=True,
-                    tracker="bytetrack.yaml",
-                    conf=0.15,
-                    imgsz=640,
-                    verbose=False
-                )
-                
-                if results and results[0].boxes is not None:
-                    boxes = results[0].boxes.xyxy.cpu().numpy()
-                    confs = results[0].boxes.conf.cpu().numpy()
-                    clss = results[0].boxes.cls.cpu().numpy()
-                    ids = results[0].boxes.id.cpu().numpy() if results[0].boxes.id is not None else [-1] * len(boxes)
-                    
-                    chicks_count = 0
-                    hens_count = 0
-                    person_detected = False
-                    
-                    for i in range(len(boxes)):
-                        box = [int(v) for v in boxes[i]]
-                        conf = float(confs[i])
-                        cid = int(clss[i])
-                        uid = int(ids[i])
-                        
-                        # 1. Trata detecção de pessoa (classe 0) -> Alerta de Intrusão
-                        if cid == 0:
-                            person_detected = True
-                            det = {
-                                "box": box,
-                                "confidence": conf,
-                                "class_id": cid,
-                                "track_id": uid,
-                                "stable_bird_uid": uid,
-                                "species": "person",
-                                "species_label": "INVASOR",
-                                "color": (0, 0, 255), # Vermelho neon
-                                "pose_label": "ATENCAO"
-                            }
-                            detections.append(det)
-                            continue
-                            
-                        # 2. Ignora qualquer classe que não seja ave (classe 14)
-                        if cid != 14:
-                            continue
-                        
-                        # 3. Processa ave (pintinho / galinha)
-                        pose_info = pose_analyzer.analyze(box, 0.0, frame_resized.shape)
-                        species_info = species_classifier.classify(frame_resized, box, "bird", 0.0)
-                        
-                        det = {
-                            "box": box,
-                            "confidence": conf,
-                            "class_id": cid,
-                            "track_id": uid,
-                            "stable_bird_uid": uid
-                        }
-                        det.update(pose_info)
-                        det.update(species_info)
-                        detections.append(det)
-                        
-                        if species_info["species"] == "chick":
-                            chicks_count += 1
-                        else:
-                            hens_count += 1
-                            
-                    # Atualiza os estados globais sob lock de forma thread-safe
-                    from src.core.state import intrusion_state
-                    with cv_lock:
-                        # Atualiza alertas de segurança
-                        intrusion_state["active"] = person_detected
-                        if person_detected:
-                            intrusion_state["last_alert_ts"] = time.time()
-                            intrusion_state["alerts_count"] += 1
-                            
-                        # Atualiza aves ativas
-                        live_birds.clear()
-                        for d in detections:
-                            # Apenas rastreia aves no live_birds
-                            if d["class_id"] == 14:
-                                uid = d["track_id"]
-                                if uid >= 0:
-                                    live_birds[uid] = {
-                                        "box": d["box"],
-                                        "conf": d["confidence"],
-                                        "track_id": uid,
-                                        "species": d["species"],
-                                        "species_label": d["species_label"],
-                                        "last_seen": time.time(),
-                                        "mask_area_px": 0.0
-                                    }
-                                    
-                        species_counts["chicks"] = chicks_count
-                        species_counts["hens"] = hens_count
-                        species_counts["total"] = chicks_count + hens_count
-                        
-                        # Estimativa dinâmica de peso
-                        bird_total = chicks_count + hens_count
-                        if bird_total > 0:
-                            weight_state["avg_weight_g"] = round(1180.0 + bird_total * 2.8 + np.random.normal(0, 4), 1)
-                            weight_state["count"] = bird_total
-                            weight_state["confidence"] = 0.93
-                            weight_state["updated_at"] = time.time()
-            except Exception as cv_err:
-                logger.error(f"Erro no processamento YOLO: {cv_err}")
-                
-        # Desenha overlay rico no frame
+        # Desenha overlay rico no frame copiado de forma limpa e estável
         try:
-            processed_frame = frame_resized.copy()
-            if detections:
-                processed_frame = CVOverlay.draw_detections(processed_frame, detections, set())
+            processed_frame = current_frame.copy()
+            if current_detections:
+                processed_frame = CVOverlay.draw_detections(processed_frame, current_detections, set())
                 
-            # Adiciona informações HUD e metricas
             metrics_dict = {
                 "fps_camera": 30.0,
                 "fps_inference": 10.0 if model else 0.0,
@@ -312,17 +388,17 @@ def camera_worker():
             
             set_global_frame(processed_frame)
         except Exception as overlay_err:
-            logger.error(f"Erro ao gerar overlay visual: {overlay_err}")
-            set_global_frame(frame_resized)
+            logger.error(f"Erro ao gerar overlay visual no loop: {overlay_err}")
+            set_global_frame(current_frame)
             
-        # Controla taxa de quadros (throttle para 30 FPS)
+        # Throttle para travar em 30 FPS estável
         elapsed = time.perf_counter() - t_loop_start
         sleep_t = 0.033 - elapsed
         if sleep_t > 0.001:
             time.sleep(sleep_t)
             
-    if cap is not None:
-        cap.release()
+    if _cap is not None:
+        _cap.release()
     logger.info("camera_worker encerrado.")
 
 def start_camera_thread():
