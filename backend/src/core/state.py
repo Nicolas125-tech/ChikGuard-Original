@@ -1,4 +1,5 @@
 import time
+import numpy as np
 
 # Estados globais migrados do app.py
 active_camera_id = "galpao-1"
@@ -46,10 +47,13 @@ weight_state = {
     "updated_at": time.time(),
 }
 
-import numpy as np
+global_frame_data = np.zeros((480, 640, 3), dtype=np.uint8)
 
-# Mock ou ponteiro para a funcao real que retorna o frame
-def _default_get_global_frame():
-    return np.zeros((480, 640, 3), dtype=np.uint8)
+def get_global_frame():
+    global global_frame_data
+    return global_frame_data
 
-get_global_frame = _default_get_global_frame
+def set_global_frame(frame):
+    global global_frame_data
+    global_frame_data = frame
+

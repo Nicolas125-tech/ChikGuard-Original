@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 export default function CameraPanel({ token, serverIP, cameras = [], activeCamera }) {
   const [videoBlocked, setVideoBlocked] = useState(false);
   const [showHeatmapOverlay, setShowHeatmapOverlay] = useState(false);
-  const [useWebRTC, setUseWebRTC] = useState(true);
+  const [useWebRTC, setUseWebRTC] = useState(false);
   
   // Local Webcam State
   const [source, setSource] = useState('server'); // 'server' or 'local'
@@ -210,7 +210,7 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
                   <p className="text-slate-400 font-medium">Aguardando Conexão com Câmera Real</p>
                   <p className="text-slate-500 text-xs mt-2">Sem simuladores disponíveis</p>
                   <button 
-                    onClick={() => { setVideoBlocked(false); setUseWebRTC(true); }}
+                    onClick={() => { setVideoBlocked(false); setUseWebRTC(false); }}
                     className="mt-4 flex items-center gap-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none"
                   >
                     <RefreshCw size={14} aria-hidden="true" />
