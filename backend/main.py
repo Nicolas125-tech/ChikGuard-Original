@@ -199,6 +199,17 @@ async def get_alerts(user: UserContext = Depends(get_current_user)):
     return []
 
 
+@fastapi_app.get("/api/weather/forecast")
+async def get_weather_forecast():
+    return {
+        "loaded": True,
+        "next_night_min_c": 14.5,
+        "preheat_recommended": False,
+        "message": "Sem alertas meteorológicos críticos para as próximas 24h.",
+        "updated_at": 1783072867.0
+    }
+
+
 @fastapi_app.get("/api/history")
 async def get_history(user: UserContext = Depends(get_current_user)):
     import time

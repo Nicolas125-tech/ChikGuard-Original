@@ -11,11 +11,14 @@ export default function TVScreen({ serverIP, showHeader = false, onLogout }) {
   const videoUrl = `${baseUrl}/api/video`;
 
   const load = useCallback(async () => {
+    const token = localStorage.getItem('cg_token');
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
     const [s, a, w] = await Promise.all([
-      fetch(`${baseUrl}/api/summary`),
-      fetch(`${baseUrl}/api/alerts`),
-      fetch(`${baseUrl}/api/weather/forecast`),
+      fetch(`${baseUrl}/api/summary`, { headers }),
+      fetch(`${baseUrl}/api/alerts`, { headers }),
+      fetch(`${baseUrl}/api/weather/forecast`, { headers }),
     ]);
+
     if (s.ok) {
       const data = await s.json();
       setSummary(prev => isDeepEqual(prev, data) ? prev : data);
