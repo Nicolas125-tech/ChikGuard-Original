@@ -199,7 +199,8 @@ export default function ManagementPanel({ serverIP, prefs, token, cameras = [], 
               <span className="block text-slate-400 font-medium mb-3 text-sm">Classificação Manual (.wav)</span>
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="relative flex-1">
-                  <input aria-label="Upload de arquivo de áudio WAV para classificação manual" type="file" accept=".wav,audio/wav" disabled={isClassifying} onChange={(e) => setAudioFile(e.target.files?.[0] || null)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed" />
+                  <label htmlFor="manual-audio-upload" className="sr-only">Upload de arquivo de áudio WAV para classificação manual</label>
+                  <input id="manual-audio-upload" aria-label="Upload de arquivo de áudio WAV para classificação manual" type="file" accept=".wav,audio/wav" disabled={isClassifying} onChange={(e) => setAudioFile(e.target.files?.[0] || null)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed" />
                   <div className={`bg-slate-900 border border-slate-700 border-dashed rounded-lg px-4 py-2.5 text-center text-slate-300 hover:bg-slate-800 hover:border-slate-600 transition-all ${isClassifying ? 'opacity-50' : ''}`}>
                     {audioFile ? <span className="text-emerald-400 font-medium">{audioFile.name}</span> : 'Selecionar arquivo de áudio'}
                   </div>
