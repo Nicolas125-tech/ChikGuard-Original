@@ -3,6 +3,14 @@ from src.ai.forecast import predict_slaughter_date
 
 def test_predict_slaughter_date_insufficient_data():
     start_date = datetime(2023, 1, 1)
+
+    # 0 items
+    assert predict_slaughter_date([], start_date) is None
+
+    # 1 item
+    assert predict_slaughter_date([{"day": 1, "avg_weight": 50.0}], start_date) is None
+
+    # 2 items
     weight_data = [
         {"day": 1, "avg_weight": 50.0},
         {"day": 2, "avg_weight": 100.0}
