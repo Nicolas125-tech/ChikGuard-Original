@@ -40,19 +40,15 @@ def check_internet(host="8.8.8.8", port=53, timeout=3):
     except socket.error:
         return False
 
-ALLOWED_TABLES = {"sensor_reading", "event_log", "bird_snapshot"}
 
 def get_pending_records(session, table_name, limit):
     """
     Busca registros nao sincronizados via SQL RAW bruto para maxima performance.
     Traz PENDING ou FAILED cujo ultimo erro ocorreu ha mais de X minutos.
     """
-    if table_name not in ALLOWED_TABLES:
-        raise ValueError(f"Table name {table_name} is not allowed")
-
     sql = f"""
         SELECT * FROM {table_name}
-        WHERE sync_status = 'PENDING' 
+        WHERE sync_status = 'PENDING'
            OR (sync_status = 'FAILED' AND last_sync_attempt < :cutoff_time)
         ORDER BY id ASC
         LIMIT :limit
@@ -67,9 +63,6 @@ def get_pending_records(session, table_name, limit):
 
 def mark_records(session, table_name, ids, status):
     """Atualiza o status em Bulk localmente."""
-    if table_name not in ALLOWED_TABLES:
-        raise ValueError(f"Table name {table_name} is not allowed")
-
     if not ids:
         return
     now_str = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S")
@@ -82,7 +75,7 @@ def mark_records(session, table_name, ids, status):
     ids_str_params = ",".join(id_params)
 
     sql = f"""
-        UPDATE {table_name} 
+        UPDATE {table_name}
         SET sync_status = :status, last_sync_attempt = :now_str
         WHERE id IN ({ids_str_params})
     """
