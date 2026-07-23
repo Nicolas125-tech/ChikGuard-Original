@@ -108,3 +108,7 @@
 **Vulnerability:** The migrated device control endpoints in FastAPI (`/api/auto-mode`, `/api/ventilacao`, `/api/aquecedor`) only enforced basic authentication via `Depends(get_current_user)`. This allowed any authenticated user (such as a 'viewer') to manipulate the physical hardware state.
 **Learning:** During migration to FastAPI, replacing `@require_auth(roles=...)` with a basic `Depends(get_current_user)` leads to privilege escalation. You must explicitly chain or use role-checking dependencies.
 **Prevention:** When securing FastAPI endpoints that modify physical hardware state, always use explicit role checks, for example: `Depends(RequireRole(["operator", "admin", "superadmin"]))`.
+## 2024-05-18 - Fix SQL injection in sync worker raw queries
+**Vulnerability:** SQL Injection via unparameterized table names in `backend/scripts/sync_worker.py`.
+**Learning:** Table names cannot be parameterized in standard SQL drivers, leaving dynamically constructed queries vulnerable if not validated.
+**Prevention:** Always validate dynamic table names against a strict, hardcoded allowlist of permitted tables before interpolating them into raw SQL queries.

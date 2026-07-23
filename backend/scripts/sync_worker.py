@@ -46,6 +46,12 @@ def get_pending_records(session, table_name, limit):
     Busca registros nao sincronizados via SQL RAW bruto para maxima performance.
     Traz PENDING ou FAILED cujo ultimo erro ocorreu ha mais de X minutos.
     """
+
+    # 🛡️ Sentinel: Validate table_name against an allowlist to prevent SQL Injection
+    ALLOWED_TABLES = {"sensor_reading", "event_log", "bird_snapshot"}
+    if table_name not in ALLOWED_TABLES:
+        raise ValueError(f"Invalid table_name: {table_name}")
+
     sql = f"""
         SELECT * FROM {table_name}
         WHERE sync_status = 'PENDING' 
@@ -65,6 +71,12 @@ def mark_records(session, table_name, ids, status):
     """Atualiza o status em Bulk localmente."""
     if not ids:
         return
+
+    # 🛡️ Sentinel: Validate table_name against an allowlist to prevent SQL Injection
+    ALLOWED_TABLES = {"sensor_reading", "event_log", "bird_snapshot"}
+    if table_name not in ALLOWED_TABLES:
+        raise ValueError(f"Invalid table_name: {table_name}")
+
     now_str = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S")
     params = {"status": status, "now_str": now_str}
     id_params = []
