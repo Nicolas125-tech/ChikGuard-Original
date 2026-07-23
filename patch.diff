@@ -1,0 +1,99 @@
+--- frontend/src/components/AdminPanel.jsx
++++ frontend/src/components/AdminPanel.jsx
+@@ -95,7 +95,7 @@
+   const handleApprove = async (userId, targetRole) => {
+     if (!window.confirm(`Confirma a aprovação como ${targetRole.toUpperCase()}?`)) return;
+-    setActionLoading(userId);
++    setActionLoading(`${userId}-approve`);
+     try {
+       const authToken = await getAuthToken();
+@@ -124,7 +124,7 @@
+   const handleSuspend = async (userId) => {
+     if (!window.confirm('Suspender esta conta? O utilizador perderá o acesso imediatamente.')) return;
+-    setActionLoading(userId);
++    setActionLoading(`${userId}-suspend`);
+     try {
+       const authToken = await getAuthToken();
+@@ -154,7 +154,7 @@
+   const handleReactivate = async (userId) => {
+     if (!window.confirm('Reativar esta conta?')) return;
+-    setActionLoading(userId);
++    setActionLoading(`${userId}-reactivate`);
+     try {
+       const authToken = await getAuthToken();
+@@ -184,7 +184,7 @@
+   const handleDelete = async (userId) => {
+     if (!window.confirm('Tem certeza que deseja excluir esta conta permanentemente? Esta ação não pode ser desfeita.')) return;
+-    setActionLoading(userId);
++    setActionLoading(`${userId}-delete`);
+     try {
+       const authToken = await getAuthToken();
+@@ -324,7 +324,11 @@
+                 {users.map((u) => {
+                   const isPending   = u.status === 'PENDING' || activeTab === 'pending';
+                   const isSuspended = u.status === 'SUSPENDED' || u.active === false;
+-                  const isActioning = actionLoading === u.id;
++                  const isActioning = actionLoading?.startsWith(`${u.id}-`);
++                  const isApproving = actionLoading === `${u.id}-approve`;
++                  const isSuspending = actionLoading === `${u.id}-suspend`;
++                  const isReactivating = actionLoading === `${u.id}-reactivate`;
++                  const isDeleting = actionLoading === `${u.id}-delete`;
+                   const isSuperadmin= u.role === 'superadmin';
+
+@@ -334,8 +338,8 @@
+                         {isPending ? (
+                           /* ── Aprovação ── */
+                           <div className="flex items-center gap-2 flex-wrap">
++                            <label htmlFor={`role-select-${u.id}`} className="sr-only">Selecionar função do usuário</label>
+                             <select
+-                              aria-label="Selecionar função do usuário"
+                               id={`role-select-${u.id}`}
+                               defaultValue="viewer"
+                               className="bg-slate-950 border border-slate-700 text-slate-300 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-emerald-500 transition-colors cursor-pointer">
+@@ -351,8 +355,8 @@
+                               }}
+                               className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3.5 py-1.5 rounded-lg transition-all disabled:opacity-50 shadow shadow-emerald-500/20 whitespace-nowrap">
+-                              {isActioning ? <RefreshCw size={13} className="animate-spin" /> : <UserCheck size={13} />}
+-                              {isActioning ? 'Aprovando...' : 'Aprovar'}
++                              {isApproving ? <RefreshCw size={13} className="animate-spin" /> : <UserCheck size={13} />}
++                              {isApproving ? 'Aprovando...' : 'Aprovar'}
+                             </button>
+                           </div>
+                         ) : isSuspended ? (
+                           /* ── Reativar ── */
+                           <button
+                             disabled={isActioning || isSuperadmin}
+                             onClick={() => handleReactivate(u.id)}
+                             className="flex items-center gap-1.5 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 text-xs font-bold px-3.5 py-1.5 rounded-lg border border-emerald-500/30 transition-all disabled:opacity-30 whitespace-nowrap">
+-                            {isActioning ? <RefreshCw size={13} className="animate-spin" /> : <ShieldCheck size={13} />}
+-                            {isActioning ? 'Reativando...' : 'Reativar'}
++                            {isReactivating ? <RefreshCw size={13} className="animate-spin" /> : <ShieldCheck size={13} />}
++                            {isReactivating ? 'Reativando...' : 'Reativar'}
+                           </button>
+                         ) : (
+                           /* ── Suspender ── */
+-                          <button
++                          <button
+                             disabled={isActioning || isSuperadmin}
+                             onClick={() => handleSuspend(u.id)}
+                             title={isSuperadmin ? 'Superadmin não pode ser suspenso' : 'Suspender conta'}
+                             className="flex items-center gap-1.5 bg-red-600/20 hover:bg-red-600/40 text-red-400 text-xs font-bold px-3.5 py-1.5 rounded-lg border border-red-500/30 transition-all disabled:opacity-30 whitespace-nowrap">
+-                            {isSuperadmin ? <ShieldOff size={13} /> : (isActioning ? <RefreshCw size={13} className="animate-spin" /> : <UserX size={13} />)}
+-                            {isSuperadmin ? 'Protegido' : (isActioning ? 'Suspendendo...' : 'Suspender')}
++                            {isSuperadmin ? <ShieldOff size={13} /> : (isSuspending ? <RefreshCw size={13} className="animate-spin" /> : <UserX size={13} />)}
++                            {isSuperadmin ? 'Protegido' : (isSuspending ? 'Suspendendo...' : 'Suspender')}
+                           </button>
+                         )}
+
+                         {/* ── Excluir ── */}
+                         <button
+                           disabled={isActioning || isSuperadmin}
+                           onClick={() => handleDelete(u.id)}
+                           title={isSuperadmin ? 'Superadmin não pode ser excluído' : 'Excluir conta'}
+                           className="flex items-center gap-1.5 bg-red-900/40 hover:bg-red-600/60 text-red-300 text-xs font-bold px-3.5 py-1.5 rounded-lg border border-red-700/50 transition-all disabled:opacity-30 whitespace-nowrap ml-2">
+-                          {isActioning ? <RefreshCw size={13} className="animate-spin" /> : <UserX size={13} />}
+-                          {isActioning ? 'Excluindo...' : 'Excluir'}
++                          {isDeleting ? <RefreshCw size={13} className="animate-spin" /> : <UserX size={13} />}
++                          {isDeleting ? 'Excluindo...' : 'Excluir'}
+                         </button>
+                       </td>

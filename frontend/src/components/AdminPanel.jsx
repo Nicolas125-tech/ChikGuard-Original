@@ -94,7 +94,7 @@ export default function AdminPanel({ token, serverIP }) {
   // ─── Aprovar utilizador ─────────────────────────────────────────────────────
   const handleApprove = async (userId, targetRole) => {
     if (!window.confirm(`Confirma a aprovação como ${targetRole.toUpperCase()}?`)) return;
-    setActionLoading(userId);
+    setActionLoading(`${userId}-approve`);
     try {
       const authToken = await getAuthToken();
       const res = await fetch(`${getBaseUrl(serverIP)}/api/admin/approve-user`, {
@@ -123,7 +123,7 @@ export default function AdminPanel({ token, serverIP }) {
   // ─── Suspender utilizador ────────────────────────────────────────────────────
   const handleSuspend = async (userId) => {
     if (!window.confirm('Suspender esta conta? O utilizador perderá o acesso imediatamente.')) return;
-    setActionLoading(userId);
+    setActionLoading(`${userId}-suspend`);
     try {
       const authToken = await getAuthToken();
       const res = await fetch(`${getBaseUrl(serverIP)}/api/accounts/users/${userId}`, {
@@ -153,7 +153,7 @@ export default function AdminPanel({ token, serverIP }) {
   // ─── Reativar utilizador ─────────────────────────────────────────────────────
   const handleReactivate = async (userId) => {
     if (!window.confirm('Reativar esta conta?')) return;
-    setActionLoading(userId);
+    setActionLoading(`${userId}-reactivate`);
     try {
       const authToken = await getAuthToken();
       const res = await fetch(`${getBaseUrl(serverIP)}/api/accounts/users/${userId}`, {
@@ -183,7 +183,7 @@ export default function AdminPanel({ token, serverIP }) {
 // ─── Excluir utilizador ────────────────────────────────────────────────────
   const handleDelete = async (userId) => {
     if (!window.confirm('Tem certeza que deseja excluir esta conta permanentemente? Esta ação não pode ser desfeita.')) return;
-    setActionLoading(userId);
+    setActionLoading(`${userId}-delete`);
     try {
       const authToken = await getAuthToken();
       const res = await fetch(`${getBaseUrl(serverIP)}/api/accounts/users/${userId}`, {
@@ -297,7 +297,11 @@ export default function AdminPanel({ token, serverIP }) {
                 {users.map((u) => {
                   const isPending   = u.status === 'PENDING' || activeTab === 'pending';
                   const isSuspended = u.status === 'SUSPENDED' || u.active === false;
-                  const isActioning = actionLoading === u.id;
+                  const isActioning = actionLoading?.startsWith(`${u.id}-`);
+                  const isApproving = actionLoading === `${u.id}-approve`;
+                  const isSuspending = actionLoading === `${u.id}-suspend`;
+                  const isReactivating = actionLoading === `${u.id}-reactivate`;
+                  const isDeleting = actionLoading === `${u.id}-delete`;
                   const isSuperadmin = u.role === 'superadmin';
 
                   return (
@@ -333,8 +337,8 @@ export default function AdminPanel({ token, serverIP }) {
                         {isPending ? (
                           /* ── Aprovação ── */
                           <div className="flex items-center gap-2 flex-wrap">
+                            <label htmlFor={`role-select-${u.id}`} className="sr-only">Selecionar função do usuário</label>
                             <select
-                              aria-label="Selecionar função do usuário"
                               id={`role-select-${u.id}`}
                               defaultValue="viewer"
                               className="bg-slate-950 border border-slate-700 text-slate-300 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-emerald-500 transition-colors cursor-pointer">
@@ -350,8 +354,8 @@ export default function AdminPanel({ token, serverIP }) {
                                 handleApprove(u.id, el?.value || 'viewer');
                               }}
                               className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3.5 py-1.5 rounded-lg transition-all disabled:opacity-50 shadow shadow-emerald-500/20 whitespace-nowrap">
-                              {isActioning ? <RefreshCw size={13} className="animate-spin" /> : <UserCheck size={13} />}
-                              {isActioning ? 'Aprovando...' : 'Aprovar'}
+                              {isApproving ? <RefreshCw size={13} className="animate-spin" /> : <UserCheck size={13} />}
+                              {isApproving ? 'Aprovando...' : 'Aprovar'}
                             </button>
                           </div>
                         ) : isSuspended ? (
@@ -360,8 +364,8 @@ export default function AdminPanel({ token, serverIP }) {
                             disabled={isActioning || isSuperadmin}
                             onClick={() => handleReactivate(u.id)}
                             className="flex items-center gap-1.5 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 text-xs font-bold px-3.5 py-1.5 rounded-lg border border-emerald-500/30 transition-all disabled:opacity-30 whitespace-nowrap">
-                            {isActioning ? <RefreshCw size={13} className="animate-spin" /> : <ShieldCheck size={13} />}
-                            {isActioning ? 'Reativando...' : 'Reativar'}
+                            {isReactivating ? <RefreshCw size={13} className="animate-spin" /> : <ShieldCheck size={13} />}
+                            {isReactivating ? 'Reativando...' : 'Reativar'}
                           </button>
                         ) : (
                           /* ── Suspender ── */
@@ -370,8 +374,8 @@ export default function AdminPanel({ token, serverIP }) {
                             onClick={() => handleSuspend(u.id)}
                             title={isSuperadmin ? 'Superadmin não pode ser suspenso' : 'Suspender conta'}
                             className="flex items-center gap-1.5 bg-red-600/20 hover:bg-red-600/40 text-red-400 text-xs font-bold px-3.5 py-1.5 rounded-lg border border-red-500/30 transition-all disabled:opacity-30 whitespace-nowrap">
-                            {isSuperadmin ? <ShieldOff size={13} /> : (isActioning ? <RefreshCw size={13} className="animate-spin" /> : <UserX size={13} />)}
-                            {isSuperadmin ? 'Protegido' : (isActioning ? 'Suspendendo...' : 'Suspender')}
+                            {isSuperadmin ? <ShieldOff size={13} /> : (isSuspending ? <RefreshCw size={13} className="animate-spin" /> : <UserX size={13} />)}
+                            {isSuperadmin ? 'Protegido' : (isSuspending ? 'Suspendendo...' : 'Suspender')}
                           </button>
                         )}
 
@@ -381,8 +385,8 @@ export default function AdminPanel({ token, serverIP }) {
                           onClick={() => handleDelete(u.id)}
                           title={isSuperadmin ? 'Superadmin não pode ser excluído' : 'Excluir conta'}
                           className="flex items-center gap-1.5 bg-red-900/40 hover:bg-red-600/60 text-red-300 text-xs font-bold px-3.5 py-1.5 rounded-lg border border-red-700/50 transition-all disabled:opacity-30 whitespace-nowrap ml-2">
-                          {isActioning ? <RefreshCw size={13} className="animate-spin" /> : <UserX size={13} />}
-                          {isActioning ? 'Excluindo...' : 'Excluir'}
+                          {isDeleting ? <RefreshCw size={13} className="animate-spin" /> : <UserX size={13} />}
+                          {isDeleting ? 'Excluindo...' : 'Excluir'}
                         </button>
                       </td>
                     </tr>
