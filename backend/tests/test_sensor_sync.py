@@ -36,13 +36,14 @@ def db_session():
         db.drop_all()
 
 
-@pytest.mark.asyncio
-async def test_sensor_sync_success(db_session):
+import asyncio
+
+
+def test_sensor_sync_success(db_session):
     """
     Testa a sincronização bem-sucedida de registros PENDING.
     Os registros devem ser enviados ao Supabase e marcados localmente como SYNCED.
     """
-    # 1. Cria leitura local pendente no banco SQLite
     reading1 = SensorReading(
         camera_id="galpao-1",
         temperature_c=25.5,
@@ -64,29 +65,22 @@ async def test_sensor_sync_success(db_session):
     db_session.add_all([reading1, reading2])
     db_session.commit()
 
-    # Instancia o worker injetando a sessão do SQLite local e um mock do cliente Supabase
     supabase_mock = MagicMock()
-    # Mock da chamada encadeada do Supabase: client.table().insert().execute()
     supabase_mock.table.return_value.insert.return_value.execute = MagicMock()
 
     worker = SensorSyncWorker(db_session=db_session, supabase_client=supabase_mock, interval_seconds=2)
     
-    # Executa o ciclo de sincronização uma vez
-    await worker.run_once()
+    asyncio.run(worker.run_once())
 
-    # Verifica se os registros locais foram atualizados para SYNCED no SQLite
     assert reading1.sync_status == "SYNCED"
     assert reading2.sync_status == "SYNCED"
     assert reading1.last_sync_attempt is not None
 
-    # Verifica se o Supabase recebeu as chamadas corretas
     supabase_mock.table.assert_called_with("sensor_readings")
-    # Verifica que houve chamada de insert
     assert supabase_mock.table.return_value.insert.called
 
 
-@pytest.mark.asyncio
-async def test_sensor_sync_network_failure_keeps_local_data(db_session):
+def test_sensor_sync_network_failure_keeps_local_data(db_session):
     """
     Garante que falhas de rede no Supabase mudem o status para FAILED no local,
     sem perda de dados (Offline-First), e ativem backoff exponencial.
@@ -103,23 +97,18 @@ async def test_sensor_sync_network_failure_keeps_local_data(db_session):
     db_session.add(reading)
     db_session.commit()
 
-    # Mock do Supabase lança uma exceção de rede
     supabase_mock = MagicMock()
     supabase_mock.table.return_value.insert.return_value.execute.side_effect = Exception("Network timeout")
 
     worker = SensorSyncWorker(db_session=db_session, supabase_client=supabase_mock, interval_seconds=2)
     
-    # Primeira execução (falha)
-    await worker.run_once()
+    asyncio.run(worker.run_once())
 
-    # O registro local deve estar marcado como FAILED
     assert reading.sync_status == "FAILED"
-    # O intervalo atual do worker deve ter dobrado devido ao backoff
     assert worker.current_interval == 4
 
 
-@pytest.mark.asyncio
-async def test_sensor_sync_recovery_from_failed(db_session):
+def test_sensor_sync_recovery_from_failed(db_session):
     """
     Testa se o worker recupera registros FAILED quando a rede é reestabelecida,
     e reseta o intervalo de backoff para o valor padrão.
@@ -130,7 +119,7 @@ async def test_sensor_sync_recovery_from_failed(db_session):
         humidity_pct=58.0,
         ammonia_ppm=8.0,
         source="lora_node_1",
-        sync_status="FAILED",  # Já falhou anteriormente
+        sync_status="FAILED",
         timestamp=datetime.now(timezone.utc)
     )
     db_session.add(reading)
@@ -139,14 +128,10 @@ async def test_sensor_sync_recovery_from_failed(db_session):
     supabase_mock = MagicMock()
     supabase_mock.table.return_value.insert.return_value.execute = MagicMock()
 
-    # Instancia o worker com intervalo inicial de 2 e simulando backoff atualizado para 8s
     worker = SensorSyncWorker(db_session=db_session, supabase_client=supabase_mock, interval_seconds=2)
     worker.current_interval = 8
 
-    # Executa a sincronização (agora com rede funcionando)
-    await worker.run_once()
+    asyncio.run(worker.run_once())
 
-    # Registro foi sincronizado com sucesso
     assert reading.sync_status == "SYNCED"
-    # Intervalo de backoff resetado ao base
     assert worker.current_interval == 2

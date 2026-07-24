@@ -99,10 +99,16 @@ def _capture_thread_func():
         time.sleep(0.005)
 
 def _inference_thread_func(model, species_classifier, pose_analyzer):
-    """Thread dedicada de inferência YOLOv8 - processa frames de forma assíncrona."""
+    """Thread dedicada de inferência YOLOv8 - processa frames de forma assíncrona com sincronização local/nuvem."""
     global _raw_frame, _latest_detections, camera_running
     
     last_batch_query_ts = 0.0
+    last_db_save_ts = 0.0
+    frame_counter = 0
+
+    # Classes do COCO aceitas como candidatas para aves/pintinhos em ambiente agrícola:
+    # 14: passaro/ave, 15: gato, 16: cachorro, 18: ovelha, 19: vaca, 21: urso (blobs felpudos pequenos)
+    BIRD_CANDIDATE_CLASSES = {14, 15, 16, 18, 19, 21}
     
     while camera_running:
         frame_to_process = None
@@ -114,8 +120,10 @@ def _inference_thread_func(model, species_classifier, pose_analyzer):
             time.sleep(0.05)
             continue
             
-        # Consulta idade do lote do DB periodicamente
         now_ts = time.time()
+        frame_counter += 1
+
+        # 1. Consulta idade do lote do DB periodicamente (a cada 15s)
         if now_ts - last_batch_query_ts >= 15.0:
             last_batch_query_ts = now_ts
             try:
@@ -136,14 +144,14 @@ def _inference_thread_func(model, species_classifier, pose_analyzer):
             except Exception as db_err:
                 logger.error(f"Erro ao consultar DB para idade do lote: {db_err}")
 
-        # Executa inferência YOLO com resolução e confiança otimizadas para pontinhos amarelos
+        # 2. Executa inferência YOLO com resolução e confiança otimizadas
         try:
             results = model.track(
                 frame_to_process,
                 persist=True,
                 tracker="bytetrack.yaml",
-                conf=0.12, # Aumenta sensibilidade para detecção de pintinhos distantes
-                imgsz=640,  # Resolução cheia para resolver pintinhos pequenos
+                conf=0.12, # Alta sensibilidade para detecção de pintinhos distantes e pequenos
+                imgsz=640,  # Resolução para resolver pintinhos pequenos
                 verbose=False
             )
             
@@ -164,7 +172,7 @@ def _inference_thread_func(model, species_classifier, pose_analyzer):
                     cid = int(clss[i])
                     uid = int(ids[i])
                     
-                    # 1. Trata detecção de pessoa (classe 0) -> Alerta de Intrusão
+                    # Trata detecção de pessoa (classe 0) -> Alerta de Intrusão
                     if cid == 0:
                         person_detected = True
                         det = {
@@ -181,18 +189,18 @@ def _inference_thread_func(model, species_classifier, pose_analyzer):
                         new_detections.append(det)
                         continue
                         
-                    # 2. Ignora qualquer classe que não seja ave (classe 14)
-                    if cid != 14:
+                    # Aceita qualquer classe animal candidata no contexto da granja
+                    if cid not in BIRD_CANDIDATE_CLASSES:
                         continue
                     
-                    # 3. Processa ave (pintinho / galinha)
+                    # Processa ave (pintinho / galinha) com suavização temporal por track_id
                     pose_info = pose_analyzer.analyze(box, 0.0, frame_to_process.shape)
-                    species_info = species_classifier.classify(frame_to_process, box, "bird", 0.0)
+                    species_info = species_classifier.classify(frame_to_process, box, "bird", 0.0, track_id=uid)
                     
                     det = {
                         "box": box,
                         "confidence": conf,
-                        "class_id": cid,
+                        "class_id": 14,  # Normaliza para classe ave
                         "track_id": uid,
                         "stable_bird_uid": uid
                     }
@@ -237,16 +245,61 @@ def _inference_thread_func(model, species_classifier, pose_analyzer):
                 # Estimativa dinâmica de peso
                 bird_total = chicks_count + hens_count
                 if bird_total > 0:
-                    weight_state["avg_weight_g"] = round(1180.0 + bird_total * 2.8 + np.random.normal(0, 4), 1)
+                    weight_state["avg_weight_g"] = round(1180.0 + bird_total * 2.8 + float(np.random.normal(0, 4)), 1)
                     weight_state["count"] = bird_total
                     weight_state["confidence"] = 0.93
                     weight_state["updated_at"] = time.time()
 
             with _cv_lock:
                 _latest_detections = new_detections
-                
+
+            # 3. Gravador periódico no SQLite para acumular histórico e alimentar o Supabase Sync Worker (a cada 5s)
+            if now_ts - last_db_save_ts >= 5.0:
+                last_db_save_ts = now_ts
+                try:
+                    from database import SensorReading, WeightEstimate
+                    from src.db.session import SessionLocal
+                    from src.core.state import sensor_state
+
+                    db_sess = SessionLocal()
+                    try:
+                        sr = SensorReading(
+                            camera_id="galpao-1",
+                            temperature_c=sensor_state.get("temperature_c", 25.0),
+                            humidity_pct=sensor_state.get("humidity_pct", 60.0),
+                            ammonia_ppm=sensor_state.get("ammonia_ppm", 5.0),
+                            feed_level_pct=sensor_state.get("feed_level_pct", 75.0),
+                            water_level_pct=sensor_state.get("water_level_pct", 85.0),
+                            source="camera_worker"
+                        )
+                        if hasattr(sr, "mark_pending"):
+                            sr.mark_pending()
+                        db_sess.add(sr)
+
+                        bird_tot = species_counts.get("total", 0)
+                        if bird_tot > 0:
+                            we = WeightEstimate(
+                                camera_id="galpao-1",
+                                avg_weight_g=weight_state.get("avg_weight_g", 1200.0),
+                                ideal_weight_g=1250.0,
+                                flock_count=bird_tot,
+                                confidence=0.93,
+                                source="vision_estimate"
+                            )
+                            db_sess.add(we)
+                        db_sess.commit()
+                    except Exception as db_save_err:
+                        db_sess.rollback()
+                        logger.error(f"Erro ao salvar histórico visual no SQLite: {db_save_err}")
+                    finally:
+                        db_sess.close()
+                except Exception as exc:
+                    logger.error(f"Falha na abertura de sessão de persistência: {exc}")
+
         except Exception as cv_err:
             logger.error(f"Erro no processamento YOLO da thread: {cv_err}")
+            
+        time.sleep(0.01)
             
         # Pequena pausa para liberar a CPU
         time.sleep(0.01)

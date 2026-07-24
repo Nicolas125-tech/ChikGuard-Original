@@ -130,11 +130,13 @@ class BirdPoseAnalyzer:
 class SpeciesClassifier:
     """
     Classifica cada detecção como 'chick' (pintinho), 'hen' (galinha) ou 'bird' (genérico).
-    Utiliza cor HSV da ROI + tamanho relativo ao frame + idade do lote como prior.
+    Utiliza cor HSV da ROI + tamanho relativo ao frame + idade do lote como prior,
+    com histerese e suavização temporal por track_id para evitar cintilação.
     """
 
     def __init__(self):
         self._batch_age_day: int = 30  # padrão: assume lote adulto
+        self._track_history: Dict[int, deque] = {}
         self._lock = threading.Lock()
 
     def set_batch_age(self, age_day: int):
@@ -142,7 +144,12 @@ class SpeciesClassifier:
             self._batch_age_day = max(1, int(age_day))
 
     def classify(
-        self, frame: np.ndarray, box: List[int], class_name: str = "bird", mask_area_px: float = 0.0
+        self,
+        frame: np.ndarray,
+        box: List[int],
+        class_name: str = "bird",
+        mask_area_px: float = 0.0,
+        track_id: int = -1,
     ) -> Dict[str, Any]:
         """
         Retorna dict:
@@ -203,7 +210,7 @@ class SpeciesClassifier:
                             hen_ratio, float(np.sum(m > 0)) / max(1, roi.shape[0] * roi.shape[1])
                         )
 
-                    if chick_ratio > 0.30:
+                    if chick_ratio > 0.25:
                         color_vote = "chick"
                     elif hen_ratio > 0.35:
                         color_vote = "hen"
@@ -227,29 +234,48 @@ class SpeciesClassifier:
         )
 
         if votes_chick >= 2:
+            raw_species = "chick"
+        elif votes_hen >= 2:
+            if color_vote == "chick":
+                raw_species = "chick"
+            else:
+                raw_species = "hen"
+        else:
+            if color_vote == "chick" or size_vote == "chick" or age_chick_prior:
+                raw_species = "chick"
+            else:
+                raw_species = "hen"
+
+        # ── Suavização Temporal por Track ID (Histerese) ───────────────────
+        final_species = raw_species
+        if track_id >= 0:
+            with self._lock:
+                if track_id not in self._track_history:
+                    self._track_history[track_id] = deque(maxlen=15)
+                self._track_history[track_id].append(raw_species)
+
+                # Voto de maioria no histórico recente da mesma ave
+                counts = {"chick": 0, "hen": 0, "bird": 0}
+                for s in self._track_history[track_id]:
+                    counts[s] = counts.get(s, 0) + 1
+
+                if counts["chick"] >= counts["hen"]:
+                    final_species = "chick"
+                else:
+                    final_species = "hen"
+
+                # Limpeza periódica do dicionário para prevenir vazamento de memória
+                if len(self._track_history) > 2000:
+                    self._track_history.clear()
+
+        if final_species == "chick":
             species = "chick"
             species_label = "PINTINHO"
             color = COLOR_CHICK
-        elif votes_hen >= 2:
-            # Se a cor detectada for especificamente amarelo-chick, mesmo que o tamanho seja grande (ex: perto da lente), é pintinho
-            if color_vote == "chick":
-                species = "chick"
-                species_label = "PINTINHO"
-                color = COLOR_CHICK
-            else:
-                species = "hen"
-                species_label = "GALINHA"
-                color = COLOR_HEN
         else:
-            # Tiebreak: se for amarelo ou pequeno, classifica como pintinho
-            if color_vote == "chick" or size_vote == "chick" or age_chick_prior:
-                species = "chick"
-                species_label = "PINTINHO"
-                color = COLOR_CHICK
-            else:
-                species = "hen"
-                species_label = "GALINHA"
-                color = COLOR_HEN
+            species = "hen"
+            species_label = "GALINHA"
+            color = COLOR_HEN
 
         return {
             "species": species,
