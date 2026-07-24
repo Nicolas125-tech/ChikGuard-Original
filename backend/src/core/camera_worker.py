@@ -52,7 +52,50 @@ def simulate_telemetry_step():
     sensor_state["source"] = "telemetry_simulator"
     sensor_state["updated_at"] = time.time()
 
-# Variáveis globais compartilhadas entre as threads internas
+def save_telemetry_snapshot_to_db():
+    """Grava as medições atuais de sensores e dados de visão no SQLite local."""
+    try:
+        from database import SensorReading, WeightEstimate
+        from src.db.session import SessionLocal
+        from src.core.state import sensor_state, species_counts, weight_state
+
+        db_sess = SessionLocal()
+        try:
+            sr = SensorReading(
+                camera_id="galpao-1",
+                temperature_c=sensor_state.get("temperature_c", 24.8),
+                humidity_pct=sensor_state.get("humidity_pct", 62.0),
+                ammonia_ppm=sensor_state.get("ammonia_ppm", 5.2),
+                feed_level_pct=sensor_state.get("feed_level_pct", 78.0),
+                water_level_pct=sensor_state.get("water_level_pct", 88.0),
+                source=sensor_state.get("source", "camera_worker")
+            )
+            if hasattr(sr, "mark_pending"):
+                sr.mark_pending()
+            db_sess.add(sr)
+
+            bird_tot = species_counts.get("total", 0)
+            if bird_tot > 0:
+                we = WeightEstimate(
+                    camera_id="galpao-1",
+                    avg_weight_g=weight_state.get("avg_weight_g", 1200.0),
+                    ideal_weight_g=1250.0,
+                    flock_count=bird_tot,
+                    confidence=0.93,
+                    source="vision_estimate"
+                )
+                db_sess.add(we)
+            db_sess.commit()
+            print(f"[SAVED SNAPSHOT TO DB] Temp: {sr.temperature_c}°C, Status: {sr.sync_status}")
+        except Exception as db_save_err:
+            db_sess.rollback()
+            logger.error(f"Erro ao salvar histórico visual no SQLite: {db_save_err}")
+            print(f"[SAVE ERROR] {db_save_err}")
+        finally:
+            db_sess.close()
+    except Exception as exc:
+        logger.error(f"Falha na abertura de sessão de persistência: {exc}")
+        print(f"[SESSION ERROR] {exc}")
 _raw_frame = None
 _latest_detections = []
 _cap = None
@@ -315,6 +358,7 @@ def camera_worker():
     _camera_index = settings.camera_index
     
     logger.info(f"Iniciando camera_worker. Câmera Index: {_camera_index}")
+    print(f"[CAMERA WORKER] Starting... camera_index={_camera_index}")
     
     _cap = None
     _use_sim = False
@@ -338,6 +382,7 @@ def camera_worker():
         _use_sim = True
         sim_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "video_granja.mp4"))
         logger.info(f"Ativando simulador com vídeo: {sim_path}")
+        print(f"[CAMERA WORKER] Using simulation video: {sim_path}")
         if os.path.exists(sim_path):
             _cap = cv2.VideoCapture(sim_path)
         else:
@@ -358,6 +403,7 @@ def camera_worker():
             model = YOLO(model_path)
             model.to("cpu")
             logger.info("YOLO carregado com sucesso.")
+            print("[CAMERA WORKER] YOLO loaded successfully")
         else:
             logger.error("Nenhum arquivo de pesos YOLO encontrado.")
     except Exception as e:
@@ -378,6 +424,8 @@ def camera_worker():
         inference_thread.start()
 
     last_telemetry_sim_ts = 0.0
+    last_db_save_ts = 0.0
+    print("[CAMERA WORKER] Entering main coordinator loop...")
     
     # 5. Loop do Coordenador Principal (Roda a 30 FPS estável, sem travar!)
     while camera_running:
@@ -391,6 +439,14 @@ def camera_worker():
                 simulate_telemetry_step()
             except Exception as e:
                 logger.error(f"Erro na simulação de telemetria: {e}")
+
+        # Salva snapshot de telemetria no SQLite a cada 3 segundos
+        if now - last_db_save_ts >= 3.0:
+            last_db_save_ts = now
+            try:
+                save_telemetry_snapshot_to_db()
+            except Exception as e:
+                logger.error(f"Erro ao salvar snapshot de telemetria: {e}")
 
         # Recupera frame e detecções mais recentes sob lock
         current_frame = None
