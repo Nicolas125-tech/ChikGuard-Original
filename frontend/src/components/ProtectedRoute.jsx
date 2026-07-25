@@ -50,39 +50,13 @@ export default function ProtectedRoute({
           <ShieldAlert className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h1 className="text-xl font-bold text-red-400 mb-2">Conta Suspensa</h1>
           <p className="text-slate-400 mb-6 text-sm">
-            Sua conta do ChikGuard foi suspensa. Entre em contato com o suporte ou o administrador da granja.
+            Sua conta foi suspensa. Entre em contato com o administrador do sistema.
           </p>
           <button
             onClick={onLogout}
             className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-colors"
           >
             <LogOut size={16} /> Sair do Sistema
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // 3. Conta Pendente de Aprovação
-  if (status === 'PENDING') {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-        <div className="bg-slate-900 border border-amber-500/20 p-8 rounded-2xl max-w-md w-full text-center shadow-xl">
-          <div className="bg-amber-500/10 rounded-full p-4 w-16 h-16 flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <h1 className="text-xl font-bold text-amber-400 mb-3">Aguardando Aprovação</h1>
-          <p className="text-slate-300 mb-6 text-sm leading-relaxed">
-            A sua conta foi criada com sucesso, mas precisa de ser aprovada por um administrador antes de aceder ao sistema.
-            Você receberá uma notificação quando for aprovado.
-          </p>
-          <button
-            onClick={onLogout}
-            className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-colors"
-          >
-            <LogOut size={16} /> Sair e Voltar ao Login
           </button>
         </div>
       </div>
