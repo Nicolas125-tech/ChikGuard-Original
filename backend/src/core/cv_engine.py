@@ -31,23 +31,33 @@ _MAX_HISTORY = 45
 # Constantes de classificação visual
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Pintinho (1–14 dias): amarelo-palha, muito pequeno
-CHICK_HSV_LOW = np.array([15, 60, 100], dtype=np.uint8)
-CHICK_HSV_HIGH = np.array([38, 255, 255], dtype=np.uint8)
+# Pintinho (1-21 dias): amarelo-palha, amarelo-ouro, branco-amarelado
+# Faixa ampliada para cobrir pintinhos sob diferentes iluminações
+CHICK_HSV_RANGES = [
+    # Amarelo clássico (iluminação branca)
+    (np.array([14, 50, 100], dtype=np.uint8), np.array([40, 255, 255], dtype=np.uint8)),
+    # Amarelo-ouro / férrea (iluminação quente)
+    (np.array([8,  60,  80], dtype=np.uint8), np.array([25, 230, 230], dtype=np.uint8)),
+    # Branco-amarelado (pintinhos claros / iluminação forte)
+    (np.array([12, 20, 180], dtype=np.uint8), np.array([45, 110, 255], dtype=np.uint8)),
+    # Bege / creme (pintinhos mais velhos / 10-21 dias)
+    (np.array([5,  30,  90], dtype=np.uint8), np.array([22, 180, 220], dtype=np.uint8)),
+]
+# Mantido para compatibilidade com código legado
+CHICK_HSV_LOW  = np.array([14, 50, 100], dtype=np.uint8)
+CHICK_HSV_HIGH = np.array([40, 255, 255], dtype=np.uint8)
 
 # Galinha adulta: branco, pardo, castanho, preto
 HEN_HSV_RANGES = [
-    (np.array([0, 0, 160], dtype=np.uint8), np.array([180, 40, 255], dtype=np.uint8)),  # branca
-    (
-        np.array([10, 30, 60], dtype=np.uint8),
-        np.array([30, 200, 200], dtype=np.uint8),
-    ),  # parda/castanha
-    (np.array([0, 0, 0], dtype=np.uint8), np.array([180, 80, 60], dtype=np.uint8)),  # preta
+    (np.array([0,   0, 160], dtype=np.uint8), np.array([180, 40, 255], dtype=np.uint8)),  # branca
+    (np.array([10, 30,  60], dtype=np.uint8), np.array([30, 200, 200], dtype=np.uint8)),  # parda/castanha
+    (np.array([0,   0,   0], dtype=np.uint8), np.array([180, 80,  60], dtype=np.uint8)),  # preta
 ]
 
 # Limites de área para espécie (fração da área do frame)
-CHICK_MAX_AREA_RATIO = 0.010  # pintinho: pequeno
-HEN_MIN_AREA_RATIO = 0.008  # galinha: médio/grande (overlap intencional para casos intermediários)
+# Ampliados: pintinhos em resolução alta podem ocupar até 3% do frame
+CHICK_MAX_AREA_RATIO = 0.030   # pintinho: até 3% do frame (antes: 1%)
+HEN_MIN_AREA_RATIO   = 0.025   # galinha: a partir de 2.5% (antes: 0.8%)
 
 # Aspect ratio para postura
 POSE_LYING_THRESHOLD = 1.45  # w/h > 1.45 → deitada de lado
@@ -189,33 +199,35 @@ class SpeciesClassifier:
         else:
             size_vote = "unknown"
 
-        # ── Classificação por cor HSV da ROI ──────────────────────────────
+        # -- Classificacao por cor HSV da ROI ---------------------------------
         color_vote = "unknown"
         if rx2 > rx1 and ry2 > ry1:
             roi = frame[ry1:ry2, rx1:rx2]
             if roi.size > 0:
                 try:
                     hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-                    # Verifica amarelo-palha (pintinho)
-                    chick_mask = cv2.inRange(hsv, CHICK_HSV_LOW, CHICK_HSV_HIGH)
-                    chick_ratio = float(np.sum(chick_mask > 0)) / max(
-                        1, roi.shape[0] * roi.shape[1]
-                    )
+                    roi_px = max(1, roi.shape[0] * roi.shape[1])
 
-                    # Verifica padrões de galinha
+                    # Testa todas as faixas HSV de pintinho (multi-range)
+                    chick_ratio = 0.0
+                    for c_lo, c_hi in CHICK_HSV_RANGES:
+                        mask = cv2.inRange(hsv, c_lo, c_hi)
+                        chick_ratio = max(chick_ratio, float(np.sum(mask > 0)) / roi_px)
+
+                    # Verifica padroes de galinha
                     hen_ratio = 0.0
                     for lo, hi in HEN_HSV_RANGES:
                         m = cv2.inRange(hsv, lo, hi)
-                        hen_ratio = max(
-                            hen_ratio, float(np.sum(m > 0)) / max(1, roi.shape[0] * roi.shape[1])
-                        )
+                        hen_ratio = max(hen_ratio, float(np.sum(m > 0)) / roi_px)
 
-                    if chick_ratio > 0.25:
+                    # Limiares calibrados para pintinhos
+                    if chick_ratio > 0.20:
                         color_vote = "chick"
-                    elif hen_ratio > 0.35:
+                    elif hen_ratio > 0.40 and chick_ratio < 0.10:
                         color_vote = "hen"
                 except Exception:
                     pass
+
 
         # ── Fusão dos votos ────────────────────────────────────────────────
         votes_chick = sum(
@@ -246,27 +258,31 @@ class SpeciesClassifier:
             else:
                 raw_species = "hen"
 
-        # ── Suavização Temporal por Track ID (Histerese) ───────────────────
+        # -- Suavizacao Temporal por Track ID (Histerese) --------------------
         final_species = raw_species
         if track_id >= 0:
             with self._lock:
                 if track_id not in self._track_history:
-                    self._track_history[track_id] = deque(maxlen=15)
+                    # Janela de 9 frames: mais responsivo em cenas com muitos pintinhos
+                    self._track_history[track_id] = deque(maxlen=9)
                 self._track_history[track_id].append(raw_species)
 
-                # Voto de maioria no histórico recente da mesma ave
-                counts = {"chick": 0, "hen": 0, "bird": 0}
+                # Voto de maioria no historico recente da mesma ave
+                counts_h = {"chick": 0, "hen": 0, "bird": 0}
                 for s in self._track_history[track_id]:
-                    counts[s] = counts.get(s, 0) + 1
+                    counts_h[s] = counts_h.get(s, 0) + 1
 
-                if counts["chick"] >= counts["hen"]:
+                # Empate favorece pintinho (reduz sub-contagem em lotes jovens)
+                if counts_h["chick"] >= counts_h["hen"]:
                     final_species = "chick"
                 else:
                     final_species = "hen"
 
-                # Limpeza periódica do dicionário para prevenir vazamento de memória
-                if len(self._track_history) > 2000:
-                    self._track_history.clear()
+                # Limpeza parcial: preserva tracks mais recentes (nao apaga tudo)
+                if len(self._track_history) > 1000:
+                    keys = list(self._track_history.keys())
+                    for k in keys[:200]:
+                        del self._track_history[k]
 
         if final_species == "chick":
             species = "chick"

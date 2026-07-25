@@ -209,44 +209,98 @@ def _inference_thread_func(model, species_classifier, pose_analyzer):
             except Exception as db_err:
                 logger.error(f"Erro ao consultar DB para idade do lote: {db_err}")
 
-        # 2. Executa inferência YOLO com resolução e confiança otimizadas
+        # 2. Inferência YOLO com confiança adaptativa e tiling para pintinhos
         try:
+            frame_h, frame_w = frame_to_process.shape[:2]
+
+            # Inferência principal: imagem completa com resolucao maior para objetos pequenos
             results = model.track(
                 frame_to_process,
                 persist=True,
                 tracker="bytetrack.yaml",
-                conf=0.25,  # Limiar equilibrado: sensível a pintinhos mas sem falsos positivos humanos
-                imgsz=640,
-                verbose=False
+                conf=0.15,   # Baixo para capturar pintinhos distantes/pequenos
+                iou=0.45,    # NMS mais permissivo em grupos densos
+                imgsz=960,   # Resolucao maior: detecta objetos ate ~3px
+                verbose=False,
+                agnostic_nms=True,   # NMS entre classes (evita duplicatas humano+ave)
             )
-            
+
+            # -- Tiled inference (SAHI-style) para grupos de pintinhos muito densos --
+            # Divide o frame em 4 quadrantes e roda inferencia separada
+            # Util quando ha 50+ pintinhos comprimidos num canto
+            tile_results_extra = []
+            try:
+                tiles = [
+                    (0,           0,           frame_w//2, frame_h//2),  # TL
+                    (frame_w//2,  0,           frame_w,    frame_h//2),  # TR
+                    (0,           frame_h//2,  frame_w//2, frame_h),     # BL
+                    (frame_w//2,  frame_h//2,  frame_w,    frame_h),     # BR
+                ]
+                for tx1, ty1, tx2, ty2 in tiles:
+                    tile = frame_to_process[ty1:ty2, tx1:tx2]
+                    if tile.size == 0:
+                        continue
+                    tile_r = model.predict(tile, conf=0.18, imgsz=640, verbose=False)
+                    if tile_r and tile_r[0].boxes is not None:
+                        tb = tile_r[0].boxes.xyxy.cpu().numpy()
+                        tc = tile_r[0].boxes.conf.cpu().numpy()
+                        tl = tile_r[0].boxes.cls.cpu().numpy()
+                        for j in range(len(tb)):
+                            bx1, by1, bx2, by2 = tb[j]
+                            # Converte coordenadas da tile para o frame completo
+                            tile_results_extra.append({
+                                "box": [int(bx1+tx1), int(by1+ty1), int(bx2+tx1), int(by2+ty1)],
+                                "conf": float(tc[j]),
+                                "cls":  int(tl[j]),
+                                "tid":  -1,
+                            })
+            except Exception as tile_err:
+                logger.debug(f"Tiling opcional falhou (ignorado): {tile_err}")
+
             new_detections = []
             chicks_count = 0
             hens_count = 0
             person_detected = False
             person_boxes = []  # Caixas de pessoas detectadas neste frame
-            frame_h, frame_w = frame_to_process.shape[:2]
-            
+            # (frame_h, frame_w ja definidos acima antes do model.track)
+
             if results and results[0].boxes is not None:
                 boxes = results[0].boxes.xyxy.cpu().numpy()
                 confs = results[0].boxes.conf.cpu().numpy()
                 clss = results[0].boxes.cls.cpu().numpy()
                 ids = results[0].boxes.id.cpu().numpy() if results[0].boxes.id is not None else [-1] * len(boxes)
 
-                # ── Passo 1: Coletar todas as caixas de PESSOA primeiro ──
-                # (necessário para supressão IoU nas aves)
+                # -- Passo 1: Coletar caixas de PESSOA primeiro (para supressao IoU) --
                 for i in range(len(boxes)):
                     cid = int(clss[i])
-                    if cid == 0:  # pessoa
+                    if cid == 0:
                         person_boxes.append([int(v) for v in boxes[i]])
 
-                # ── Passo 2: Processar todas as detecções ──
+                # -- Passo 2: Candidatos brutos = YOLO principal + tiles extras --
+                # Monta lista unificada de candidatos brutos
+                raw_candidates = []
                 for i in range(len(boxes)):
-                    box = [int(v) for v in boxes[i]]
-                    conf = float(confs[i])
-                    cid = int(clss[i])
-                    uid = int(ids[i])
-                    
+                    raw_candidates.append({
+                        "box": [int(v) for v in boxes[i]],
+                        "conf": float(confs[i]),
+                        "cls":  int(clss[i]),
+                        "tid":  int(ids[i]),
+                    })
+                # Adiciona candidatos dos tiles (sem track_id -1)
+                # com NMS leve: so adiciona se nao houver caixa similar ja presente
+                for te in tile_results_extra:
+                    te_box = te["box"]
+                    is_dup = any(_compute_iou(te_box, rc["box"]) > 0.50 for rc in raw_candidates)
+                    if not is_dup:
+                        raw_candidates.append(te)
+
+                # -- Passo 3: Processar todos os candidatos --
+                for cand in raw_candidates:
+                    box  = cand["box"]
+                    conf = cand["conf"]
+                    cid  = cand["cls"]
+                    uid  = cand["tid"]
+
                     # Trata detecção de pessoa (classe 0) → Alerta de Intrusão
                     if cid == 0:
                         person_detected = True
@@ -285,9 +339,10 @@ def _inference_thread_func(model, species_classifier, pose_analyzer):
                         logger.debug(f"Track {uid} descartado: proporção e tamanho típicos de humano.")
                         continue
 
-                    # Confiança mínima adicional para candidatas a aves não-pássaro
-                    if cid != 14 and conf < 0.30:
+                    # Confianca minima adicional para candidatas a aves nao-passaro
+                    if cid != 14 and conf < 0.22:
                         continue
+
                     
                     # Processa ave (pintinho / galinha) com suavização temporal por track_id
                     pose_info = pose_analyzer.analyze(box, 0.0, frame_to_process.shape)
