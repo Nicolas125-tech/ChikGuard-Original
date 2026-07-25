@@ -102,6 +102,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [backendOnline, setBackendOnline] = useState(null);
   const [alertCount, setAlertCount] = useState(0);
+  const [pendingCount, setPendingCount] = useState(0);
   const [clock, setClock] = useState('');
   const [cameras, setCameras] = useState([]);
   const [activeCamera, setActiveCamera] = useState('');
@@ -329,6 +330,36 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
     return () => clearInterval(alertsTimer);
   }, [fetchAlertCount]);
 
+  // ── Badge de Pendentes para Admin/Superadmin ──
+  const fetchPendingCount = useCallback(async () => {
+    if (role !== 'admin' && role !== 'superadmin') return;
+    try {
+      const res = await fetch(`${baseUrl}/api/admin/pending-count`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const newCount = data.count || 0;
+        if (newCount > pendingCount && pendingCount > 0) {
+          // Nova solicitação chegou durante a sessão
+          import('sonner').then(({ toast }) => {
+            toast.warning(`🔔 ${newCount - pendingCount} nova(s) solicitação(ões) de acesso aguardando aprovação!`, {
+              duration: 8000,
+              action: { label: 'Ver agora', onClick: () => handleTabChange('admin') }
+            });
+          });
+        }
+        setPendingCount(newCount);
+      }
+    } catch { /* silencia erros de rede */ }
+  }, [baseUrl, token, role, pendingCount, handleTabChange]);
+
+  useEffect(() => {
+    fetchPendingCount();
+    const pendingTimer = setInterval(fetchPendingCount, 30000);
+    return () => clearInterval(pendingTimer);
+  }, [fetchPendingCount]);
+
   // ── Definições de Permissões das Abas (RBAC) ──
   const tabs = useMemo(() => {
     const sections = [
@@ -359,7 +390,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
           { id: 'profile',   label: 'Meu Perfil',         icon: User },
           { id: 'settings',  label: 'Sistema & Conexão',  icon: Settings },
           { id: 'cameras',   label: 'Gerenciar Granjas',  icon: Camera },
-          { id: 'admin',     label: 'Gerenciar Acessos',  icon: Database },
+          { id: 'admin',     label: 'Gerenciar Acessos',  icon: Database, badge: pendingCount },
         ]
       },
     ];

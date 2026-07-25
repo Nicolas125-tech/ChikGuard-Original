@@ -152,6 +152,28 @@ def _inference_thread_func(model, species_classifier, pose_analyzer):
     # Classes do COCO aceitas como candidatas para aves/pintinhos em ambiente agrícola:
     # 14: passaro/ave, 15: gato, 16: cachorro, 18: ovelha, 19: vaca, 21: urso (blobs felpudos pequenos)
     BIRD_CANDIDATE_CLASSES = {14, 15, 16, 18, 19, 21}
+
+    def _compute_iou(box_a: list, box_b: list) -> float:
+        """Calcula Intersection-over-Union entre duas caixas [x1,y1,x2,y2]."""
+        ax1, ay1, ax2, ay2 = box_a
+        bx1, by1, bx2, by2 = box_b
+        ix1 = max(ax1, bx1); iy1 = max(ay1, by1)
+        ix2 = min(ax2, bx2); iy2 = min(ay2, by2)
+        inter = max(0, ix2 - ix1) * max(0, iy2 - iy1)
+        if inter == 0:
+            return 0.0
+        area_a = max(1, (ax2 - ax1) * (ay2 - ay1))
+        area_b = max(1, (bx2 - bx1) * (by2 - by1))
+        return inter / float(area_a + area_b - inter)
+
+    def _is_human_shaped(box: list, frame_h: int, frame_w: int) -> bool:
+        """Retorna True se a caixa tem proporção e tamanho típicos de humano em pé."""
+        x1, y1, x2, y2 = box
+        w = max(1, x2 - x1); h = max(1, y2 - y1)
+        ar = w / h  # < 0.55 → muito alto e estreito (humano em pé)
+        area_ratio = (w * h) / max(1, frame_h * frame_w)
+        # Humano em pé: estreito + ocupa pelo menos 3% do frame
+        return ar < 0.55 and area_ratio > 0.03
     
     while camera_running:
         frame_to_process = None
@@ -193,8 +215,8 @@ def _inference_thread_func(model, species_classifier, pose_analyzer):
                 frame_to_process,
                 persist=True,
                 tracker="bytetrack.yaml",
-                conf=0.12, # Alta sensibilidade para detecção de pintinhos distantes e pequenos
-                imgsz=640,  # Resolução para resolver pintinhos pequenos
+                conf=0.25,  # Limiar equilibrado: sensível a pintinhos mas sem falsos positivos humanos
+                imgsz=640,
                 verbose=False
             )
             
@@ -202,20 +224,30 @@ def _inference_thread_func(model, species_classifier, pose_analyzer):
             chicks_count = 0
             hens_count = 0
             person_detected = False
+            person_boxes = []  # Caixas de pessoas detectadas neste frame
+            frame_h, frame_w = frame_to_process.shape[:2]
             
             if results and results[0].boxes is not None:
                 boxes = results[0].boxes.xyxy.cpu().numpy()
                 confs = results[0].boxes.conf.cpu().numpy()
                 clss = results[0].boxes.cls.cpu().numpy()
                 ids = results[0].boxes.id.cpu().numpy() if results[0].boxes.id is not None else [-1] * len(boxes)
-                
+
+                # ── Passo 1: Coletar todas as caixas de PESSOA primeiro ──
+                # (necessário para supressão IoU nas aves)
+                for i in range(len(boxes)):
+                    cid = int(clss[i])
+                    if cid == 0:  # pessoa
+                        person_boxes.append([int(v) for v in boxes[i]])
+
+                # ── Passo 2: Processar todas as detecções ──
                 for i in range(len(boxes)):
                     box = [int(v) for v in boxes[i]]
                     conf = float(confs[i])
                     cid = int(clss[i])
                     uid = int(ids[i])
                     
-                    # Trata detecção de pessoa (classe 0) -> Alerta de Intrusão
+                    # Trata detecção de pessoa (classe 0) → Alerta de Intrusão
                     if cid == 0:
                         person_detected = True
                         det = {
@@ -226,14 +258,35 @@ def _inference_thread_func(model, species_classifier, pose_analyzer):
                             "stable_bird_uid": uid,
                             "species": "person",
                             "species_label": "INVASOR",
-                            "color": (0, 0, 255), # Vermelho neon
-                            "pose_label": "ATENCAO"
+                            "color": (0, 0, 255),
+                            "pose_label": "ATENÇÃO"
                         }
                         new_detections.append(det)
                         continue
                         
-                    # Aceita qualquer classe animal candidata no contexto da granja
+                    # Aceita apenas classes candidatas a aves
                     if cid not in BIRD_CANDIDATE_CLASSES:
+                        continue
+
+                    # ── Guarda de segurança: Supressão IoU Humano→Ave ──
+                    # Se a caixa candidata a ave tem alta sobreposição com uma
+                    # caixa de pessoa confirmada, descartar — é provavelmente um humano.
+                    is_overlapping_human = any(
+                        _compute_iou(box, pb) > 0.35 for pb in person_boxes
+                    )
+                    if is_overlapping_human:
+                        logger.debug(f"Track {uid} descartado: sobreposição IoU com pessoa detectada.")
+                        continue
+
+                    # ── Guarda de aspecto: Forma humana sem detecção explícita de pessoa ──
+                    # Blobs muito altos e estreitos que são grandes provavelmente são humanos
+                    # que o modelo classificou com baixa confiança como animal.
+                    if _is_human_shaped(box, frame_h, frame_w):
+                        logger.debug(f"Track {uid} descartado: proporção e tamanho típicos de humano.")
+                        continue
+
+                    # Confiança mínima adicional para candidatas a aves não-pássaro
+                    if cid != 14 and conf < 0.30:
                         continue
                     
                     # Processa ave (pintinho / galinha) com suavização temporal por track_id

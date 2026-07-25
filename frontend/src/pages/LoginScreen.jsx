@@ -25,24 +25,47 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
 
     try {
       if (mode === 'login') {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        });
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        
+
         let role = 'viewer';
         let status = 'PENDING';
         if (data.session) {
-           const { data: profile } = await supabase.from('profiles').select('role, status').eq('id', data.session.user.id).single();
-           if (profile) {
-              role = profile.role || role;
-              status = profile.status || 'PENDING';
-           }
-           onLogin({ accessToken: data.session.access_token, role, username: email, status });
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role, status')
+            .eq('id', data.session.user.id)
+            .single();
+          if (profile) {
+            role = profile.role || role;
+            status = profile.status || 'PENDING';
+          }
+
+          // ── Bloqueio de Acesso para contas não aprovadas ──
+          if (status === 'PENDING') {
+            await supabase.auth.signOut(); // Logout imediato para evitar acesso parcial
+            setErrorMsg('⏳ Sua conta está aguardando aprovação de um Administrador. Você receberá um email quando for liberado.');
+            setLoading(false);
+            return;
+          }
+          if (status === 'REJECTED') {
+            await supabase.auth.signOut();
+            setErrorMsg('❌ Sua solicitação de acesso foi negada. Entre em contato com o suporte.');
+            setLoading(false);
+            return;
+          }
+          if (status === 'SUSPENDED') {
+            await supabase.auth.signOut();
+            setErrorMsg('🔒 Sua conta foi suspensa. Entre em contato com o administrador do sistema.');
+            setLoading(false);
+            return;
+          }
+
+          onLogin({ accessToken: data.session.access_token, role, username: email, status });
         }
       } else {
-        const { error } = await supabase.auth.signUp({
+        // ── Cadastro (Solicitação de Acesso) ──
+        const { data: signUpData, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -56,8 +79,32 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
           }
         });
         if (error) throw error;
-        
-        setErrorMsg('Solicitação enviada. Aguarde aprovação de um Administrador.');
+
+        // ── Garante criação do perfil PENDING no backend (caso não exista trigger) ──
+        if (signUpData?.user?.id) {
+          try {
+            const backendUrl = server
+              ? (server.startsWith('http') ? server : `http://${server}:5000`)
+              : 'http://127.0.0.1:5000';
+            await fetch(`${backendUrl}/api/accounts/ensure-profile`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                user_id: signUpData.user.id,
+                email,
+                full_name: fullName,
+                phone,
+                cpf,
+                location,
+                age: age ? parseInt(age, 10) : null
+              })
+            });
+          } catch {
+            // Não bloqueia o cadastro se o backend não estiver acessível
+          }
+        }
+
+        setErrorMsg('✅ Solicitação enviada com sucesso! Aguarde aprovação de um Administrador.');
         setMode('login');
       }
     } catch (err) {
