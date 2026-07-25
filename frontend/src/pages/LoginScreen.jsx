@@ -39,7 +39,12 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
         const role    = (profile?.role || 'viewer').toLowerCase();
         const status  = profile?.status || 'ACTIVE';
 
-        // Apenas bloqueia contas explicitamente suspensas ou rejeitadas
+        // Verifica o status de aprovação da conta
+        if (status === 'PENDING') {
+          await supabase.auth.signOut();
+          setErrorMsg('⏳ Sua conta está aguardando aprovação pelo administrador.');
+          return;
+        }
         if (status === 'SUSPENDED') {
           await supabase.auth.signOut();
           setErrorMsg('🔒 Conta suspensa. Contacte o administrador do sistema.');

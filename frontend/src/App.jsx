@@ -151,6 +151,20 @@ function AppCore() {
           // Timeout ou RLS → usa defaults seguros
         }
 
+        if (nextStatus === 'PENDING' || nextStatus === 'SUSPENDED' || nextStatus === 'REJECTED') {
+          await supabase.auth.signOut();
+          localStorage.removeItem(STORAGE.token);
+          localStorage.removeItem(STORAGE.role);
+          localStorage.removeItem(STORAGE.username);
+          localStorage.removeItem('cg_status');
+          setToken(null);
+          setRole('viewer');
+          setStatus(nextStatus);
+          setShowLogin(true);
+          setBooting(false);
+          return;
+        }
+
         localStorage.setItem(STORAGE.token,    accessToken);
         localStorage.setItem(STORAGE.role,     nextRole);
         localStorage.setItem(STORAGE.username, nextUser || '');
