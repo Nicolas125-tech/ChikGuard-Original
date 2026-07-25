@@ -18,6 +18,19 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
   const [server, setServer] = useState(serverIP || localStorage.getItem('cg_ip') || '');
   const [showServer, setShowServer] = useState(false);
 
+  // ── Utilitário: busca perfil com timeout de 5 s ──────────────────────────
+  const fetchProfileSafe = async (userId) => {
+    try {
+      const result = await Promise.race([
+        supabase.from('profiles').select('role, status').eq('id', userId).single(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000)),
+      ]);
+      return result?.data || null;
+    } catch {
+      return null; // timeout ou RLS bloqueando → tratar como perfil inexistente
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -28,40 +41,36 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
 
-        let role = 'viewer';
-        let status = 'PENDING';
         if (data.session) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('role, status')
-            .eq('id', data.session.user.id)
-            .single();
-          if (profile) {
-            role = profile.role || role;
-            status = profile.status || 'PENDING';
-          }
+          // Busca perfil com timeout — nunca bloqueia o login
+          const profile = await fetchProfileSafe(data.session.user.id);
 
-          // ── Bloqueio de Acesso para contas não aprovadas ──
+          const role   = (profile?.role   || 'viewer').toLowerCase();
+          const status = profile?.status  || 'ACTIVE'; // sem perfil → permite entrar
+
+          // Bloqueia apenas se o status for explicitamente rejeitado/suspenso/pendente
           if (status === 'PENDING') {
-            await supabase.auth.signOut(); // Logout imediato para evitar acesso parcial
-            setErrorMsg('⏳ Sua conta está aguardando aprovação de um Administrador. Você receberá um email quando for liberado.');
-            setLoading(false);
+            await supabase.auth.signOut();
+            setErrorMsg('⏳ Conta aguardando aprovação de um Administrador.');
             return;
           }
           if (status === 'REJECTED') {
             await supabase.auth.signOut();
-            setErrorMsg('❌ Sua solicitação de acesso foi negada. Entre em contato com o suporte.');
-            setLoading(false);
+            setErrorMsg('❌ Solicitação de acesso negada. Contacte o suporte.');
             return;
           }
           if (status === 'SUSPENDED') {
             await supabase.auth.signOut();
-            setErrorMsg('🔒 Sua conta foi suspensa. Entre em contato com o administrador do sistema.');
-            setLoading(false);
+            setErrorMsg('🔒 Conta suspensa. Contacte o administrador.');
             return;
           }
 
-          onLogin({ accessToken: data.session.access_token, role, username: email, status });
+          onLogin({
+            accessToken: data.session.access_token,
+            role,
+            username: profile?.full_name || email,
+            status,
+          });
         }
       } else {
         // ── Cadastro (Solicitação de Acesso) ──
@@ -74,46 +83,53 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
               phone,
               cpf,
               location,
-              age: age ? parseInt(age, 10) : null
-            }
-          }
+              age: age ? parseInt(age, 10) : null,
+            },
+          },
         });
         if (error) throw error;
 
-        // ── Garante criação do perfil PENDING no backend (caso não exista trigger) ──
+        // Garante criação do perfil PENDING — fire-and-forget (não bloqueia o fluxo)
         if (signUpData?.user?.id) {
-          try {
-            const backendUrl = server
-              ? (server.startsWith('http') ? server : `http://${server}:5000`)
-              : 'http://127.0.0.1:5000';
-            await fetch(`${backendUrl}/api/accounts/ensure-profile`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                user_id: signUpData.user.id,
-                email,
-                full_name: fullName,
-                phone,
-                cpf,
-                location,
-                age: age ? parseInt(age, 10) : null
-              })
-            });
-          } catch {
-            // Não bloqueia o cadastro se o backend não estiver acessível
-          }
+          const backendUrl = server
+            ? (server.startsWith('http') ? server : `http://${server}:5000`)
+            : 'http://127.0.0.1:5000';
+          fetch(`${backendUrl}/api/accounts/ensure-profile`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user_id: signUpData.user.id,
+              email,
+              full_name: fullName,
+              phone,
+              cpf,
+              location,
+              age: age ? parseInt(age, 10) : null,
+            }),
+          }).catch(() => {}); // silencia erros de rede
         }
 
-        setErrorMsg('✅ Solicitação enviada com sucesso! Aguarde aprovação de um Administrador.');
+        setErrorMsg('✅ Solicitação enviada! Aguarde aprovação de um Administrador.');
         setMode('login');
       }
     } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || 'Falha na autenticação');
+      // Mensagem amigável para erros comuns do Supabase
+      const msg = err.message || '';
+      if (msg.includes('Invalid login credentials') || msg.includes('invalid_credentials')) {
+        setErrorMsg('E-mail ou senha incorretos. Verifique suas credenciais.');
+      } else if (msg.includes('Email not confirmed')) {
+        setErrorMsg('Confirme seu e-mail antes de fazer login. Verifique sua caixa de entrada.');
+      } else if (msg.includes('User already registered')) {
+        setErrorMsg('Este e-mail já está registado. Tente fazer login.');
+      } else {
+        setErrorMsg(msg || 'Falha na autenticação. Tente novamente.');
+      }
     } finally {
       setLoading(false);
     }
   };
+
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -165,10 +181,13 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
 
         {/* Error/Success Messages */}
         {errorMsg && (
-          <div className={`p-4 rounded-xl text-sm mb-6 flex items-center gap-2 animate-fade-in-down ${errorMsg.includes('enviada') ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
-            {errorMsg}
+          <div className={`p-4 rounded-xl text-sm mb-6 flex items-start gap-3 animate-fade-in-down ${
+            errorMsg.startsWith('✅') ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'
+            : errorMsg.startsWith('⏳') ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
+            : 'bg-red-500/10 text-red-300 border border-red-500/20'
+          }`}>
+            <span className="leading-relaxed">{errorMsg}</span>
           </div>
-
         )}
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
@@ -319,12 +338,22 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
             disabled={loading}
             className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3.5 px-4 rounded-xl transition-all mt-8 hover-lift shadow-lg shadow-emerald-500/20 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {loading ? <Loader className="animate-spin" size={20} /> : (
+            {loading ? (
+              <span className="flex items-center gap-2">
+                <Loader className="animate-spin" size={18} />
+                {mode === 'login' ? 'Autenticando...' : 'Enviando...'}
+              </span>
+            ) : (
               <span className="flex items-center gap-2">
                 {mode === 'login' ? 'Entrar no Sistema' : 'Enviar Solicitação'} <ArrowRight size={18} />
               </span>
             )}
           </button>
+          {loading && (
+            <p className="text-center text-xs text-slate-600 mt-2 animate-pulse">
+              Verificando credenciais… pode levar alguns segundos.
+            </p>
+          )}
         </form>
 
         {/* Google OAuth */}
