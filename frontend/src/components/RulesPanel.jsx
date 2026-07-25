@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { getBaseUrl } from '../utils/config';
-import { ServerCog, Plus, Trash2, ShieldCheck, Thermometer } from 'lucide-react';
+import { ServerCog, Plus, Trash2, ShieldCheck, Thermometer, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function RulesPanel({ serverIP }) {
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   
   // Form state
   const [name, setName] = useState('');
@@ -47,8 +49,10 @@ export default function RulesPanel({ serverIP }) {
 
   const handleAddRule = async (e) => {
     e.preventDefault();
+    setIsSaving(true);
     if (!name || !value) {
       toast.error('Preencha os campos obrigatórios');
+      setIsSaving(false);
       return;
     }
 
@@ -77,11 +81,14 @@ export default function RulesPanel({ serverIP }) {
     } catch (err) {
       console.error(err);
       toast.error('Falha de conexão');
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm('Excluir esta regra?')) return;
+    setDeletingId(id);
     try {
       const res = await fetch(`${getBaseUrl(serverIP)}/api/rules/${id}`, {
         method: 'DELETE'
@@ -93,6 +100,8 @@ export default function RulesPanel({ serverIP }) {
     } catch (err) {
       console.error(err);
       toast.error('Falha de conexão');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -171,9 +180,9 @@ export default function RulesPanel({ serverIP }) {
           </div>
 
           <div className="md:col-span-6 flex justify-end mt-2">
-            <button type="submit" className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 px-6 rounded-lg shadow-lg shadow-indigo-900/20 transition-all flex items-center gap-2">
-              <ShieldCheck size={18} />
-              Salvar Regra
+            <button type="submit" disabled={isSaving} className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 px-6 rounded-lg shadow-lg shadow-indigo-900/20 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+              {isSaving ? <RefreshCw size={18} className="animate-spin" /> : <ShieldCheck size={18} />}
+              {isSaving ? 'Salvando...' : 'Salvar Regra'}
             </button>
           </div>
         </form>
@@ -211,11 +220,12 @@ export default function RulesPanel({ serverIP }) {
                 </div>
                 <button 
                   aria-label="Excluir regra"
+                  disabled={deletingId === r.id}
                   onClick={() => handleDelete(r.id)}
-                  className="mt-3 sm:mt-0 p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-400/10 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none"
+                  className="mt-3 sm:mt-0 p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-400/10 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Excluir"
                 >
-                  <Trash2 size={18} aria-hidden="true" />
+                  {deletingId === r.id ? <RefreshCw size={18} className="animate-spin" aria-hidden="true" /> : <Trash2 size={18} aria-hidden="true" />}
                 </button>
               </div>
             ))}
