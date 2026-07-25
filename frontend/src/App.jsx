@@ -190,14 +190,8 @@ function AppCore() {
     localStorage.setItem(STORAGE.prefs, JSON.stringify(next));
   }, []);
 
-  const handleLogout = async () => {
-    if (isSupabaseConfigured) {
-      try {
-        await supabase.auth.signOut();
-      } catch (err) {
-        console.error('Erro ao fazer signOut do Supabase:', err);
-      }
-    }
+  const handleLogout = () => {
+    // Limpa estado IMEDIATAMENTE — não espera o Supabase responder
     localStorage.removeItem(STORAGE.token);
     localStorage.removeItem(STORAGE.role);
     localStorage.removeItem('cg_status');
@@ -206,6 +200,13 @@ function AppCore() {
     setRole('viewer');
     setStatus('PENDING');
     setShowLogin(false);
+
+    // Chama signOut do Supabase em background (não bloqueia a UI)
+    if (isSupabaseConfigured) {
+      supabase.auth.signOut().catch(err =>
+        console.warn('[logout] Supabase signOut falhou (ignorado):', err)
+      );
+    }
   };
 
   const tvMode = window.location.pathname === '/tv';

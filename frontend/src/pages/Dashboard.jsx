@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Joyride, STATUS, ACTIONS, EVENTS } from 'react-joyride';
 import ChickenPhoto from '../components/ChickenPhoto';
 
 import {
@@ -110,118 +109,6 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
 
   const baseUrl = getBaseUrl(serverIP);
   const canControlDevices = role === 'admin' || role === 'operator' || role === 'superadmin';
-
-  // ── Tutorial (Joyride) ──
-  const [runTour, setRunTour] = useState(false);
-
-  useEffect(() => {
-    const isCompleted = localStorage.getItem('cg_tourCompleted');
-    if (!isCompleted) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setRunTour(true);
-    }
-    return () => {
-      document.body.style.overflow = ''; // Cleanup on unmount
-    };
-  }, []);
-
-  const handleJoyrideCallback = (data) => {
-    const { status, action, type } = data;
-    
-    if (
-      status === 'finished' ||
-      status === 'skipped' ||
-      action === 'close' ||
-      type === 'targetNotFound' ||
-      [STATUS?.FINISHED, STATUS?.SKIPPED].includes(status) ||
-      action === ACTIONS?.CLOSE ||
-      type === EVENTS?.TARGET_NOT_FOUND
-    ) {
-      setRunTour(false);
-      localStorage.setItem('cg_tourCompleted', 'true');
-      document.body.style.overflow = ''; // Force reset overflow
-    }
-  };
-
-  const isMobile = window.innerWidth < 768;
-
-  const tourSteps = isMobile ? [
-    {
-      target: 'body',
-      content: 'Bem-vindo ao ChikGuard Premium! Vamos fazer um rápido tour pelas principais funcionalidades.',
-      placement: 'center',
-    },
-    {
-      target: 'button[aria-label="Open mobile menu"]',
-      content: 'Aqui você acessa o menu principal com todas as funcionalidades de Monitoramento e Operações.',
-    },
-    {
-      target: '.tour-camera-selector',
-      content: 'Troque de granja/galpão rapidamente usando este seletor.',
-    },
-    {
-      target: '.tour-alerts',
-      content: 'Fique de olho nos Alertas para notificações críticas do sistema.',
-    }
-  ] : [
-    {
-      target: 'body',
-      content: 'Bem-vindo ao ChikGuard Premium! Vamos fazer um rápido tour pelas principais funcionalidades.',
-      placement: 'center',
-    },
-    {
-      target: '.tour-sidebar',
-      content: 'Aqui é o menu principal. Navegue entre as seções de Monitoramento, Operações e Administração.',
-    },
-    {
-      target: '[data-tour="overview"]',
-      content: 'Na Visão Geral, você acompanha um resumo das principais métricas do aviário em tempo real.',
-    },
-    {
-      target: '[data-tour="camera"]',
-      content: 'Câmeras Ao Vivo: Visualize o monitoramento em tempo real processado pela nossa inteligência artificial.',
-    },
-    {
-      target: '[data-tour="digitaltwin"]',
-      content: 'Gêmeo Digital 2D: Veja a distribuição espacial térmica e o mapa de movimentação do galpão.',
-    },
-    {
-      target: '[data-tour="birds"]',
-      content: 'Aves & Tracking: Acesse detalhes sobre rastreamento, histórico de movimentação e biometria por IA.',
-    },
-    {
-      target: '[data-tour="alerts"]',
-      content: 'Alertas: Central de notificações críticas de anomalias (temperatura, intrusos, comportamento anômalo).',
-    },
-    {
-      target: '[data-tour="climate"]',
-      content: 'Clima & IoT: Monitore e controle o clima e atuadores como aquecedores e exaustores.',
-    },
-    {
-      target: '[data-tour="smartops"]',
-      content: 'Operações Smart: Acesse relatórios inteligentes, otimizações automáticas e análises da produção.',
-    },
-    {
-      target: '[data-tour="management"]',
-      content: 'Gestão Avançada: Visualize indicadores de desempenho (KPIs) e os balanços do lote.',
-    },
-    {
-      target: '[data-tour="devices"]',
-      content: 'Dispositivos: Verifique o status operacional se sensores, atuadores e relés estão online.',
-    },
-    {
-      target: '[data-tour="history"]',
-      content: 'Histórico: Analise gráficos e tabelas com todo o histórico de dados exportável.',
-    },
-    {
-      target: '.tour-camera-selector',
-      content: 'Troque de granja/galpão rapidamente a qualquer momento usando este seletor.',
-    },
-    {
-      target: '.tour-user-menu',
-      content: 'Por fim, acesse as configurações da sua conta, permissões, e o botão para repetir este tutorial aqui.',
-    }
-  ];
 
   // ── Sincronização de Rotas por Hash ──
   useEffect(() => {
@@ -551,7 +438,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
       case 'history':
         return <HistoryPanel token={token} serverIP={serverIP} prefs={prefs} cameras={cameras} activeCamera={activeCamera} />;
       case 'settings':
-        return <SettingsPanel serverIP={serverIP} token={token} prefs={prefs} onSavePrefs={onSavePrefs} onSaveServer={onSaveServer} onRestartTour={() => setRunTour(true)} />;
+        return <SettingsPanel serverIP={serverIP} token={token} prefs={prefs} onSavePrefs={onSavePrefs} onSaveServer={onSaveServer} />;
       case 'profile':
         return <ProfilePanel role={role} cameras={cameras} />;
       case 'cameras':
@@ -567,44 +454,6 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
 
   return (
     <div className="min-h-screen bg-premium-glow text-slate-300 flex overflow-hidden">
-      {runTour && (
-        <Joyride
-          disableScrollParentFix={true}
-          disableScrolling={false}
-          disableOverlayClose={false}
-          spotlightClicks={true}
-          steps={tourSteps}
-          run={runTour}
-          continuous={true}
-          showSkipButton={true}
-          showProgress={true}
-          callback={handleJoyrideCallback}
-          floaterProps={{
-            disableAnimation: true,
-          }}
-          styles={{
-            options: {
-              primaryColor: '#10b981',
-              textColor: '#334155',
-              backgroundColor: '#ffffff',
-              zIndex: 100000,
-            },
-            overlay: {
-              backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            },
-            spotlight: {
-              backgroundColor: 'transparent',
-            }
-          }}
-          locale={{
-            back: 'Anterior',
-            close: 'Fechar',
-            last: 'Finalizar',
-            next: 'Próximo',
-            skip: 'Pular Tutorial'
-          }}
-        />
-      )}
       {renderDesktopSidebar()}
       {renderMobileSidebar()}
 
