@@ -27,6 +27,7 @@ import ProfilePanel from '../components/ProfilePanel';
 import RulesPanel from '../components/RulesPanel';
 import BatchPassport from '../components/BatchPassport';
 import { getBaseUrl } from '../utils/config';
+import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 
 // ── Sub-componente de Renderização do Conteúdo da Sidebar ──
 const SidebarContent = React.memo(({ tabs, tab, handleTabChange, role, onLogout }) => (
@@ -330,34 +331,32 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
     return () => clearInterval(alertsTimer);
   }, [fetchAlertCount]);
 
-  // ── Badge de Pendentes para Admin/Superadmin ──
+  // ── Badge de Pendentes (direto do Supabase) ──
   const fetchPendingCount = useCallback(async () => {
     if (role !== 'admin' && role !== 'superadmin') return;
+    if (!isSupabaseConfigured) return;
     try {
-      const res = await fetch(`${baseUrl}/api/admin/pending-count`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const newCount = data.count || 0;
-        if (newCount > pendingCount && pendingCount > 0) {
-          // Nova solicitação chegou durante a sessão
-          import('sonner').then(({ toast }) => {
-            toast.warning(`🔔 ${newCount - pendingCount} nova(s) solicitação(ões) de acesso aguardando aprovação!`, {
-              duration: 8000,
-              action: { label: 'Ver agora', onClick: () => handleTabChange('admin') }
-            });
+      const { count } = await supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'PENDING');
+      const newCount = count || 0;
+      if (newCount > pendingCount && pendingCount > 0) {
+        import('sonner').then(({ toast }) => {
+          toast.warning(`🔔 ${newCount - pendingCount} nova(s) solicitação(oes) aguardando aprovação!`, {
+            duration: 8000,
+            action: { label: 'Ver agora', onClick: () => handleTabChange('admin') }
           });
-        }
-        setPendingCount(newCount);
+        });
       }
-    } catch { /* silencia erros de rede */ }
-  }, [baseUrl, token, role, pendingCount, handleTabChange]);
+      setPendingCount(newCount);
+    } catch { /* silencia */ }
+  }, [role, pendingCount, handleTabChange]);
 
   useEffect(() => {
     fetchPendingCount();
-    const pendingTimer = setInterval(fetchPendingCount, 30000);
-    return () => clearInterval(pendingTimer);
+    const t = setInterval(fetchPendingCount, 30000);
+    return () => clearInterval(t);
   }, [fetchPendingCount]);
 
   // ── Definições de Permissões das Abas (RBAC) ──
@@ -407,7 +406,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
       return sections.map(s => ({ ...s, items: s.items.filter(t => t.id !== 'admin' && t.id !== 'settings' && t.id !== 'cameras') })).filter(s => s.items.length > 0);
     }
     return sections;
-  }, [role, alertCount]);
+  }, [role, alertCount, pendingCount]);
 
   const allItems = tabs.flatMap(s => s.items);
   const currentTab = allItems.find(t => t.id === tab);
@@ -558,7 +557,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
       case 'cameras':
         return <CamerasManager serverIP={serverIP} token={token} />;
       case 'admin':
-        return <AdminPanel serverIP={serverIP} token={token} />;
+        return <AdminPanel serverIP={serverIP} token={token} role={role} />;
       case 'system':
         return <SystemPanel serverIP={serverIP} token={token} />;
       default:
