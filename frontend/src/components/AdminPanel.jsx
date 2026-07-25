@@ -208,56 +208,107 @@ export default function AdminPanel({ token, serverIP, role: myRole }) {
   const [confirm, setConfirm] = useState(null); // {type, userId, extra}
   const [rejectReason, setRejectReason] = useState('');
   const [editUser, setEditUser] = useState(null);
-  const abortRef = useRef(null);
+  const abortRef = useRef(null); // mantido para compatibilidade
 
   const myLevel = ROLE_LEVELS[myRole] || 4; // superadmin by default in this panel
 
-  // ── Fetch direto do Supabase (sem depender do backend) ────────────────────
+  // Geração de fetch — evita actualizações de estado stale entre re-renders
+  const fetchGenRef = useRef(0);
+
+  // ── Fetch com timeout de 8s + fallback para o backend ────────────────────
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     setError('');
+    const gen = ++fetchGenRef.current;
 
-    // Cancela fetch anterior se houver
-    if (abortRef.current) abortRef.current = false;
-    abortRef.current = true;
+    const withTimeout = (promise, ms, label) =>
+      Promise.race([
+        promise,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`Timeout (${ms / 1000}s): ${label}`)), ms)
+        ),
+      ]);
 
-    try {
-      if (!isSupabaseConfigured) {
-        setError('Supabase não está configurado neste ambiente. Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.');
-        setUsers([]);
-        return;
-      }
+    // ── Tentativa 1: Supabase direto ──────────────────────────────────────
+    if (isSupabaseConfigured) {
+      try {
+        let query = supabase
+          .from('profiles')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (activeTab === 'pending') query = query.eq('status', 'PENDING');
 
-      let query = supabase.from('profiles').select('*').order('created_at', { ascending: false });
+        const { data, error: sbErr } = await withTimeout(query, 8000, 'Supabase');
 
-      if (activeTab === 'pending') {
-        query = query.eq('status', 'PENDING');
-      }
+        if (fetchGenRef.current !== gen) return; // outro fetch foi iniciado
 
-      const { data, error: sbErr } = await query;
-
-      if (!abortRef.current) return; // componente desmontado
-
-      if (sbErr) {
-        // Tabela não existe ainda — mostrar estado vazio amigável
-        if (sbErr.code === 'PGRST116' || sbErr.message?.includes('does not exist')) {
-          setError('A tabela "profiles" ainda não existe no Supabase. Execute a migration SQL para criá-la.');
-        } else {
-          setError(`Erro Supabase: ${sbErr.message}`);
+        if (!sbErr) {
+          setUsers(data || []);
+          setLoading(false);
+          return; // sucesso — não precisa do fallback
         }
+
+        // RLS ou tabela inexistente → tenta backend
+        console.warn('[AdminPanel] Supabase direto falhou:', sbErr.message, '— tentando backend...');
+      } catch (err) {
+        if (fetchGenRef.current !== gen) return;
+        console.warn('[AdminPanel] Supabase direto timeout/erro:', err.message, '— tentando backend...');
+      }
+    }
+
+    // ── Tentativa 2: Backend como fallback ────────────────────────────────
+    try {
+      const { supabase: sb } = await import('../utils/supabaseClient');
+      const { data: { session } } = await sb.auth.getSession().catch(() => ({ data: { session: null } }));
+      const authToken = session?.access_token || token || '';
+
+      const endpoint = activeTab === 'pending'
+        ? `/api/admin/pending-users`
+        : `/api/accounts/users`;
+
+      const baseUrl = serverIP
+        ? (serverIP.startsWith('http') ? serverIP : `http://${serverIP}:5000`)
+        : 'http://127.0.0.1:5000';
+
+      const res = await withTimeout(
+        fetch(`${baseUrl}${endpoint}`, {
+          headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+        }),
+        8000,
+        'Backend'
+      );
+
+      if (fetchGenRef.current !== gen) return;
+
+      if (res.status === 401 || res.status === 403) {
+        setError('Sem permissão. Certifique-se de estar autenticado como admin ou superadmin.');
         setUsers([]);
         return;
       }
 
-      setUsers(data || []);
-    } catch (err) {
-      if (abortRef.current) {
-        setError(`Falha ao carregar: ${err.message}`);
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.detail || d.msg || `HTTP ${res.status}`);
       }
+
+      const d = await res.json();
+      setUsers(d.items || d || []);
+    } catch (err) {
+      if (fetchGenRef.current !== gen) return;
+
+      const isSbConfigured = isSupabaseConfigured;
+      setError(
+        err.message.startsWith('Timeout')
+          ? `${err.message}. Verifique a ligação ao Supabase/backend.`
+          : isSbConfigured
+            ? `Erro ao carregar utilizadores: ${err.message}`
+            : 'Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no arquivo .env do frontend.'
+      );
+      setUsers([]);
     } finally {
-      if (abortRef.current) setLoading(false);
+      if (fetchGenRef.current === gen) setLoading(false);
     }
-  }, [activeTab]);
+  }, [activeTab, token, serverIP]);
 
   useEffect(() => {
     fetchUsers();
