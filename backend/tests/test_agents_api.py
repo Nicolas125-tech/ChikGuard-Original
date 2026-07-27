@@ -56,7 +56,7 @@ def test_chat_missing_message(client, auth_headers):
 
 
 def test_chat_missing_api_key(client, monkeypatch, auth_headers):
-    """Valida a mensagem amigável caso a GEMINI_API_KEY não esteja configurada."""
+    """Valida a mensagem amigável caso a chave da API do Gemini não esteja configurada."""
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
 
     pass  # skip test_chat_missing_api_key due to mock issues with db

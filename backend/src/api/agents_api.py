@@ -76,12 +76,17 @@ def _call_gemini_api(api_key: str, system_prompt: str, user_message: str):
     return reply, None
 
 
-def _build_system_prompt(user_message: str, SensorReading, AcousticReading, Batch, EventLog, estado_dispositivos) -> str:
+def _build_system_prompt(
+    user_message: str,
+    SensorReading,
+    AcousticReading,
+    Batch,
+    EventLog,
+    estado_dispositivos,
+) -> str:
     """Coleta dados de telemetria e cria o prompt do sistema embutido com contexto em tempo real."""
     # 1. Coleta dados de sensores recentes
-    last_sensor = SensorReading.query.order_by(
-        SensorReading.timestamp.desc()
-    ).first()
+    last_sensor = SensorReading.query.order_by(SensorReading.timestamp.desc()).first()
     sensor_text = "Sem leituras de sensores recentes nas últimas horas."
     if last_sensor:
         sensor_text = (
@@ -113,9 +118,7 @@ def _build_system_prompt(user_message: str, SensorReading, AcousticReading, Batc
         })"
 
     # 4. Coleta os alertas e logs de visão mais recentes
-    recent_events = (
-        EventLog.query.order_by(EventLog.timestamp.desc()).limit(5).all()
-    )
+    recent_events = EventLog.query.order_by(EventLog.timestamp.desc()).limit(5).all()
     events_text = "Nenhum alerta ou evento recente cadastrado."
     if recent_events:
         events_text = "\n".join(
@@ -127,12 +130,8 @@ def _build_system_prompt(user_message: str, SensorReading, AcousticReading, Batc
 
     # 5. Obtém status dos atuadores
     fan_status = "LIGADA" if estado_dispositivos.get("ventilacao") else "DESLIGADA"
-    heater_status = (
-        "LIGADO" if estado_dispositivos.get("aquecedor") else "DESLIGADO"
-    )
-    devices_text = (
-        f"Ventilação (Exaustores): {fan_status}, Aquecedor: {heater_status}"
-    )
+    heater_status = "LIGADO" if estado_dispositivos.get("aquecedor") else "DESLIGADO"
+    devices_text = f"Ventilação (Exaustores): {fan_status}, Aquecedor: {heater_status}"
 
     # 6. Recupera contexto do manual de manejo (RAG local)
     kb_context = _retrieve_knowledge_base(user_message)
@@ -193,12 +192,23 @@ def create_agents_blueprint(api_deps):
         if not api_key:
             return jsonify(
                 {
-                    "response": "Olá! Sou o assistente de IA do ChikGuard. No momento, a chave da API do Gemini não está configurada no servidor (variável `GEMINI_API_KEY`), então não consigo responder usando inteligência artificial avançada na nuvem. Contudo, todos os sensores locais e algoritmos de visão continuam protegendo o galpão perfeitamente."
+                    "response": "Olá! Sou o assistente de IA do ChikGuard. No momento, "
+                    "a chave da API do Gemini não está configurada no servidor, "
+                    "então não consigo responder usando inteligência artificial "
+                    "avançada na nuvem. Contudo, todos os sensores locais e "
+                    "algoritmos de visão continuam protegendo o galpão perfeitamente."
                 }
             )
 
         try:
-            system_prompt = _build_system_prompt(user_message, SensorReading, AcousticReading, Batch, EventLog, api_deps.get("estado_dispositivos", {}))
+            system_prompt = _build_system_prompt(
+                user_message,
+                SensorReading,
+                AcousticReading,
+                Batch,
+                EventLog,
+                api_deps.get("estado_dispositivos", {}),
+            )
             reply, error = _call_gemini_api(api_key, system_prompt, user_message)
 
             if error:
