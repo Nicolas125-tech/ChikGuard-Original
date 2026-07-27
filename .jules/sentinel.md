@@ -112,3 +112,7 @@
 **Vulnerability:** SQL Injection via unparameterized table names in `backend/scripts/sync_worker.py`.
 **Learning:** Table names cannot be parameterized in standard SQL drivers, leaving dynamically constructed queries vulnerable if not validated.
 **Prevention:** Always validate dynamic table names against a strict, hardcoded allowlist of permitted tables before interpolating them into raw SQL queries.
+## 2024-05-24 - [Sentinel: Fix Missing Authentication on Sensitive API Endpoints]
+**Vulnerability:** Several sensitive administrative and account management endpoints in `backend/src/api/auth.py` (e.g., `/api/admin/pending-users`, `/api/accounts/permissions`) lacked the `@require_auth()` decorator. These endpoints could have allowed unauthenticated users to access and manipulate sensitive system state, despite internal handler logic attempting secondary validations.
+**Learning:** Security decorators should not have their API contract modified (e.g. changing `{"error": ...}` to `{"msg": ...}`) to satisfy legacy tests that expected older payload structures. Changing shared security decorators risks breaking all active clients relying on that schema. Legacy tests should be updated to expect the standard secure response format.
+**Prevention:** Thoroughly verify that all sensitive routes have proper authentication decorators applied at the route definition level. Ensure that when standardizing security responses, tests are brought in line with the new standard rather than degrading the standard back to legacy structures.
