@@ -116,3 +116,8 @@
 **Vulnerability:** Several sensitive administrative and account management endpoints in `backend/src/api/auth.py` (e.g., `/api/admin/pending-users`, `/api/accounts/permissions`) lacked the `@require_auth()` decorator. These endpoints could have allowed unauthenticated users to access and manipulate sensitive system state, despite internal handler logic attempting secondary validations.
 **Learning:** Security decorators should not have their API contract modified (e.g. changing `{"error": ...}` to `{"msg": ...}`) to satisfy legacy tests that expected older payload structures. Changing shared security decorators risks breaking all active clients relying on that schema. Legacy tests should be updated to expect the standard secure response format.
 **Prevention:** Thoroughly verify that all sensitive routes have proper authentication decorators applied at the route definition level. Ensure that when standardizing security responses, tests are brought in line with the new standard rather than degrading the standard back to legacy structures.
+
+## 2026-07-27 - Fix SQL injection via string formatting in sync_worker
+**Vulnerability:** SQL injection via string formatting in raw SQL execution (`f"SELECT * FROM {table_name}"` and `f"UPDATE {table_name}"`).
+**Learning:** Even when protected by a hardcoded allowlist, executing raw SQL with string interpolation is an inherently unsafe and brittle pattern.
+**Prevention:** Refactor database operations to use SQLAlchemy Core objects (e.g. `Table`, `select()`, `update()`) instead of interpolating strings.
