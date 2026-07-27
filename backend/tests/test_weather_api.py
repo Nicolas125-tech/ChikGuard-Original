@@ -5,11 +5,13 @@ from src.security.fastapi_auth import get_current_user, UserContext
 
 client = TestClient(fastapi_app)
 
-def override_get_current_user():
+async def override_get_current_user():
     return UserContext(user_id="test-123", role="admin", tenant_id=1)
 
 def test_get_farm_location_and_weather_unauthorized():
     """Testa a rota sem autenticacao para garantir que retorna 401."""
+    # Ensure there's no override for this test
+    fastapi_app.dependency_overrides.clear()
     response = client.get("/api/climate/location-forecast")
     assert response.status_code == 401
 

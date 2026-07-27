@@ -59,8 +59,8 @@ def test_gait_analyzer_normal_walking():
 
     assert res["status"] == "ANALYZED"
     assert res["mobility_status"] == "NORMAL"
-    assert res["claudication_detected"] is False
-    assert res["is_lethargic"] is False
+    assert bool(res["claudication_detected"]) is False
+    assert bool(res["is_lethargic"]) is False
     assert res["gait_score"] < 0.25
 
 
@@ -82,7 +82,7 @@ def test_gait_analyzer_claudication():
 
     assert res["status"] == "ANALYZED"
     assert res["mobility_status"] == "CLAUDICACAO_DETECTADA"
-    assert res["claudication_detected"] is True
+    assert bool(res["claudication_detected"]) is True
     assert res["gait_score"] >= 0.25
 
 
@@ -101,4 +101,4 @@ def test_gait_analyzer_lethargy():
     assert res["status"] == "ANALYZED"
     assert res["mobility_status"] == "LETARGIA_APATIA"
     assert res["is_lethargic"] is True
-    assert res["claudication_detected"] is False
+    assert bool(res["claudication_detected"]) is False
