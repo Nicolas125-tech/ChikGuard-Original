@@ -10,7 +10,13 @@ class Settings:
     def __init__(self):
         # Database setup
         self.database_url = os.getenv("DATABASE_URL", "sqlite:///chikguard.db")
-        self.jwt_secret_key = os.getenv("JWT_SECRET_KEY", secrets.token_hex(32))
+        self.jwt_secret_key = os.getenv("JWT_SECRET_KEY")
+        if not self.jwt_secret_key:
+            if os.getenv("ENV") == "production" or os.getenv("FLASK_ENV") == "production":
+                raise ValueError("JWT_SECRET_KEY environment variable MUST be set in production")
+            else:
+                # Fallback to a static dev secret to avoid token invalidation across restarts
+                self.jwt_secret_key = "dev-secret-key-change-in-production-long-enough"
 
         # Application settings
         self.log_level = os.getenv("LOG_LEVEL", "INFO")

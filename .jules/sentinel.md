@@ -112,3 +112,7 @@
 **Vulnerability:** SQL Injection via unparameterized table names in `backend/scripts/sync_worker.py`.
 **Learning:** Table names cannot be parameterized in standard SQL drivers, leaving dynamically constructed queries vulnerable if not validated.
 **Prevention:** Always validate dynamic table names against a strict, hardcoded allowlist of permitted tables before interpolating them into raw SQL queries.
+## 2025-02-27 - JWT Secret Key Generation in Production
+**Vulnerability:** The application was falling back to `secrets.token_hex(32)` if the `JWT_SECRET_KEY` environment variable was not set. In a production environment, this means that every time the application restarts, all previously issued JWTs would become invalid, causing a denial of service (DoS) and a bad user experience.
+**Learning:** Hard-failing when critical cryptographic secrets (like JWT secrets) are missing in production is essential to maintain stability and prevent ephemeral tokens from inadvertently masking configuration issues.
+**Prevention:** In configuration loading, explicitly raise an exception if required keys are missing in production rather than silently falling back to randomly generated keys.
