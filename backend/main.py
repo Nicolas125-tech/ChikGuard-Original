@@ -1,3 +1,5 @@
+from src.db.session import get_db
+from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -122,22 +124,73 @@ async def root():
 
 
 @fastapi_app.get("/api/summary")
-async def get_summary(user: UserContext = Depends(get_current_user)):
+async def get_summary(
+    user: UserContext = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    import time
+    from datetime import datetime
+    from database import Reading, BirdIdentity, EnergyUsageDaily, SyncQueueItem
+    from src.core.state import (
+        active_camera_id,
+        sensor_state,
+        acoustic_state,
+        weight_state,
+        live_birds,
+        cv_lock,
+    )
+
+    ultima = db.query(Reading).order_by(Reading.id.desc()).first()
+    recentes = db.query(Reading).order_by(Reading.id.desc()).limit(30).all()
+    temperaturas = [item.temperatura for item in recentes]
+    alertas = [item for item in recentes if item.status != "NORMAL"]
+
+    total_vistas = db.query(BirdIdentity).count()
+
+    count = 0
+    alive_count = 0
+    now = time.time()
+
+    if cv_lock:
+        with cv_lock:
+            alive_count = sum(
+                1
+                for info in live_birds.values()
+                if (now - float(info["last_seen"])) <= 60
+            )
+            count = alive_count
+    else:
+        alive_count = sum(
+            1 for info in live_birds.values() if (now - float(info["last_seen"])) <= 60
+        )
+        count = alive_count
+
+    pending_sync = db.query(SyncQueueItem).filter_by(status="pending").count()
+    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    energy_today = (
+        db.query(EnergyUsageDaily)
+        .filter_by(camera_id=active_camera_id, day=today)
+        .first()
+    )
+    vent_sec_today = float(energy_today.ventilacao_seconds) if energy_today else 0.0
+    aq_sec_today = float(energy_today.aquecedor_seconds) if energy_today else 0.0
+
     return {
-        "temperatura_atual": 28.5,
-        "status_atual": "NORMAL",
-        "media_temperatura": 28.0,
-        "contagem_aves": 150,
-        "aves_vivas_individuais": 150,
-        "total_aves_vistas": 150,
+        "temperatura_atual": ultima.temperatura if ultima else 0.0,
+        "status_atual": ultima.status if ultima else "INICIANDO",
+        "media_temperatura": (
+            round(sum(temperaturas) / len(temperaturas), 1) if temperaturas else 0.0
+        ),
+        "contagem_aves": count,
+        "aves_vivas_individuais": alive_count,
+        "total_aves_vistas": total_vistas,
         "metodo_temperatura_ave": "estimada_rgb_proxy",
         "dispositivos": {
             "ventilacao": "desligado",
             "aquecedor": "desligado",
             "modo_automatico": True,
         },
-        "total_alertas": 0,
-        "camera_id": "galpao-1",
+        "total_alertas": len(alertas),
+        "camera_id": active_camera_id,
         "behavior": {
             "status": "NORMAL",
             "message": "",
@@ -145,27 +198,32 @@ async def get_summary(user: UserContext = Depends(get_current_user)):
             "edge_ratio": 0.1,
         },
         "sensors": {
-            "humidity_pct": 60,
-            "ammonia_ppm": 5,
-            "feed_level_pct": 80,
-            "water_level_pct": 90,
+            "humidity_pct": sensor_state.get("humidity_pct", 0.0),
+            "ammonia_ppm": sensor_state.get("ammonia_ppm", 0.0),
+            "feed_level_pct": sensor_state.get("feed_level_pct", 0.0),
+            "water_level_pct": sensor_state.get("water_level_pct", 0.0),
         },
         "automation": {"enabled": True, "targets": {}},
         "batch": {"name": "Lote 1"},
         "weight": {
-            "avg_weight_g": 1200,
-            "ideal_weight_g": 1250,
-            "confidence": 0.9,
+            "avg_weight_g": weight_state.get("avg_weight_g", 0.0),
+            "ideal_weight_g": weight_state.get("ideal_weight_g", 0.0),
+            "confidence": weight_state.get("confidence", 0.0),
             "method": "segmentation_area",
         },
         "acoustic": {
-            "respiratory_health_index": 0.95,
-            "cough_index": 0.05,
-            "stress_audio_index": 0.1,
-            "source": "sensor",
+            "respiratory_health_index": acoustic_state.get(
+                "respiratory_health_index", 100.0
+            ),
+            "cough_index": acoustic_state.get("cough_index", 0.0),
+            "stress_audio_index": acoustic_state.get("stress_audio_index", 0.0),
+            "source": acoustic_state.get("source", "sensor"),
             "trained_model_loaded": True,
         },
-        "energy_today": {"ventilacao_seconds": 120, "aquecedor_seconds": 0},
+        "energy_today": {
+            "ventilacao_seconds": round(vent_sec_today, 2),
+            "aquecedor_seconds": round(aq_sec_today, 2),
+        },
         "smart_grid_forecast_12h": {
             "projected_total_cost": 0.0,
             "projected_heater_cost": 0.0,
@@ -173,7 +231,7 @@ async def get_summary(user: UserContext = Depends(get_current_user)):
             "suggest_optimize_airflow": False,
             "message": "Ok",
         },
-        "sync": {"pending": 0},
+        "sync": {"pending": pending_sync},
         "weather": {},
         "tamper": {"last_alert_ts": 0, "last_causes": [], "alerts_count": 0},
         "carcass": {"count": 0, "audio_alert": False},
