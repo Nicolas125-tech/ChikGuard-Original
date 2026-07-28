@@ -223,6 +223,7 @@ export default function AdminPanel({ token, serverIP }) {
           </p>
         </div>
         <button
+          aria-label="Atualizar lista de utilizadores"
           onClick={fetchUsers}
           disabled={loading}
           className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 flex-shrink-0">
@@ -348,6 +349,7 @@ export default function AdminPanel({ token, serverIP }) {
                               <option value="superadmin">SUPERADMIN</option>
                             </select>
                             <button
+                              aria-label={`Aprovar utilizador ${u.email}`}
                               disabled={isActioning}
                               onClick={() => {
                                 const el = document.getElementById(`role-select-${u.id}`);
@@ -361,6 +363,7 @@ export default function AdminPanel({ token, serverIP }) {
                         ) : isSuspended ? (
                           /* ── Reativar ── */
                           <button
+                            aria-label={`Reativar utilizador ${u.email}`}
                             disabled={isActioning || isSuperadmin}
                             onClick={() => handleReactivate(u.id)}
                             className="flex items-center gap-1.5 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 text-xs font-bold px-3.5 py-1.5 rounded-lg border border-emerald-500/30 transition-all disabled:opacity-30 whitespace-nowrap">
@@ -370,6 +373,7 @@ export default function AdminPanel({ token, serverIP }) {
                         ) : (
                           /* ── Suspender ── */
 <button
+                            aria-label={isSuperadmin ? "Superadmin não pode ser suspenso" : `Suspender utilizador ${u.email}`}
                             disabled={isActioning || isSuperadmin}
                             onClick={() => handleSuspend(u.id)}
                             title={isSuperadmin ? 'Superadmin não pode ser suspenso' : 'Suspender conta'}
@@ -381,6 +385,7 @@ export default function AdminPanel({ token, serverIP }) {
 
                         {/* ── Excluir ── */}
                         <button
+                          aria-label={isSuperadmin ? "Superadmin não pode ser excluído" : `Excluir utilizador ${u.email}`}
                           disabled={isActioning || isSuperadmin}
                           onClick={() => handleDelete(u.id)}
                           title={isSuperadmin ? 'Superadmin não pode ser excluído' : 'Excluir conta'}
