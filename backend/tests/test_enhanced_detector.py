@@ -37,3 +37,15 @@ def test_iou():
     # One inside another
     box5 = [2, 2, 8, 8]
     assert pytest.approx(_iou(box1, box5), 1e-4) == 0.36
+
+    # Edge case: One box is zero-area
+    box_zero = [0, 0, 0, 10]
+    assert _iou(box1, box_zero) == 0.0
+    assert _iou(box_zero, box1) == 0.0
+
+    # Edge case: Both boxes are zero-area
+    assert _iou(box_zero, box_zero) == 0.0
+
+    # Edge case: Disjoint zero-area boxes
+    box_zero_2 = [20, 20, 20, 30]
+    assert _iou(box_zero, box_zero_2) == 0.0
