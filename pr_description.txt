@@ -1,9 +1,0 @@
-🎯 **What:** The testing gap in `backend/src/vision/enhanced_detector.py` for the `_iou` function has been addressed. The function was lacking coverage for edge cases involving bounding boxes with an area of zero.
-
-📊 **Coverage:** The following scenarios are now tested:
-- One bounding box has zero area.
-- Both bounding boxes have zero area.
-- Disjoint zero-area bounding boxes.
-- Swapped order of zero-area bounding boxes.
-
-✨ **Result:** Test coverage for `_iou` is now more robust, ensuring the mathematical helper handles zero-area edge cases correctly without raising errors or returning incorrect (non-zero) intersections, giving confidence for future refactoring.
