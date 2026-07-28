@@ -726,10 +726,13 @@ with app.app_context():
             "alerts.read",
         ],
     }
+    # Bolt Optimization: Fetch existing permissions in a single O(1) query
+    # and use an in-memory set to prevent N+1 query bottleneck during initialization.
+    existing_perms = RolePermission.query.all()
+    existing_set = {(p.role, p.permission) for p in existing_perms}
     for role, perms in default_perms.items():
         for perm in perms:
-            exists = RolePermission.query.filter_by(role=role, permission=perm).first()
-            if exists is None:
+            if (role, perm) not in existing_set:
                 db.session.add(RolePermission(role=role, permission=perm, allowed=True))
     db.session.commit()
 
