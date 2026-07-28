@@ -56,3 +56,6 @@
 ## 2025-02-12 - Fix N+1 queries during local Supabase sync
 **Learning:** During sync workflows with remote tables, the update logic applied element-by-element caused heavy CPU/DB bottlenecks.
 **Action:** Replaced the for loop update sequence (`for r in readings: r.mark_synced()`) with a bulk update using `session.execute(update(Model).where(Model.id.in_(ids)).values(...))`. This avoids processing 100 individual SQL update queries in favor of a single bulk execution, resulting in an estimated 23.85% speedup on batches of 10,000 records.
+## 2026-07-28 - Avoid N+1 Query in Startup Loop
+**Learning:** During database initialization loops (like checking default permissions), using `.first()` inside the loop for each combination creates severe N+1 bottlenecks.
+**Action:** Always fetch all existing combinations upfront using a single `O(1)` query into an in-memory set (e.g., `{(p.role, p.permission) for p in RolePermission.query.all()}`) for fast lookups.
