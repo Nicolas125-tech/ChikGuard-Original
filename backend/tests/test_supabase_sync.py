@@ -41,7 +41,7 @@ def temp_files(tmp_path):
     return str(log_file), str(state_file)
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_sync_worker_success(temp_files):
     log_file, state_file = temp_files
     worker = SupabaseSyncWorker(log_file=log_file, state_file=state_file, interval_seconds=2)
@@ -66,7 +66,7 @@ async def test_sync_worker_success(temp_files):
             assert len(state["backlog"]) == 0
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_sync_worker_network_failure_and_backlog(temp_files):
     log_file, state_file = temp_files
     worker = SupabaseSyncWorker(log_file=log_file, state_file=state_file, interval_seconds=2)
@@ -91,7 +91,7 @@ async def test_sync_worker_network_failure_and_backlog(temp_files):
             assert len(state["backlog"]) == 2
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_sync_worker_recovery(temp_files):
     log_file, state_file = temp_files
     worker = SupabaseSyncWorker(log_file=log_file, state_file=state_file, interval_seconds=2)

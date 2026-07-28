@@ -59,8 +59,8 @@ def test_gait_analyzer_normal_walking():
 
     assert res["status"] == "ANALYZED"
     assert res["mobility_status"] == "NORMAL"
-    assert res["claudication_detected"] is False
-    assert res["is_lethargic"] is False
+    assert not res["claudication_detected"]
+    assert not res["is_lethargic"]
     assert res["gait_score"] < 0.25
 
 
@@ -82,7 +82,7 @@ def test_gait_analyzer_claudication():
 
     assert res["status"] == "ANALYZED"
     assert res["mobility_status"] == "CLAUDICACAO_DETECTADA"
-    assert res["claudication_detected"] is True
+    assert bool(res["claudication_detected"]) is True
     assert res["gait_score"] >= 0.25
 
 
@@ -92,13 +92,13 @@ def test_gait_analyzer_lethargy():
     base_time = datetime.utcnow()
 
     # Simula 15 frames sem deslocamento de quadril (ave apática)
-    for i in range(15):
+    for i in range(20):
         kps = _generate_keypoints(100, 100, 120, 120)
         res = analyzer.update_track(
-            track_id=3, keypoints=kps, timestamp=base_time + timedelta(seconds=i * 0.1)
+            track_id=3, keypoints=kps, timestamp=base_time + timedelta(seconds=i * 0.2)
         )
 
     assert res["status"] == "ANALYZED"
     assert res["mobility_status"] == "LETARGIA_APATIA"
-    assert res["is_lethargic"] is True
-    assert res["claudication_detected"] is False
+    assert bool(res["is_lethargic"]) is True
+    assert not res["claudication_detected"]

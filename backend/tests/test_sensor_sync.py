@@ -36,7 +36,7 @@ def db_session():
         db.drop_all()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_sensor_sync_success(db_session):
     """
     Testa a sincronização bem-sucedida de registros PENDING.
@@ -85,7 +85,7 @@ async def test_sensor_sync_success(db_session):
     assert supabase_mock.table.return_value.insert.called
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_sensor_sync_network_failure_keeps_local_data(db_session):
     """
     Garante que falhas de rede no Supabase mudem o status para FAILED no local,
@@ -118,7 +118,7 @@ async def test_sensor_sync_network_failure_keeps_local_data(db_session):
     assert worker.current_interval == 4
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_sensor_sync_recovery_from_failed(db_session):
     """
     Testa se o worker recupera registros FAILED quando a rede é reestabelecida,

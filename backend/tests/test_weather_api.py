@@ -10,6 +10,7 @@ def override_get_current_user():
 
 def test_get_farm_location_and_weather_unauthorized():
     """Testa a rota sem autenticacao para garantir que retorna 401."""
+    fastapi_app.dependency_overrides = {}
     response = client.get("/api/climate/location-forecast")
     assert response.status_code == 401
 
