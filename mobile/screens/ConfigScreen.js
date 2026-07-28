@@ -5,7 +5,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Save, LogOut } from 'lucide-react-native';
 
-const normalizeServerUrl = (value) => {
+export const normalizeServerUrl = (value) => {
   const raw = String(value || '').trim();
   if (!raw) return '';
 
