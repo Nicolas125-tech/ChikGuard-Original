@@ -143,3 +143,17 @@ def auth_headers():
         algorithm="HS256",
     )
     return {"Authorization": f"Bearer {token}"}
+
+def test_knowledge_base_retrieval_error(monkeypatch):
+    """Valida o tratamento de erro (ex: IOError) ao tentar ler o arquivo."""
+    from src.api.agents_api import _retrieve_knowledge_base
+
+    def mock_open(*args, **kwargs):
+        raise IOError("Simulated IOError")
+
+    monkeypatch.setattr("builtins.open", mock_open)
+    # Certifique-se de que os.path.exists retorna True para passar pelo primeiro check
+    monkeypatch.setattr("os.path.exists", lambda path: True)
+
+    res = _retrieve_knowledge_base("amônia")
+    assert res == ""
