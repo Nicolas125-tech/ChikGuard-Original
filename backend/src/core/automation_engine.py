@@ -77,6 +77,15 @@ class AutomationEngine:
         heater_on_temp = target_temp - 0.5
         heater_off_temp = target_temp + 0.2
 
+        # Regra de Somatória de Conforto Térmico (Índice de Estresse por Calor e Umidade combinados)
+        # Prática consagrada na avicultura: Temp (°C) + UR (%) > 115 indica desconforto térmico severo.
+        # Acima de 120, a saturação do ar impede a perda de calor respiratório.
+        if (temp_c + humidity_pct) > 115.0 and temp_c > 24.0:
+            self._trigger_action(
+                camera_id, "exhaust_fan", "on",
+                reason=f"Estresse termico combinado calor/umidade (Temp+UR = {temp_c + humidity_pct:.1f} > 115)"
+            )
+
         if temp_c > fan_on_temp:
             self._trigger_action(
                 camera_id, "exhaust_fan", "on", reason=f"Calor acima do conforto ({temp_c:.1f}°C > {fan_on_temp:.1f}°C)"

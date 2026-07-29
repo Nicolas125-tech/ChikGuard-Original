@@ -73,6 +73,13 @@ async def fsm_loop():
             if sensor_state["ammonia_ppm"] > 20.0 and not result["ventilacao"]:
                 result["ventilacao"] = True
                 result["changes"].append("ventilacao ligada por amonia elevada")
+
+            # Proteção contra Estresse Térmico Combinado (Regra Zootécnica Temp + UR > 115)
+            curr_temp = sensor_state["temperature_c"]
+            curr_hum = sensor_state["humidity_pct"]
+            if (curr_temp + curr_hum) > 115.0 and curr_temp > 24.0 and not result["ventilacao"]:
+                result["ventilacao"] = True
+                result["changes"].append("ventilacao ligada por estresse termico calor+umidade")
             
             # Se a FSM mandar alterar algo, aplicar fisicamente (simulado via state por enquanto)
             if result["changes"]:
