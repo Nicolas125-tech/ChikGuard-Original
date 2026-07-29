@@ -22,6 +22,32 @@ async def fsm_loop():
     
     while True:
         try:
+            # Busca lote ativo no banco de dados para calcular a idade real do lote e as metas zootécnicas
+            from src.db.session import SessionLocal
+            from database import Batch
+            from datetime import datetime
+            from src.core.state_machine import get_ideal_temp_for_age
+
+            db_session = SessionLocal()
+            batch_age_day = 21
+            target_temp = 23.0
+            try:
+                batch = db_session.query(Batch).filter_by(camera_id="galpao-1", active=True).order_by(Batch.id.desc()).first()
+                if batch:
+                    batch_age_day = max(1, (datetime.utcnow().date() - batch.start_date.date()).days + 1)
+                target_temp = get_ideal_temp_for_age(batch_age_day)
+            except Exception as db_err:
+                logger.error(f"Erro ao buscar lote ativo na FSM: {db_err}")
+                target_temp = get_ideal_temp_for_age(batch_age_day)
+            finally:
+                db_session.close()
+
+            # Limites e diferenciais de acionamento dinâmicos e adequados
+            heater_on = max(15.0, target_temp - 0.5)
+            heater_off = max(15.0, target_temp + 0.2)
+            fan_on = min(38.0, target_temp + 2.0)
+            fan_off = min(38.0, target_temp + 1.0)
+
             # Puxa o contexto do que esta acontecendo agora
             context = {
                 "temp_atual": sensor_state["temperature_c"],
@@ -29,11 +55,12 @@ async def fsm_loop():
                 "aquecedor_on": actuator_state["aquecedor_on"],
                 "hour": time.localtime().tm_hour,
                 "targets": {
-                    "fan_on_temp": sensor_thresholds["temp_max"],
-                    "fan_off_temp": sensor_thresholds["temp_max"] - 1.0,
-                    "heater_on_temp": sensor_thresholds["temp_min"],
-                    "heater_off_temp": sensor_thresholds["temp_min"] + 1.0,
-                    "batch_age_day": 21 # Em prod buscaria do banco de dados (Batch)
+                    "fan_on_temp": fan_on,
+                    "fan_off_temp": fan_off,
+                    "heater_on_temp": heater_on,
+                    "heater_off_temp": heater_off,
+                    "target_temp": target_temp,
+                    "batch_age_day": batch_age_day
                 },
                 "intrusion_active": False, # Placeholder
                 "preheat_recommended": False

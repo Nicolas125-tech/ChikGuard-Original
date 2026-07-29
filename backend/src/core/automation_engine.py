@@ -52,21 +52,40 @@ class AutomationEngine:
                                 reason=f"Regra customizada: {rule.name} ({val} {rule.condition_operator} {rule.condition_value})",
                             )
 
-        # Fallback Hardcoded
-        if temp_c > 31.0:
+        # Fallback de Automação Reativa Baseada em Comforto Térmico Zootécnico
+        target_temp = 23.0
+        if self.app_context_fn:
+            from database import Batch
+            from datetime import datetime
+            from src.core.state_machine import get_ideal_temp_for_age
+            with self.app_context_fn():
+                try:
+                    batch = Batch.query.filter_by(camera_id=camera_id, active=True).order_by(Batch.id.desc()).first()
+                    if batch:
+                        age_day = max(1, (datetime.utcnow().date() - batch.start_date.date()).days + 1)
+                        target_temp = get_ideal_temp_for_age(age_day)
+                except Exception as db_err:
+                    logger.error(f"Erro ao consultar lote ativo para fallback de automacao: {db_err}")
+
+        # Diferenciais dinâmicos adequados à idade/conforto das aves
+        fan_on_temp = target_temp + 2.0
+        heater_on_temp = target_temp - 0.5
+        heater_off_temp = target_temp + 0.2
+
+        if temp_c > fan_on_temp:
             self._trigger_action(
-                camera_id, "exhaust_fan", "on", reason=f"Temperatura critica ({temp_c}°C)"
+                camera_id, "exhaust_fan", "on", reason=f"Calor acima do conforto ({temp_c:.1f}°C > {fan_on_temp:.1f}°C)"
             )
-        elif temp_c < 25.0:
+        elif temp_c < heater_on_temp:
             self._trigger_action(
-                camera_id, "exhaust_fan", "off", reason=f"Temperatura normalizada ({temp_c}°C)"
+                camera_id, "exhaust_fan", "off", reason=f"Frio detectado. Ventilacao desligada ({temp_c:.1f}°C)"
             )
             self._trigger_action(
-                camera_id, "heater", "on", reason=f"Temperatura baixa detectada ({temp_c}°C)"
+                camera_id, "heater", "on", reason=f"Aquecedor ativado preventivamente ({temp_c:.1f}°C < {heater_on_temp:.1f}°C)"
             )
-        elif temp_c > 28.0:
+        elif temp_c > heater_off_temp:
             self._trigger_action(
-                camera_id, "heater", "off", reason=f"Temperatura adequada alcançada ({temp_c}°C)"
+                camera_id, "heater", "off", reason=f"Temperatura de conforto reestabelecida. Aquecedor desligado ({temp_c:.1f}°C)"
             )
 
     def process_ai_vision_anomaly(self, camera_id: str, anomaly_type: str, severity: str):

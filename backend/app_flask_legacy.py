@@ -1010,15 +1010,20 @@ def _active_batch(camera_id):
 
 
 def _ideal_temp_for_age_day(age_day):
-    if age_day <= 7:
-        return 32.0
-    if age_day <= 14:
-        return 30.0
-    if age_day <= 21:
-        return 27.0
-    if age_day <= 28:
-        return 24.0
-    return 22.0
+    # Diretrizes Ross 308 / Cobb 500 para frangos de corte.
+    # Interpolação linear evita choques térmicos causados por decréscimos em degraus semanais.
+    curve = {1: 32.0, 7: 30.0, 14: 27.0, 21: 23.0, 28: 20.0, 35: 19.0}
+    keys = sorted(curve.keys())
+    if age_day <= keys[0]:
+        return float(curve[keys[0]])
+    if age_day >= keys[-1]:
+        return float(curve[keys[-1]])
+    for i in range(len(keys) - 1):
+        a, b = keys[i], keys[i + 1]
+        if a <= age_day <= b:
+            ratio = (age_day - a) / (b - a)
+            return float(curve[a] + (curve[b] - curve[a]) * ratio)
+    return float(curve[keys[-1]])
 
 
 def _temperature_targets(camera_id):

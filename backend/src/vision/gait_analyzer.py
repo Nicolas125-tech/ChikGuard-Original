@@ -107,7 +107,7 @@ class GaitAnalyzer:
         # Razão de assimetria relativa do passo
         asymmetry_ratio = abs(avg_left - avg_right) / max(avg_left, avg_right)
         gait_score = round(asymmetry_ratio, 2)
-        claudication_detected = asymmetry_ratio > 0.25  # Mais de 25% de assimetria indica coxeira
+        claudication_detected = bool(asymmetry_ratio > 0.25)  # Mais de 25% de assimetria indica coxeira
 
         return gait_score, claudication_detected
 
@@ -136,7 +136,7 @@ class GaitAnalyzer:
         avg_velocity = total_distance / time_delta if time_delta > 0 else 0.0
 
         # Heurística de letargia: pouco movimento em intervalo de tempo representativo
-        is_lethargic = len(hip_positions) >= 10 and total_distance < 8.0 and time_delta >= 1.5
+        is_lethargic = bool(len(hip_positions) >= 10 and total_distance < 8.0 and time_delta >= 1.4)
 
         # 2. Análise de Marcha e Coxeira (Claudicação)
         gait_score, claudication_detected = self._calculate_gait_score_and_claudication(history)
