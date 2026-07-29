@@ -3272,6 +3272,7 @@ from src.core.mqtt_client import ChikGuardMQTTClient
 mqtt_client = ChikGuardMQTTClient(app_context_fn=app.app_context)
 mqtt_client.start()
 automation_engine = AutomationEngine(mqtt_client, app_context_fn=app.app_context)
+mqtt_client.automation_engine = automation_engine
 
 
 def _get_current_account():

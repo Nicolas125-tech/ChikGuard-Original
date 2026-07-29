@@ -20,8 +20,13 @@ class AutomationEngine:
         self.cooldown_seconds = 120  # Evita ligar/desligar exaustor a cada segundo
         self.app_context_fn = app_context_fn
 
-    def process_telemetry(self, camera_id: str, temp_c: float, humidity_pct: float):
-        """Avalia telemetria básica (Temperatura/Umidade) usando regras do DB e fallback"""
+    def process_telemetry(self, camera_id: str, temp_c: float, humidity_pct: float, ammonia_ppm: float = 0.0):
+        """Avalia telemetria básica (Temperatura/Umidade/Amônia) usando regras do DB e fallback"""
+        # Proteção contra Amônia (Gás Tóxico NH3) - Regra Zootécnica de Bem-Estar e Saúde Respiratória
+        if ammonia_ppm > 20.0:
+            self._trigger_action(
+                camera_id, "exhaust_fan", "on", reason=f"Renovação de ar por amônia elevada ({ammonia_ppm:.1f} ppm > 20.0 ppm)"
+            )
         # Regras Dinâmicas
         if self.app_context_fn:
             from database import AutomationRule

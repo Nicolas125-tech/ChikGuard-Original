@@ -82,13 +82,28 @@ class ChikGuardMQTTClient:
         """Salva a leitura de temperatura/umidade real vinda do IoT."""
         from database import SensorReading, db
 
+        temp = payload.get("temperature")
+        hum = payload.get("humidity")
+        ammonia = payload.get("ammonia")
+
         reading = SensorReading(
             camera_id=camera_id,
-            temperature_c=payload.get("temperature"),
-            humidity_pct=payload.get("humidity"),
-            ammonia_ppm=payload.get("ammonia"),
+            temperature_c=temp,
+            humidity_pct=hum,
+            ammonia_ppm=ammonia,
             source="mqtt_iot",
         )
         db.session.add(reading)
         db.session.commit()
         logger.debug(f"[MQTT] Telemetria salva para {camera_id}: {payload}")
+
+        if getattr(self, "automation_engine", None):
+            try:
+                self.automation_engine.process_telemetry(
+                    camera_id,
+                    float(temp) if temp is not None else 0.0,
+                    float(hum) if hum is not None else 0.0,
+                    float(ammonia) if ammonia is not None else 0.0
+                )
+            except Exception as e:
+                logger.error(f"[MQTT] Erro ao disparar motor de automacao: {e}")

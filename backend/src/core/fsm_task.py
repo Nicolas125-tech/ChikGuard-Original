@@ -68,6 +68,11 @@ async def fsm_loop():
             
             # Submete o cenario para a AI (FSM)
             result = fsm.process_context(context)
+
+            # Proteção contra Amônia (Regra Zootécnica de Qualidade do Ar)
+            if sensor_state["ammonia_ppm"] > 20.0 and not result["ventilacao"]:
+                result["ventilacao"] = True
+                result["changes"].append("ventilacao ligada por amonia elevada")
             
             # Se a FSM mandar alterar algo, aplicar fisicamente (simulado via state por enquanto)
             if result["changes"]:
