@@ -3,9 +3,10 @@ import sys
 
 import pytest
 
-# Ajusta sys.path para enxergar src/ e o backend
+# Ajusta sys.path para enxergar src/, o backend e plugins
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../plugins")))
 
 # Mock do cv2 para evitar erros na inicialização de módulos de visão do app
 import unittest.mock as mock

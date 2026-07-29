@@ -1,0 +1,16 @@
+{
+  "serverInfo": {
+    "name": "ChikGuard MCP Server",
+    "version": "2.0.0"
+  },
+  "endpoint": "https://chikguard.com/mcp",
+  "capabilities": {
+    "tools": {
+      "list": true,
+      "call": true
+    },
+    "resources": {
+      "list": true
+    }
+  }
+}

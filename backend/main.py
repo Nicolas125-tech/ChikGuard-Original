@@ -1,7 +1,7 @@
 from src.db.session import get_db
 from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, Depends
+from fastapi import FastAPI, Request, Depends, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -80,6 +80,7 @@ from src.api.fastapi_climate import router as climate_router
 from src.api.fastapi_accounts import router as accounts_router
 from src.api.fastapi_cameras import router as cameras_router
 from src.api.fastapi_heatmap import router as heatmap_router
+from src.api.fastapi_agent_discovery import router as agent_discovery_router
 from src.api.fastapi_ws import socket_app
 from src.security.headers import ALLOWED_ORIGINS
 from src.security.fastapi_auth import get_current_user, UserContext, RequireRole
@@ -102,6 +103,7 @@ fastapi_app.include_router(climate_router)
 fastapi_app.include_router(accounts_router)
 fastapi_app.include_router(cameras_router)
 fastapi_app.include_router(heatmap_router)
+fastapi_app.include_router(agent_discovery_router)
 
 # CORS middleware
 # Ajustando os ALLOWED_ORIGINS buscando de src.security.headers para seguranca
@@ -115,7 +117,32 @@ fastapi_app.add_middleware(
 
 
 @fastapi_app.get("/")
-async def root():
+async def root(request: Request, response: Response):
+    link_header = '</.well-known/api-catalog>; rel="api-catalog", </docs>; rel="service-doc"'
+    response.headers["Link"] = link_header
+    
+    accept_header = request.headers.get("accept", "")
+    if "text/markdown" in accept_header:
+        md_content = """# ChikGuard
+
+Welcome to the ChikGuard intelligent poultry monitoring node.
+
+- **Status**: Online
+- **Version**: 2.0.0
+- **Service**: ChikGuard FastAPI Edge Node
+
+## Discovery
+- API Catalog: `/.well-known/api-catalog`
+- MCP Server Card: `/.well-known/mcp/server-card.json`
+- Skills Index: `/.well-known/agent-skills/index.json`
+"""
+        headers = {
+            "Content-Type": "text/markdown",
+            "x-markdown-tokens": str(len(md_content.split())),
+            "Link": link_header
+        }
+        return Response(content=md_content, media_type="text/markdown", headers=headers)
+
     return {
         "status": "online",
         "service": "ChikGuard FastAPI Edge Node",
