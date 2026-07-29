@@ -3,7 +3,7 @@ import { Settings, Save, CheckCircle, RefreshCw, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { DEFAULT_PREFS } from '../utils/config';
 
-export default function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServer, onRestartTour }) {
+export default function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServer }) {
   const [serverDraft, setServerDraft] = useState(serverIP);
   const [draft, setDraft] = useState(prefs);
   const [saved, setSaved] = useState(false);
@@ -106,14 +106,6 @@ export default function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServ
         )}
         
         <div className="flex gap-3 w-full sm:w-auto">
-          {onRestartTour && (
-            <button
-              onClick={onRestartTour}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 font-semibold px-6 py-2.5 rounded-xl border border-indigo-500/20 hover:border-indigo-500/40 transition-all shadow-sm group"
-            >
-              Repetir Tutorial
-            </button>
-          )}
           <button
             onClick={saveAll}
             className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-6 py-2.5 rounded-xl transition-all shadow-lg shadow-emerald-600/20 hover:shadow-emerald-500/30 transform hover:-translate-y-0.5"

@@ -427,20 +427,3 @@ code, .font-mono, [class*="font-mono"] {
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   border-bottom: 1px solid hsla(220, 30%, 30%, 0.15);
 }
-
-
-
-/* ═══════════════════════════════════════════════════════════════
-   Joyride / React Floater Overrides
-   ═══════════════════════════════════════════════════════════════ */
-.__floater__ {
-  z-index: 100000 !important;
-}
-
-/* Fix mobile rendering for the Joyride overlay that might have gray issues */
-.react-joyride__overlay {
-  z-index: 99999 !important;
-  mix-blend-mode: normal !important;
-  /* Prevent interaction bugs on mobile */
-  touch-action: none;
-}
