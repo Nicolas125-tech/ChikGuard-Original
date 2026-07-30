@@ -175,6 +175,13 @@ class VetWelfareAgent(ChikGuardAgent):
             "stress": sum(stress) / len(stress) if stress else 0.0,
         }
 
+        # Cálculo científico do ITU (Índice de Temperatura e Umidade) adaptado para frangos de corte
+        # Formula: ITU = 0.8 * Temp + (UR / 100) * (Temp - 14.4) + 46.4
+        t = averages["temp"]
+        rh = averages["humi"]
+        thi_val = 0.8 * t + (rh / 100.0) * (t - 14.4) + 46.4
+        averages["thi"] = thi_val
+
         # Contagem de eventos de visão
         events = telemetry["events"]
         counts = {
@@ -187,6 +194,20 @@ class VetWelfareAgent(ChikGuardAgent):
 
         return averages, counts
 
+    def _diagnose_thermal_index(
+        self, thi: float, recommendations: List[str], anomalies: List[str]
+    ) -> str:
+        """Diagnostica o estresse térmico com base no ITU científico (Índice de Temperatura e Umidade)."""
+        if thi >= 80.0:
+            anomalies.append(f"ITU Crítico ({thi:.1f}): Risco iminente de mortalidade por estresse térmico severo.")
+            recommendations.append("Acionar exaustores na velocidade máxima (efeito wind-chill) e verificar o sistema de nebulização (se UR < 80%).")
+            return "CRITICAL"
+        elif thi >= 75.0:
+            anomalies.append(f"ITU Elevado ({thi:.1f}): Estresse térmico moderado detectado.")
+            recommendations.append("Aumentar a ventilação mínima e renovação de ar no galpão.")
+            return "WARNING"
+        return "NORMAL"
+
     def _generate_diagnostic_note(
         self,
         welfare_status: str,
@@ -198,7 +219,7 @@ class VetWelfareAgent(ChikGuardAgent):
         """Formata o relatório clínico final a ser persistido no Logbook."""
         summary = (
             f"[Diagnóstico Veterinário - {welfare_status}]\n"
-            f"Sensores: Temp={averages['temp']:.1f}°C, Umid={averages['humi']:.1f}%, Amônia={averages['amon']:.1f}ppm\n"
+            f"Sensores: Temp={averages['temp']:.1f}°C, Umid={averages['humi']:.1f}%, Amônia={averages['amon']:.1f}ppm, ITU={averages['thi']:.1f}\n"
             f"Saúde Acústica: Resp={averages['resp']:.2f}, Tosse={averages['cough']:.2f}, Estresse={averages['stress']:.2f}\n"
             f"Métricas Visuais: Carcaças={counts['carcass']}, Prostradas={counts['prostration']}, Agrupamento={counts['behavior']}\n"
         )
@@ -220,9 +241,26 @@ class VetWelfareAgent(ChikGuardAgent):
 
         # Executa as regras de diagnóstico em cadeia
         amonia_status = self._diagnose_ammonia(averages["amon"], recommendations, anomalies)
+        
+        # Correlação patológica de sinergia entre Amônia (NH3) e tosses acústicas
+        synergy_status = "NORMAL"
+        if averages["amon"] > 10.0 and averages["cough"] > 0.3:
+            anomalies.append(
+                f"Sinergia Patológica Detectada: Amônia elevada ({averages['amon']:.1f} ppm) combinada com tosses acústicas recorrentes ({averages['cough']:.2f}). Alto risco de lesão ciliar na traqueia e infecção respiratória secundária (ex: Colibacilose, Micoplasmose)."
+            )
+            recommendations.append(
+                "Urgente: Incrementar ventilação de renovação para baixar amônia abaixo de 10 ppm e realizar avaliação diagnóstica clínica."
+            )
+            synergy_status = "CRITICAL"
+
         resp_status = self._diagnose_respiratory_health(
             averages["cough"], averages["resp"], averages["stress"], recommendations, anomalies
         )
+        
+        thermal_status = self._diagnose_thermal_index(
+            averages["thi"], recommendations, anomalies
+        )
+        
         visual_counts = VisualCounts(
             carcass=counts["carcass"],
             prostration=counts["prostration"],
@@ -238,7 +276,7 @@ class VetWelfareAgent(ChikGuardAgent):
         # Escolhe o status mais grave (CRITICAL > WARNING > NORMAL)
         status_rank = {"NORMAL": 0, "WARNING": 1, "CRITICAL": 2}
         welfare_status = max(
-            [amonia_status, resp_status, visual_status], key=lambda s: status_rank[s]
+            [amonia_status, synergy_status, resp_status, thermal_status, visual_status], key=lambda s: status_rank[s]
         )
 
         summary_text = self._generate_diagnostic_note(
