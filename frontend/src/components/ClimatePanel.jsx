@@ -49,9 +49,11 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
   }, [baseUrl, token]);
 
   useEffect(() => {
-    setTimeout(() => fetchDevices(), 0);
-    setTimeout(() => fetchHistory(), 0);
-    setTimeout(() => fetchWeather(), 0);
+    (async () => {
+      fetchDevices();
+      fetchHistory();
+      fetchWeather();
+    })();
     const c = setInterval(fetchDevices, prefs.devicesMs);
     const h = setInterval(fetchHistory, prefs.historyMs);
     const w = setInterval(fetchWeather, 300000); // 5 min

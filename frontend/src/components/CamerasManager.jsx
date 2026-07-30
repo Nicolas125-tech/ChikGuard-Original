@@ -38,7 +38,7 @@ export default function CamerasManager({ serverIP, token }) {
   }, [serverIP, token]);
 
   useEffect(() => {
-    setTimeout(() => fetchCameras(), 0);
+    (async () => { fetchCameras(); })();
   }, [serverIP, token, fetchCameras]);
 
   const handleSubmit = async (e) => {

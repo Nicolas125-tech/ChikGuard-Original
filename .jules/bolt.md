@@ -59,3 +59,7 @@
 ## 2026-07-28 - Avoid N+1 Query in Startup Loop
 **Learning:** During database initialization loops (like checking default permissions), using `.first()` inside the loop for each combination creates severe N+1 bottlenecks.
 **Action:** Always fetch all existing combinations upfront using a single `O(1)` query into an in-memory set (e.g., `{(p.role, p.permission) for p in RolePermission.query.all()}`) for fast lookups.
+
+## 2025-05-15 - Replace setTimeout for initial data fetch
+**Learning:** When initializing concurrent data fetches in React `useEffect` hooks, wrapping the fetch calls in `setTimeout(..., 0)` unnecessarily defers execution to the next macrotask and delays the network request.
+**Action:** Calling the async fetch functions directly (e.g., inside an IIFE `(async () => { fetch(); })()`) optimizes Time-To-First-Byte (TTFB) and avoids macro-task queuing delays while also adhering to ESLint synchronous state updates rules.

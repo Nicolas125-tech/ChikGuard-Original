@@ -174,7 +174,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
   }, [baseUrl, token]);
 
   useEffect(() => {
-    setTimeout(() => fetchCameras(), 0);
+    (async () => { fetchCameras(); })();
   }, [fetchCameras]);
 
   const switchCamera = async (camId) => {
@@ -193,7 +193,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
   };
 
   useEffect(() => {
-    setTimeout(() => checkHealth(), 0);
+    (async () => { checkHealth(); })();
     const healthTimer = setInterval(checkHealth, 15000);
     return () => clearInterval(healthTimer);
   }, [checkHealth]);
@@ -212,7 +212,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
   }, [baseUrl, token]);
 
   useEffect(() => {
-    setTimeout(() => fetchAlertCount(), 0);
+    (async () => { fetchAlertCount(); })();
     const alertsTimer = setInterval(fetchAlertCount, 20000);
     return () => clearInterval(alertsTimer);
   }, [fetchAlertCount]);
