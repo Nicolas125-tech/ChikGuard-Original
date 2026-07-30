@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Tuple
 from dataclasses import dataclass
 
-from database import AcousticReading, Batch, BatchLogbook, EventLog, SensorReading, db
+from database import AcousticReading, Batch, BatchLogbook, EventLog, SensorReading, WeightEstimate, db
 
 
 
@@ -223,6 +223,13 @@ class VetWelfareAgent(ChikGuardAgent):
             f"Saúde Acústica: Resp={averages['resp']:.2f}, Tosse={averages['cough']:.2f}, Estresse={averages['stress']:.2f}\n"
             f"Métricas Visuais: Carcaças={counts['carcass']}, Prostradas={counts['prostration']}, Agrupamento={counts['behavior']}\n"
         )
+        try:
+            latest_weight = WeightEstimate.query.order_by(WeightEstimate.timestamp.desc()).first()
+            if latest_weight:
+                summary += f"Desempenho de Marcha/Peso: Peso Médio={latest_weight.avg_weight_g:.1f}g, Padrão Ross 308={latest_weight.ideal_weight_g:.1f}g\n"
+        except Exception:
+            pass
+
         if anomalies:
             summary += "\nAnomalias Detectadas:\n" + "\n".join([f"- {a}" for a in anomalies]) + "\n"
             summary += "Ações Recomendadas:\n" + "\n".join([f"- {r}" for r in recommendations])
@@ -273,10 +280,35 @@ class VetWelfareAgent(ChikGuardAgent):
             anomalies,
         )
 
+        # Análise de desempenho zootécnico e ganho de peso relativo à curva genética Ross 308
+        weight_status = "NORMAL"
+        try:
+            latest_weight = WeightEstimate.query.order_by(WeightEstimate.timestamp.desc()).first()
+            if latest_weight and latest_weight.ideal_weight_g and latest_weight.ideal_weight_g > 0:
+                avg_w = latest_weight.avg_weight_g
+                ideal_w = latest_weight.ideal_weight_g
+                dev_pct = ((avg_w - ideal_w) / ideal_w) * 100.0
+                
+                # Se o peso estiver mais de 15% abaixo do padrão genético
+                if dev_pct < -15.0:
+                    anomalies.append(
+                        f"Desvio de Desempenho Zootécnico: Peso médio estimado ({avg_w:.1f}g) está {abs(dev_pct):.1f}% abaixo da curva genética Ross 308 (Esperado: {ideal_w:.1f}g)."
+                    )
+                    recommendations.append(
+                        "Verificar a qualidade da ração, acesso e uniformidade de distribuição dos comedouros/bebedouros e verificar sintomas de infecção subclínica (como disbiose ou coccidiose)."
+                    )
+                    weight_status = "WARNING"
+                    
+                    # Se o desvio for extremo (> 25%), eleva para crítico
+                    if dev_pct < -25.0:
+                        weight_status = "CRITICAL"
+        except Exception as e:
+            logger.error(f"Erro ao analisar desvio de peso zootécnico no VetWelfareAgent: {e}")
+
         # Escolhe o status mais grave (CRITICAL > WARNING > NORMAL)
         status_rank = {"NORMAL": 0, "WARNING": 1, "CRITICAL": 2}
         welfare_status = max(
-            [amonia_status, synergy_status, resp_status, thermal_status, visual_status], key=lambda s: status_rank[s]
+            [amonia_status, synergy_status, resp_status, thermal_status, visual_status, weight_status], key=lambda s: status_rank[s]
         )
 
         summary_text = self._generate_diagnostic_note(
