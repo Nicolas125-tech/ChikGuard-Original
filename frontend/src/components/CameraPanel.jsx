@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Maximize, WifiOff, Layers, RefreshCw, Camera, Video, AlertCircle } from 'lucide-react';
+import { Maximize, Minimize, WifiOff, Layers, RefreshCw, Camera, Video, AlertCircle } from 'lucide-react';
 import WebRTCVideo from './WebRTCVideo';
 import HeatmapOverlay from './HeatmapOverlay';
 import { getBaseUrl } from '../utils/config';
@@ -9,6 +9,7 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
   const [videoBlocked, setVideoBlocked] = useState(false);
   const [showHeatmapOverlay, setShowHeatmapOverlay] = useState(false);
   const [useWebRTC, setUseWebRTC] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   
   // Local Webcam State
   const [source, setSource] = useState('server'); // 'server' or 'local'
@@ -17,11 +18,38 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
   const [localStream, setLocalStream] = useState(null);
   const [cameraPermission, setCameraPermission] = useState('prompt'); // 'prompt', 'granted', 'denied'
   const localVideoRef = useRef(null);
+  const containerRef = useRef(null);
 
   const baseUrl = getBaseUrl(serverIP);
   const webrtcUrl = `${baseUrl}/api/webrtc/offer`;
   const mjpegUrl = token ? `${baseUrl}/api/video?token=${token}` : `${baseUrl}/api/video`;
   const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Câmera Principal';
+
+  // Toggle Fullscreen mode using HTML5 API
+  const toggleFullscreen = () => {
+    if (!containerRef.current) return;
+    
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen().catch(err => {
+        console.error(`Erro ao ativar tela cheia: ${err.message}`);
+        toast.error('Não foi possível ativar o modo tela cheia.');
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
+  // Sync state with browser fullscreen changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
 
   // Request camera permission and enumerate devices
   const initLocalCamera = async () => {
@@ -129,10 +157,19 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
               <Layers size={14} aria-hidden="true" className={showHeatmapOverlay ? "text-emerald-400" : "text-slate-400"} />
               {showHeatmapOverlay ? 'Ocultar Heatmap' : 'Mostrar Heatmap AI'}
             </button>
+
+            <button 
+              onClick={toggleFullscreen}
+              className="flex items-center gap-1.5 text-xs font-semibold bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 rounded-lg px-3 py-1.5 transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 focus:outline-none"
+              title="Alternar Tela Cheia"
+            >
+              {isFullscreen ? <Minimize size={14} className="text-emerald-400" /> : <Maximize size={14} className="text-slate-400" />}
+              {isFullscreen ? 'Sair da Tela Cheia' : 'Tela Cheia'}
+            </button>
           </div>
         </div>
 
-        <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden h-full">
+        <div ref={containerRef} className="relative flex-1 bg-black flex items-center justify-center overflow-hidden h-full">
           {source === 'local' ? (
             /* Local Camera View */
             <div className="absolute inset-0 w-full h-full flex flex-col items-center justify-center bg-slate-950">
@@ -184,7 +221,7 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
                   <div className="absolute bottom-4 left-4 right-4 bg-slate-950/80 backdrop-blur-md border border-slate-800 p-3 rounded-2xl z-10 flex items-center justify-between gap-4 max-w-md mx-auto">
                     <div className="flex items-center gap-2 min-w-0">
                       <Camera size={16} className="text-emerald-400 shrink-0" />
-                      <span className="text-xs font-semibold text-slate-300 truncate">Câmera ativa no dispositivo</span>
+                      <span className="text-xs font-semibold text-slate-300 truncate">Câmera activa no dispositivo</span>
                     </div>
                     {devices.length > 1 && (
                       <select 
@@ -244,6 +281,16 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
                 {showHeatmapOverlay && <HeatmapOverlay serverIP={serverIP} token={token} />}
               </>
             )
+          )}
+
+          {isFullscreen && (
+            <button
+              onClick={toggleFullscreen}
+              className="absolute top-4 right-4 z-50 bg-slate-950/80 hover:bg-slate-900 border border-slate-700 text-slate-200 p-2.5 rounded-full transition-all shadow-lg flex items-center justify-center cursor-pointer"
+              title="Sair da Tela Cheia"
+            >
+              <Minimize size={18} className="text-emerald-400" />
+            </button>
           )}
         </div>
       </div>
