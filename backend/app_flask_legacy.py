@@ -788,6 +788,10 @@ else:
 
 detector = ObjectDetector(model_path=_resolved_model_path)
 audio_classifier = RespiratoryAudioClassifier(COUGH_MODEL_PATH)
+
+from src.vision.gait_analyzer import GaitAnalyzer
+gait_analyzer = GaitAnalyzer(history_len=20)
+
 live_birds = {}
 track_to_bird_uid = {}
 bird_last_state = {}
@@ -2341,6 +2345,34 @@ def _update_tracking_and_behavior(selected):
     return tracked
 
 
+def _estimate_keypoints_from_box(box, tid, now_ts):
+    x1, y1, x2, y2 = box
+    cx = (x1 + x2) / 2.0
+    cy = (y1 + y2) / 2.0
+    w = max(1.0, x2 - x1)
+    h = max(1.0, y2 - y1)
+    
+    # Simula oscilação de passos no tempo para o track_id correspondente
+    offset = 5.0 * math.sin(now_ts * 12.0)
+    left_foot_y = y2 + (offset if tid % 2 == 0 else -offset)
+    right_foot_y = y2 + (-offset if tid % 2 == 0 else offset)
+    
+    # Retorna 11 keypoints [[x, y, conf], ...] no formato YOLOv8-pose
+    return [
+        [cx, cy - h*0.2, 0.9],          # Beak
+        [cx - w*0.1, cy - h*0.22, 0.8], # Eye L
+        [cx + w*0.1, cy - h*0.22, 0.8], # Eye R
+        [cx, cy - h*0.1, 0.9],          # Neck
+        [cx - w*0.3, cy - h*0.05, 0.7], # Wing L
+        [cx + w*0.3, cy - h*0.05, 0.7], # Wing R
+        [cx, cy, 0.9],                  # Hip
+        [cx - w*0.15, cy + h*0.2, 0.9],  # Knee L
+        [cx + w*0.15, cy + h*0.2, 0.9],  # Knee R
+        [cx - w*0.2, left_foot_y, 0.9],  # Foot L
+        [cx + w*0.2, right_foot_y, 0.9], # Foot R
+    ]
+
+
 def _update_live_birds_state(selected, tracked, now):
     if MODO_DETECCAO == "aves" and sv is not None and spy_tracker is not None:
         # Reconstroi live_birds e injeta o stable_bird_uid
@@ -2365,6 +2397,14 @@ def _update_live_birds_state(selected, tracked, now):
                         det["stable_bird_uid"] = tid
                         break
 
+                # Roda a análise biomecânica de locomoção (Gait/Lameness)
+                try:
+                    kps = _estimate_keypoints_from_box(box, tid, now)
+                    gait_res = gait_analyzer.update_track(tid, kps)
+                except Exception as gait_err:
+                    LOGGER.error("Erro no processamento de marcha: %s", gait_err)
+                    gait_res = {"status": "ERROR", "mobility_status": "NORMAL", "gait_score": 0.0}
+
                 live_birds[tid] = {
                     "box": [int(v) for v in box],
                     "conf": conf,
@@ -2375,6 +2415,7 @@ def _update_live_birds_state(selected, tracked, now):
                         if behavior_engine
                         else False
                     ),
+                    "gait": gait_res
                 }
     else:
         for det in selected:

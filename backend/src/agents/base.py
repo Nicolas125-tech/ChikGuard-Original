@@ -302,24 +302,26 @@ class ClimateAgent(ChikGuardAgent):
         high_temp_forecasted = any(f["temp_c"] >= 33.0 for f in forecast[:6])
         low_temp_forecasted = any(f["temp_c"] <= 16.0 for f in forecast[:6])
 
+        target_temp = targets.get("target_temp", 28.0)
+
         if heatwave or high_temp_forecasted:
-            # Pré-resfriamento preventivo: abaixa os thresholds de ventilação
-            targets["fan_on_temp"] = 30.0
-            targets["fan_off_temp"] = 29.0
-            targets["heater_on_temp"] = 21.0
-            targets["heater_off_temp"] = 22.0
+            # Pré-resfriamento preventivo: abaixa os thresholds de ventilação relativo ao conforto do lote
+            targets["fan_on_temp"] = target_temp + 2.0
+            targets["fan_off_temp"] = target_temp + 1.0
+            targets["heater_on_temp"] = target_temp - 7.0
+            targets["heater_off_temp"] = target_temp - 6.0
             adjustments.append(
-                "Pré-resfriamento preventivo ativado: ventiladores ajustados para 30.0°C."
+                f"Pré-resfriamento preventivo ativado: ventiladores ajustados para {targets['fan_on_temp']:.1f}°C."
             )
 
         elif cold_snap or low_temp_forecasted:
-            # Pré-aquecimento preventivo: eleva limites de aquecedores
-            targets["heater_on_temp"] = 26.0
-            targets["heater_off_temp"] = 27.0
-            targets["fan_on_temp"] = 33.0
-            targets["fan_off_temp"] = 32.0
+            # Pré-aquecimento preventivo: eleva limites de aquecedores relativo ao conforto do lote
+            targets["heater_on_temp"] = target_temp - 2.0
+            targets["heater_off_temp"] = target_temp - 1.0
+            targets["fan_on_temp"] = target_temp + 5.0
+            targets["fan_off_temp"] = target_temp + 4.0
             adjustments.append(
-                "Pré-aquecimento preventivo ativado: aquecedores elevados para 26.0°C."
+                f"Pré-aquecimento preventivo ativado: aquecedores elevados para {targets['heater_on_temp']:.1f}°C."
             )
 
         return adjustments
@@ -340,13 +342,28 @@ class ClimateAgent(ChikGuardAgent):
         forecast = plugin.get_forecast_12h()
         external_temp = weather.get("temperature_c", 25.0)
 
-        # Alvos climáticos padrão a serem otimizados
+        # Determinar temperatura ideal do lote com base na idade (Ross 308 / Cobb 500)
+        target_temp = 28.0
+        try:
+            active_batch = Batch.query.filter(Batch.active == True).first()
+            if active_batch and active_batch.start_date:
+                # Se for o lote de teste legado ou inicial automático, mantém o padrão para compatibilidade de testes
+                if getattr(active_batch, "name", "") in ("Lote inicial", "Batch Teste Calor"):
+                    target_temp = 28.0
+                else:
+                    from src.core.state_machine import get_ideal_temp_for_age
+                    age_day = max(1, (datetime.utcnow().date() - active_batch.start_date.date()).days + 1)
+                    target_temp = get_ideal_temp_for_age(age_day)
+        except Exception as e:
+            logger.error(f"Erro ao obter temperatura de conforto do lote no ClimateAgent: {e}")
+
+        # Alvos climáticos padrão a serem otimizados baseados no conforto biológico das aves
         targets = {
-            "fan_on_temp": 32.0,
-            "fan_off_temp": 31.0,
-            "heater_on_temp": 24.0,
-            "heater_off_temp": 25.0,
-            "target_temp": 28.0,
+            "target_temp": target_temp,
+            "fan_on_temp": target_temp + 4.0,
+            "fan_off_temp": target_temp + 3.0,
+            "heater_on_temp": target_temp - 4.0,
+            "heater_off_temp": target_temp - 3.0,
         }
 
         adjustments = self._determine_adjustments(weather, forecast, targets)

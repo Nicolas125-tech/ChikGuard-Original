@@ -30,7 +30,7 @@ def persist_sensor_reading(db: Session, source: str = "sensor"):
             source=source,
         )
         db.add(row)
-        db.commit()
+        db.flush()  # Obtém o ID autogerado sem encerrar a transação
 
         # Enqueue sync item
         sync_item = SyncQueueItem(
@@ -39,7 +39,7 @@ def persist_sensor_reading(db: Session, source: str = "sensor"):
             status="pending"
         )
         db.add(sync_item)
-        db.commit()
+        db.commit()  # Confirma ambas as inserções de forma atômica
     except Exception as e:
         db.rollback()
         logger.error(f"Failed to persist sensor reading: {e}")
@@ -61,7 +61,7 @@ def _maybe_alert_sensor(db: Session, kind: str, value: float, message: str):
             metadata_json=_safe_json({"kind": kind, "value": value})
         )
         db.add(event)
-        db.commit()
+        db.flush()  # Obtém o ID autogerado sem encerrar a transação
 
         sync_item = SyncQueueItem(
             item_type="event_log",
@@ -69,7 +69,7 @@ def _maybe_alert_sensor(db: Session, kind: str, value: float, message: str):
             status="pending"
         )
         db.add(sync_item)
-        db.commit()
+        db.commit()  # Confirma ambas as inserções de forma atômica
     except Exception as e:
         db.rollback()
         logger.error(f"Failed to create sensor alert event log: {e}")

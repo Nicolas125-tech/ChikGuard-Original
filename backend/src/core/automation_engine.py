@@ -118,9 +118,19 @@ class AutomationEngine:
             self._trigger_action(
                 camera_id, "exhaust_fan", "on", reason="Estresse térmico visual (IA detectou calor)"
             )
-            self._trigger_action(
-                camera_id, "water_pump", "on", reason="Aumentar nebulização evaporativa"
-            )
+            # SALVAGUARDA ZOOTÉCNICA CRÍTICA: Nunca ativar resfriamento evaporativo (nebulização)
+            # se a umidade relativa já estiver muito alta (>= 80%), pois satura o ar e impede a perda
+            # de calor latente das aves por respiração/panting, agravando a hipertermia e risco de morte.
+            from src.core.state import sensor_state
+            humidity = float(sensor_state.get("humidity_pct", 0.0))
+            if humidity < 80.0:
+                self._trigger_action(
+                    camera_id, "water_pump", "on", reason=f"Ativar nebulização evaporativa (UR: {humidity:.1f}% < 80%)"
+                )
+            else:
+                self._trigger_action(
+                    camera_id, "water_pump", "off", reason=f"Bloqueio de nebulização evaporativa por alta umidade (UR: {humidity:.1f}% >= 80%)"
+                )
 
     def process_ai_audio_anomaly(self, camera_id: str, cough_idx: float, stress_idx: float):
         """
