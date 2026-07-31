@@ -12,7 +12,7 @@ class LamenessDetector:
         self,
         model_path="yolov8n-pose.engine",
         history_size=45,
-        angle_threshold=110.0,
+        angle_threshold=60.0,
         stride_threshold=0.05,
     ):
         """
@@ -21,7 +21,7 @@ class LamenessDetector:
         Args:
             model_path (str): Caminho para o modelo YOLOv8 pose (idealmente TensorRT .engine para borda).
             history_size (int): Quantidade de frames (histórico temporal) para análise da marcha.
-            angle_threshold (float): Ângulo em graus. Ângulos consistentemente menores que isso indicam ave sentada/mancando.
+            angle_threshold (float): Ângulo em graus. Limite de detecção (default legacy: 60.0 para compatibilidade, padrão zootécnico: 110.0).
             stride_threshold (float): Limite inferior para passada normalizada (Euclidiana). Menor que isso indica passos anormais.
         """
         from ultralytics import YOLO
@@ -106,9 +106,10 @@ class LamenessDetector:
         Heurística rigorosa de detecção de claudicação (Lameness).
 
         Baseia-se na biometria do Ângulo Tibiotársico (Hock Angle) calculado ao longo do tempo.
+        Resolução dinâmica do esqueleto com base no número de keypoints para suportar múltiplos modelos.
         
         Regra de Negócio Biomecânica:
-        - Ave sentada/agachada (agachamento crônico): Média histórica do ângulo < 60°
+        - Ave sentada/agachada (agachamento crônico): Média histórica do ângulo < angle_threshold (default legacy: 60.0)
         - Perna travada/rigidez articular (baixa mobilidade): Variância do ângulo < 5.0
 
         Ambos os critérios devem ser satisfeitos simultaneamente para disparar o diagnóstico positivo.
@@ -120,54 +121,112 @@ class LamenessDetector:
             tuple[bool, float, dict]: (is_lame, confidence_score, details_dict)
         """
         history = list(self.track_history[track_id])
-
-        # Mapeamento biomecânico dos Keypoints YOLOv8-pose
-        HIP = 2   # Quadril/Pélvis (ponto de fixação superior da coxa)
-        HOCK = 3  # Jarrete/Articulação Tibiotársica (articulação intermediária da perna)
-        FOOT = 5  # Pata (ponto de apoio ao solo)
-
-        angles = []
-
-        for curr_kp in history:
-            # Garante que os keypoints foram detectados com confiança razoável (evita oclusão)
-            if curr_kp[HIP][0] > 0 and curr_kp[HOCK][0] > 0 and curr_kp[FOOT][0] > 0:
-                p1 = np.array(curr_kp[HIP][:2])
-                p2 = np.array(curr_kp[HOCK][:2])
-                p3 = np.array(curr_kp[FOOT][:2])
-
-                angle = self.calculate_hock_angle(p1, p2, p3)
-                if angle > 0:  # Descarta retornos de erro da função geométrica (0.0)
-                    angles.append(angle)
-
-        # Exige amostragem temporal mínima representativa (mínimo de 15 frames válidos)
-        if len(angles) < 15:
+        if not history:
             return False, 0.0, {}
 
-        # Métricas estatísticas da série temporal do Hock Angle
-        avg_angle = float(np.mean(angles))
-        var_angle = float(np.var(angles))
+        # Determina o número de keypoints baseado no primeiro frame do histórico
+        num_kps = len(history[0])
+        
+        # Mapeamento do esqueleto adaptado ao modelo de Pose detectado
+        # Se 17 (COCO/yolov8n-pose), checa perna esquerda (11, 13, 15) e perna direita (12, 14, 16)
+        # Se 11 (ChikGuard), checa perna esquerda (6, 7, 9) e perna direita (6, 8, 10)
+        # Se 6 (Custom Simplificado), checa perna única (2, 3, 5)
+        legs = []
+        if num_kps == 17:
+            legs = [("Esquerda", 11, 13, 15), ("Direita", 12, 14, 16)]
+        elif num_kps == 11:
+            legs = [("Esquerda", 6, 7, 9), ("Direita", 6, 8, 10)]
+        elif num_kps == 6:
+            legs = [("Principal", 2, 3, 5)]
+        else:
+            # Fallback seguro
+            legs = [("Principal", 2, 3, 5)]
 
+        # Coleta os ângulos por perna
+        angles_per_leg = {leg_name: [] for leg_name, _, _, _ in legs}
+
+        for curr_kp in history:
+            for leg_name, hip_idx, hock_idx, foot_idx in legs:
+                if hip_idx < len(curr_kp) and hock_idx < len(curr_kp) and foot_idx < len(curr_kp):
+                    # Garante detecção com confiança aceitável
+                    pt_hip = curr_kp[hip_idx]
+                    pt_hock = curr_kp[hock_idx]
+                    pt_foot = curr_kp[foot_idx]
+                    
+                    hip_ok = pt_hip[0] > 0 and (len(pt_hip) < 3 or pt_hip[2] > 0.3)
+                    hock_ok = pt_hock[0] > 0 and (len(pt_hock) < 3 or pt_hock[2] > 0.3)
+                    foot_ok = pt_foot[0] > 0 and (len(pt_foot) < 3 or pt_foot[2] > 0.3)
+                    
+                    if hip_ok and hock_ok and foot_ok:
+                        p1 = np.array(pt_hip[:2])
+                        p2 = np.array(pt_hock[:2])
+                        p3 = np.array(pt_foot[:2])
+                        
+                        angle = self.calculate_hock_angle(p1, p2, p3)
+                        if angle > 0:
+                            angles_per_leg[leg_name].append(angle)
+
+        # Filtra pernas que têm amostragem válida
+        valid_legs = {name: vals for name, vals in angles_per_leg.items() if len(vals) >= 15}
+        
+        if not valid_legs:
+            return False, 0.0, {}
+
+        # Calcula métricas para cada perna válida
+        gait_diagnostics = {}
         is_lame = False
-        conf_score = 0.0
-        symptom = None
+        max_conf_score = 0.0
+        symptoms = []
 
-        # Avaliação de claudicação conforme os limites fisiológicos
-        if avg_angle < 60.0 and var_angle < 5.0:
-            is_lame = True
-            # Confiança baseada na imobilidade da articulação: variância mais baixa indica
-            # maior certeza de travamento articular. Normalizado com piso de 0.5.
-            conf_score = float(max(0.5, 1.0 - (var_angle / 5.0)))
-            symptom = (
-                "Claudicação crônica: Agachamento severo (ângulo médio <60) E rigidez articular (variância <5.0)"
-            )
+        for leg_name, angles in valid_legs.items():
+            avg_angle = float(np.mean(angles))
+            var_angle = float(np.var(angles))
+            
+            leg_lame = False
+            if avg_angle < self.angle_threshold and var_angle < 5.0:
+                leg_lame = True
+                is_lame = True
+                conf_score = float(max(0.5, 1.0 - (var_angle / 5.0)))
+                max_conf_score = max(max_conf_score, conf_score)
+                symptoms.append(
+                    f"Claudicação na perna {leg_name}: agachamento severo (ângulo médio {avg_angle:.1f}°) "
+                    f"E rigidez articular (variância {var_angle:.2f})"
+                )
+                
+            gait_diagnostics[leg_name] = {
+                "avg_angle": round(avg_angle, 2),
+                "var_angle": round(var_angle, 2),
+                "is_lame": leg_lame
+            }
 
+        # Checa assimetria entre as pernas (Zootecnia avançada) se ambas as pernas esquerda e direita forem válidas
+        if "Esquerda" in valid_legs and "Direita" in valid_legs:
+            avg_left = gait_diagnostics["Esquerda"]["avg_angle"]
+            avg_right = gait_diagnostics["Direita"]["avg_angle"]
+            angle_diff = abs(avg_left - avg_right)
+            
+            # Se a diferença média de angulação entre as pernas for maior que 20 graus, indica assimetria severa
+            if angle_diff > 20.0 and not is_lame:
+                is_lame = True
+                max_conf_score = max(max_conf_score, float(min(0.9, angle_diff / 40.0)))
+                symptoms.append(
+                    f"Claudicação Unilateral: Assimetria severa de angulação intertársica ({angle_diff:.1f}° de diferença)"
+                )
+            gait_diagnostics["asymmetry_diff_deg"] = round(angle_diff, 2)
+
+        symptom_desc = "; ".join(symptoms) if symptoms else None
+
+        avg_angles_all = [diag["avg_angle"] for diag in gait_diagnostics.values() if isinstance(diag, dict) and "avg_angle" in diag]
+        var_angles_all = [diag["var_angle"] for diag in gait_diagnostics.values() if isinstance(diag, dict) and "var_angle" in diag]
+        
         details = {
-            "avg_hock_angle": round(avg_angle, 2),
-            "angle_variance": round(var_angle, 2),
-            "symptom": symptom,
+            "avg_hock_angle": round(float(np.mean(avg_angles_all)), 2) if avg_angles_all else 0.0,
+            "angle_variance": round(float(np.mean(var_angles_all)), 2) if var_angles_all else 0.0,
+            "symptom": symptom_desc,
+            "legs_detail": gait_diagnostics
         }
 
-        return is_lame, conf_score, details
+        return is_lame, max_conf_score, details
 
     def analyze_gait_advanced(self, track_id: int) -> tuple[bool, float, dict]:
         """Método legado. Delega para a nova implementação estrita analyze_gait."""
