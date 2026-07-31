@@ -4,6 +4,7 @@ import SystemCard from './SystemCard';
 import { getBaseUrl } from '../utils/config';
 import { RefreshCw, Download } from 'lucide-react';
 import { isDeepEqual } from '../utils/performance';
+import QueryErrorState from './QueryErrorState';
 
 export default function ManagementPanel({ serverIP, prefs, token, cameras = [], activeCamera }) {
   const baseUrl = getBaseUrl(serverIP);
@@ -21,44 +22,45 @@ export default function ManagementPanel({ serverIP, prefs, token, cameras = [], 
   const [isClassifying, setIsClassifying] = useState(false);
   const [sensorHistory, setSensorHistory] = useState([]);
   const [weather, setWeather] = useState(null);
+  const [error, setError] = useState(null);
   const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
 
   const loadManagement = useCallback(async () => {
-    const headers = { Authorization: `Bearer ${token}` };
-    const [wCurve, th, en, au, sy, sh, sum] = await Promise.all([
-      fetch(`${baseUrl}/api/weight/curve?days=30`, { headers }),
-      fetch(`${baseUrl}/api/thermal-anomalies/live?minutes=60`, { headers }),
-      fetch(`${baseUrl}/api/energy/summary`, { headers }),
-      fetch(`${baseUrl}/api/audit/logs?limit=80`, { headers }),
-      fetch(`${baseUrl}/api/sync/status`, { headers }),
-      fetch(`${baseUrl}/api/sensors/history?limit=120`, { headers }),
-      fetch(`${baseUrl}/api/summary`, { headers }),
-    ]);
-    if (wCurve.ok) {
-      const data = (await wCurve.json()).items || [];
-      setWeightCurve(prev => isDeepEqual(prev, data) ? prev : data);
-    }
-    if (th.ok) {
-      const data = await th.json();
-      setThermal(prev => isDeepEqual(prev, data) ? prev : data);
-    }
-    if (en.ok) {
-      const data = await en.json();
-      setEnergy(prev => isDeepEqual(prev, data) ? prev : data);
-    }
-    if (au.ok) {
-      const data = await au.json();
-      setAudit(prev => isDeepEqual(prev, data) ? prev : data);
-    }
-    if (sy.ok) {
-      const data = await sy.json();
-      setSync(prev => isDeepEqual(prev, data) ? prev : data);
-    }
-    if (sh.ok) {
-      const data = (await sh.json()).items || [];
-      setSensorHistory(prev => isDeepEqual(prev, data) ? prev : data);
-    }
-    if (sum.ok) {
+    try {
+      setError(null);
+      const headers = { Authorization: `Bearer ${token}` };
+      const [wCurve, th, en, au, sy, sh, sum] = await Promise.all([
+        fetch(`${baseUrl}/api/weight/curve?days=30`, { headers }),
+        fetch(`${baseUrl}/api/thermal-anomalies/live?minutes=60`, { headers }),
+        fetch(`${baseUrl}/api/energy/summary`, { headers }),
+        fetch(`${baseUrl}/api/audit/logs?limit=80`, { headers }),
+        fetch(`${baseUrl}/api/sync/status`, { headers }),
+        fetch(`${baseUrl}/api/sensors/history?limit=120`, { headers }),
+        fetch(`${baseUrl}/api/summary`, { headers }),
+      ]);
+      
+      if (!wCurve.ok || !th.ok || !en.ok || !au.ok || !sy.ok || !sh.ok || !sum.ok) {
+        throw new Error('Falha ao obter os dados de gestão da granja.');
+      }
+
+      const wCurveData = (await wCurve.json()).items || [];
+      setWeightCurve(prev => isDeepEqual(prev, wCurveData) ? prev : wCurveData);
+
+      const thData = await th.json();
+      setThermal(prev => isDeepEqual(prev, thData) ? prev : thData);
+
+      const enData = await en.json();
+      setEnergy(prev => isDeepEqual(prev, enData) ? prev : enData);
+
+      const auData = await au.json();
+      setAudit(prev => isDeepEqual(prev, auData) ? prev : auData);
+
+      const syData = await sy.json();
+      setSync(prev => isDeepEqual(prev, syData) ? prev : syData);
+
+      const shData = (await sh.json()).items || [];
+      setSensorHistory(prev => isDeepEqual(prev, shData) ? prev : shData);
+
       const d = await sum.json();
       const prev = dadosRef.current;
       if (!prev || !isDeepEqual(prev, d)) {
@@ -68,6 +70,9 @@ export default function ManagementPanel({ serverIP, prefs, token, cameras = [], 
         setWeather(d.weather);
         dadosRef.current = d;
       }
+    } catch (err) {
+      console.error('Error fetching management data:', err);
+      setError(err.message || 'Erro de conexão com o painel de gestão.');
     }
   }, [baseUrl, token]);
 
@@ -116,6 +121,22 @@ export default function ManagementPanel({ serverIP, prefs, token, cameras = [], 
       clearInterval(timer);
     };
   }, [loadManagement, prefs.historyMs]);
+
+  if (error) {
+    return (
+      <div className="space-y-4 sm:space-y-6">
+        <div className="mb-2">
+          <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+            Gestão Avançada - <span className="text-emerald-400">{farmName}</span>
+          </h2>
+          <p className="text-slate-400 text-sm mt-1">Dados de crescimento, financeiro e saúde avançada.</p>
+        </div>
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-12 flex items-center justify-center min-h-[400px]">
+          <QueryErrorState message={error} onRetry={loadManagement} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 sm:space-y-6">

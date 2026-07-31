@@ -59,11 +59,28 @@ async def lifespan(fastapi_app: FastAPI):
     sync_worker = SensorSyncWorker()
     sync_task = asyncio.create_task(sync_worker.run())
 
+    # Inicia o SOTA Computer Vision Pipeline
+    try:
+        from src.cv_master import get_sota_runner
+        get_sota_runner().start(asyncio.get_running_loop())
+        LOGGER.info("SOTA Computer Vision Pipeline iniciado.")
+    except Exception as cv_err:
+        LOGGER.error(f"Falha ao iniciar o SOTA Computer Vision Pipeline: {cv_err}")
+
     yield
 
     # Cleanup na finalizacao
     fsm_task.cancel()
     sync_task.cancel()
+    
+    # Finaliza o SOTA Computer Vision Pipeline
+    try:
+        from src.cv_master import get_sota_runner
+        get_sota_runner().stop()
+        LOGGER.info("SOTA Computer Vision Pipeline finalizado.")
+    except Exception as cv_err:
+        LOGGER.error(f"Falha ao finalizar o SOTA Computer Vision Pipeline: {cv_err}")
+
     if mqtt_client:
         mqtt_client.loop_stop()
         mqtt_client.disconnect()
@@ -164,6 +181,7 @@ async def get_summary(
         weight_state,
         live_birds,
         cv_lock,
+        tamper_state,
     )
 
     ultima = db.query(Reading).order_by(Reading.id.desc()).first()
@@ -260,7 +278,7 @@ async def get_summary(
         },
         "sync": {"pending": pending_sync},
         "weather": {},
-        "tamper": {"last_alert_ts": 0, "last_causes": [], "alerts_count": 0},
+        "tamper": tamper_state,
         "carcass": {"count": 0, "audio_alert": False},
         "comfort_score": 95,
     }

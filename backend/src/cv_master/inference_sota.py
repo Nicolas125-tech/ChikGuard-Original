@@ -1,4 +1,5 @@
 import logging
+import torch
 
 try:
     import supervision as sv
@@ -9,27 +10,30 @@ except ImportError:
 
 
 class SOTAInferenceEngine:
-    def __init__(self, model_path, confidence=0.45, iou_threshold=0.5):
+    def __init__(self, model_path, confidence=0.25, iou_threshold=0.45):
         """
-        Engine SOTA utilizando ONNX Runtime (preferencialmente TensorRT)
-        e SAHI para detecção otimizada de alvos em oclusão severa.
+        Engine SOTA utilizando SAHI para detecção de alvos pequenos/distantes.
+        Detecta automaticamente aceleração de GPU CUDA se disponível, caso contrário cai para CPU.
         """
         self.logger = logging.getLogger("cv_master.SOTAInference")
         self.model_path = model_path
         self.confidence = confidence
         self.iou_threshold = iou_threshold
 
-        self.logger.info(f"Carregando SOTA Model em {model_path} via ONNX/TensorRT...")
+        # Detecção Dinâmica de Aceleração de Hardware
+        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        self.logger.info(
+            f"Carregando SOTA Model em {model_path} via SAHI (device={self.device})..."
+        )
 
-        # O Sahi detecta a extensão (.onnx) e tenta injetar os providers de hardware.
-        # Caso seja PT, recairá para PyTorch na lib ultralytics padrão.
         self.model = AutoDetectionModel.from_pretrained(
-            model_type="yolov8",  # Compatível com YOLOv8/v10 padrão SAHI
+            model_type="yolov8",  # YOLOv8/v10/v8-seg são compatíveis com o tipo yolov8 no SAHI
             model_path=model_path,
             confidence_threshold=self.confidence,
-            device="cuda:0",
+            device=self.device,
         )
-        # Injeta IOU modificado para desempate de NMS
+
+        # Injeta IOU modificado para NMS se aplicável
         if hasattr(self.model, "engine") and hasattr(self.model.engine, "model"):
             self.model.engine.model.iou = self.iou_threshold
 
@@ -38,6 +42,9 @@ class SOTAInferenceEngine:
         Gera predições fatiadas para detectar aves pequenas.
         Retorna obj supervision.Detections
         """
+        if frame is None or frame.size == 0:
+            return sv.Detections.empty()
+
         result = get_sliced_prediction(
             frame,
             self.model,
@@ -47,6 +54,7 @@ class SOTAInferenceEngine:
             overlap_width_ratio=overlap,
             postprocess_class_agnostic=True,
             postprocess_match_metric="IOU",
+            verbose=0,
         )
 
         # Ponte SAHI para Supervision

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Thermometer, Bird, Activity, TrendingUp, TrendingDown, Minus, Database } from 'lucide-react';
 import { getBaseUrl } from '@/utils/config';
 import WeightForecastChart from '@/components/WeightForecastChart';
+import QueryErrorState from './QueryErrorState';
 
 /* ── Animated Number ─────────────────────────────────────────── */
 const AnimatedNum = React.memo(function AnimatedNum({ value, decimals = 0 }) {
@@ -67,11 +68,13 @@ export default function OverviewPanel({ token, serverIP, prefs, cameras = [], ac
   const [contagem, setContagem] = useState(null);
   const [summary, setSummary] = useState(null);
   const [prevTemp, setPrevTemp] = useState(null);
+  const [error, setError] = useState(null);
   const dadosRef = useRef(null);
   const baseUrl = getBaseUrl(serverIP);
 
   const fetchSummary = useCallback(async () => {
     try {
+      setError(null);
       const r = await fetch(`${baseUrl}/api/summary`, { headers: { Authorization: `Bearer ${token}` } });
       if (r.ok) {
         const d = await r.json();
@@ -91,8 +94,13 @@ export default function OverviewPanel({ token, serverIP, prefs, cameras = [], ac
         const newDados = { temperatura: newTemp, status: newStatus };
         setDados(newDados);
         dadosRef.current = newDados;
+      } else {
+        throw new Error('Falha ao carregar dados');
       }
-    } catch (_e) { console.error(_e); }
+    } catch (_e) { 
+      console.error(_e); 
+      setError(_e.message);
+    }
   }, [baseUrl, token]);
 
   useEffect(() => {
@@ -110,6 +118,22 @@ export default function OverviewPanel({ token, serverIP, prefs, cameras = [], ac
 
   const onlineFarms = cameras.filter(c => c.status === 'online').length;
   const offlineFarms = cameras.length - onlineFarms;
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="mb-2">
+          <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+            Visão Geral - <span className="text-emerald-400">{cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal'}</span>
+          </h2>
+          <p className="text-slate-400 text-sm mt-1">Monitoramento de telemetria e visão computacional em tempo real.</p>
+        </div>
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-12 flex items-center justify-center min-h-[400px]">
+          <QueryErrorState message={error} onRetry={fetchSummary} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { getBaseUrl } from '../utils/config';
 import { ServerCog, Plus, Trash2, ShieldCheck, Thermometer, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import QueryErrorState from './QueryErrorState';
 
 export default function RulesPanel({ serverIP }) {
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   
@@ -17,33 +19,36 @@ export default function RulesPanel({ serverIP }) {
   const [device, setDevice] = useState('exhaust_fan');
   const [state, setState] = useState('on');
 
-  useEffect(() => {
-    const fetchRules = async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(`${getBaseUrl(serverIP)}/api/rules`);
-        if (res.ok) {
-          const data = await res.json();
-          setRules(data);
-        }
-      } catch (err) {
-        console.error('Failed to fetch rules', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchRules();
+  const fetchRules = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${getBaseUrl(serverIP)}/api/rules`);
+      if (!res.ok) throw new Error('Não foi possível obter as regras de automação.');
+      const data = await res.json();
+      setRules(data);
+    } catch (err) {
+      console.error('Failed to fetch rules', err);
+      setError(err.message || 'Erro ao carregar as regras.');
+    } finally {
+      setLoading(false);
+    }
   }, [serverIP]);
+
+  useEffect(() => {
+    fetchRules();
+  }, [fetchRules]);
 
   const reloadRules = async () => {
     try {
+      setError(null);
       const res = await fetch(`${getBaseUrl(serverIP)}/api/rules`);
-      if (res.ok) {
-        const data = await res.json();
-        setRules(data);
-      }
+      if (!res.ok) throw new Error('Não foi possível recarregar as regras de automação.');
+      const data = await res.json();
+      setRules(data);
     } catch (err) {
       console.error('Failed to reload rules', err);
+      setError(err.message || 'Erro ao recarregar as regras.');
     }
   };
 
@@ -193,7 +198,9 @@ export default function RulesPanel({ serverIP }) {
         <h3 className="text-lg font-semibold text-slate-200 mb-4 flex items-center gap-2">
           <Thermometer size={18} className="text-blue-400" /> Regras Ativas
         </h3>
-        {loading ? (
+        {error ? (
+          <QueryErrorState message={error} onRetry={fetchRules} />
+        ) : loading ? (
           <div className="text-center py-8 text-slate-500 animate-pulse">Carregando regras...</div>
         ) : rules.length === 0 ? (
           <div className="text-center py-10 bg-slate-950/30 rounded-xl border border-slate-800/50">

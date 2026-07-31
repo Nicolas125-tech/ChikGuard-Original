@@ -3,13 +3,14 @@ import { Wind, Zap, Thermometer, LayoutDashboard, Download, CloudLightning, Refr
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { getBaseUrl } from '../utils/config';
 import { isDeepEqual } from '../utils/performance';
+import QueryErrorState from './QueryErrorState';
 
 export default function ClimatePanel({ token, serverIP, prefs, canControlDevices, cameras = [], activeCamera }) {
   const [dispositivos, setDispositivos] = useState({ ventilacao: false, aquecedor: false });
   const [isToggling, setIsToggling] = useState(null);
   const [historico, setHistorico] = useState([]);
   const [weather, setWeather] = useState(null);
-  const [Erro_State, setErro] = useState(false);
+  const [error, setError] = useState(null);
   const baseUrl = getBaseUrl(serverIP);
   const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
 
@@ -19,8 +20,9 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
       if (!r.ok) throw new Error('Device state fetch failed');
       const data = await r.json() || { ventilacao: false, aquecedor: false };
       setDispositivos(prev => isDeepEqual(prev, data) ? prev : data);
-    } catch {
-      setErro(true);
+    } catch (err) {
+      console.error(err);
+      setError('Falha ao conectar com a central de climatização.');
     }
   }, [baseUrl, token]);
 
@@ -30,8 +32,9 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
       if (!r.ok) throw new Error('History fetch failed');
       const data = await r.json() || [];
       setHistorico(prev => isDeepEqual(prev, data) ? prev : data);
-    } catch {
-      setErro(true);
+    } catch (err) {
+      console.error(err);
+      setError('Falha ao obter histórico térmico.');
     }
   }, [baseUrl, token]);
 
@@ -40,7 +43,6 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
       const r = await fetch(`${baseUrl}/api/weather/forecast`, { headers: { Authorization: `Bearer ${token}` } });
       if (r.ok) {
         const data = await r.json();
-        // Bolt Optimization: Prevent unnecessary React re-renders by skipping state updates if the polled API data is identical.
         setWeather(prev => isDeepEqual(prev, data) ? prev : data);
       }
     } catch {
@@ -48,17 +50,20 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
     }
   }, [baseUrl, token]);
 
+  const loadAll = useCallback(() => {
+    setError(null);
+    fetchDevices();
+    fetchHistory();
+    fetchWeather();
+  }, [fetchDevices, fetchHistory, fetchWeather]);
+
   useEffect(() => {
-    (async () => {
-      fetchDevices();
-      fetchHistory();
-      fetchWeather();
-    })();
+    loadAll();
     const c = setInterval(fetchDevices, prefs.devicesMs);
     const h = setInterval(fetchHistory, prefs.historyMs);
     const w = setInterval(fetchWeather, 300000); // 5 min
     return () => { clearInterval(c); clearInterval(h); clearInterval(w); };
-  }, [fetchDevices, fetchHistory, fetchWeather, prefs]);
+  }, [loadAll, fetchDevices, fetchHistory, fetchWeather, prefs]);
 
   const toggleDevice = async (tipo, ligar) => {
     if (!canControlDevices) return;
@@ -89,6 +94,22 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  if (error) {
+    return (
+      <div className="space-y-4 sm:space-y-6">
+        <div className="mb-2">
+          <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+            Clima e Dispositivos - <span className="text-emerald-400">{farmName}</span>
+          </h2>
+          <p className="text-slate-400 text-sm mt-1">Monitore o clima e controle o ambiente.</p>
+        </div>
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-12 flex items-center justify-center min-h-[400px]">
+          <QueryErrorState message={error} onRetry={loadAll} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 sm:space-y-6">

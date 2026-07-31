@@ -3,6 +3,7 @@ import { Layers, Thermometer, Bird, Cpu, AlertTriangle, Fan, Flame, Activity } f
 import { getBaseUrl } from '../utils/config';
 import DigitalTwin3D from './DigitalTwin3D';
 import { isDeepEqual } from '../utils/performance';
+import QueryErrorState from './QueryErrorState';
 
 export default function DigitalTwinPanel({ token, serverIP, cameras = [], activeCamera }) {
   const [activeLayer, setActiveLayer] = useState('sensors'); // 'sensors' | 'birds' | 'devices' | 'alerts'
@@ -11,6 +12,7 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
   const [heatmapPoints, setHeatmapPoints] = useState([]);
   const [thermalAnomalies, setThermalAnomalies] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const baseUrl = getBaseUrl(serverIP);
   const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Galpão Principal 1';
@@ -19,6 +21,7 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
+      setError(null);
       const headers = { Authorization: `Bearer ${token}` };
       const [rSensors, rDevices, rHeatmap, rAnomalies] = await Promise.all([
         fetch(`${baseUrl}/api/sensors/live`, { headers }),
@@ -27,30 +30,26 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
         fetch(`${baseUrl}/api/thermal-anomalies/live?minutes=15`, { headers }),
       ]);
 
-      // Bolt Optimization: Prevent unnecessary re-renders when polling data is identical.
-      if (rSensors.ok) {
-        const sData = await rSensors.json();
-        setSensorLive(prev => isDeepEqual(prev, sData) ? prev : sData);
+      if (!rSensors.ok || !rDevices.ok || !rHeatmap.ok || !rAnomalies.ok) {
+        throw new Error('Falha ao sincronizar dados do gêmeo digital.');
       }
 
-      if (rDevices.ok) {
-        const dData = await rDevices.json();
-        setDeviceState(prev => isDeepEqual(prev, dData) ? prev : dData);
-      }
+      const sData = await rSensors.json();
+      setSensorLive(prev => isDeepEqual(prev, sData) ? prev : sData);
 
-      if (rHeatmap.ok) {
-        const hData = await rHeatmap.json();
-        const newPoints = hData.points || [];
-        setHeatmapPoints(prev => isDeepEqual(prev, newPoints) ? prev : newPoints);
-      }
+      const dData = await rDevices.json();
+      setDeviceState(prev => isDeepEqual(prev, dData) ? prev : dData);
 
-      if (rAnomalies.ok) {
-        const aData = await rAnomalies.json();
-        const newItems = aData.items || [];
-        setThermalAnomalies(prev => isDeepEqual(prev, newItems) ? prev : newItems);
-      }
+      const hData = await rHeatmap.json();
+      const newPoints = hData.points || [];
+      setHeatmapPoints(prev => isDeepEqual(prev, newPoints) ? prev : newPoints);
+
+      const aData = await rAnomalies.json();
+      const newItems = aData.items || [];
+      setThermalAnomalies(prev => isDeepEqual(prev, newItems) ? prev : newItems);
     } catch (err) {
       console.error('Error fetching digital twin data:', err);
+      setError(err.message || 'Erro de conexão com o painel 3D.');
     } finally {
       setLoading(false);
     }
@@ -124,6 +123,22 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
 
   const isVentActive = deviceState.ventilacao;
   const isHeatActive = deviceState.aquecedor;
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="mb-2">
+          <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+            Gêmeo Digital 3D - <span className="text-emerald-400">{farmName}</span>
+          </h2>
+          <p className="text-slate-400 text-sm mt-1">Navegue na visualização térmica e comportamento das aves.</p>
+        </div>
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-12 flex items-center justify-center min-h-[400px]">
+          <QueryErrorState message={error} onRetry={fetchData} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

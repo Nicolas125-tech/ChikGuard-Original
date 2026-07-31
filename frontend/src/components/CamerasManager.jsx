@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Camera, Plus, Trash2, Edit2, PlayCircle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import QueryErrorState from './QueryErrorState';
 
 export default function CamerasManager({ serverIP, token }) {
   const [cameras, setCameras] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({ camera_id: '', name: '', connection_type: 'url', connection_url: '' });
   const [editingId, setEditingId] = useState(null);
@@ -23,15 +25,16 @@ export default function CamerasManager({ serverIP, token }) {
   const fetchCameras = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
       const res = await fetch(`${serverIP}/api/cameras`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (res.ok) {
-        const data = await res.json();
-        setCameras(data.items);
-      }
-    } catch (err) { console.error(err);
-      console.error("Failed", err);
+      if (!res.ok) throw new Error('Não foi possível carregar a lista de granjas.');
+      const data = await res.json();
+      setCameras(data.items);
+    } catch (err) {
+      console.error(err);
+      setError(err.message || 'Erro ao carregar granjas.');
     } finally {
       setLoading(false);
     }
@@ -125,7 +128,13 @@ export default function CamerasManager({ serverIP, token }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800">
-            {loading ? (
+            {error ? (
+              <tr>
+                <td colSpan="5" className="p-8 text-center text-slate-400">
+                  <QueryErrorState message={error} onRetry={fetchCameras} />
+                </td>
+              </tr>
+            ) : loading ? (
               <tr>
                 <td colSpan="5" className="p-8 text-center text-slate-400">
                   <RefreshCw className="animate-spin inline-block mr-2" size={18} /> Carregando...

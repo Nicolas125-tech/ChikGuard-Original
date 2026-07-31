@@ -3,18 +3,24 @@ import { RefreshCw, Database } from 'lucide-react';
 import { getBaseUrl } from '../utils/config';
 import { toast } from 'sonner';
 import { isDeepEqual } from '../utils/performance';
+import QueryErrorState from './QueryErrorState';
 
 export default function HistoryPanel({ serverIP, prefs, token, cameras = [], activeCamera }) {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const baseUrl = getBaseUrl(serverIP);
 
   const loadHistory = useCallback(async () => {
     try {
+      setError(null);
       const r = await fetch(`${baseUrl}/api/history`, { headers: { Authorization: `Bearer ${token}` } });
-      if (!r.ok) throw new Error('History fetch failed');
+      if (!r.ok) throw new Error('Não foi possível carregar o histórico de leituras.');
       const data = await r.json();
       setHistory(prev => isDeepEqual(prev, data) ? prev : data);
+    } catch (err) {
+      console.error(err);
+      setError(err.message || 'Erro ao conectar ao servidor da granja.');
     } finally {
       setLoading(false);
     }
@@ -31,6 +37,14 @@ export default function HistoryPanel({ serverIP, prefs, token, cameras = [], act
       <div className="flex flex-col items-center justify-center py-16 text-slate-500 h-[500px]">
         <RefreshCw size={24} className="animate-spin mb-3 text-emerald-500" />
         <span className="font-medium text-sm">Carregando histórico...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 flex items-center justify-center h-[500px]">
+        <QueryErrorState message={error} onRetry={loadHistory} />
       </div>
     );
   }

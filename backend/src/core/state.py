@@ -53,3 +53,15 @@ def _default_get_global_frame():
     return np.zeros((480, 640, 3), dtype=np.uint8)
 
 get_global_frame = _default_get_global_frame
+
+# Estado global de violacao/tamper da camera e sensores
+tamper_state = {
+    "last_alert_ts": 0.0,
+    "last_causes": [],
+    "alerts_count": 0,
+    "dark_frames": 0,
+    "freeze_frames": 0,
+    "sensor_stale": False,
+    "lens_dirty": False,
+}
+

@@ -6,6 +6,7 @@ import {
   RefreshCw, AlertTriangle, ShieldOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import QueryErrorState from './QueryErrorState';
 
 // ─── Helpers de estilo ─────────────────────────────────────────────────────────
 const ROLE_BADGE = {
@@ -253,10 +254,7 @@ export default function AdminPanel({ token, serverIP }) {
 
       {/* ── Error ── */}
       {error && (
-        <div className="flex items-start gap-3 bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl">
-          <AlertTriangle size={18} className="flex-shrink-0 mt-0.5" />
-          <span className="text-sm leading-relaxed">{error}</span>
-        </div>
+        <QueryErrorState message={error} onRetry={fetchUsers} />
       )}
 
       {/* ── Loading ── */}
