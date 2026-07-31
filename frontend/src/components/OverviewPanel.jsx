@@ -96,10 +96,9 @@ export default function OverviewPanel({ token, serverIP, prefs, cameras = [], ac
   }, [baseUrl, token]);
 
   useEffect(() => {
-    const bootstrap = setTimeout(fetchSummary, 0);
+    (async () => { fetchSummary(); })();
     const c = setInterval(fetchSummary, prefs.statusMs);
     return () => {
-        clearTimeout(bootstrap);
         clearInterval(c);
     };
   }, [fetchSummary, prefs]);

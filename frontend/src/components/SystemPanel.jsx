@@ -52,10 +52,9 @@ export default function SystemPanel({ serverIP, prefs, token }) {
   }, [baseUrl, token]);
 
   useEffect(() => {
-    const bootstrap = setTimeout(loadHealth, 0);
+    (async () => { loadHealth(); })();
     const timer = setInterval(loadHealth, pollMs);
     return () => {
-      clearTimeout(bootstrap);
       clearInterval(timer);
     };
   }, [loadHealth, pollMs]);

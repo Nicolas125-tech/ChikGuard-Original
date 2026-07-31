@@ -109,10 +109,9 @@ export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], ac
   }, [baseUrl, token]);
 
   useEffect(() => {
-    const bootstrap = setTimeout(loadData, 0);
+    (async () => { loadData(); })();
     const timer = setInterval(loadData, prefs.statusMs);
     return () => {
-      clearTimeout(bootstrap);
       clearInterval(timer);
     };
   }, [loadData, prefs.statusMs]);

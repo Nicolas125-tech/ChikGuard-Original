@@ -57,7 +57,7 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
   }, [baseUrl, token]);
 
   useEffect(() => {
-    setTimeout(() => fetchData(), 0);
+    (async () => { fetchData(); })();
     const interval = setInterval(fetchData, 6000);
     return () => clearInterval(interval);
   }, [fetchData]);

@@ -110,10 +110,9 @@ export default function ManagementPanel({ serverIP, prefs, token, cameras = [], 
   };
 
   useEffect(() => {
-    const bootstrap = setTimeout(loadManagement, 0);
+    (async () => { loadManagement(); })();
     const timer = setInterval(loadManagement, prefs.historyMs);
     return () => {
-      clearTimeout(bootstrap);
       clearInterval(timer);
     };
   }, [loadManagement, prefs.historyMs]);
