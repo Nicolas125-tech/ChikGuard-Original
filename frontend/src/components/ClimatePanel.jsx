@@ -49,9 +49,11 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
   }, [baseUrl, token]);
 
   useEffect(() => {
-    setTimeout(() => fetchDevices(), 0);
-    setTimeout(() => fetchHistory(), 0);
-    setTimeout(() => fetchWeather(), 0);
+    // Bolt Optimization: Call fetch functions directly instead of deferring
+    // via setTimeout(..., 0) to improve Time-To-First-Byte (TTFB) and avoid macrotask delays.
+    fetchDevices();
+    fetchHistory();
+    fetchWeather();
     const c = setInterval(fetchDevices, prefs.devicesMs);
     const h = setInterval(fetchHistory, prefs.historyMs);
     const w = setInterval(fetchWeather, 300000); // 5 min
