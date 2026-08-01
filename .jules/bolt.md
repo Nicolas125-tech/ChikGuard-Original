@@ -63,3 +63,6 @@
 ## 2025-05-15 - Replace setTimeout for initial data fetch
 **Learning:** When initializing concurrent data fetches in React `useEffect` hooks, wrapping the fetch calls in `setTimeout(..., 0)` unnecessarily defers execution to the next macrotask and delays the network request.
 **Action:** Calling the async fetch functions directly (e.g., inside an IIFE `(async () => { fetch(); })()`) optimizes Time-To-First-Byte (TTFB) and avoids macro-task queuing delays while also adhering to ESLint synchronous state updates rules.
+## 2025-02-12 - [Heatmap Test Creation]
+**Learning:** Testing logic involving `cv2` needs mock declarations in `sys.modules["cv2"]` *before* the application components are loaded to prevent environment-specific test suite import failures.
+**Action:** Always inject `cv2` and similar heavily-compiled native binary mocks at the very top of `sys.modules` during backend initialization for uncoupled components like APIs.
