@@ -15,7 +15,9 @@ sys.modules["cv2"] = mock.MagicMock()
 
 # Configuração de variáveis de ambiente para testes do Flask
 os.environ["FLASK_ENV"] = "testing"
-os.environ["SUPABASE_JWT_SECRET"] = os.environ.get("SUPABASE_JWT_SECRET", "dummy_secret_dummy_secret_dummy_secret")
+os.environ["SUPABASE_JWT_SECRET"] = os.environ.get(
+    "SUPABASE_JWT_SECRET", "dummy_secret_dummy_secret_dummy_secret"
+)
 os.environ["ADMIN_PASSWORD"] = "testpassword"
 os.environ["ADMIN_EMAIL"] = "test@example.com"
 os.environ["JWT_SECRET_KEY"] = "testsecret"
@@ -144,6 +146,7 @@ def auth_headers():
     )
     return {"Authorization": f"Bearer {token}"}
 
+
 def test_knowledge_base_retrieval_error(monkeypatch):
     """Valida o tratamento de erro (ex: IOError) ao tentar ler o arquivo."""
     from src.api.agents_api import _retrieve_knowledge_base
@@ -157,3 +160,75 @@ def test_knowledge_base_retrieval_error(monkeypatch):
 
     res = _retrieve_knowledge_base("amônia")
     assert res == ""
+
+
+def test_call_gemini_api_success(monkeypatch):
+    from src.api.agents_api import _call_gemini_api
+
+    def mock_post(url, headers, json, timeout):
+        assert (
+            url
+            == "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+        )
+        assert headers == {
+            "Content-Type": "application/json",
+            "x-goog-api-key": "mock_api_key",
+        }
+        assert (
+            json["contents"][0]["parts"][0]["text"]
+            == "Instruções do Sistema:\nsys_prompt\n\nPergunta do Produtor: user_msg"
+        )
+
+        class MockResponse:
+            def __init__(self):
+                self.status_code = 200
+
+            def json(self):
+                return {
+                    "candidates": [{"content": {"parts": [{"text": "mock_reply"}]}}]
+                }
+
+        return MockResponse()
+
+    monkeypatch.setattr("requests.post", mock_post)
+    reply, error = _call_gemini_api("mock_api_key", "sys_prompt", "user_msg")
+    assert reply == "mock_reply"
+    assert error is None
+
+
+def test_call_gemini_api_error_status(monkeypatch):
+    from src.api.agents_api import _call_gemini_api
+
+    def mock_post(*args, **kwargs):
+        class MockResponse:
+            def __init__(self):
+                self.status_code = 400
+                self.text = "Bad Request"
+
+        return MockResponse()
+
+    monkeypatch.setattr("requests.post", mock_post)
+    reply, error = _call_gemini_api("mock_api_key", "sys_prompt", "user_msg")
+    assert reply is None
+    assert error == "Erro na API do Gemini (Código 400): Bad Request"
+
+
+def test_call_gemini_api_fallback_text(monkeypatch):
+    from src.api.agents_api import _call_gemini_api
+
+    def mock_post(*args, **kwargs):
+        class MockResponse:
+            def __init__(self):
+                self.status_code = 200
+
+            def json(self):
+                return {}  # missing candidates/parts
+
+        return MockResponse()
+
+    monkeypatch.setattr("requests.post", mock_post)
+    reply, error = _call_gemini_api("mock_api_key", "sys_prompt", "user_msg")
+    assert (
+        reply == "Desculpe, não obtive uma resposta válida da inteligência artificial."
+    )
+    assert error is None
