@@ -160,6 +160,7 @@ void loop() {
         {showCode && (
           <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 overflow-hidden relative group">
             <button 
+               aria-label="Copiar código C++ (ESP32/Arduino)"
                onClick={() => {
                  navigator.clipboard.writeText(arduinoCode);
                  setIsCopied(true);

@@ -72,6 +72,7 @@ export default function HistoryPanel({ serverIP, prefs, token, cameras = [], act
       <div className="p-4 border-b border-slate-800 bg-slate-950/50 flex justify-between items-center z-10 sticky top-0 backdrop-blur-sm">
         <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">Histórico de Leituras - <span className="text-emerald-400">{farmName}</span></h2>
         <button
+          aria-label="Exportar histórico em formato CSV"
           onClick={exportHistoryCSV}
           disabled={history.length === 0}
           title={history.length === 0 ? "Nenhum histórico disponível para exportar" : "Exportar Excel (CSV)"}
