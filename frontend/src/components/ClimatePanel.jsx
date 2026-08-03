@@ -168,6 +168,7 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
               <LayoutDashboard size={16} className="text-amber-400" /> Histórico Térmico
             </h3>
             <button
+              aria-label="Baixar histórico térmico em formato CSV"
               onClick={exportHistoryToCSV}
               disabled={historico.length === 0}
               className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg border border-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"

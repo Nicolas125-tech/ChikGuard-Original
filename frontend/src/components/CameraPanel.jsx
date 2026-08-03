@@ -224,15 +224,19 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
                       <span className="text-xs font-semibold text-slate-300 truncate">Câmera activa no dispositivo</span>
                     </div>
                     {devices.length > 1 && (
-                      <select 
-                        value={selectedDeviceId}
-                        onChange={handleDeviceChange}
-                        className="bg-slate-900 text-slate-200 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-medium focus:outline-none focus:border-emerald-500 cursor-pointer max-w-[200px]"
-                      >
-                        {devices.map(d => (
-                          <option key={d.deviceId} value={d.deviceId}>{d.label || `Câmera ${d.deviceId.slice(0, 5)}`}</option>
-                        ))}
-                      </select>
+                      <>
+                        <label htmlFor="deviceSelect" className="sr-only">Selecione a câmera do dispositivo</label>
+                        <select
+                          id="deviceSelect"
+                          value={selectedDeviceId}
+                          onChange={handleDeviceChange}
+                          className="bg-slate-900 text-slate-200 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-medium focus:outline-none focus:border-emerald-500 cursor-pointer max-w-[200px]"
+                        >
+                          {devices.map(d => (
+                            <option key={d.deviceId} value={d.deviceId}>{d.label || `Câmera ${d.deviceId.slice(0, 5)}`}</option>
+                          ))}
+                        </select>
+                      </>
                     )}
                   </div>
                 </>
