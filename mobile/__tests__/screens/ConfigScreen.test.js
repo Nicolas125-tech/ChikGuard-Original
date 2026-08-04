@@ -44,6 +44,18 @@ describe('normalizeServerUrl', () => {
     expect(normalizeServerUrl('My tunnel is test.trycloudflare.com today')).toBe('https://test.trycloudflare.com');
   });
 
+  it('should handle strings that become empty after cleaning', () => {
+    expect(normalizeServerUrl('.')).toBe('');
+    expect(normalizeServerUrl(',')).toBe('');
+    expect(normalizeServerUrl(';,')).toBe('');
+  });
+
+  it('should handle unparseable/invalid URL patterns with fallback', () => {
+    // testing the catch block
+    expect(normalizeServerUrl('http://')).toBe('');
+    expect(normalizeServerUrl('https://')).toBe('');
+  });
+
   it('should fallback to regex parsing when URL is unavailable', () => {
     const originalURL = global.URL;
     global.URL = undefined;
@@ -52,6 +64,9 @@ describe('normalizeServerUrl', () => {
     expect(normalizeServerUrl('https://example.com')).toBe('https://example.com');
     expect(normalizeServerUrl('test.trycloudflare.com')).toBe('https://test.trycloudflare.com');
     expect(normalizeServerUrl('http://example.com/test')).toBe('http://example.com');
+
+    expect(normalizeServerUrl('http://')).toBe('');
+    expect(normalizeServerUrl('https://')).toBe('');
 
     global.URL = originalURL;
   });
