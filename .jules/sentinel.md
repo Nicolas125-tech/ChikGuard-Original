@@ -121,3 +121,7 @@
 **Vulnerability:** SQL injection via string formatting in raw SQL execution (`f"SELECT * FROM {table_name}"` and `f"UPDATE {table_name}"`).
 **Learning:** Even when protected by a hardcoded allowlist, executing raw SQL with string interpolation is an inherently unsafe and brittle pattern.
 **Prevention:** Refactor database operations to use SQLAlchemy Core objects (e.g. `Table`, `select()`, `update()`) instead of interpolating strings.
+## 2025-02-24 - [High] Fix hardcoded Wi-Fi credentials
+**Vulnerability:** A Wi-Fi SSID and password were hardcoded in the C++ firmware template within a frontend React component. Hardcoding credentials in source code exposes sensitive information to unauthorized users and attackers.
+**Learning:** Hardcoded credentials should never be present in source code. We should rely on libraries like WiFiManager which create a captive portal to securely handle Wi-Fi configuration.
+**Prevention:** Use credential management tools or portal configuration libraries (like `WiFiManager`) instead of hardcoding sensitive credentials in source code.
