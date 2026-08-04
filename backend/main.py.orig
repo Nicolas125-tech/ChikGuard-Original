@@ -1,16 +1,15 @@
-import asyncio
+from src.db.session import get_db
+from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
-
-from fastapi import Depends, FastAPI, Request, Response
+from fastapi import FastAPI, Request, Depends, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
 
 from src.core.config import load_settings
-from src.core.fsm_task import fsm_loop
 from src.core.logger import configure_logging
+from src.core.fsm_task import fsm_loop
 from src.core.mqtt_bridge import start_mqtt_bridge
-from src.db.session import get_db
+import asyncio
 
 # Configuracoes e Logger base
 SETTINGS = load_settings()
@@ -24,8 +23,8 @@ async def lifespan(fastapi_app: FastAPI):
 
     # Inicializa o banco de dados SQLite
     try:
-        from database import Camera, db
-        from src.db.session import SessionLocal, engine
+        from database import db, Camera
+        from src.db.session import engine, SessionLocal
 
         db.metadata.create_all(bind=engine)
 
@@ -63,7 +62,6 @@ async def lifespan(fastapi_app: FastAPI):
     # Inicia o SOTA Computer Vision Pipeline
     try:
         from src.cv_master import get_sota_runner
-
         get_sota_runner().start(asyncio.get_running_loop())
         LOGGER.info("SOTA Computer Vision Pipeline iniciado.")
     except Exception as cv_err:
@@ -78,7 +76,6 @@ async def lifespan(fastapi_app: FastAPI):
     # Finaliza o SOTA Computer Vision Pipeline
     try:
         from src.cv_master import get_sota_runner
-
         get_sota_runner().stop()
         LOGGER.info("SOTA Computer Vision Pipeline finalizado.")
     except Exception as cv_err:
@@ -91,19 +88,20 @@ async def lifespan(fastapi_app: FastAPI):
     LOGGER.info("Encerrando o servidor FastAPI - ChikGuard")
 
 
-from src.api.fastapi_accounts import router as accounts_router
-from src.api.fastapi_agent_discovery import router as agent_discovery_router
-from src.api.fastapi_birds import router_birds, router_weight
-from src.api.fastapi_cameras import router as cameras_router
-from src.api.fastapi_climate import router as climate_router
 from src.api.fastapi_health import router as health_router
-from src.api.fastapi_heatmap import router as heatmap_router
-from src.api.fastapi_iot import router as iot_router
 from src.api.fastapi_sensors import router as sensors_router
+from src.api.fastapi_birds import router_birds, router_weight
 from src.api.fastapi_webrtc import router as webrtc_router
+from src.api.fastapi_iot import router as iot_router
+from src.api.fastapi_climate import router as climate_router
+from src.api.fastapi_accounts import router as accounts_router
+from src.api.fastapi_cameras import router as cameras_router
+from src.api.fastapi_heatmap import router as heatmap_router
+from src.api.fastapi_agent_discovery import router as agent_discovery_router
 from src.api.fastapi_ws import socket_app
-from src.security.fastapi_auth import RequireRole, UserContext, get_current_user
 from src.security.headers import ALLOWED_ORIGINS
+from src.security.fastapi_auth import get_current_user, UserContext, RequireRole
+from fastapi import Depends
 
 fastapi_app = FastAPI(
     title="ChikGuard API",
@@ -130,16 +128,14 @@ fastapi_app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "X-Device-ID"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
 @fastapi_app.get("/")
 async def root(request: Request, response: Response):
-    link_header = (
-        '</.well-known/api-catalog>; rel="api-catalog", </docs>; rel="service-doc"'
-    )
+    link_header = '</.well-known/api-catalog>; rel="api-catalog", </docs>; rel="service-doc"'
     response.headers["Link"] = link_header
 
     accept_header = request.headers.get("accept", "")
@@ -160,7 +156,7 @@ Welcome to the ChikGuard intelligent poultry monitoring node.
         headers = {
             "Content-Type": "text/markdown",
             "x-markdown-tokens": str(len(md_content.split())),
-            "Link": link_header,
+            "Link": link_header
         }
         return Response(content=md_content, media_type="text/markdown", headers=headers)
 
@@ -177,16 +173,15 @@ async def get_summary(
 ):
     import time
     from datetime import datetime
-
-    from database import BirdIdentity, EnergyUsageDaily, Reading, SyncQueueItem
+    from database import Reading, BirdIdentity, EnergyUsageDaily, SyncQueueItem
     from src.core.state import (
-        acoustic_state,
         active_camera_id,
-        cv_lock,
-        live_birds,
         sensor_state,
-        tamper_state,
+        acoustic_state,
         weight_state,
+        live_birds,
+        cv_lock,
+        tamper_state,
     )
 
     ultima = db.query(Reading).order_by(Reading.id.desc()).first()
@@ -291,7 +286,8 @@ async def get_summary(
 
 @fastapi_app.get("/api/status")
 async def get_status(user: UserContext = Depends(get_current_user)):
-    from src.core.state import active_camera_id, sensor_state
+    import time
+    from src.core.state import sensor_state, active_camera_id
 
     temp = sensor_state.get("temperature_c", 28.5)
     return {
@@ -309,7 +305,6 @@ async def get_alerts(user: UserContext = Depends(get_current_user)):
 @fastapi_app.get("/api/history")
 async def get_history(user: UserContext = Depends(get_current_user)):
     import time
-
     from src.core.state import sensor_state
 
     temp = sensor_state.get("temperature_c", 28.5)
