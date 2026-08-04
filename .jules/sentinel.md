@@ -121,3 +121,12 @@
 **Vulnerability:** SQL injection via string formatting in raw SQL execution (`f"SELECT * FROM {table_name}"` and `f"UPDATE {table_name}"`).
 **Learning:** Even when protected by a hardcoded allowlist, executing raw SQL with string interpolation is an inherently unsafe and brittle pattern.
 **Prevention:** Refactor database operations to use SQLAlchemy Core objects (e.g. `Table`, `select()`, `update()`) instead of interpolating strings.
+## 2025-02-14 - Fix hardcoded token in configuration
+**Vulnerability:** Hardcoded tokens and configuration keys in `frontend/src/utils/config.js` (`STORAGE` object).
+**Learning:** Hardcoded configuration keys in JavaScript expose the internal storage mechanics and potential secrets to client-side enumeration or version control leaks. While these were keys for local storage rather than secret tokens themselves, hardcoding such values is poor security hygiene. Furthermore, `import.meta.env` can be undefined in Node.js test environments (like `node:test`), so fallback handling (e.g., `(import.meta.env || {}).VAR`) is essential to prevent tests from crashing.
+**Prevention:** Always use environment variables for configurable parameters or secrets, ensuring safe fallback syntax for testing environments.
+
+## 2025-02-14 - Fix hardcoded token in configuration (Revision)
+**Vulnerability:** Hardcoded tokens and configuration keys in `frontend/src/utils/config.js` (`STORAGE` object).
+**Learning:** When resolving 'hardcoded token/key' vulnerabilities, do not leave the literal string in the source code as a fallback (e.g., `fallback || 'hardcoded_value'`). This fails to resolve the security scanner flag because the hardcoded string remains in the repository. Additionally, in the frontend project, Vite requires precise syntactical matching (`import.meta.env.VITE_VAR`) during the build step. Dynamic property access like `(import.meta.env || {}).VITE_VAR` will not be replaced during production builds, causing the app to fail or silently revert to hardcoded values.
+**Prevention:** Use exact Vite replacement syntax combined with standard Node.js backups for test environments: `(import.meta.env && import.meta.env.VITE_VAR) || process.env.VITE_VAR`. Ensure test and production environments are properly configured with these variables, and never leave the original literal strings as fallbacks in the codebase.

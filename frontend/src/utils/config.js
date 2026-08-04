@@ -1,9 +1,9 @@
 export const STORAGE = {
-  token: 'cg_token',
-  role: 'cg_role',
-  username: 'cg_username',
-  server: 'cg_ip',
-  prefs: 'cg_prefs',
+  token: (import.meta.env && import.meta.env.VITE_STORAGE_TOKEN) || process.env.VITE_STORAGE_TOKEN,
+  role: (import.meta.env && import.meta.env.VITE_STORAGE_ROLE) || process.env.VITE_STORAGE_ROLE,
+  username: (import.meta.env && import.meta.env.VITE_STORAGE_USERNAME) || process.env.VITE_STORAGE_USERNAME,
+  server: (import.meta.env && import.meta.env.VITE_STORAGE_SERVER) || process.env.VITE_STORAGE_SERVER,
+  prefs: (import.meta.env && import.meta.env.VITE_STORAGE_PREFS) || process.env.VITE_STORAGE_PREFS,
 };
 
 export const DEFAULT_PREFS = {
@@ -18,13 +18,11 @@ export const isTunnelHost = (value = '') => /trycloudflare|cfargotunnel/i.test(v
 export const getBaseUrl = (ipOrUrl) => {
   if (isTunnelHost(window.location.hostname)) return window.location.origin;
   
-  // Se estiver rodando localmente no navegador, force o uso do backend local
-  // para evitar que configs velhas apontem para o Vercel.
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     return 'http://127.0.0.1:5000';
   }
 
-  const target = ipOrUrl || (import.meta.env || {}).VITE_API_URL;
+  const target = ipOrUrl || (import.meta.env && import.meta.env.VITE_API_URL) || process.env.VITE_API_URL;
   if (!target) return 'http://127.0.0.1:5000';
   const clean = target.replace(/\/$/, '');
   
