@@ -94,3 +94,40 @@ def test_rate_limiting_trigger(client):
         data = json.loads(response_blocked.data)
         assert data["code"] == "RATE_LIMIT_EXCEEDED"
         mock_sleep.assert_called_once()
+
+@patch("src.security.hardening.logger.error")
+@patch("src.security.hardening.time.time")
+def test_blacklist_ip_function(mock_time, mock_logger):
+    """Verifica o funcionamento direto da função blacklist_ip, ignorando localhost e registrando ips externos."""
+    from src.security.hardening import blacklist_ip, BLOCK_DURATION_SEC, BLACKLISTED_IPS
+
+    # Configura o mock do time para um valor fixo
+    current_time = 1000.0
+    mock_time.return_value = current_time
+
+    # Testa IP válido
+    ip_to_block = "192.168.0.50"
+    reason = "Test Block"
+
+    # Chama a função
+    blacklist_ip(ip_to_block, reason)
+
+    # Verifica se foi adicionado ao dicionário com o offset correto
+    assert ip_to_block in BLACKLISTED_IPS
+    assert BLACKLISTED_IPS[ip_to_block] == current_time + BLOCK_DURATION_SEC
+
+    # Verifica se o log foi gerado
+    mock_logger.assert_called_once_with(f"[SECURITY-ALERT] IP {ip_to_block} adicionado à lista negra. Motivo: {reason}")
+    mock_logger.reset_mock()
+
+    # Testa IP de localhost (IPv4) - não deve ser adicionado
+    ip_localhost = "127.0.0.1"
+    blacklist_ip(ip_localhost, "Should be ignored")
+    assert ip_localhost not in BLACKLISTED_IPS
+    mock_logger.assert_not_called()
+
+    # Testa IP de localhost (IPv6) - não deve ser adicionado
+    ip_ipv6_localhost = "::1"
+    blacklist_ip(ip_ipv6_localhost, "Should be ignored")
+    assert ip_ipv6_localhost not in BLACKLISTED_IPS
+    mock_logger.assert_not_called()
