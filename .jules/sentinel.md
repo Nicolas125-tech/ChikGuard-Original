@@ -121,3 +121,7 @@
 **Vulnerability:** SQL injection via string formatting in raw SQL execution (`f"SELECT * FROM {table_name}"` and `f"UPDATE {table_name}"`).
 **Learning:** Even when protected by a hardcoded allowlist, executing raw SQL with string interpolation is an inherently unsafe and brittle pattern.
 **Prevention:** Refactor database operations to use SQLAlchemy Core objects (e.g. `Table`, `select()`, `update()`) instead of interpolating strings.
+## 2024-10-24 - Restrict CORS Configuration
+**Vulnerability:** Insecure CORS configuration in `backend/main.py` where `allow_methods` and `allow_headers` were set to `["*"]`.
+**Learning:** Always specify explicit HTTP methods and headers for CORS configurations to prevent unauthorized access and potential exploits.
+**Prevention:** Avoid using wildcard character `*` for allowing CORS requests. Enforce a least-privilege approach by explicitly defining only the necessary origins, headers, and methods.
