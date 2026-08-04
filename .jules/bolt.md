@@ -66,3 +66,7 @@
 ## 2025-02-12 - [Heatmap Test Creation]
 **Learning:** Testing logic involving `cv2` needs mock declarations in `sys.modules["cv2"]` *before* the application components are loaded to prevent environment-specific test suite import failures.
 **Action:** Always inject `cv2` and similar heavily-compiled native binary mocks at the very top of `sys.modules` during backend initialization for uncoupled components like APIs.
+
+## 2026-08-03 - Caching file read in get_last_sync loop
+**Learning:** In scenarios where file state needs to be accessed frequently, making an I/O read on every `get_last_sync` call introduces severe latency, especially at large scales. Adding a simple caching mechanism `self._cached_last_sync` populated once from the disk and updated when saving the state reduces read times.
+**Action:** When working on worker loops processing local files, always check for disk reads inside tight loops or accessor methods and consider caching them in-memory to prevent an I/O bottleneck.

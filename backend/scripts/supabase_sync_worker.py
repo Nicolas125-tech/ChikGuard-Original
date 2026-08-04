@@ -45,8 +45,24 @@ class SupabaseSyncWorker:
 
         self.last_processed_idx = 0
         self.backlog = []  # Registros pendentes de envio (backlog de falha)
+        self._cached_last_sync = None
+        self._last_sync_initialized = False
 
         self.load_state()
+
+    def get_last_sync(self):
+        if not self._last_sync_initialized:
+            if os.path.exists(self.state_file):
+                try:
+                    import json
+
+                    with open(self.state_file, "r") as f:
+                        data = json.load(f)
+                        self._cached_last_sync = data.get("last_sync_timestamp")
+                except Exception:
+                    pass
+            self._last_sync_initialized = True
+        return self._cached_last_sync
 
     def load_state(self):
         """Carrega o estado anterior de sincronização do arquivo persistente."""
@@ -56,18 +72,24 @@ class SupabaseSyncWorker:
                     state = json.load(f)
                     self.last_processed_idx = state.get("last_processed_idx", 0)
                     self.backlog = state.get("backlog", [])
-                print(
-                    f"[Sync] Estado carregado. Index={self.last_processed_idx}, Backlog={len(self.backlog)} itens."
-                )
+                    self._cached_last_sync = state.get("last_sync_timestamp")
+                    self._last_sync_initialized = True
+                print(f"[Sync] Estado carregado. Index={self.last_processed_idx}, Backlog={len(self.backlog)} itens.")
             except Exception as e:
                 print(f"[Sync] Erro ao carregar estado: {e}. Iniciando do zero.")
 
     def save_state(self):
         """Salva o estado atual de sincronização em arquivo persistente."""
         try:
+            state_dict = {
+                "last_processed_idx": self.last_processed_idx,
+                "backlog": self.backlog,
+            }
+            if self._last_sync_initialized:
+                state_dict["last_sync_timestamp"] = self._cached_last_sync
             with open(self.state_file, "w") as f:
                 json.dump(
-                    {"last_processed_idx": self.last_processed_idx, "backlog": self.backlog},
+                    state_dict,
                     f,
                     indent=2,
                 )
@@ -112,9 +134,7 @@ class SupabaseSyncWorker:
                         "pos_x": det["smoothed_centroid"][0],
                         "pos_y": det["smoothed_centroid"][1],
                         "frame_number": frame_num,
-                        "detected_at": time.strftime(
-                            "%Y-%m-%d %H:%M:%S", time.localtime(timestamp)
-                        ),
+                        "detected_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp)),
                     }
                 )
         return records
@@ -147,6 +167,10 @@ class SupabaseSyncWorker:
             if success:
                 # Remove itens enviados do backlog
                 self.backlog = self.backlog[self.batch_size :]
+                import time
+
+                self._cached_last_sync = time.time()
+                self._last_sync_initialized = True
                 self.save_state()
                 # Reseta o intervalo de backoff (sucesso restabelece a rede)
                 self.current_interval = self.base_interval
@@ -154,9 +178,7 @@ class SupabaseSyncWorker:
             else:
                 # Falhou: aplica backoff exponencial (máximo de 5 minutos)
                 self.current_interval = min(self.current_interval * 2, 300)
-                print(
-                    f"[Sync] Erro no backlog. Aumentando intervalo de espera para {self.current_interval}s."
-                )
+                print(f"[Sync] Erro no backlog. Aumentando intervalo de espera para {self.current_interval}s.")
                 return
 
         # 2. Busca novos logs apenas se o backlog estiver limpo
@@ -172,11 +194,13 @@ class SupabaseSyncWorker:
                     if success:
                         # Avança o índice e limpa registros enviados
                         self.last_processed_idx += len(new_logs)  # Ajusta index correspondente
+                        import time
+
+                        self._cached_last_sync = time.time()
+                        self._last_sync_initialized = True
                         self.save_state()
                         self.current_interval = self.base_interval
-                        print(
-                            f"[Sync] Sincronizados {len(records)} registros novos. Próximo index: {self.last_processed_idx}"
-                        )
+                        print(f"[Sync] Sincronizados {len(records)} registros novos. Próximo index: {self.last_processed_idx}")
                     else:
                         # Adiciona registros ao backlog de falha para tentar mais tarde
                         self.backlog.extend(records)
