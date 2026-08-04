@@ -1,0 +1,6 @@
+🧹 [Code Health] Explicitly export active_learning_pipeline
+
+🎯 What: Added `__all__ = ["active_learning_pipeline"]` in `backend/src/mlops/__init__.py`.
+💡 Why: This resolves a static analysis error (F401) by explicitly declaring that `active_learning_pipeline` is exported, rather than just being an unused import. This clarifies intent and stops linters from complaining about unused code.
+✅ Verification: Ran `flake8 src/mlops/__init__.py` which now passes without throwing the F401 error. Tested importing from other locations as it's done in the application, and the export continues to work successfully.
+✨ Result: Cleaner code health with no static analysis false positives.
