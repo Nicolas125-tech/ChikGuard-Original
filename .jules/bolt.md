@@ -66,6 +66,7 @@
 ## 2025-02-12 - [Heatmap Test Creation]
 **Learning:** Testing logic involving `cv2` needs mock declarations in `sys.modules["cv2"]` *before* the application components are loaded to prevent environment-specific test suite import failures.
 **Action:** Always inject `cv2` and similar heavily-compiled native binary mocks at the very top of `sys.modules` during backend initialization for uncoupled components like APIs.
-## 2024-05-18 - Fix N+1 DB query issue in `automation_engine.py` process_telemetry loop
-**Learning:** Performing multiple individual `.filter_by().first()` queries during tight loops like IoT telemetry batch processing causes an N+1 performance bottleneck. By switching to `.filter_by().all()` and building a local dictionary cache (invalidated every few minutes), we effectively eliminate DB network overhead.
-**Action:** Always prefer bulk fetching and pre-aggregating data in dictionaries/caches before iterating. Watch out for DB accesses inside heavily accessed event handlers (e.g., telemetry processing callbacks).
+## 2025-02-12 - Remove synchronous requests fallback in async_uploader
+
+**Learning:** When an `import aiohttp` fails in a `try/except` block, developers sometimes fallback to `run_in_executor` with `requests`. This introduces unnecessary thread pool overhead (spawning threads, context switching).
+**Action:** Replace `requests` fallback patterns inside `run_in_executor` with native `aiohttp` requests when asynchronous network I/O is required.
