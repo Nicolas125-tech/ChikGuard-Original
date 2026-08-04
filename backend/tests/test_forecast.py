@@ -68,3 +68,31 @@ def test_failure_to_reach_target_weight_in_90_days():
     # Make sure we actually didn't reach the target weight within the projected timeframe
     max_weight_in_projections = max(p["estimated_weight_g"] for p in result["projections"])
     assert max_weight_in_projections < 2800.0
+
+def test_predict_slaughter_date_biological_monotonicity():
+    start_date = datetime(2023, 1, 1)
+    weight_data = [
+        {"day": 10, "avg_weight": 2000.0},
+        {"day": 20, "avg_weight": 2500.0},
+        {"day": 30, "avg_weight": 2000.0}
+    ]
+    result = predict_slaughter_date(weight_data, start_date, target_weight=2800.0)
+    assert result is not None
+
+    last_w = 0.0
+    for p in result["projections"]:
+        assert p["estimated_weight_g"] >= last_w
+        last_w = p["estimated_weight_g"]
+
+def test_predict_slaughter_date_target_weight_at_start():
+    start_date = datetime(2023, 1, 1)
+    weight_data = [
+        {"day": 10, "avg_weight": 2000.0},
+        {"day": 20, "avg_weight": 2500.0},
+        {"day": 30, "avg_weight": 3000.0}
+    ]
+    result = predict_slaughter_date(weight_data, start_date, target_weight=2800.0)
+    assert result is not None
+    assert result["target_date"] is not None
+    assert result["target_day"] == 31
+    assert result["target_weight"] == 2800.0
