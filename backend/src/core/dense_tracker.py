@@ -19,7 +19,6 @@ Parametros via ENV:
   MAX_TIME_LOST       = 45     (frames antes de remover track definitivamente)
 """
 
-from __future__ import annotations
 
 import logging
 import os
