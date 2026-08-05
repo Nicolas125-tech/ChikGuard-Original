@@ -1,7 +1,7 @@
 import json
 import logging
 
-import paho.mqtt.client as mqtt
+from paho.mqtt.client import CallbackAPIVersion, Client, MQTTv311
 
 logger = logging.getLogger("chikguard.mqtt")
 
@@ -16,7 +16,7 @@ class ChikGuardMQTTClient:
         self.broker_url = broker_url
         self.port = port
         self.app_context_fn = app_context_fn
-        self.client = mqtt.Client(client_id="chikguard_backend", protocol=mqtt.MQTTv311)
+        self.client = Client(CallbackAPIVersion.VERSION1, client_id="chikguard_backend", protocol=MQTTv311)
 
         self.client.on_connect = self._on_connect
         self.client.on_message = self._on_message
