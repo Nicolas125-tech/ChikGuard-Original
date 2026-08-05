@@ -1,18 +1,19 @@
-import time
-import uuid
-import cv2
 import asyncio
 import logging
+import time
+import uuid
+
+import cv2
 import jwt
-from fastapi import APIRouter, Depends, Request, HTTPException
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
 from aiortc.contrib.media import MediaRelay
 from av import VideoFrame
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from src.core.state import get_global_frame
-from src.security.fastapi_auth import get_current_user, UserContext, SUPABASE_JWT_SECRET
+from src.security.fastapi_auth import SUPABASE_JWT_SECRET, UserContext, get_current_user
 
 router = APIRouter(prefix="/api/webrtc", tags=["video"])
 logger = logging.getLogger(__name__)
@@ -76,7 +77,7 @@ async def webrtc_offer(offer: WebRTCOffer, user: UserContext = Depends(get_curre
     await pc.setRemoteDescription(session_desc)
     answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
-    
+
     return {"sdp": answer.sdp, "type": answer.type}
 
 @router.get("/pcs")
