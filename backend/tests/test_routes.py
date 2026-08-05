@@ -9,7 +9,7 @@ import asyncio
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Setup environment variables needed by app modules
-os.environ["SUPABASE_JWT_SECRET"] = "dummy_secret_for_testing"
+os.environ["SUPABASE_JWT_SECRET"] = "dummy_secret_dummy_secret_dummy_secret_for_testing_32b"
 
 # Mock external dependencies
 sys.modules["cv2"] = MagicMock()
@@ -21,9 +21,16 @@ sys.modules["av"] = MagicMock()
 import src.security.auth
 def dummy_require_auth(*args, **kwargs):
     def decorator(f):
-        return f
+        import functools
+        @functools.wraps(f)
+        def decorated(*args, **kwargs):
+            return f(*args, **kwargs)
+        return decorated
     return decorator
 src.security.auth.require_auth = dummy_require_auth
+import sys
+if 'src.api.routes' in sys.modules:
+    sys.modules.pop('src.api.routes')
 
 from src.api.routes import create_api_blueprint
 
