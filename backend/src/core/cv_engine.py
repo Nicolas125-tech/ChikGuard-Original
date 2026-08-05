@@ -9,7 +9,6 @@ Pipeline desacoplado: Captura de câmera ↔ Inferência YOLO em threads separad
 - Métricas de performance em tempo real (FPS câmera, FPS inferência, latência ms)
 """
 
-from __future__ import annotations
 
 import logging
 import math
@@ -566,9 +565,9 @@ class InferencePipeline:
                 # Pré-processamento CV: CLAHE (Melhora contraste em baixa luz e poeira)
                 try:
                     lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
-                    l, a, b = cv2.split(lab)
+                    l_channel, a, b = cv2.split(lab)
                     clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(8, 8))
-                    l_clahe = clahe.apply(l)
+                    l_clahe = clahe.apply(l_channel)
                     lab_clahe = cv2.merge((l_clahe, a, b))
                     enhanced_frame = cv2.cvtColor(lab_clahe, cv2.COLOR_LAB2BGR)
                 except Exception:
