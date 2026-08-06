@@ -134,7 +134,8 @@ MODO_DETECCAO = os.getenv("MODO_DETECCAO", "aves").strip().lower()
 ACTIVE_CAMERA_ID = os.getenv("ACTIVE_CAMERA_ID", "galpao-1")
 
 from dataclasses import dataclass
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 
 @dataclass
 class LogEventData:
@@ -790,6 +791,7 @@ detector = ObjectDetector(model_path=_resolved_model_path)
 audio_classifier = RespiratoryAudioClassifier(COUGH_MODEL_PATH)
 
 from src.vision.gait_analyzer import GaitAnalyzer
+
 gait_analyzer = GaitAnalyzer(history_len=20)
 
 live_birds = {}
@@ -2351,12 +2353,12 @@ def _estimate_keypoints_from_box(box, tid, now_ts):
     cy = (y1 + y2) / 2.0
     w = max(1.0, x2 - x1)
     h = max(1.0, y2 - y1)
-    
+
     # Simula oscilação de passos no tempo para o track_id correspondente
     offset = 5.0 * math.sin(now_ts * 12.0)
     left_foot_y = y2 + (offset if tid % 2 == 0 else -offset)
     right_foot_y = y2 + (-offset if tid % 2 == 0 else offset)
-    
+
     # Retorna 11 keypoints [[x, y, conf], ...] no formato YOLOv8-pose
     return [
         [cx, cy - h*0.2, 0.9],          # Beak
@@ -2831,206 +2833,193 @@ def _weekly_report_scheduler():
         time.sleep(60)
 
 
+def _manage_camera_on_demand():
+    global _camera_capture, _inference_pipeline
+    is_watching = (time.time() - last_video_request_time) < 8.0
+
+    if is_watching:
+        if _camera_capture is None or not _camera_capture.is_live:
+            LOGGER.info("[camera_loop] Ativacao da camera sob demanda.")
+            _camera_capture = CameraCapture(
+                camera_index=CAMERA_INDEX,
+                target_fps=CAMERA_TARGET_FPS,
+                width=1280,
+                height=720,
+                backend=CAMERA_BACKEND_ID,
+                metrics=_perf_metrics,
+            )
+            _camera_capture.start()
+
+        if _inference_pipeline is None or not _inference_pipeline.is_alive():
+            _inference_pipeline = InferencePipeline(
+                detector=detector,
+                species_classifier=_species_classifier,
+                pose_analyzer=_pose_analyzer,
+                metrics=_perf_metrics,
+                imgsz=INFERENCE_IMGSZ,
+                class_name_fn=_class_name_by_id,
+            )
+            _inference_pipeline.start()
+    else:
+        if _camera_capture is not None:
+            LOGGER.info("[camera_loop] Desativacao da camera por inatividade.")
+            try:
+                _camera_capture.stop()
+            except Exception:
+                pass
+            _camera_capture = None
+
+        if _inference_pipeline is not None:
+            try:
+                _inference_pipeline.stop()
+            except Exception:
+                pass
+            _inference_pipeline = None
+
+        idle_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        cv2.putText(
+            idle_frame,
+            "AGUARDANDO CONEXAO DA TELA AO VIVO...",
+            (50, 240),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (180, 180, 0),
+            2,
+        )
+        with lock:
+            global global_frame
+            global_frame = idle_frame
+        time.sleep(0.2)
+    return is_watching
+
+def _sync_batch_age_if_needed(now_ts, last_batch_age_sync):
+    if now_ts - last_batch_age_sync > 60.0 and _species_classifier is not None:
+        last_batch_age_sync = now_ts
+        try:
+            batch = _active_batch(ACTIVE_CAMERA_ID)
+            if batch is not None:
+                age = max(1, (_utcnow().date() - batch.start_date.date()).days + 1)
+                _species_classifier.set_batch_age(age)
+        except Exception:
+            pass
+    return last_batch_age_sync
+
+def _get_frame_or_sim(video_sim):
+    use_sim = not _camera_capture.is_live
+    frame = None
+    if use_sim:
+        sim_path = SIM_VIDEO_PATH
+        if sim_path:
+            sim_path = sim_path if os.path.isabs(sim_path) else os.path.join(CURRENT_DIR, sim_path)
+        if VideoProcessor is not None and sim_path and os.path.exists(sim_path):
+            if video_sim is None:
+                try:
+                    video_sim = VideoProcessor(sim_path)
+                except Exception:
+                    video_sim = None
+            if video_sim is not None:
+                try:
+                    frame = video_sim.get_next_frame()
+                except Exception:
+                    video_sim = None
+            if frame is None:
+                frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        else:
+            frame = np.zeros((480, 640, 3), dtype=np.uint8)
+            cv2.putText(
+                frame,
+                "CAMERA OFFLINE - SEM VIDEO SIMULADOR",
+                (80, 240),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 0, 255),
+                2,
+            )
+    else:
+        frame = _camera_capture.latest_frame(timeout=0.05)
+    return frame, video_sim, use_sim
+
+def _process_inference_and_hud(frame):
+    result = _inference_pipeline.get_result(timeout=0.04)
+    if result is not None:
+        detections = result.get("detections", [])
+        if MODO_DETECCAO == "aves":
+            _check_tampering(frame)
+        draw_frame = detectar_objetos(frame, pre_detections=detections)
+    else:
+        draw_frame = frame.copy()
+        if _perf_metrics and _CV_ENGINE_AVAILABLE and CVOverlay is not None:
+            _md = _perf_metrics.get()
+            draw_frame = CVOverlay.draw_hud(
+                draw_frame,
+                _md,
+                counts=species_counts,
+                behavior_status=behavior_state.get("status", "AGUARDANDO"),
+            )
+    return draw_frame
+
+def _handle_temperature_and_alerts(frame, now_ts, last_temp_emergency_notification_ts):
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    temp_atual = 20.0 + (float(np.mean(gray)) / 255.0) * 20.0
+
+    _apply_automatic_control(temp_atual)
+    _update_energy_runtime()
+
+    if temp_atual >= 35.0 and (now_ts - float(last_temp_emergency_notification_ts)) > 600:
+        last_temp_emergency_notification_ts = now_ts
+        txt = f"Temperatura subiu para {temp_atual:.1f}C! Intervencao necessaria."
+        sent, detail = _telegram_send_text(txt)
+        _log_event(LogEventData(
+            "temperature_critical_alert",
+            "high",
+            txt,
+            metadata={"telegram_sent": sent, "telegram_detail": detail},
+        ))
+    return temp_atual, last_temp_emergency_notification_ts
+
 def _run_cv_engine_v2_loop():
     global global_frame, db_last_save_time, fps_last_time, last_temp_emergency_notification_ts
-    global _camera_capture, _inference_pipeline
     last_error_print_time = 0.0
     last_batch_age_sync = 0.0
-
     video_sim = None
-    use_sim = False
 
-    _bg_subtractor = cv2.createBackgroundSubtractorMOG2(
-        history=100, varThreshold=25, detectShadows=False
-    )
+    _bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=100, varThreshold=25, detectShadows=False)
 
     while True:
         try:
-            # ── Controle On-Demand da Câmera ─────────────────────────────
-            is_watching = (time.time() - last_video_request_time) < 8.0
-
-            if is_watching:
-                # Se alguém está assistindo e a câmera não está rodando, inicia
-                if _camera_capture is None or not _camera_capture.is_live:
-                    LOGGER.info("[camera_loop] Ativacao da camera sob demanda.")
-                    _camera_capture = CameraCapture(
-                        camera_index=CAMERA_INDEX,
-                        target_fps=CAMERA_TARGET_FPS,
-                        width=1280,
-                        height=720,
-                        backend=CAMERA_BACKEND_ID,
-                        metrics=_perf_metrics,
-                    )
-                    _camera_capture.start()
-
-                if _inference_pipeline is None or not _inference_pipeline.is_alive():
-                    _inference_pipeline = InferencePipeline(
-                        detector=detector,
-                        species_classifier=_species_classifier,
-                        pose_analyzer=_pose_analyzer,
-                        metrics=_perf_metrics,
-                        imgsz=INFERENCE_IMGSZ,
-                        class_name_fn=_class_name_by_id,
-                    )
-                    _inference_pipeline.start()
-            else:
-                # Se ninguem está assistindo e a câmera está rodando, desativa
-                if _camera_capture is not None:
-                    LOGGER.info("[camera_loop] Desativacao da camera por inatividade.")
-                    try:
-                        _camera_capture.stop()
-                    except Exception:
-                        pass
-                    _camera_capture = None
-
-                if _inference_pipeline is not None:
-                    try:
-                        _inference_pipeline.stop()
-                    except Exception:
-                        pass
-                    _inference_pipeline = None
-
-                # Gera o frame de espera e dorme
-                idle_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                cv2.putText(
-                    idle_frame,
-                    "AGUARDANDO CONEXAO DA TELA AO VIVO...",
-                    (50, 240),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.7,
-                    (180, 180, 0),
-                    2,
-                )
-                with lock:
-                    global_frame = idle_frame
-                time.sleep(0.2)
+            is_watching = _manage_camera_on_demand()
+            if not is_watching:
                 continue
 
-            # ── Sincronizar idade do lote com SpeciesClassifier ────────────
             now_ts = time.time()
-            if now_ts - last_batch_age_sync > 60.0 and _species_classifier is not None:
-                last_batch_age_sync = now_ts
-                try:
-                    batch = _active_batch(ACTIVE_CAMERA_ID)
-                    if batch is not None:
-                        age = max(
-                            1, (_utcnow().date() - batch.start_date.date()).days + 1
-                        )
-                        _species_classifier.set_batch_age(age)
-                except Exception:
-                    pass
+            last_batch_age_sync = _sync_batch_age_if_needed(now_ts, last_batch_age_sync)
 
-            # ── Obter frame da câmera ou simulador se a câmera falhar ──────
-            use_sim = not _camera_capture.is_live
-            if use_sim:
-                sim_path = SIM_VIDEO_PATH
-                if sim_path:
-                    sim_path = (
-                        sim_path
-                        if os.path.isabs(sim_path)
-                        else os.path.join(CURRENT_DIR, sim_path)
-                    )
-                if VideoProcessor is not None and sim_path and os.path.exists(sim_path):
-                    if video_sim is None:
-                        try:
-                            video_sim = VideoProcessor(sim_path)
-                        except Exception:
-                            video_sim = None
-                    frame = None
-                    if video_sim is not None:
-                        try:
-                            frame = video_sim.get_next_frame()
-                        except Exception:
-                            video_sim = None
-                    if frame is None:
-                        frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                else:
-                    frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                    cv2.putText(
-                        frame,
-                        "CAMERA OFFLINE - SEM VIDEO SIMULADOR",
-                        (80, 240),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7,
-                        (0, 0, 255),
-                        2,
-                    )
-            else:
-                frame = _camera_capture.latest_frame(timeout=0.05)
-                if frame is None:
-                    time.sleep(0.005)
-                    continue
+            frame, video_sim, use_sim = _get_frame_or_sim(video_sim)
+            if frame is None:
+                time.sleep(0.005)
+                continue
 
-            # ── Motion Heuristics (Frame Skipping) ──────────────────────────
             fg_mask = _bg_subtractor.apply(frame)
             motion_pixels = cv2.countNonZero(fg_mask)
             total_pixels = frame.shape[0] * frame.shape[1]
             motion_ratio = float(motion_pixels) / float(total_pixels)
 
             if motion_ratio >= 0.005:
-                # ── Submeter para inferência apenas se houver movimento significativo ──
                 _inference_pipeline.submit_frame(frame)
 
-            # ── Obter último resultado de inferência ───────────────────────
-            result = _inference_pipeline.get_result(timeout=0.04)
-            if result is not None:
-                detections = result.get("detections", [])
-                # Executar análise de comportamento/imobilidade no frame
-                if MODO_DETECCAO == "aves":
-                    _check_tampering(frame)
-                    # Passa detecções já calculadas — NÃO chama detector.detect() novamente
-                    draw_frame = detectar_objetos(frame, pre_detections=detections)
-                else:
-                    draw_frame = detectar_objetos(frame, pre_detections=detections)
-            else:
-                # Sem resultado ainda: exibir frame bruto com HUD parcial
-                draw_frame = frame.copy()
-                if _perf_metrics and _CV_ENGINE_AVAILABLE and CVOverlay is not None:
-                    _md = _perf_metrics.get()
-                    draw_frame = CVOverlay.draw_hud(
-                        draw_frame,
-                        _md,
-                        counts=species_counts,
-                        behavior_status=behavior_state.get("status", "AGUARDANDO"),
-                    )
+            draw_frame = _process_inference_and_hud(frame)
 
-            # ── Temperatura estimada ───────────────────────────────────────
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            temp_atual = 20.0 + (float(np.mean(gray)) / 255.0) * 20.0
+            temp_atual, last_temp_emergency_notification_ts = _handle_temperature_and_alerts(
+                frame, now_ts, last_temp_emergency_notification_ts
+            )
 
-            _apply_automatic_control(temp_atual)
-            _update_energy_runtime()
-
-            if (
-                temp_atual >= 35.0
-                and (now_ts - float(last_temp_emergency_notification_ts)) > 600
-            ):
-                last_temp_emergency_notification_ts = now_ts
-                txt = (
-                    f"Temperatura subiu para {temp_atual:.1f}C! Intervencao necessaria."
-                )
-                sent, detail = _telegram_send_text(txt)
-                _log_event(LogEventData(
-                    "temperature_critical_alert",
-                    "high",
-                    txt,
-                    metadata={"telegram_sent": sent, "telegram_detail": detail},
-                ))
-
-            # ── FPS overlay (posição superior direita) ─────────────────────
             new_time = time.time()
             fps = 1.0 / max(1e-6, new_time - fps_last_time)
             fps_last_time = new_time
             h_fr, w_fr = draw_frame.shape[:2]
             cv2.putText(
-                draw_frame,
-                f"LOOP:{int(fps)}fps",
-                (w_fr - 155, h_fr - 12),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.45,
-                (160, 160, 255),
-                1,
-                cv2.LINE_AA,
+                draw_frame, f"LOOP:{int(fps)}fps", (w_fr - 155, h_fr - 12),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.45, (160, 160, 255), 1, cv2.LINE_AA,
             )
 
             with lock:
@@ -3062,17 +3051,10 @@ def _run_cv_engine_v2_loop():
             with lock:
                 if global_frame is None:
                     err_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                    cv2.putText(
-                        err_frame,
-                        "THREAD ERROR",
-                        (50, 240),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        2,
-                        (0, 0, 255),
-                        3,
-                    )
+                    cv2.putText(err_frame, "THREAD ERROR", (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 3)
                     global_frame = err_frame
             time.sleep(1)
+
 
 
 def _run_legacy_camera_loop():
