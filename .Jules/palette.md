@@ -17,3 +17,6 @@
 ## 2024-05-14 - Adding explicit labels and standardizing button aria-labels
 **Learning:** Using aria-label on action buttons (like export or copy buttons) and ensuring selects have matching htmlFor labels are critical accessibility fixes. Missing explicit labels for inputs such as `<select>` often leads to poor screen reader compatibility. Using a hidden `.sr-only` class is the best way to add descriptive label elements without impacting visual layout.
 **Action:** Always ensure any `<select>` input has an associated `<label>` using htmlFor and id when working with standard form elements. Action buttons need explicit aria-labels describing their intent if the icon or text is ambiguous to screen readers.
+## 2024-08-06 - [Add loading spinner to Camera form]
+**Learning:** Users can accidentally submit multiple camera create/edit requests if the UI doesn't visually block and indicate that an async submission is in progress. Adding a visual loading state to form submission button is essential to prevent user frustration and ensure the integrity of backend operations.
+**Action:** Always include a visual loading state (like a spinner) and disable form submit buttons during async actions.
