@@ -1,3 +1,5 @@
+import re
+
 from flask import jsonify, request
 
 from src.security.auth import require_auth
@@ -25,6 +27,35 @@ def _add_acoustic_routes(bp, deps):
         )
 
 
+def _parse_voice_action(command):
+    if "ligar ventilador" in command or "ligar ventilacao" in command:
+        return "ventilador", {"ventilacao_ligada": True}
+    elif "desligar ventilador" in command or "desligar ventilacao" in command:
+        return "ventilador", {"ventilacao_ligada": False}
+    elif "ligar aquecedor" in command:
+        return "aquecedor", {"aquecedor_ligado": True}
+    elif "desligar aquecedor" in command:
+        return "aquecedor", {"aquecedor_ligado": False}
+    elif "luz" in command and "porcento" in command:
+        try:
+            match = re.search(r"(\d+)\s*porcento", command)
+            if match:
+                nivel = int(match.group(1))
+                nivel = max(0, min(nivel, 100))
+                return "luz_dimmer", {"luz_dimmer": nivel}
+        except Exception:
+            pass
+    return None, {}
+
+
+def _get_action_permission(action):
+    if action in ("ventilador", "aquecedor"):
+        return "device.power_on"
+    elif action == "luz_dimmer":
+        return "lighting.manage"
+    return "device.manage"
+
+
 def _add_voice_routes(bp, deps):
     _guard_critical_action = deps.get("guard_critical_action")
     estado_dispositivos = deps.get("estado_dispositivos", {})
@@ -39,42 +70,12 @@ def _add_voice_routes(bp, deps):
         if not command:
             return jsonify({"msg": "Nenhum comando recebido"}), 400
 
-        action = None
-        target_state = {}
-
-        if "ligar ventilador" in command or "ligar ventilacao" in command:
-            action = "ventilador"
-            target_state = {"ventilacao_ligada": True}
-        elif "desligar ventilador" in command or "desligar ventilacao" in command:
-            action = "ventilador"
-            target_state = {"ventilacao_ligada": False}
-        elif "ligar aquecedor" in command:
-            action = "aquecedor"
-            target_state = {"aquecedor_ligado": True}
-        elif "desligar aquecedor" in command:
-            action = "aquecedor"
-            target_state = {"aquecedor_ligado": False}
-        elif "luz" in command and "porcento" in command:
-            try:
-                import re
-
-                match = re.search(r"(\d+)\s*porcento", command)
-                if match:
-                    nivel = int(match.group(1))
-                    nivel = max(0, min(nivel, 100))
-                    action = "luz_dimmer"
-                    target_state = {"luz_dimmer": nivel}
-            except Exception:
-                pass
+        action, target_state = _parse_voice_action(command)
 
         if not action:
             return jsonify({"msg": "Comando não reconhecido ou suportado", "command": command}), 400
 
-        action_perm = "device.manage"
-        if action == "ventilador" or action == "aquecedor":
-            action_perm = "device.power_on"
-        elif action == "luz_dimmer":
-            action_perm = "lighting.manage"
+        action_perm = _get_action_permission(action)
 
         if _guard_critical_action:
             ok, resp = _guard_critical_action("voice_command_control", permission=action_perm)
@@ -91,6 +92,20 @@ def _add_voice_routes(bp, deps):
         return jsonify(
             {"msg": "Comando executado", "action": action, "devices": estado_dispositivos}
         )
+
+
+def _validate_rule_data(data):
+    for k in [
+        "name",
+        "condition_variable",
+        "condition_operator",
+        "condition_value",
+        "action_device",
+        "action_state",
+    ]:
+        if data.get(k) and len(str(data[k])) > 100:
+            return False
+    return True
 
 
 def _add_rules_routes(bp, deps):
@@ -119,16 +134,9 @@ def _add_rules_routes(bp, deps):
             if not ok:
                 return resp
         data = request.json or {}
-        for k in [
-            "name",
-            "condition_variable",
-            "condition_operator",
-            "condition_value",
-            "action_device",
-            "action_state",
-        ]:
-            if data.get(k) and len(str(data[k])) > 100:
-                return jsonify({"msg": "Input length limits exceeded"}), 400
+
+        if not _validate_rule_data(data):
+            return jsonify({"msg": "Input length limits exceeded"}), 400
 
         if AutomationRule and db:
             rule = AutomationRule(
