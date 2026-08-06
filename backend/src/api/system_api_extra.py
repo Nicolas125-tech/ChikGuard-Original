@@ -3,17 +3,9 @@ from flask import jsonify, request
 from src.security.auth import require_auth
 
 
-def add_remaining_routes(bp, deps):
+def _add_acoustic_routes(bp, deps):
     audio_classifier = deps.get("audio_classifier")
     acoustic_state = deps.get("acoustic_state", {})
-    _guard_critical_action = deps.get("guard_critical_action")
-    estado_dispositivos = deps.get("estado_dispositivos", {})
-    _audit = deps.get("audit")
-    _require_permission = deps.get("require_permission")
-    db = deps.get("db")
-    AutomationRule = deps.get("AutomationRule")
-    Account = deps.get("Account")
-    _get_current_account = deps.get("get_current_account")
 
     @bp.route("/api/acoustic/model-info", methods=["GET"])
     @require_auth()
@@ -31,6 +23,12 @@ def add_remaining_routes(bp, deps):
                 "last_inference_ms": acoustic_state.get("last_inference_ms", 0),
             }
         )
+
+
+def _add_voice_routes(bp, deps):
+    _guard_critical_action = deps.get("guard_critical_action")
+    estado_dispositivos = deps.get("estado_dispositivos", {})
+    _audit = deps.get("audit")
 
     @bp.route("/api/voice/command", methods=["POST"])
     @require_auth()
@@ -66,7 +64,7 @@ def add_remaining_routes(bp, deps):
                     nivel = max(0, min(nivel, 100))
                     action = "luz_dimmer"
                     target_state = {"luz_dimmer": nivel}
-            except:
+            except Exception:
                 pass
 
         if not action:
@@ -93,6 +91,13 @@ def add_remaining_routes(bp, deps):
         return jsonify(
             {"msg": "Comando executado", "action": action, "devices": estado_dispositivos}
         )
+
+
+def _add_rules_routes(bp, deps):
+    _require_permission = deps.get("require_permission")
+    db = deps.get("db")
+    AutomationRule = deps.get("AutomationRule")
+    _guard_critical_action = deps.get("guard_critical_action")
 
     @bp.route("/api/rules", methods=["GET"])
     @require_auth()
@@ -156,12 +161,17 @@ def add_remaining_routes(bp, deps):
             return jsonify({"msg": "Regra deletada"}), 200
         return jsonify({"msg": "Error"}), 500
 
+
+def _add_push_routes(bp, deps):
+    db = deps.get("db")
+    _get_current_account = deps.get("get_current_account")
+
     @bp.route("/api/push-token", methods=["POST"])
     @require_auth()
     def register_push_token():
         data = request.json or {}
         token = str(data.get("token", "")).strip()
-        device_id = str(data.get("device_id", "")).strip()
+        _device_id = str(data.get("device_id", "")).strip()
 
         if not token:
             return jsonify({"msg": "token is required"}), 400
@@ -173,3 +183,10 @@ def add_remaining_routes(bp, deps):
                     acc.push_token = token
                     db.session.commit()
         return jsonify({"msg": "Token registered/updated"})
+
+
+def add_remaining_routes(bp, deps):
+    _add_acoustic_routes(bp, deps)
+    _add_voice_routes(bp, deps)
+    _add_rules_routes(bp, deps)
+    _add_push_routes(bp, deps)
