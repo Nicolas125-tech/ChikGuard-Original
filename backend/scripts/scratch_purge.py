@@ -40,9 +40,9 @@ code = re.sub(
 # Remove random import
 code = re.sub(r"import random\n", "", code)
 
-# Fix missing/trailing sources
+# Fix missing/trailing sources (remove simulated_fallback, switch simulated to sensor)
 code = re.sub(r'[ \t]*"source": "simulated_fallback",?\n?', "", code)
-code = re.sub(r'"source": "simulated"', '"source": "sensor"', code)
+code = code.replace('"source": "simulated"', '"source": "sensor"')
 code = code.replace('source="simulated"', 'source="sensor"')
 
 with open("c:/nic/ChikGuard-Original/backend/app.py", "w", encoding="utf-8") as f:
