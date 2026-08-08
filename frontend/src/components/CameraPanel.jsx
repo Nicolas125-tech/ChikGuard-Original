@@ -289,6 +289,7 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
 
           {isFullscreen && (
             <button
+              aria-label="Sair da Tela Cheia"
               onClick={toggleFullscreen}
               className="absolute top-4 right-4 z-50 bg-slate-950/80 hover:bg-slate-900 border border-slate-700 text-slate-200 p-2.5 rounded-full transition-all shadow-lg flex items-center justify-center cursor-pointer"
               title="Sair da Tela Cheia"

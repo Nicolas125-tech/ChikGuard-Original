@@ -107,6 +107,7 @@ export default function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServ
         
         <div className="flex gap-3 w-full sm:w-auto">
           <button
+            aria-label="Salvar Configurações"
             onClick={saveAll}
             className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-6 py-2.5 rounded-xl transition-all shadow-lg shadow-emerald-600/20 hover:shadow-emerald-500/30 transform hover:-translate-y-0.5"
           >
@@ -177,7 +178,7 @@ export default function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServ
             />
           </Field>
           <div className="md:col-span-2 flex justify-end mt-2">
-            <button disabled={isCreatingFarm} type="submit" className="bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 px-6 rounded-xl border border-slate-700 transition-all flex items-center gap-2 hover:-translate-y-0.5 shadow-sm disabled:opacity-50 disabled:hover:translate-y-0 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
+            <button aria-label="Criar Nova Granja" disabled={isCreatingFarm} type="submit" className="bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 px-6 rounded-xl border border-slate-700 transition-all flex items-center gap-2 hover:-translate-y-0.5 shadow-sm disabled:opacity-50 disabled:hover:translate-y-0 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
               {isCreatingFarm ? <RefreshCw size={18} className="animate-spin" /> : <Plus size={18} />}
               {isCreatingFarm ? 'Criando...' : 'Criar Nova Granja'}
             </button>
