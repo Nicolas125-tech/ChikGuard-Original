@@ -17,14 +17,14 @@ async def get_location_forecast(user: UserContext = Depends(get_current_user)):
     try:
         async with aiohttp.ClientSession() as session:
             # 1. Obter Localização via IP
-            async with session.get("http://ip-api.com/json/") as loc_resp:
+            async with session.get("https://freeipapi.com/api/json") as loc_resp:
                 if loc_resp.status != 200:
                     raise HTTPException(status_code=502, detail="Erro ao obter localização")
                 loc_data = await loc_resp.json()
                 
-            lat = loc_data.get("lat", -24.9555)
-            lon = loc_data.get("lon", -53.4552)
-            city = loc_data.get("city", "Desconhecida")
+            lat = loc_data.get("latitude", -24.9555)
+            lon = loc_data.get("longitude", -53.4552)
+            city = loc_data.get("cityName", "Desconhecida")
             region = loc_data.get("regionName", "Desconhecida")
             country = loc_data.get("countryCode", "BR")
 
