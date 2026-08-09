@@ -109,3 +109,5 @@ supabase/.temp/
 scratch/
 backend/scratch/
 backend/data/
+data/
+runs/

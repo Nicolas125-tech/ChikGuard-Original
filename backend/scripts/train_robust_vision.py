@@ -157,7 +157,8 @@ def validate_dataset(data_yaml: str) -> bool:
     if nc < 1:
         issues.append("'nc' (número de classes) não definido no data.yaml")
     else:
-        print(f"  ✅ Classes: {nc} — {list(names.values()) if names else 'não listadas'}")
+        names_list = list(names.values()) if isinstance(names, dict) else list(names)
+        print(f"  ✅ Classes: {nc} — {names_list if names_list else 'não listadas'}")
 
     if issues:
         print("\n[ERRO] Problemas no dataset:")
