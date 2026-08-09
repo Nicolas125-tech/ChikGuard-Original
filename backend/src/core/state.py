@@ -37,7 +37,7 @@ cv_lock = threading.Lock()
 
 # CV States
 live_birds = {}
-species_counts = {}
+species_counts = {"chicks": 0, "hens": 0, "total": 0}
 
 weight_state = {
     "avg_weight_g": 0.0,
@@ -47,11 +47,54 @@ weight_state = {
     "updated_at": time.time(),
 }
 
+behavior_state = {
+    "status": "NORMAL",
+    "message": "Comportamento dentro dos parâmetros padrão",
+    "dispersion_ratio": 0.5,
+    "edge_ratio": 0.1,
+    "count": 0,
+    "updated_at": time.time(),
+}
+
+immobility_state = {}
+
+carcass_state = {
+    "count": 0,
+    "items": [],
+    "updated_at": time.time(),
+}
+
+tamper_state = {
+    "last_alert_ts": 0.0,
+    "last_causes": [],
+    "alerts_count": 0,
+    "dark_frames": 0,
+    "freeze_frames": 0,
+}
+
+TAMPER_SENSOR_STALE_SEC = 60.0
+
 intrusion_state = {
     "active": False,
     "last_alert_ts": 0.0,
     "alerts_count": 0
 }
+
+zone_analytics_state = {
+    "drinker_count": 0,
+    "brooder_count": 0,
+    "feeder_count": 0,
+    "drinker_pct": 0.0,
+    "brooder_pct": 0.0,
+    "feeder_pct": 0.0,
+    "welfare_status": "CONFORTO_IDEAL",
+    "welfare_message": "Ambiência Adequada: Distribuição homogênea entre comedouro, bebedouro e aquecimento",
+    "welfare_index": 0.95,
+    "updated_at": time.time(),
+}
+
+spatial_accumulator = None
+zone_time_series_tracker = None
 
 global_frame_data = np.zeros((480, 640, 3), dtype=np.uint8)
 
@@ -62,4 +105,5 @@ def get_global_frame():
 def set_global_frame(frame):
     global global_frame_data
     global_frame_data = frame
+
 

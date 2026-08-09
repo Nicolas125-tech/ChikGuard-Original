@@ -701,10 +701,15 @@ class CVOverlay:
             color = det.get("color", COLOR_BIRD)
             is_carcass = uid in carcass_uids
 
-            if is_carcass:
+            is_lame = bool(det.get("is_lame", False))
+            is_immobile = bool(det.get("is_immobile", False))
+            if is_carcass or is_immobile:
                 color = COLOR_CARCASS
-                species_lbl = "CARCACA"
+                species_lbl = "CARCACA / IMOVEL" if is_immobile else "CARCACA"
                 pose_lbl = ""
+            elif is_lame:
+                color = (0, 140, 255)  # laranja vibrante para claudicação
+                pose_lbl = "⚠ CLAUDICACAO"
 
             # Neon glow: borda exterior escura + interior brilhante
             cv2.rectangle(draw, (x1 - 1, y1 - 1), (x2 + 1, y2 + 1), (0, 0, 0), 2)
@@ -782,26 +787,27 @@ class CVOverlay:
 
         overlay = frame.copy()
 
-        # -- 1. Zona de Monitoramento: poligono translucido magenta ----------
-        mx = int(w * 0.04)
+        # -- 1. Zonamento Trifásico (Saltoratto et al., 2013) -----------------
         my = int(h * 0.08)
-        zone_pts = np.array(
-            [
-                [mx, my],
-                [w - mx, my],
-                [w - mx, h - my],
-                [mx, h - my],
-            ],
-            dtype=np.int32,
-        )
-        cv2.fillPoly(overlay, [zone_pts], (180, 0, 180))
-        cv2.addWeighted(overlay, 0.08, frame, 0.92, 0, frame)
-        cv2.polylines(
-            frame, [zone_pts], isClosed=True, color=(255, 0, 255), thickness=2, lineType=cv2.LINE_AA
-        )
-        _put_text_shadow(
-            frame, "ZONA DE MONITORAMENTO", (mx + 6, my - 5), FONT, 0.40, (255, 0, 255), 1
-        )
+        w33 = int(w * 0.33)
+        w66 = int(w * 0.66)
+
+        # Zona (a) Bebedouro (Azul)
+        cv2.rectangle(overlay, (4, my), (w33, h - my), (255, 140, 0), -1)
+        # Zona (b) Luz de Aquecimento (Vermelho)
+        cv2.rectangle(overlay, (w33, my), (w66, h - my), (0, 0, 200), -1)
+        # Zona (c) Comedouro (Verde)
+        cv2.rectangle(overlay, (w66, my), (w - 4, h - my), (0, 180, 0), -1)
+
+        cv2.addWeighted(overlay, 0.09, frame, 0.91, 0, frame)
+
+        # Desenha linhas divisórias das zonas
+        cv2.line(frame, (w33, my), (w33, h - my), (255, 200, 0), 1, cv2.LINE_AA)
+        cv2.line(frame, (w66, my), (w66, h - my), (0, 220, 200), 1, cv2.LINE_AA)
+
+        _put_text_shadow(frame, "(a) BEBEDOURO", (10, my + 14), FONT, 0.38, (255, 200, 100), 1)
+        _put_text_shadow(frame, "(b) AQUECIMENTO", (w33 + 10, my + 14), FONT, 0.38, (100, 100, 255), 1)
+        _put_text_shadow(frame, "(c) COMEDOURO", (w66 + 10, my + 14), FONT, 0.38, (100, 255, 100), 1)
 
         # -- 2. Painel HUD: topo-direito ------------------------------------
         pw = min(260, w - 20)
