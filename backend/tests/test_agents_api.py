@@ -15,7 +15,9 @@ sys.modules["cv2"] = mock.MagicMock()
 
 # Configuração de variáveis de ambiente para testes do Flask
 os.environ["FLASK_ENV"] = "testing"
-os.environ["SUPABASE_JWT_SECRET"] = "dummy_secret"
+os.environ["SUPABASE_JWT_SECRET"] = os.environ.get(
+    "SUPABASE_JWT_SECRET", "dummy_secret_dummy_secret_dummy_secret"
+)
 os.environ["ADMIN_PASSWORD"] = "testpassword"
 os.environ["ADMIN_EMAIL"] = "test@example.com"
 os.environ["JWT_SECRET_KEY"] = "testsecret"
@@ -56,7 +58,7 @@ def test_chat_missing_message(client, auth_headers):
 
 
 def test_chat_missing_api_key(client, monkeypatch, auth_headers):
-    """Valida a mensagem amigável caso a GEMINI_API_KEY não esteja configurada."""
+    """Valida a mensagem amigável caso a chave da API do Gemini não esteja configurada."""
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
 
     pass  # skip test_chat_missing_api_key due to mock issues with db
@@ -139,7 +141,94 @@ def test_knowledge_base_retrieval_fallback(monkeypatch):
 def auth_headers():
     token = jwt.encode(
         {"sub": "test_user", "app_metadata": {"role": "admin"}, "aud": "authenticated"},
-        "dummy_secret",
+        os.environ.get("SUPABASE_JWT_SECRET", "dummy_secret_dummy_secret_dummy_secret"),
         algorithm="HS256",
     )
     return {"Authorization": f"Bearer {token}"}
+
+
+def test_knowledge_base_retrieval_error(monkeypatch):
+    """Valida o tratamento de erro (ex: IOError) ao tentar ler o arquivo."""
+    from src.api.agents_api import _retrieve_knowledge_base
+
+    def mock_open(*args, **kwargs):
+        raise IOError("Simulated IOError")
+
+    monkeypatch.setattr("builtins.open", mock_open)
+    # Certifique-se de que os.path.exists retorna True para passar pelo primeiro check
+    monkeypatch.setattr("os.path.exists", lambda path: True)
+
+    res = _retrieve_knowledge_base("amônia")
+    assert res == ""
+
+
+def test_call_gemini_api_success(monkeypatch):
+    from src.api.agents_api import _call_gemini_api
+
+    def mock_post(url, headers, json, timeout):
+        assert (
+            url
+            == "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+        )
+        assert headers == {
+            "Content-Type": "application/json",
+            "x-goog-api-key": "mock_api_key",
+        }
+        assert (
+            json["contents"][0]["parts"][0]["text"]
+            == "Instruções do Sistema:\nsys_prompt\n\nPergunta do Produtor: user_msg"
+        )
+
+        class MockResponse:
+            def __init__(self):
+                self.status_code = 200
+
+            def json(self):
+                return {
+                    "candidates": [{"content": {"parts": [{"text": "mock_reply"}]}}]
+                }
+
+        return MockResponse()
+
+    monkeypatch.setattr("requests.post", mock_post)
+    reply, error = _call_gemini_api("mock_api_key", "sys_prompt", "user_msg")
+    assert reply == "mock_reply"
+    assert error is None
+
+
+def test_call_gemini_api_error_status(monkeypatch):
+    from src.api.agents_api import _call_gemini_api
+
+    def mock_post(*args, **kwargs):
+        class MockResponse:
+            def __init__(self):
+                self.status_code = 400
+                self.text = "Bad Request"
+
+        return MockResponse()
+
+    monkeypatch.setattr("requests.post", mock_post)
+    reply, error = _call_gemini_api("mock_api_key", "sys_prompt", "user_msg")
+    assert reply is None
+    assert error == "Erro na API do Gemini (Código 400): Bad Request"
+
+
+def test_call_gemini_api_fallback_text(monkeypatch):
+    from src.api.agents_api import _call_gemini_api
+
+    def mock_post(*args, **kwargs):
+        class MockResponse:
+            def __init__(self):
+                self.status_code = 200
+
+            def json(self):
+                return {}  # missing candidates/parts
+
+        return MockResponse()
+
+    monkeypatch.setattr("requests.post", mock_post)
+    reply, error = _call_gemini_api("mock_api_key", "sys_prompt", "user_msg")
+    assert (
+        reply == "Desculpe, não obtive uma resposta válida da inteligência artificial."
+    )
+    assert error is None

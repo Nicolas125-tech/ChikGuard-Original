@@ -23,10 +23,9 @@ export default function HeatmapOverlay({ serverIP, token }) {
   }, [baseUrl, token]);
 
   useEffect(() => {
-    const bootstrap = setTimeout(fetchHeatmapData, 0);
+    (async () => { fetchHeatmapData(); })();
     const interval = setInterval(fetchHeatmapData, 5000);
     return () => {
-      clearTimeout(bootstrap);
       clearInterval(interval);
     };
   }, [fetchHeatmapData]);

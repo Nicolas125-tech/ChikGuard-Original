@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "name": "python-opencv",
+  "owner": "josiahsiegel",
+  "repo": "claude-plugin-marketplace",
+  "path": "plugins/python-master/skills/python-opencv",
+  "branch": "main",
+  "sha": "c28c30ed0804e5ddb230fd2f6398537a133b068b",
+  "source": "manual"
+}

@@ -24,6 +24,7 @@ import SystemScreen from './screens/SystemScreen';
 import ConfigScreen from './screens/ConfigScreen';
 import DigitalTwinScreen from './screens/DigitalTwinScreen';
 import AdminPanel from './AdminPanel';
+import { registerWebMCPTools } from './WebMCP';
 
 import { 
   LayoutDashboard, History, Bird, Activity, Database, Bell, Cpu, Settings, Layers, LogOut, User, Key, AlertTriangle
@@ -265,6 +266,15 @@ export default function App() {
       };
     }
   }, [token, normalizedServerUrl, activeTab]);
+
+  // WebMCP API context registration for AI Agents in the browser (Expo Web)
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const controller = registerWebMCPTools(normalizedServerUrl, token);
+    return () => {
+      if (controller) controller.abort();
+    };
+  }, [normalizedServerUrl, token]);
 
   const handleGoogleLogin = async () => {
     setLoadingLogin(true);

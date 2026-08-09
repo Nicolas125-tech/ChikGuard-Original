@@ -1,3 +1,6 @@
+import os
+os.environ["SUPABASE_JWT_SECRET"] = os.environ.get("SUPABASE_JWT_SECRET", "dummy_secret_dummy_secret_dummy_secret_for_tests_32bytes")
+
 from fastapi.testclient import TestClient
 
 from main import fastapi_app
@@ -10,6 +13,9 @@ def override_get_current_user():
 
 def test_get_farm_location_and_weather_unauthorized():
     """Testa a rota sem autenticacao para garantir que retorna 401."""
+    # Reset any overrides to test unauthorized access
+    fastapi_app.dependency_overrides.clear()
+
     response = client.get("/api/climate/location-forecast")
     assert response.status_code == 401
 

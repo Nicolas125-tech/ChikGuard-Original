@@ -34,7 +34,7 @@ export default function TVScreen({ serverIP, showHeader = false, onLogout }) {
   }, [baseUrl]);
 
   useEffect(() => {
-    const bootstrap = setTimeout(load, 0);
+    (async () => { load(); })();
     const timer = setInterval(load, 4000);
 
     // WebSocket listener for instant updates
@@ -45,7 +45,6 @@ export default function TVScreen({ serverIP, showHeader = false, onLogout }) {
     });
 
     return () => {
-      clearTimeout(bootstrap);
       clearInterval(timer);
       socket.disconnect();
     };

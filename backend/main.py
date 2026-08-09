@@ -1,11 +1,12 @@
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from src.core.config import load_settings
-from src.core.logger import configure_logging
 from src.core.fsm_task import fsm_loop
+from src.core.logger import configure_logging
 from src.core.mqtt_bridge import start_mqtt_bridge
 import asyncio
 import time
@@ -22,8 +23,8 @@ async def lifespan(fastapi_app: FastAPI):
 
     # Inicializa o banco de dados SQLite
     try:
-        from database import db, Camera
-        from src.db.session import engine, SessionLocal
+        from database import Camera, db
+        from src.db.session import SessionLocal, engine
 
         db.metadata.create_all(bind=engine)
 
@@ -68,6 +69,16 @@ async def lifespan(fastapi_app: FastAPI):
     stop_camera_thread()
     fsm_task.cancel()
     sync_task.cancel()
+
+    # Finaliza o SOTA Computer Vision Pipeline
+    try:
+        from src.cv_master import get_sota_runner
+
+        get_sota_runner().stop()
+        LOGGER.info("SOTA Computer Vision Pipeline finalizado.")
+    except Exception as cv_err:
+        LOGGER.error(f"Falha ao finalizar o SOTA Computer Vision Pipeline: {cv_err}")
+
     if mqtt_client:
         mqtt_client.loop_stop()
         mqtt_client.disconnect()
@@ -75,20 +86,17 @@ async def lifespan(fastapi_app: FastAPI):
     LOGGER.info("Encerrando o servidor FastAPI - ChikGuard")
 
 
-from src.api.fastapi_health import router as health_router
-from src.api.fastapi_sensors import router as sensors_router
-from src.api.fastapi_birds import router_birds, router_weight
-from src.api.fastapi_webrtc import router as webrtc_router
-from src.api.fastapi_iot import router as iot_router
-from src.api.fastapi_climate import router as climate_router
 from src.api.fastapi_accounts import router as accounts_router
+from src.api.fastapi_agent_discovery import router as agent_discovery_router
+from src.api.fastapi_birds import router_birds, router_weight
 from src.api.fastapi_cameras import router as cameras_router
+from src.api.fastapi_climate import router as climate_router
+from src.api.fastapi_health import router as health_router
 from src.api.fastapi_heatmap import router as heatmap_router
 from src.api.fastapi_zone_analytics import router as zone_analytics_router
 from src.api.fastapi_ws import socket_app
+from src.security.fastapi_auth import RequireRole, UserContext, get_current_user
 from src.security.headers import ALLOWED_ORIGINS
-from src.security.fastapi_auth import get_current_user, UserContext, RequireRole
-from fastapi import Depends
 
 fastapi_app = FastAPI(
     title="ChikGuard API",
@@ -115,13 +123,40 @@ fastapi_app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Device-ID"],
 )
 
 
 @fastapi_app.get("/")
-async def root():
+async def root(request: Request, response: Response):
+    link_header = (
+        '</.well-known/api-catalog>; rel="api-catalog", </docs>; rel="service-doc"'
+    )
+    response.headers["Link"] = link_header
+
+    accept_header = request.headers.get("accept", "")
+    if "text/markdown" in accept_header:
+        md_content = """# ChikGuard
+
+Welcome to the ChikGuard intelligent poultry monitoring node.
+
+- **Status**: Online
+- **Version**: 2.0.0
+- **Service**: ChikGuard FastAPI Edge Node
+
+## Discovery
+- API Catalog: `/.well-known/api-catalog`
+- MCP Server Card: `/.well-known/mcp/server-card.json`
+- Skills Index: `/.well-known/agent-skills/index.json`
+"""
+        headers = {
+            "Content-Type": "text/markdown",
+            "x-markdown-tokens": str(len(md_content.split())),
+            "Link": link_header,
+        }
+        return Response(content=md_content, media_type="text/markdown", headers=headers)
+
     return {
         "status": "online",
         "service": "ChikGuard FastAPI Edge Node",
@@ -159,8 +194,8 @@ async def get_summary(user: UserContext = Depends(get_current_user)):
             "aquecedor": "ligado" if actuator_state.get("aquecedor_on", False) else "desligado",
             "modo_automatico": True,
         },
-        "total_alertas": 0,
-        "camera_id": "galpao-1",
+        "total_alertas": len(alertas),
+        "camera_id": active_camera_id,
         "behavior": {
             "status": "NORMAL",
             "message": "",
@@ -182,13 +217,18 @@ async def get_summary(user: UserContext = Depends(get_current_user)):
             "method": "segmentation_area",
         },
         "acoustic": {
-            "respiratory_health_index": 0.95,
-            "cough_index": 0.05,
-            "stress_audio_index": 0.1,
-            "source": "sensor",
+            "respiratory_health_index": acoustic_state.get(
+                "respiratory_health_index", 100.0
+            ),
+            "cough_index": acoustic_state.get("cough_index", 0.0),
+            "stress_audio_index": acoustic_state.get("stress_audio_index", 0.0),
+            "source": acoustic_state.get("source", "sensor"),
             "trained_model_loaded": True,
         },
-        "energy_today": {"ventilacao_seconds": 120, "aquecedor_seconds": 0},
+        "energy_today": {
+            "ventilacao_seconds": round(vent_sec_today, 2),
+            "aquecedor_seconds": round(aq_sec_today, 2),
+        },
         "smart_grid_forecast_12h": {
             "projected_total_cost": 0.0,
             "projected_heater_cost": 0.0,
@@ -196,9 +236,9 @@ async def get_summary(user: UserContext = Depends(get_current_user)):
             "suggest_optimize_airflow": False,
             "message": "Ok",
         },
-        "sync": {"pending": 0},
+        "sync": {"pending": pending_sync},
         "weather": {},
-        "tamper": {"last_alert_ts": 0, "last_causes": [], "alerts_count": 0},
+        "tamper": tamper_state,
         "carcass": {"count": 0, "audio_alert": False},
         "comfort_score": 95 if temp < 32 else 70,
     }
@@ -273,8 +313,7 @@ async def video_feed(token: str = None):
 
 @fastapi_app.get("/api/status")
 async def get_status(user: UserContext = Depends(get_current_user)):
-    import time
-    from src.core.state import sensor_state, active_camera_id
+    from src.core.state import active_camera_id, sensor_state
 
     temp = sensor_state.get("temperature_c", 28.5)
     return {
@@ -303,6 +342,7 @@ async def get_weather_forecast():
 @fastapi_app.get("/api/history")
 async def get_history(user: UserContext = Depends(get_current_user)):
     import time
+
     from src.core.state import sensor_state
 
     temp = sensor_state.get("temperature_c", 28.5)

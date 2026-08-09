@@ -1,0 +1,23 @@
+{
+  "linkset": [
+    {
+      "anchor": "https://chikguard.com/api",
+      "service-desc": [
+        {
+          "href": "https://chikguard.com/docs",
+          "type": "application/openapi+json"
+        }
+      ],
+      "service-doc": [
+        {
+          "href": "https://chikguard.com/docs"
+        }
+      ],
+      "status": [
+        {
+          "href": "https://chikguard.com/api/health/system"
+        }
+      ]
+    }
+  ]
+}

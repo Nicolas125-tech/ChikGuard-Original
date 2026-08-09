@@ -1,6 +1,6 @@
 import os
 
-os.environ["SUPABASE_JWT_SECRET"] = "dummy_secret"
+os.environ["SUPABASE_JWT_SECRET"] = os.environ.get("SUPABASE_JWT_SECRET", "dummy_secret_dummy_secret_dummy_secret_for_testing_32b")
 os.environ["ADMIN_PASSWORD"] = "testpassword"
 os.environ["ADMIN_EMAIL"] = "test@example.com"
 os.environ["JWT_SECRET_KEY"] = "testsecret"
@@ -26,4 +26,4 @@ def test_accounts_me_invalid_session(client):
     """Testa a rota /api/accounts/me sem autenticacao para garantir que retorna 401."""
     response = client.get("/api/accounts/me")
     assert response.status_code == 401
-    assert response.json == {"msg": "Sessão inválida"}
+    assert response.json == {"error": "Missing or invalid token"}

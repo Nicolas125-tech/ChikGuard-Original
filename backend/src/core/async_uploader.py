@@ -264,7 +264,9 @@ class AsyncUploader:
 
         # Usa call_soon_threadsafe para enfileirar de forma thread-safe
         try:
-            future = asyncio.run_coroutine_threadsafe(self._safe_enqueue(payload), self._loop)
+            future = asyncio.run_coroutine_threadsafe(
+                self._safe_enqueue(payload), self._loop
+            )
             result = future.result(timeout=0.05)  # nao espera mais de 50ms
             if result:
                 self._stats["enqueued"] += 1
@@ -344,11 +346,7 @@ class AsyncUploader:
         Faz upload do crop JPEG para o Supabase Storage.
         Retorna a URL publica do arquivo.
         """
-        try:
-            import aiohttp
-        except ImportError:
-            # Fallback sincrono via requests (menos ideal, mas funciona)
-            return await self._upload_storage_requests(payload)
+        import aiohttp
 
         ts = int(payload.timestamp)
         path = f"{ACTIVE_CAMERA_ID}/{BATCH_ID}/chick_{payload.track_id}_{ts}.jpg"
@@ -373,33 +371,6 @@ class AsyncUploader:
         public_url = f"{self._url}/storage/v1/object/public/{self._bucket}/{path}"
         return public_url
 
-    async def _upload_storage_requests(self, payload: UploadPayload) -> str:
-        """Fallback sincrono via requests (sem aiohttp instalado)."""
-        import requests
-
-        ts = int(payload.timestamp)
-        path = f"{ACTIVE_CAMERA_ID}/{BATCH_ID}/chick_{payload.track_id}_{ts}.jpg"
-        url = f"{self._url}/storage/v1/object/{self._bucket}/{path}"
-
-        loop = asyncio.get_event_loop()
-
-        def _do_upload():
-            resp = requests.post(
-                url,
-                data=payload.crop_jpg,
-                headers={
-                    "Authorization": f"Bearer {self._key}",
-                    "Content-Type": "image/jpeg",
-                    "x-upsert": "true",
-                },
-                timeout=UPLOAD_TIMEOUT_SEC,
-            )
-            if resp.status_code not in (200, 201):
-                raise RuntimeError(f"Storage HTTP {resp.status_code}: {resp.text[:200]}")
-
-        await loop.run_in_executor(None, _do_upload)
-        return f"{self._url}/storage/v1/object/public/{self._bucket}/{path}"
-
     # ── Supabase Database ─────────────────────────────────────────────────────
 
     async def _insert_database(self, payload: UploadPayload, image_url: str):
@@ -407,11 +378,7 @@ class AsyncUploader:
         Insere registro na tabela Supabase via REST API.
         Usa ON CONFLICT DO NOTHING para garantia extra contra duplicatas.
         """
-        try:
-            import aiohttp
-        except ImportError:
-            await self._insert_database_requests(payload, image_url)
-            return
+        import aiohttp
 
         url = f"{self._url}/rest/v1/{self._table}"
         headers = {
@@ -447,47 +414,6 @@ class AsyncUploader:
                 if resp.status not in (200, 201):
                     text = await resp.text()
                     raise RuntimeError(f"DB HTTP {resp.status}: {text[:200]}")
-
-    async def _insert_database_requests(self, payload: UploadPayload, image_url: str):
-        """Fallback sincrono para insert no banco."""
-        import requests
-
-        url = f"{self._url}/rest/v1/{self._table}"
-        body = {
-            "track_id": payload.track_id,
-            "camera_id": ACTIVE_CAMERA_ID,
-            "batch_id": BATCH_ID,
-            "centroid_x": round(payload.centroid[0], 2),
-            "centroid_y": round(payload.centroid[1], 2),
-            "bbox": {
-                "x1": payload.bbox[0],
-                "y1": payload.bbox[1],
-                "x2": payload.bbox[2],
-                "y2": payload.bbox[3],
-            },
-            "confidence": round(float(payload.confidence), 4),
-            "species": payload.species,
-            "image_url": image_url,
-        }
-
-        loop = asyncio.get_event_loop()
-
-        def _do_insert():
-            resp = requests.post(
-                url,
-                json=body,
-                headers={
-                    "Authorization": f"Bearer {self._key}",
-                    "apikey": self._key,
-                    "Content-Type": "application/json",
-                    "Prefer": "return=minimal,resolution=ignore-duplicates",
-                },
-                timeout=UPLOAD_TIMEOUT_SEC,
-            )
-            if resp.status_code not in (200, 201):
-                raise RuntimeError(f"DB HTTP {resp.status_code}: {resp.text[:200]}")
-
-        await loop.run_in_executor(None, _do_insert)
 
     # ── Stats / Debug ─────────────────────────────────────────────────────────
 

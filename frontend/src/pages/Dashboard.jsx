@@ -44,7 +44,6 @@ const SidebarContent = React.memo(({ tabs, tab, handleTabChange, role, onLogout 
             return (
               <button
                 key={item.id}
-                data-tour={item.id}
                 onClick={() => handleTabChange(item.id)}
                 className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium flex items-center gap-3 transition-all duration-200 group relative ${
                   isActive
@@ -72,7 +71,7 @@ const SidebarContent = React.memo(({ tabs, tab, handleTabChange, role, onLogout 
       ))}
     </div>
 
-    <div className="p-3 border-t border-slate-800/60 tour-user-menu">
+    <div className="p-3 border-t border-slate-800/60">
       <div className="flex items-center gap-3 mb-3 px-2">
         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-xs font-bold text-white uppercase shadow-md">
           {role[0]}
@@ -175,7 +174,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
   }, [baseUrl, token]);
 
   useEffect(() => {
-    setTimeout(() => fetchCameras(), 0);
+    (async () => { fetchCameras(); })();
   }, [fetchCameras]);
 
   const switchCamera = async (camId) => {
@@ -194,7 +193,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
   };
 
   useEffect(() => {
-    setTimeout(() => checkHealth(), 0);
+    (async () => { checkHealth(); })();
     const healthTimer = setInterval(checkHealth, 15000);
     return () => clearInterval(healthTimer);
   }, [checkHealth]);
@@ -213,7 +212,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
   }, [baseUrl, token]);
 
   useEffect(() => {
-    setTimeout(() => fetchAlertCount(), 0);
+    (async () => { fetchAlertCount(); })();
     const alertsTimer = setInterval(fetchAlertCount, 20000);
     return () => clearInterval(alertsTimer);
   }, [fetchAlertCount]);
@@ -302,7 +301,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
   // ── Métodos de Renderização Secundários (Clean Code Layout) ──
 
   const renderDesktopSidebar = () => (
-    <aside className="w-60 flex-col z-40 relative hidden md:flex shrink-0 glass-panel shadow-2xl tour-sidebar">
+    <aside className="w-60 flex-col z-40 relative hidden md:flex shrink-0 glass-panel shadow-2xl">
       <div className="p-5 border-b border-slate-800/60 flex items-center gap-3">
         <div className="bg-emerald-500/10 p-1.5 rounded-xl border border-emerald-500/20 w-9 h-9 flex items-center justify-center shadow-inner">
           <img src="/logo.jpeg" alt="ChikGuard" className="w-6 h-6 object-contain drop-shadow-md" />
@@ -366,7 +365,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
               title="Selecionar granja/câmera"
             value={activeCamera} 
             onChange={(e) => switchCamera(e.target.value)}
-            className="tour-camera-selector bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-medium focus:outline-none focus:border-emerald-500 transition-colors cursor-pointer"
+            className="bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-medium focus:outline-none focus:border-emerald-500 transition-colors cursor-pointer"
           >
             {cameras.map(c => (
               <option key={c.camera_id} value={c.camera_id}>{c.name}</option>
@@ -389,7 +388,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
         <button
           aria-label="View alerts"
           onClick={() => handleTabChange('alerts')}
-          className="tour-alerts relative p-2 rounded-lg text-slate-400 hover:bg-slate-800 transition-colors border border-slate-800/50 hover:border-slate-700"
+          className="relative p-2 rounded-lg text-slate-400 hover:bg-slate-800 transition-colors border border-slate-800/50 hover:border-slate-700"
         >
           <Bell size={18} />
           {alertCount > 0 && (

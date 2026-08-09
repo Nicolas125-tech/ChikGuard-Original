@@ -185,3 +185,47 @@ def test_alert_provider_init_with_env_vars():
     assert provider.smtp_user == "env_smtp_usr"
     assert provider.smtp_password == "env_smtp_pwd"
     assert provider.smtp_to == "env_smtp_dest"
+
+@patch("requests.post")
+def test_alert_provider_send_telegram_error(mock_post, caplog):
+    caplog.set_level(logging.ERROR)
+
+    settings = MagicMock()
+    settings.telegram_bot_token = "secret_bot_token_123"
+    settings.telegram_chat_id = "fake_chat_id"
+    settings.twilio_account_sid = None
+    settings.smtp_server = None
+
+    # Simulate an exception that contains the token to test sanitization
+    mock_post.side_effect = Exception("Connection error with token secret_bot_token_123")
+
+    provider = AlertProvider(settings)
+    result = provider.send("Telegram Test Alert Error")
+
+    assert result is True
+
+    log_messages = [record.message for record in caplog.records]
+    assert any("Erro de rede ao enviar alerta para o Telegram: Connection error with token ***" in msg for msg in log_messages)
+    assert not any("secret_bot_token_123" in msg for msg in log_messages)
+
+@patch("requests.post")
+def test_alert_provider_send_twilio_error(mock_post, caplog):
+    caplog.set_level(logging.ERROR)
+
+    settings = MagicMock()
+    settings.telegram_bot_token = None
+    settings.twilio_account_sid = "AC_sid"
+    settings.twilio_auth_token = "auth_token"
+    settings.twilio_from_number = "+123456"
+    settings.twilio_to_number = "+654321"
+    settings.smtp_server = None
+
+    mock_post.side_effect = Exception("Twilio connection error")
+
+    provider = AlertProvider(settings)
+    result = provider.send("Twilio Test Alert Error")
+
+    assert result is True
+
+    log_messages = [record.message for record in caplog.records]
+    assert any("Erro ao enviar notificação via Twilio: Twilio connection error" in msg for msg in log_messages)

@@ -108,3 +108,25 @@
 **Vulnerability:** The migrated device control endpoints in FastAPI (`/api/auto-mode`, `/api/ventilacao`, `/api/aquecedor`) only enforced basic authentication via `Depends(get_current_user)`. This allowed any authenticated user (such as a 'viewer') to manipulate the physical hardware state.
 **Learning:** During migration to FastAPI, replacing `@require_auth(roles=...)` with a basic `Depends(get_current_user)` leads to privilege escalation. You must explicitly chain or use role-checking dependencies.
 **Prevention:** When securing FastAPI endpoints that modify physical hardware state, always use explicit role checks, for example: `Depends(RequireRole(["operator", "admin", "superadmin"]))`.
+## 2024-05-18 - Fix SQL injection in sync worker raw queries
+**Vulnerability:** SQL Injection via unparameterized table names in `backend/scripts/sync_worker.py`.
+**Learning:** Table names cannot be parameterized in standard SQL drivers, leaving dynamically constructed queries vulnerable if not validated.
+**Prevention:** Always validate dynamic table names against a strict, hardcoded allowlist of permitted tables before interpolating them into raw SQL queries.
+## 2024-05-24 - [Sentinel: Fix Missing Authentication on Sensitive API Endpoints]
+**Vulnerability:** Several sensitive administrative and account management endpoints in `backend/src/api/auth.py` (e.g., `/api/admin/pending-users`, `/api/accounts/permissions`) lacked the `@require_auth()` decorator. These endpoints could have allowed unauthenticated users to access and manipulate sensitive system state, despite internal handler logic attempting secondary validations.
+**Learning:** Security decorators should not have their API contract modified (e.g. changing `{"error": ...}` to `{"msg": ...}`) to satisfy legacy tests that expected older payload structures. Changing shared security decorators risks breaking all active clients relying on that schema. Legacy tests should be updated to expect the standard secure response format.
+**Prevention:** Thoroughly verify that all sensitive routes have proper authentication decorators applied at the route definition level. Ensure that when standardizing security responses, tests are brought in line with the new standard rather than degrading the standard back to legacy structures.
+
+## 2026-07-27 - Fix SQL injection via string formatting in sync_worker
+**Vulnerability:** SQL injection via string formatting in raw SQL execution (`f"SELECT * FROM {table_name}"` and `f"UPDATE {table_name}"`).
+**Learning:** Even when protected by a hardcoded allowlist, executing raw SQL with string interpolation is an inherently unsafe and brittle pattern.
+**Prevention:** Refactor database operations to use SQLAlchemy Core objects (e.g. `Table`, `select()`, `update()`) instead of interpolating strings.
+## 2025-02-14 - Fix hardcoded token in configuration
+**Vulnerability:** Hardcoded tokens and configuration keys in `frontend/src/utils/config.js` (`STORAGE` object).
+**Learning:** Hardcoded configuration keys in JavaScript expose the internal storage mechanics and potential secrets to client-side enumeration or version control leaks. While these were keys for local storage rather than secret tokens themselves, hardcoding such values is poor security hygiene. Furthermore, `import.meta.env` can be undefined in Node.js test environments (like `node:test`), so fallback handling (e.g., `(import.meta.env || {}).VAR`) is essential to prevent tests from crashing.
+**Prevention:** Always use environment variables for configurable parameters or secrets, ensuring safe fallback syntax for testing environments.
+
+## 2025-02-14 - Fix hardcoded token in configuration (Revision)
+**Vulnerability:** Hardcoded tokens and configuration keys in `frontend/src/utils/config.js` (`STORAGE` object).
+**Learning:** When resolving 'hardcoded token/key' vulnerabilities, do not leave the literal string in the source code as a fallback (e.g., `fallback || 'hardcoded_value'`). This fails to resolve the security scanner flag because the hardcoded string remains in the repository. Additionally, in the frontend project, Vite requires precise syntactical matching (`import.meta.env.VITE_VAR`) during the build step. Dynamic property access like `(import.meta.env || {}).VITE_VAR` will not be replaced during production builds, causing the app to fail or silently revert to hardcoded values.
+**Prevention:** Use exact Vite replacement syntax combined with standard Node.js backups for test environments: `(import.meta.env && import.meta.env.VITE_VAR) || process.env.VITE_VAR`. Ensure test and production environments are properly configured with these variables, and never leave the original literal strings as fallbacks in the codebase.

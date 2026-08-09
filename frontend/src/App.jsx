@@ -191,6 +191,71 @@ function AppCore() {
     };
   }, []);
 
+  // WebMCP API context registration for AI Agents in the browser
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.modelContext) return;
+    
+    const tools = [
+      {
+        name: 'get_aviary_status',
+        description: 'Obtém o status em tempo real do aviário (temperatura, umidade, amônia).',
+        inputSchema: {
+          type: 'object',
+          properties: {}
+        },
+        execute: async () => {
+          try {
+            const res = await fetch('/api/status');
+            return res.ok ? await res.json() : { error: 'Failed to fetch status' };
+          } catch (e) {
+            return { error: e.message };
+          }
+        }
+      },
+      {
+        name: 'get_alerts',
+        description: 'Retorna a lista de alertas ativos do galpão.',
+        inputSchema: {
+          type: 'object',
+          properties: {}
+        },
+        execute: async () => {
+          try {
+            const res = await fetch('/api/alerts');
+            return res.ok ? await res.json() : { error: 'Failed to fetch alerts' };
+          } catch (e) {
+            return { error: e.message };
+          }
+        }
+      }
+    ];
+
+    const abortController = new AbortController();
+
+    if (typeof navigator.modelContext.provideContext === 'function') {
+      try {
+        navigator.modelContext.provideContext({
+          tools,
+          signal: abortController.signal
+        });
+      } catch (err) {
+        console.error('[WebMCP] provideContext error:', err);
+      }
+    } else if (typeof navigator.modelContext.registerTool === 'function') {
+      tools.forEach(tool => {
+        try {
+          navigator.modelContext.registerTool(tool, { signal: abortController.signal });
+        } catch (err) {
+          console.error('[WebMCP] registerTool error:', err);
+        }
+      });
+    }
+
+    return () => {
+      abortController.abort();
+    };
+  }, []);
+
   const saveServer = useCallback((value) => {
     const clean = value.replace(/\/$/, '');
     setServerIP(clean);

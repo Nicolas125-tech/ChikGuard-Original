@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
+  "skills": [
+    {
+      "name": "robots-txt",
+      "type": "skill-md",
+      "description": "Crawler rules and discovery pathways",
+      "url": "https://isitagentready.com/.well-known/agent-skills/robots-txt/SKILL.md",
+      "digest": "sha256:7f058097f5fa26bc2bf3d748f21950d9959dc3dc7dc11059f13dc1e2dfa9a3b2"
+    }
+  ]
+}

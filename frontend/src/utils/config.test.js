@@ -77,6 +77,18 @@ describe('getBaseUrl', () => {
     assert.strictEqual(getBaseUrl(), 'https://random-trycloudflare.com');
   });
 
+  it('should return origin if hostname matches trycloudflare but not origin', () => {
+    global.window.location.hostname = 'example-trycloudflare.com';
+    global.window.location.origin = 'https://different-origin.com';
+    assert.strictEqual(getBaseUrl(), 'https://different-origin.com');
+  });
+
+  it('should ignore ipOrUrl and return origin if hostname matches a tunnel host like cfargotunnel', () => {
+    global.window.location.hostname = 'test-cfargotunnel.com';
+    global.window.location.origin = 'https://cfargotunnel.com';
+    assert.strictEqual(getBaseUrl('http://192.168.1.1:5000'), 'https://cfargotunnel.com');
+  });
+
   it('should return local backend URL if hostname is localhost', () => {
     global.window.location.hostname = 'localhost';
     assert.strictEqual(getBaseUrl('192.168.1.100'), 'http://127.0.0.1:5000');

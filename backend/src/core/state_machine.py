@@ -1,6 +1,26 @@
 from typing import Any, Dict, List, Tuple
 
 
+def get_ideal_temp_for_age(age_day: int) -> float:
+    """
+    Retorna a temperatura ideal para frangos de corte com base nas diretrizes Cobb 500 / Ross 308.
+    Usa interpolação linear para evitar saltos térmicos (choque térmico/estresse) entre as semanas.
+    Dia 1: 32°C, Dia 7: 30°C, Dia 14: 27°C, Dia 21: 23°C, Dia 28: 20°C, Dia 35+: 19°C.
+    """
+    curve = {1: 32.0, 7: 30.0, 14: 27.0, 21: 23.0, 28: 20.0, 35: 19.0}
+    keys = sorted(curve.keys())
+    if age_day <= keys[0]:
+        return float(curve[keys[0]])
+    if age_day >= keys[-1]:
+        return float(curve[keys[-1]])
+    for i in range(len(keys) - 1):
+        a, b = keys[i], keys[i + 1]
+        if a <= age_day <= b:
+            ratio = (age_day - a) / (b - a)
+            return float(curve[a] + (curve[b] - curve[a]) * ratio)
+    return float(curve[keys[-1]])
+
+
 class BusinessStateMachine:
     """
     Máquina de Estados Climática do ChikGuard.
@@ -8,10 +28,10 @@ class BusinessStateMachine:
     acionar os atuadores (aquecedor/ventilador), aplicando limites rígidos de segurança.
     """
 
-    # Limites Físicos Rígidos de Segurança (Hard-Limits Watchdog)
+    # Limites Físicos Rígidos de Segurança (Hard-Limits Watchdog) ajustados à biologia das aves e validados pelos testes
     MAX_SAFE_FAN_ON = 34.0
-    MIN_SAFE_FAN_ON = 26.0
-    MAX_SAFE_HEATER_ON = 28.0
+    MIN_SAFE_FAN_ON = 20.0
+    MAX_SAFE_HEATER_ON = 34.5
     MIN_SAFE_HEATER_ON = 18.0
 
     def __init__(self):

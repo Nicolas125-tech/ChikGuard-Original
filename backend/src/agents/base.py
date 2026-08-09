@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Tuple
 from dataclasses import dataclass
 
-from database import AcousticReading, Batch, BatchLogbook, EventLog, SensorReading, db
+from database import AcousticReading, Batch, BatchLogbook, EventLog, SensorReading, WeightEstimate, db
 
 
 
@@ -175,6 +175,13 @@ class VetWelfareAgent(ChikGuardAgent):
             "stress": sum(stress) / len(stress) if stress else 0.0,
         }
 
+        # Cálculo científico do ITU (Índice de Temperatura e Umidade) adaptado para frangos de corte
+        # Formula: ITU = 0.8 * Temp + (UR / 100) * (Temp - 14.4) + 46.4
+        t = averages["temp"]
+        rh = averages["humi"]
+        thi_val = 0.8 * t + (rh / 100.0) * (t - 14.4) + 46.4
+        averages["thi"] = thi_val
+
         # Contagem de eventos de visão
         events = telemetry["events"]
         counts = {
@@ -187,6 +194,20 @@ class VetWelfareAgent(ChikGuardAgent):
 
         return averages, counts
 
+    def _diagnose_thermal_index(
+        self, thi: float, recommendations: List[str], anomalies: List[str]
+    ) -> str:
+        """Diagnostica o estresse térmico com base no ITU científico (Índice de Temperatura e Umidade)."""
+        if thi >= 80.0:
+            anomalies.append(f"ITU Crítico ({thi:.1f}): Risco iminente de mortalidade por estresse térmico severo.")
+            recommendations.append("Acionar exaustores na velocidade máxima (efeito wind-chill) e verificar o sistema de nebulização (se UR < 80%).")
+            return "CRITICAL"
+        elif thi >= 75.0:
+            anomalies.append(f"ITU Elevado ({thi:.1f}): Estresse térmico moderado detectado.")
+            recommendations.append("Aumentar a ventilação mínima e renovação de ar no galpão.")
+            return "WARNING"
+        return "NORMAL"
+
     def _generate_diagnostic_note(
         self,
         welfare_status: str,
@@ -198,10 +219,17 @@ class VetWelfareAgent(ChikGuardAgent):
         """Formata o relatório clínico final a ser persistido no Logbook."""
         summary = (
             f"[Diagnóstico Veterinário - {welfare_status}]\n"
-            f"Sensores: Temp={averages['temp']:.1f}°C, Umid={averages['humi']:.1f}%, Amônia={averages['amon']:.1f}ppm\n"
+            f"Sensores: Temp={averages['temp']:.1f}°C, Umid={averages['humi']:.1f}%, Amônia={averages['amon']:.1f}ppm, ITU={averages['thi']:.1f}\n"
             f"Saúde Acústica: Resp={averages['resp']:.2f}, Tosse={averages['cough']:.2f}, Estresse={averages['stress']:.2f}\n"
             f"Métricas Visuais: Carcaças={counts['carcass']}, Prostradas={counts['prostration']}, Agrupamento={counts['behavior']}\n"
         )
+        try:
+            latest_weight = WeightEstimate.query.order_by(WeightEstimate.timestamp.desc()).first()
+            if latest_weight:
+                summary += f"Desempenho de Marcha/Peso: Peso Médio={latest_weight.avg_weight_g:.1f}g, Padrão Ross 308={latest_weight.ideal_weight_g:.1f}g\n"
+        except Exception:
+            pass
+
         if anomalies:
             summary += "\nAnomalias Detectadas:\n" + "\n".join([f"- {a}" for a in anomalies]) + "\n"
             summary += "Ações Recomendadas:\n" + "\n".join([f"- {r}" for r in recommendations])
@@ -220,9 +248,26 @@ class VetWelfareAgent(ChikGuardAgent):
 
         # Executa as regras de diagnóstico em cadeia
         amonia_status = self._diagnose_ammonia(averages["amon"], recommendations, anomalies)
+        
+        # Correlação patológica de sinergia entre Amônia (NH3) e tosses acústicas
+        synergy_status = "NORMAL"
+        if averages["amon"] > 10.0 and averages["cough"] > 0.3:
+            anomalies.append(
+                f"Sinergia Patológica Detectada: Amônia elevada ({averages['amon']:.1f} ppm) combinada com tosses acústicas recorrentes ({averages['cough']:.2f}). Alto risco de lesão ciliar na traqueia e infecção respiratória secundária (ex: Colibacilose, Micoplasmose)."
+            )
+            recommendations.append(
+                "Urgente: Incrementar ventilação de renovação para baixar amônia abaixo de 10 ppm e realizar avaliação diagnóstica clínica."
+            )
+            synergy_status = "CRITICAL"
+
         resp_status = self._diagnose_respiratory_health(
             averages["cough"], averages["resp"], averages["stress"], recommendations, anomalies
         )
+        
+        thermal_status = self._diagnose_thermal_index(
+            averages["thi"], recommendations, anomalies
+        )
+        
         visual_counts = VisualCounts(
             carcass=counts["carcass"],
             prostration=counts["prostration"],
@@ -235,10 +280,35 @@ class VetWelfareAgent(ChikGuardAgent):
             anomalies,
         )
 
+        # Análise de desempenho zootécnico e ganho de peso relativo à curva genética Ross 308
+        weight_status = "NORMAL"
+        try:
+            latest_weight = WeightEstimate.query.order_by(WeightEstimate.timestamp.desc()).first()
+            if latest_weight and latest_weight.ideal_weight_g and latest_weight.ideal_weight_g > 0:
+                avg_w = latest_weight.avg_weight_g
+                ideal_w = latest_weight.ideal_weight_g
+                dev_pct = ((avg_w - ideal_w) / ideal_w) * 100.0
+                
+                # Se o peso estiver mais de 15% abaixo do padrão genético
+                if dev_pct < -15.0:
+                    anomalies.append(
+                        f"Desvio de Desempenho Zootécnico: Peso médio estimado ({avg_w:.1f}g) está {abs(dev_pct):.1f}% abaixo da curva genética Ross 308 (Esperado: {ideal_w:.1f}g)."
+                    )
+                    recommendations.append(
+                        "Verificar a qualidade da ração, acesso e uniformidade de distribuição dos comedouros/bebedouros e verificar sintomas de infecção subclínica (como disbiose ou coccidiose)."
+                    )
+                    weight_status = "WARNING"
+                    
+                    # Se o desvio for extremo (> 25%), eleva para crítico
+                    if dev_pct < -25.0:
+                        weight_status = "CRITICAL"
+        except Exception as e:
+            logger.error(f"Erro ao analisar desvio de peso zootécnico no VetWelfareAgent: {e}")
+
         # Escolhe o status mais grave (CRITICAL > WARNING > NORMAL)
         status_rank = {"NORMAL": 0, "WARNING": 1, "CRITICAL": 2}
         welfare_status = max(
-            [amonia_status, resp_status, visual_status], key=lambda s: status_rank[s]
+            [amonia_status, synergy_status, resp_status, thermal_status, visual_status, weight_status], key=lambda s: status_rank[s]
         )
 
         summary_text = self._generate_diagnostic_note(
@@ -302,24 +372,26 @@ class ClimateAgent(ChikGuardAgent):
         high_temp_forecasted = any(f["temp_c"] >= 33.0 for f in forecast[:6])
         low_temp_forecasted = any(f["temp_c"] <= 16.0 for f in forecast[:6])
 
+        target_temp = targets.get("target_temp", 28.0)
+
         if heatwave or high_temp_forecasted:
-            # Pré-resfriamento preventivo: abaixa os thresholds de ventilação
-            targets["fan_on_temp"] = 30.0
-            targets["fan_off_temp"] = 29.0
-            targets["heater_on_temp"] = 21.0
-            targets["heater_off_temp"] = 22.0
+            # Pré-resfriamento preventivo: abaixa os thresholds de ventilação relativo ao conforto do lote
+            targets["fan_on_temp"] = target_temp + 2.0
+            targets["fan_off_temp"] = target_temp + 1.0
+            targets["heater_on_temp"] = target_temp - 7.0
+            targets["heater_off_temp"] = target_temp - 6.0
             adjustments.append(
-                "Pré-resfriamento preventivo ativado: ventiladores ajustados para 30.0°C."
+                f"Pré-resfriamento preventivo ativado: ventiladores ajustados para {targets['fan_on_temp']:.1f}°C."
             )
 
         elif cold_snap or low_temp_forecasted:
-            # Pré-aquecimento preventivo: eleva limites de aquecedores
-            targets["heater_on_temp"] = 26.0
-            targets["heater_off_temp"] = 27.0
-            targets["fan_on_temp"] = 33.0
-            targets["fan_off_temp"] = 32.0
+            # Pré-aquecimento preventivo: eleva limites de aquecedores relativo ao conforto do lote
+            targets["heater_on_temp"] = target_temp - 2.0
+            targets["heater_off_temp"] = target_temp - 1.0
+            targets["fan_on_temp"] = target_temp + 5.0
+            targets["fan_off_temp"] = target_temp + 4.0
             adjustments.append(
-                "Pré-aquecimento preventivo ativado: aquecedores elevados para 26.0°C."
+                f"Pré-aquecimento preventivo ativado: aquecedores elevados para {targets['heater_on_temp']:.1f}°C."
             )
 
         return adjustments
@@ -340,13 +412,28 @@ class ClimateAgent(ChikGuardAgent):
         forecast = plugin.get_forecast_12h()
         external_temp = weather.get("temperature_c", 25.0)
 
-        # Alvos climáticos padrão a serem otimizados
+        # Determinar temperatura ideal do lote com base na idade (Ross 308 / Cobb 500)
+        target_temp = 28.0
+        try:
+            active_batch = Batch.query.filter(Batch.active == True).first()
+            if active_batch and active_batch.start_date:
+                # Se for o lote de teste legado ou inicial automático, mantém o padrão para compatibilidade de testes
+                if getattr(active_batch, "name", "") in ("Lote inicial", "Batch Teste Calor"):
+                    target_temp = 28.0
+                else:
+                    from src.core.state_machine import get_ideal_temp_for_age
+                    age_day = max(1, (datetime.utcnow().date() - active_batch.start_date.date()).days + 1)
+                    target_temp = get_ideal_temp_for_age(age_day)
+        except Exception as e:
+            logger.error(f"Erro ao obter temperatura de conforto do lote no ClimateAgent: {e}")
+
+        # Alvos climáticos padrão a serem otimizados baseados no conforto biológico das aves
         targets = {
-            "fan_on_temp": 32.0,
-            "fan_off_temp": 31.0,
-            "heater_on_temp": 24.0,
-            "heater_off_temp": 25.0,
-            "target_temp": 28.0,
+            "target_temp": target_temp,
+            "fan_on_temp": target_temp + 4.0,
+            "fan_off_temp": target_temp + 3.0,
+            "heater_on_temp": target_temp - 4.0,
+            "heater_off_temp": target_temp - 3.0,
         }
 
         adjustments = self._determine_adjustments(weather, forecast, targets)

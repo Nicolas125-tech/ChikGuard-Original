@@ -1,0 +1,19 @@
+User-agent: *
+Allow: /
+Disallow: /api/private/
+Disallow: /admin/
+
+User-agent: GPTBot
+Disallow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+Content-Signal: ai-train=no, search=yes, ai-input=no
+Sitemap: https://chikguard.com/sitemap.xml

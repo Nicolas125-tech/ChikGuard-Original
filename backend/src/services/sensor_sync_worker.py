@@ -2,6 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 from database import SensorReading
+from sqlalchemy import update
 
 logger = logging.getLogger("chikguard.sensor_sync")
 
@@ -43,6 +44,7 @@ class SensorSyncWorker:
 
         if session is None:
             from src.db.session import SessionLocal
+
             session = SessionLocal()
             created_session = True
 
@@ -62,14 +64,20 @@ class SensorSyncWorker:
             # 2. Transforma as leituras no payload plano do Supabase para relatórios históricos
             records = []
             for r in readings:
-                records.append({
-                    "camera_id": r.camera_id,
-                    "temperature_c": r.temperature_c,
-                    "humidity_pct": r.humidity_pct,
-                    "ammonia_ppm": r.ammonia_ppm,
-                    "source": r.source,
-                    "created_at": r.timestamp.astimezone(timezone.utc).isoformat() if r.timestamp else datetime.now(timezone.utc).isoformat()
-                })
+                records.append(
+                    {
+                        "camera_id": r.camera_id,
+                        "temperature_c": r.temperature_c,
+                        "humidity_pct": r.humidity_pct,
+                        "ammonia_ppm": r.ammonia_ppm,
+                        "source": r.source,
+                        "created_at": (
+                            r.timestamp.astimezone(timezone.utc).isoformat()
+                            if r.timestamp
+                            else datetime.now(timezone.utc).isoformat()
+                        ),
+                    }
+                )
 
             # 3. Tenta persistir remotamente no Supabase
             try:
@@ -79,20 +87,45 @@ class SensorSyncWorker:
                 
                 client.table("sensor_readings").insert(records).execute()
 
-                # Sucesso: atualiza localmente para SYNCED
-                for r in readings:
-                    r.mark_synced()
+                    if global_supabase is not None:
+                        global_supabase.table("sensor_readings").insert(
+                            records
+                        ).execute()
+                    else:
+                        raise ConnectionError(
+                            "Cliente Supabase não inicializado no Gateway."
+                        )
+
+                # Sucesso: atualiza localmente para SYNCED em lote
+                ids = [r.id for r in readings]
+                session.execute(
+                    update(SensorReading)
+                    .where(SensorReading.id.in_(ids))
+                    .values(
+                        sync_status="SYNCED",
+                        last_sync_attempt=datetime.now(timezone.utc),
+                    )
+                )
 
                 session.commit()
                 # Reseta o tempo de espera para o valor padrão (reconexão restabelecida)
                 self.current_interval = self.base_interval
-                logger.info(f"[Sensor Sync] Sincronizados {len(readings)} registros de sensores com o Supabase.")
+                logger.info(
+                    f"[Sensor Sync] Sincronizados {len(readings)} registros de sensores com o Supabase."
+                )
 
             except Exception as net_err:
                 # Falha de rede/Supabase: marca local como FAILED e aplica backoff
                 session.rollback()
-                for r in readings:
-                    r.mark_failed()
+                ids = [r.id for r in readings]
+                session.execute(
+                    update(SensorReading)
+                    .where(SensorReading.id.in_(ids))
+                    .values(
+                        sync_status="FAILED",
+                        last_sync_attempt=datetime.now(timezone.utc),
+                    )
+                )
 
                 session.commit()
                 # Dobra o tempo de espera até o máximo de 5 minutos (300 segundos)

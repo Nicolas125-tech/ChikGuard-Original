@@ -3,9 +3,10 @@ import sys
 
 import pytest
 
-# Ajusta sys.path para enxergar src/ e o backend
+# Ajusta sys.path para enxergar src/, o backend e plugins
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../plugins")))
 
 # Mock do cv2 para evitar erros na inicialização de módulos de visão do app
 import unittest.mock as mock
@@ -14,7 +15,7 @@ sys.modules["cv2"] = mock.MagicMock()
 
 # Configuração de variáveis de ambiente para testes do Flask
 os.environ["FLASK_ENV"] = "testing"
-os.environ["SUPABASE_JWT_SECRET"] = "dummy_secret_for_tests"
+os.environ["SUPABASE_JWT_SECRET"] = os.environ.get("SUPABASE_JWT_SECRET", "dummy_secret_dummy_secret_dummy_secret_for_tests_32bytes")
 os.environ["ADMIN_PASSWORD"] = "testpassword"
 os.environ["ADMIN_EMAIL"] = "test@example.com"
 os.environ["JWT_SECRET_KEY"] = "testsecret"

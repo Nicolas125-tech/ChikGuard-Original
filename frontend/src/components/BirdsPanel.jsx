@@ -2,36 +2,42 @@ import React, { useState, useEffect, useCallback } from 'react';
 import SystemCard from './SystemCard';
 import { getBaseUrl } from '../utils/config';
 import { isDeepEqual } from '../utils/performance';
+import QueryErrorState from './QueryErrorState';
 
 export default function BirdsPanel({ token, serverIP, prefs, cameras = [], activeCamera }) {
   const [live, setLive] = useState({ count: 0, items: [] });
   const [registry, setRegistry] = useState({ count: 0, items: [] });
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const baseUrl = getBaseUrl(serverIP);
   const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
 
   const loadBirds = useCallback(async () => {
     try {
+      setError(null);
       const headers = { Authorization: `Bearer ${token}` };
       const [liveRes, regRes, historyRes] = await Promise.all([
         fetch(`${baseUrl}/api/birds/live`, { headers }),
         fetch(`${baseUrl}/api/birds/registry?limit=500`, { headers }),
         fetch(`${baseUrl}/api/birds/history?limit=300`, { headers }),
       ]);
-      // Bolt Optimization: Prevent unnecessary re-renders when polling data is identical.
-      if (liveRes.ok) {
-        const liveData = await liveRes.json();
-        setLive(prev => isDeepEqual(prev, liveData) ? prev : liveData);
+      
+      if (!liveRes.ok || !regRes.ok || !historyRes.ok) {
+        throw new Error('Falha ao sincronizar com o banco de dados de aves.');
       }
-      if (regRes.ok) {
-        const regData = await regRes.json();
-        setRegistry(prev => isDeepEqual(prev, regData) ? prev : regData);
-      }
-      if (historyRes.ok) {
-        const historyData = await historyRes.json();
-        setHistory(prev => isDeepEqual(prev, historyData) ? prev : historyData);
-      }
+      
+      const liveData = await liveRes.json();
+      setLive(prev => isDeepEqual(prev, liveData) ? prev : liveData);
+      
+      const regData = await regRes.json();
+      setRegistry(prev => isDeepEqual(prev, regData) ? prev : regData);
+      
+      const historyData = await historyRes.json();
+      setHistory(prev => isDeepEqual(prev, historyData) ? prev : historyData);
+    } catch (err) {
+      console.error(err);
+      setError(err.message || 'Erro de conexão com o banco de dados de aves.');
     } finally {
       setLoading(false);
     }
@@ -45,6 +51,14 @@ export default function BirdsPanel({ token, serverIP, prefs, cameras = [], activ
 
   if (loading) {
     return <div className="text-slate-400 p-4">Carregando aves vistas...</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 flex items-center justify-center min-h-[300px]">
+        <QueryErrorState message={error} onRetry={loadBirds} />
+      </div>
+    );
   }
 
   return (

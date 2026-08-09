@@ -233,6 +233,24 @@ def create_vision_blueprint(deps):
     def carcass_live():
         return _carcass_live(deps)
 
+    @bp.route("/api/gait/live", methods=["GET"])
+    @require_auth()
+    def get_gait_live():
+        live_birds = deps.get("live_birds", {})
+        res = []
+        for tid, data in live_birds.items():
+            gait = data.get("gait", {})
+            res.append({
+                "bird_uid": tid,
+                "box": data.get("box", []),
+                "class_name": data.get("class_name", "ave"),
+                "gait_score": gait.get("gait_score", 0.0),
+                "mobility_status": gait.get("mobility_status", "NORMAL"),
+                "claudication_detected": gait.get("claudication_detected", False),
+                "is_lethargic": gait.get("is_lethargic", False),
+            })
+        return jsonify({"count": len(res), "items": res})
+
     @bp.route("/api/heatmap/daily", methods=["GET"])
     @require_auth()
     def get_daily_heatmap():

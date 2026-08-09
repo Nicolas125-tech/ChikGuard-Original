@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from src.db.session import get_db
 from src.security.fastapi_auth import get_current_user, UserContext, RequireRole
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional
 from database import Camera
 import logging
 

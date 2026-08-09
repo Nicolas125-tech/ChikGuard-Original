@@ -25,6 +25,7 @@ export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], ac
   const [autoMode, setAutoMode] = useState(null);
   const [batches, setBatches] = useState({ count: 0, items: [] });
   const [apiCameras, setApiCameras] = useState({ active_camera_id: '', items: [] });
+  const [growthData, setGrowthData] = useState(growthDataMock);
   const [reportMsg, setReportMsg] = useState('');
   const [batchForm, setBatchForm] = useState({ name: '', start_date: '' });
   const [logbook, setLogbook] = useState({ count: 0, items: [] });
@@ -38,50 +39,79 @@ export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], ac
 
   const loadData = useCallback(async () => {
     const headers = { Authorization: `Bearer ${token}` };
-    const [i, bt, c, lb, sum] = await Promise.all([
-      fetch(`${baseUrl}/api/immobility/live`, { headers }),
-      fetch(`${baseUrl}/api/batches`, { headers }),
-      fetch(`${baseUrl}/api/cameras`, { headers }),
-      fetch(`${baseUrl}/api/logbook?limit=30`, { headers }),
-      fetch(`${baseUrl}/api/summary`, { headers }),
-    ]);
-    if (i.ok) {
-      const data = await i.json();
-      // Bolt Optimization: Prevent unnecessary React re-renders by skipping state updates if the polled API data is identical.
-      setImmobility(prev => isDeepEqual(prev, data) ? prev : data);
-    }
-    if (bt.ok) {
-      const data = await bt.json();
-      // Bolt Optimization: Prevent unnecessary React re-renders by skipping state updates if the polled API data is identical.
-      setBatches(prev => isDeepEqual(prev, data) ? prev : data);
-    }
-    if (c.ok) {
-      const data = await c.json();
-      // Bolt Optimization: Prevent unnecessary React re-renders by skipping state updates if the polled API data is identical.
-      setApiCameras(prev => isDeepEqual(prev, data) ? prev : data);
-    }
-    if (lb.ok) {
-      const data = await lb.json();
-      // Bolt Optimization: Prevent unnecessary React re-renders by skipping state updates if the polled API data is identical.
-      setLogbook(prev => isDeepEqual(prev, data) ? prev : data);
-    }
-    if (sum.ok) {
-      const d = await sum.json();
-      const prev = dadosRef.current;
-      if (!prev || !isDeepEqual(prev, d)) {
-        setBehavior(d.behavior);
-        setSensors(d.sensors);
-        setAutoMode(d.automation);
-        dadosRef.current = d;
+    try {
+      const [i, bt, c, lb, sum, wCurve] = await Promise.all([
+        fetch(`${baseUrl}/api/immobility/live`, { headers }),
+        fetch(`${baseUrl}/api/batches`, { headers }),
+        fetch(`${baseUrl}/api/cameras`, { headers }),
+        fetch(`${baseUrl}/api/logbook?limit=30`, { headers }),
+        fetch(`${baseUrl}/api/summary`, { headers }),
+        fetch(`${baseUrl}/api/weight/curve?days=30`, { headers }),
+      ]);
+
+      let parsedBatches = [];
+      if (bt.ok) {
+        const data = await bt.json();
+        parsedBatches = data;
+        setBatches(prev => isDeepEqual(prev, { count: data.length, items: data }) ? prev : { count: data.length, items: data });
       }
+      if (i.ok) {
+        const data = await i.json();
+        setImmobility(prev => isDeepEqual(prev, data) ? prev : data);
+      }
+      if (c.ok) {
+        const data = await c.json();
+        setApiCameras(prev => isDeepEqual(prev, data) ? prev : data);
+      }
+      if (lb.ok) {
+        const data = await lb.json();
+        setLogbook(prev => isDeepEqual(prev, data) ? prev : data);
+      }
+      if (sum.ok) {
+        const d = await sum.json();
+        const prev = dadosRef.current;
+        if (!prev || !isDeepEqual(prev, d)) {
+          setBehavior(d.behavior);
+          setSensors(d.sensors);
+          setAutoMode(d.automation);
+          dadosRef.current = d;
+        }
+      }
+      if (wCurve.ok) {
+        const data = await wCurve.json();
+        const items = data.items || [];
+        
+        const activeBatch = parsedBatches.find(b => b.active);
+        const batchStart = activeBatch ? new Date(activeBatch.start_date + 'T00:00:00') : null;
+
+        const formatted = items.map(point => {
+          let dayLabel = '';
+          if (batchStart) {
+            const pointDate = new Date(point.timestamp.replace(' ', 'T'));
+            const diffDays = Math.max(0, Math.floor((pointDate - batchStart) / (1000 * 60 * 60 * 24)));
+            dayLabel = `Dia ${diffDays + 1}`;
+          } else {
+            dayLabel = new Date(point.timestamp.replace(' ', 'T')).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+          }
+
+          return {
+            day: dayLabel,
+            ideal: point.ideal_weight_g,
+            real: point.avg_weight_g
+          };
+        });
+
+        setGrowthData(formatted.length > 0 ? formatted : growthDataMock);
+      }
+    } catch (err) {
+      console.error('Error fetching smart ops data:', err);
     }
   }, [baseUrl, token]);
 
   useEffect(() => {
-    const bootstrap = setTimeout(loadData, 0);
+    (async () => { loadData(); })();
     const timer = setInterval(loadData, prefs.statusMs);
     return () => {
-      clearTimeout(bootstrap);
       clearInterval(timer);
     };
   }, [loadData, prefs.statusMs]);
@@ -233,8 +263,10 @@ export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], ac
             Gestão de Lotes
           </h3>
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-4">
-            <input aria-label="Nome do lote" value={batchForm.name} disabled={isCreatingBatch} onChange={(e) => setBatchForm((p) => ({ ...p, name: e.target.value }))} placeholder="Nome do lote (ex: Lote B)" className="flex-1 bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-2.5 text-sm sm:text-base focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all placeholder:text-slate-600 disabled:opacity-50" />
-            <input aria-label="Data de início do lote" type="date" disabled={isCreatingBatch} value={batchForm.start_date} onChange={(e) => setBatchForm((p) => ({ ...p, start_date: e.target.value }))} className="flex-1 sm:w-auto bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-2.5 text-sm sm:text-base focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all text-slate-300 disabled:opacity-50" />
+            <label htmlFor="batch-name" className="sr-only">Nome do lote</label>
+            <input id="batch-name" aria-label="Nome do lote" value={batchForm.name} disabled={isCreatingBatch} onChange={(e) => setBatchForm((p) => ({ ...p, name: e.target.value }))} placeholder="Nome do lote (ex: Lote B)" className="flex-1 bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-2.5 text-sm sm:text-base focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all placeholder:text-slate-600 disabled:opacity-50" />
+            <label htmlFor="batch-start-date" className="sr-only">Data de início do lote</label>
+            <input id="batch-start-date" aria-label="Data de início do lote" type="date" disabled={isCreatingBatch} value={batchForm.start_date} onChange={(e) => setBatchForm((p) => ({ ...p, start_date: e.target.value }))} className="flex-1 sm:w-auto bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-2.5 text-sm sm:text-base focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all text-slate-300 disabled:opacity-50" />
             <button aria-label="Criar novo lote" onClick={createBatch} disabled={isCreatingBatch} className="flex items-center gap-2 justify-center bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-5 py-2.5 font-bold shadow-lg shadow-blue-500/20 transition-all text-sm sm:text-base hover:-translate-y-0.5 whitespace-nowrap disabled:opacity-50 disabled:hover:translate-y-0 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none">
               {isCreatingBatch ? <RefreshCw size={16} className="animate-spin" /> : '+ Novo'}
             </button>
@@ -259,7 +291,7 @@ export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], ac
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
               <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 flex flex-col gap-1">
                 <span className="text-slate-500 text-xs sm:text-sm font-medium">Câmera Ativa</span>
-                <span className="text-slate-200 font-bold truncate">{apiCameras.active_camera_id || 'Não configurada'}</span>
+                <span className="text-slate-200 font-bold truncate">{activeCamera || 'Não configurada'}</span>
               </div>
               <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 flex flex-col gap-1">
                 <span className="text-slate-500 text-xs sm:text-sm font-medium">Total de Câmeras</span>
@@ -296,7 +328,7 @@ export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], ac
         
         <div className="h-[300px] w-full bg-slate-950/50 rounded-xl border border-slate-800 p-4">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={growthDataMock} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+            <AreaChart data={growthData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="colorReal" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
@@ -327,7 +359,8 @@ export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], ac
           Diário do Lote (Logbook)
         </h3>
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-5">
-          <input aria-label="Nota de diário" value={logNote} disabled={isSavingLog} onChange={(e) => setLogNote(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && saveLogNote()} placeholder="Descreva eventos importantes..." className="flex-1 bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-3 text-sm sm:text-base focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all placeholder:text-slate-600 disabled:opacity-50" />
+          <label htmlFor="log-note" className="sr-only">Nota de diário</label>
+          <input id="log-note" aria-label="Nota de diário" value={logNote} disabled={isSavingLog} onChange={(e) => setLogNote(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && saveLogNote()} placeholder="Descreva eventos importantes..." className="flex-1 bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-3 text-sm sm:text-base focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all placeholder:text-slate-600 disabled:opacity-50" />
           <button aria-label="Registrar log diário" onClick={saveLogNote} disabled={isSavingLog || !logNote} className="flex items-center gap-2 justify-center bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl px-6 py-3 text-sm sm:text-base font-bold shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 whitespace-nowrap disabled:opacity-50 disabled:hover:translate-y-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none">
             {isSavingLog ? <RefreshCw size={18} className="animate-spin" /> : 'Registrar Log'}
           </button>

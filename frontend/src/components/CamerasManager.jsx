@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Camera, Plus, Trash2, Edit2, PlayCircle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import QueryErrorState from './QueryErrorState';
 
 export default function CamerasManager({ serverIP, token }) {
   const [cameras, setCameras] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({ camera_id: '', name: '', connection_type: 'url', connection_url: '' });
   const [editingId, setEditingId] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Close modal on escape key
   useEffect(() => {
@@ -23,26 +26,28 @@ export default function CamerasManager({ serverIP, token }) {
   const fetchCameras = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
       const res = await fetch(`${serverIP}/api/cameras`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (res.ok) {
-        const data = await res.json();
-        setCameras(data.items);
-      }
-    } catch (err) { console.error(err);
-      console.error("Failed", err);
+      if (!res.ok) throw new Error('Não foi possível carregar a lista de granjas.');
+      const data = await res.json();
+      setCameras(data.items);
+    } catch (err) {
+      console.error(err);
+      setError(err.message || 'Erro ao carregar granjas.');
     } finally {
       setLoading(false);
     }
   }, [serverIP, token]);
 
   useEffect(() => {
-    setTimeout(() => fetchCameras(), 0);
+    (async () => { fetchCameras(); })();
   }, [serverIP, token, fetchCameras]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsSaving(true);
     const method = editingId ? 'PUT' : 'POST';
     const url = editingId ? `${serverIP}/api/cameras/${editingId}` : `${serverIP}/api/cameras`;
     
@@ -66,8 +71,11 @@ export default function CamerasManager({ serverIP, token }) {
         const err = await res.json();
         toast.error(err.msg || "Erro ao salvar");
       }
-    } catch (err) { console.error(err);
+    } catch (err) {
+      console.error(err);
       toast.error("Erro de conexão");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -125,7 +133,13 @@ export default function CamerasManager({ serverIP, token }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800">
-            {loading ? (
+            {error ? (
+              <tr>
+                <td colSpan="5" className="p-8 text-center text-slate-400">
+                  <QueryErrorState message={error} onRetry={fetchCameras} />
+                </td>
+              </tr>
+            ) : loading ? (
               <tr>
                 <td colSpan="5" className="p-8 text-center text-slate-400">
                   <RefreshCw className="animate-spin inline-block mr-2" size={18} /> Carregando...
@@ -215,7 +229,10 @@ export default function CamerasManager({ serverIP, token }) {
               </div>
               <div className="flex justify-end gap-3 mt-6">
                 <button aria-label="Cancelar edição de câmera" type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-slate-400 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none">Cancelar</button>
-                <button type="submit" className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2 rounded-lg font-medium transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none">Salvar Câmera</button>
+                <button type="submit" disabled={isSaving} className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2 rounded-lg font-medium transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                  {isSaving && <RefreshCw size={16} className="animate-spin" />}
+                  {isSaving ? 'Salvando...' : 'Salvar Câmera'}
+                </button>
               </div>
             </form>
           </div>

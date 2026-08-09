@@ -1,0 +1,7 @@
+{
+  "resource": "https://chikguard.com/api",
+  "authorization_servers": [
+    "https://chikguard.com"
+  ],
+  "scopes_supported": ["read", "write"]
+}

@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import requests
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, MetaData, Table, update, select, or_, and_
 from sqlalchemy.orm import sessionmaker
 
 # Configuração de Logs
@@ -24,11 +24,14 @@ SYNC_INTERVAL_SEC = 30
 MAX_BACKOFF_MINUTES = 15
 
 if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
-    raise ValueError("As variaveis SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY sao obrigatorias.")
+    raise ValueError(
+        "As variaveis SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY sao obrigatorias."
+    )
 
 # Setup do SQLAlchemy (Standalone)
 engine = create_engine(LOCAL_DB_URL)
 SessionLocal = sessionmaker(bind=engine)
+metadata = MetaData()
 
 
 def check_internet(host="8.8.8.8", port=53, timeout=3):
@@ -43,21 +46,38 @@ def check_internet(host="8.8.8.8", port=53, timeout=3):
 
 def get_pending_records(session, table_name, limit):
     """
-    Busca registros nao sincronizados via SQL RAW bruto para maxima performance.
+    Busca registros nao sincronizados via SQL Core para evitar vulnerabilidades de injecao.
     Traz PENDING ou FAILED cujo ultimo erro ocorreu ha mais de X minutos.
     """
-    sql = f"""
-        SELECT * FROM {table_name}
-        WHERE sync_status = 'PENDING' 
-           OR (sync_status = 'FAILED' AND last_sync_attempt < :cutoff_time)
-        ORDER BY id ASC
-        LIMIT :limit
-    """
+
+    # 🛡️ Sentinel: Validate table_name against an allowlist to prevent SQL Injection
+    ALLOWED_TABLES = {"sensor_reading", "event_log", "bird_snapshot"}
+    if table_name not in ALLOWED_TABLES:
+        raise ValueError(f"Invalid table_name: {table_name}")
+
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=MAX_BACKOFF_MINUTES)
-    # Remove timezone info para SQLite datetime string compatibility
+    # Remove timezone info para SQLite datetime string compatibility (para a query baseada em string/core)
     cutoff_str = cutoff.replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S")
 
-    result = session.execute(text(sql), {"cutoff_time": cutoff_str, "limit": limit}).mappings().all()
+    # Reflect safe table
+    table = Table(table_name, metadata, autoload_with=engine)
+
+    stmt = (
+        select(table)
+        .where(
+            or_(
+                table.c.sync_status == "PENDING",
+                and_(
+                    table.c.sync_status == "FAILED",
+                    table.c.last_sync_attempt < cutoff_str,
+                ),
+            )
+        )
+        .order_by(table.c.id.asc())
+        .limit(limit)
+    )
+
+    result = session.execute(stmt).mappings().all()
     return [dict(r) for r in result]
 
 
@@ -65,21 +85,24 @@ def mark_records(session, table_name, ids, status):
     """Atualiza o status em Bulk localmente."""
     if not ids:
         return
-    now_str = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S")
-    params = {"status": status, "now_str": now_str}
-    id_params = []
-    for i, id_val in enumerate(ids):
-        p_name = f"id_{i}"
-        id_params.append(f":{p_name}")
-        params[p_name] = id_val
-    ids_str_params = ",".join(id_params)
 
-    sql = f"""
-        UPDATE {table_name} 
-        SET sync_status = :status, last_sync_attempt = :now_str
-        WHERE id IN ({ids_str_params})
-    """
-    session.execute(text(sql), params)
+    # 🛡️ Sentinel: Validate table_name against an allowlist to prevent SQL Injection
+    ALLOWED_TABLES = {"sensor_reading", "event_log", "bird_snapshot"}
+    if table_name not in ALLOWED_TABLES:
+        raise ValueError(f"Invalid table_name: {table_name}")
+
+    # Para updates em bulk via core e ORM no sqlite com datetime, precisamos passar o objeto datetime nativo
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    table = Table(table_name, metadata, autoload_with=engine)
+
+    stmt = (
+        update(table)
+        .where(table.c.id.in_(ids))
+        .values(sync_status=status, last_sync_attempt=now)
+    )
+
+    session.execute(stmt)
     session.commit()
 
 
@@ -93,7 +116,9 @@ def sync_table(session, table_name):
     # Preparar payload (removemos colunas exclusivas da borda local, como as de status)
     payload = []
     for r in records:
-        clean_record = {k: v for k, v in r.items() if k not in ("sync_status", "last_sync_attempt")}
+        clean_record = {
+            k: v for k, v in r.items() if k not in ("sync_status", "last_sync_attempt")
+        }
         payload.append(clean_record)
 
     # Supabase PostgREST Bulk Insert endpoint
@@ -111,10 +136,14 @@ def sync_table(session, table_name):
 
         if response.status_code in (200, 201, 204):
             mark_records(session, table_name, ids_to_sync, "SYNCED")
-            logger.info(f"[{table_name}] Sincronizados com sucesso: {len(ids_to_sync)} registros.")
+            logger.info(
+                f"[{table_name}] Sincronizados com sucesso: {len(ids_to_sync)} registros."
+            )
             return len(ids_to_sync)
         else:
-            logger.warning(f"[{table_name}] Falha na API: {response.status_code} - {response.text}")
+            logger.warning(
+                f"[{table_name}] Falha na API: {response.status_code} - {response.text}"
+            )
             mark_records(session, table_name, ids_to_sync, "FAILED")
             return 0
 

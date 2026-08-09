@@ -50,15 +50,6 @@ export default function AlertsPanel({ serverIP, prefs, token, cameras = [], acti
     };
   }, [loadAlerts, prefs.statusMs, baseUrl]);
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-slate-500 min-h-[200px]">
-        <RefreshCw size={24} className="animate-spin mb-3 text-emerald-500" />
-        <span className="font-medium text-sm">Carregando alertas...</span>
-      </div>
-    );
-  }
-
   const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
   
   // Bolt Optimization: Replace O(N*M) array.includes filter with O(N) Set lookup
@@ -67,6 +58,15 @@ export default function AlertsPanel({ serverIP, prefs, token, cameras = [], acti
     const dismissedSet = new Set(dismissed);
     return alerts.filter(a => !dismissedSet.has(a.id));
   }, [alerts, dismissed]);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-slate-500 min-h-[200px]">
+        <RefreshCw size={24} className="animate-spin mb-3 text-emerald-500" />
+        <span className="font-medium text-sm">Carregando alertas...</span>
+      </div>
+    );
+  }
 
   const dismissAlert = (id) => {
     const newDismissed = [...dismissed, id];

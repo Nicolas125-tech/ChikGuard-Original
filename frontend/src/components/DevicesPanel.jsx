@@ -3,16 +3,19 @@ import { Cpu, Wind, Zap, SlidersHorizontal } from 'lucide-react';
 import { getBaseUrl } from '../utils/config';
 import { toast } from 'sonner';
 import { isDeepEqual } from '../utils/performance';
+import QueryErrorState from './QueryErrorState';
 
 export default function DevicesPanel({ token, serverIP, canControlDevices, cameras = [], activeCamera }) {
   const [dispositivos, setDispositivos] = useState({ ventilacao: false, aquecedor: false });
   const [autoMode, setAutoMode] = useState({ enabled: false, effective_targets: null });
   const [lightPct, setLightPct] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const baseUrl = getBaseUrl(serverIP);
 
   const loadDevices = useCallback(async () => {
     try {
+      setError(null);
       const headers = { Authorization: `Bearer ${token}` };
 
       // Bolt Optimization: Concurrent API fetching for independent endpoints to prevent network waterfall.
@@ -22,20 +25,19 @@ export default function DevicesPanel({ token, serverIP, canControlDevices, camer
         fetch(`${baseUrl}/api/luz-dimmer`, { headers })
       ]);
 
-      if (!r.ok) throw new Error('Device state fetch failed');
+      if (!r.ok || !auto.ok || !l.ok) throw new Error('Não foi possível obter o estado dos dispositivos.');
       const dispData = await r.json();
       setDispositivos(prev => isDeepEqual(prev, dispData) ? prev : dispData);
 
-      if (auto.ok) {
-        const autoData = await auto.json();
-        setAutoMode(prev => isDeepEqual(prev, autoData) ? prev : autoData);
-      }
+      const autoData = await auto.json();
+      setAutoMode(prev => isDeepEqual(prev, autoData) ? prev : autoData);
 
-      if (l.ok) {
-        const j = await l.json();
-        const newLightPct = Number(j.luz_intensidade_pct || 0);
-        setLightPct(prev => prev === newLightPct ? prev : newLightPct);
-      }
+      const j = await l.json();
+      const newLightPct = Number(j.luz_intensidade_pct || 0);
+      setLightPct(prev => prev === newLightPct ? prev : newLightPct);
+    } catch (err) {
+      console.error(err);
+      setError(err.message || 'Erro de conexão com o painel de dispositivos.');
     } finally {
       setLoading(false);
     }
@@ -114,6 +116,24 @@ export default function DevicesPanel({ token, serverIP, canControlDevices, camer
   };
 
   const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
+          <div>
+            <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+              Controle de Dispositivos - <span className="text-emerald-400">{farmName}</span>
+            </h2>
+            <p className="text-slate-400 text-sm mt-1">Gerencie remotamente a ventilação, aquecimento e iluminação.</p>
+          </div>
+        </div>
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-12 flex items-center justify-center min-h-[400px]">
+          <QueryErrorState message={error} onRetry={loadDevices} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -200,7 +220,8 @@ export default function DevicesPanel({ token, serverIP, canControlDevices, camer
         </div>
 
         <div className="relative pt-4 pb-2">
-          <input aria-label="Intensidade de iluminação" disabled={!canControlDevices} type="range" min="0" max="100" value={lightPct} onChange={(e) => setLightPct(Number(e.target.value))} onMouseUp={(e) => setDimmer(Number(e.currentTarget.value))} onTouchEnd={(e) => setDimmer(Number(e.currentTarget.value))}
+          <label htmlFor="light-intensity" className="sr-only">Intensidade de iluminação</label>
+          <input id="light-intensity" aria-label="Intensidade de iluminação" disabled={!canControlDevices} type="range" min="0" max="100" value={lightPct} onChange={(e) => setLightPct(Number(e.target.value))} onMouseUp={(e) => setDimmer(Number(e.currentTarget.value))} onTouchEnd={(e) => setDimmer(Number(e.currentTarget.value))}
             className={`w-full h-3 bg-slate-800 rounded-full appearance-none outline-none focus:ring-2 focus:ring-amber-500/50 transition-all ${!canControlDevices ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:bg-amber-400 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg`}
             style={{
               background: `linear-gradient(to right, rgb(251, 191, 36) ${lightPct}%, rgb(30, 41, 59) ${lightPct}%)`

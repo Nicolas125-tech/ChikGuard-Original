@@ -1,0 +1,5 @@
+🧹 Remove unused Request import in fastapi_webrtc.py
+🎯 **What:** Removed unused `Request` import from `fastapi` in `backend/src/api/fastapi_webrtc.py` and applied `ruff check --fix` to clean up import sorting and other minor linting warnings.
+💡 **Why:** Having unused imports decreases code readability and maintainability. Removing it and adhering to formatting guidelines ensures cleaner code health without affecting behavior.
+✅ **Verification:** Ran `ruff check` which reported 0 remaining errors in the file, and verified the full test suite (`pytest tests/`) passes.
+✨ **Result:** Improved maintainability and resolved static analysis warnings in `fastapi_webrtc.py`.

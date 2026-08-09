@@ -30,10 +30,19 @@ def predict_slaughter_date(weight_data, start_date, target_weight=2800.0):
 
     projections = []
 
+    # Obter o último peso observado para servir de base e garantir a monotonicidade biológica
+    last_weight = float(y[np.argmax(x)]) if len(y) > 0 else 0.0
+
     # Projetar até o final de um ciclo longo (90 dias)
     while future_day < 90:
         future_day += 1
         pred_w = float(poly(future_day))
+
+        # Garantir monotonicidade biológica (aves não perdem peso no modelo preditivo de crescimento padrão)
+        if pred_w < last_weight:
+            pred_w = last_weight
+        
+        last_weight = pred_w
 
         projections.append(
             {
