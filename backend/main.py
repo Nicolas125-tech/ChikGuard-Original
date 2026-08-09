@@ -84,6 +84,7 @@ from src.api.fastapi_climate import router as climate_router
 from src.api.fastapi_accounts import router as accounts_router
 from src.api.fastapi_cameras import router as cameras_router
 from src.api.fastapi_heatmap import router as heatmap_router
+from src.api.fastapi_zone_analytics import router as zone_analytics_router
 from src.api.fastapi_ws import socket_app
 from src.security.headers import ALLOWED_ORIGINS
 from src.security.fastapi_auth import get_current_user, UserContext, RequireRole
@@ -106,6 +107,7 @@ fastapi_app.include_router(climate_router)
 fastapi_app.include_router(accounts_router)
 fastapi_app.include_router(cameras_router)
 fastapi_app.include_router(heatmap_router)
+fastapi_app.include_router(zone_analytics_router)
 
 # CORS middleware
 # Ajustando os ALLOWED_ORIGINS buscando de src.security.headers para seguranca
