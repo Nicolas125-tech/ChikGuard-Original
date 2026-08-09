@@ -11,7 +11,7 @@ import argparse
 import os
 import sys
 
-DEFAULT_API_KEY = "OiHV8fQKPBECkIpTGXb5"
+DEFAULT_API_KEY = os.environ.get("ROBOFLOW_API_KEY", "")
 DEFAULT_WORKSPACE = "nicolas-mandarino"
 DEFAULT_PROJECT = "poultry-detection-mqriw-fzt08"
 DEFAULT_VERSION = 1
