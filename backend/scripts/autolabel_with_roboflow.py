@@ -9,7 +9,7 @@ Uso:
     --images-dir data/annotation_frames/ \\
     --output-dir data/dataset/ \\
     --classes Chick \\
-    --api-key OiHV8fQKPBECkIpTGXb5 \\
+    --api-key $ROBOFLOW_API_KEY \\
     --train-after
 """
 
@@ -33,7 +33,7 @@ def encode_image_base64(image_path: str) -> str:
 
 def call_roboflow_workflow(
     image_path: str,
-    api_key: str = "OiHV8fQKPBECkIpTGXb5",
+    api_key: str = os.environ.get("ROBOFLOW_API_KEY", ""),
     workspace: str = "nicolas-mandarino",
     workflow_id: str = "general-segmentation-api",
     target_class: str = "Chick"
@@ -209,7 +209,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Auto-anotação de dataset via Roboflow AI Workflows")
     parser.add_argument("--images-dir", type=str, required=True, help="Pasta contendo imagens não anotadas")
     parser.add_argument("--output-dir", type=str, default="data/dataset", help="Pasta final do dataset YOLO")
-    parser.add_argument("--api-key", type=str, default="OiHV8fQKPBECkIpTGXb5", help="Chave API Roboflow")
+    parser.add_argument("--api-key", type=str, default=os.environ.get("ROBOFLOW_API_KEY", ""), help="Chave API Roboflow")
     parser.add_argument("--workspace", type=str, default="nicolas-mandarino", help="Workspace Roboflow")
     parser.add_argument("--workflow-id", type=str, default="general-segmentation-api", help="ID do Workflow Roboflow")
     parser.add_argument("--classes", type=str, nargs="+", default=["Chick"], help="Classes a identificar")
