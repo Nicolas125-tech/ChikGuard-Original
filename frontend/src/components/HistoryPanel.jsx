@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { RefreshCw, Database } from 'lucide-react';
 import { getBaseUrl } from '../utils/config';
 import { toast } from 'sonner';
@@ -10,6 +10,7 @@ export default function HistoryPanel({ serverIP, prefs, token, cameras = [], act
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const baseUrl = getBaseUrl(serverIP);
+  const farmName = useMemo(() => cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal', [cameras, activeCamera]);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -49,7 +50,6 @@ export default function HistoryPanel({ serverIP, prefs, token, cameras = [], act
     );
   }
 
-  const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
 
   const exportHistoryCSV = () => {
     if (!history || history.length === 0) {

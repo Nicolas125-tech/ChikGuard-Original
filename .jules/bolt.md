@@ -70,3 +70,7 @@
 
 **Learning:** When an `import aiohttp` fails in a `try/except` block, developers sometimes fallback to `run_in_executor` with `requests`. This introduces unnecessary thread pool overhead (spawning threads, context switching).
 **Action:** Replace `requests` fallback patterns inside `run_in_executor` with native `aiohttp` requests when asynchronous network I/O is required.
+
+## 2024-05-18 - HistoryPanel camera lookup memoization
+**Learning:** O(N) searches like `Array.find` inside React components run on every render unless memoized. In HistoryPanel, a camera lookup ran unconditionally.
+**Action:** Wrapped the search in `useMemo`, ensuring it executes only when dependencies change, and placed it before early returns to satisfy React Hook rules.
