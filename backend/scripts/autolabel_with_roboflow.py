@@ -23,6 +23,7 @@ import sys
 import time
 import cv2
 import requests
+import subprocess
 from typing import List, Dict, Any
 
 ROBOFLOW_SERVERLESS_URL = "https://serverless.roboflow.com/{workspace}/workflows/{workflow_id}"
@@ -228,4 +229,4 @@ if __name__ == "__main__":
     
     if args.train_after:
         print("\n🚀 Iniciando o Treinamento do Modelo YOLO no ChikGuard...")
-        os.system(f"python backend/scripts/train_robust_vision.py --data {os.path.join(args.output_dir, 'data.yaml')} --epochs 100 --export")
+        subprocess.run(["python", "backend/scripts/train_robust_vision.py", "--data", os.path.join(args.output_dir, 'data.yaml'), "--epochs", "100", "--export"], check=True)
