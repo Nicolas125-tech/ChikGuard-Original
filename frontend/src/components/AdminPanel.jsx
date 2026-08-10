@@ -103,7 +103,7 @@ function ProfileDrawer({ user, myRole, onClose, onSaved }) {
             <h3 className="text-base font-bold text-white">Editar Perfil</h3>
             <p className="text-xs text-slate-400 mt-0.5">{user.email}</p>
           </div>
-          <button onClick={onClose} className="p-2 text-slate-500 hover:text-slate-300 rounded-lg hover:bg-slate-800 transition-all">
+          <button aria-label="Fechar" onClick={onClose} className="p-2 text-slate-500 hover:text-slate-300 rounded-lg hover:bg-slate-800 transition-all focus-visible:ring-2 focus-visible:ring-emerald-500">
             <XCircle size={18} />
           </button>
         </div>
@@ -113,7 +113,7 @@ function ProfileDrawer({ user, myRole, onClose, onSaved }) {
           {/* Nome */}
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Nome Completo</label>
-            <input value={form.full_name} onChange={e => setForm(f=>({...f, full_name:e.target.value}))}
+            <input aria-label="Nome Completo" value={form.full_name} onChange={e => setForm(f=>({...f, full_name:e.target.value}))}
               className="w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-500/60 transition-colors"
               placeholder="Nome do utilizador" />
           </div>
@@ -121,13 +121,13 @@ function ProfileDrawer({ user, myRole, onClose, onSaved }) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Telefone</label>
-              <input value={form.phone} onChange={e => setForm(f=>({...f, phone:e.target.value}))}
+              <input aria-label="Telefone" value={form.phone} onChange={e => setForm(f=>({...f, phone:e.target.value}))}
                 className="w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-500/60 transition-colors"
                 placeholder="(00) 00000-0000" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Idade</label>
-              <input type="number" value={form.age} onChange={e => setForm(f=>({...f, age:e.target.value}))}
+              <input aria-label="Idade" type="number" value={form.age} onChange={e => setForm(f=>({...f, age:e.target.value}))}
                 className="w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-500/60 transition-colors"
                 placeholder="—" />
             </div>
@@ -135,7 +135,7 @@ function ProfileDrawer({ user, myRole, onClose, onSaved }) {
 
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Localidade</label>
-            <input value={form.location} onChange={e => setForm(f=>({...f, location:e.target.value}))}
+            <input aria-label="Localidade" value={form.location} onChange={e => setForm(f=>({...f, location:e.target.value}))}
               className="w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-500/60 transition-colors"
               placeholder="Cidade/Estado" />
           </div>
@@ -463,8 +463,8 @@ export default function AdminPanel({ token, serverIP, role: myRole }) {
             Aprovação, configuração de perfis e controlo de roles.
           </p>
         </div>
-        <button onClick={fetchUsers} disabled={loading}
-          className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 flex-shrink-0">
+        <button aria-label="Atualizar lista de utilizadores" onClick={fetchUsers} disabled={loading}
+          className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 flex-shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500">
           <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
           Atualizar
         </button>
@@ -517,7 +517,7 @@ VITE_SUPABASE_ANON_KEY=eyJ...`}
           {!loading && users.length > 0 && (
             <div className="relative">
               <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
-              <input type="text" placeholder="Pesquisar por nome, email, role, status..."
+              <input aria-label="Pesquisar utilizadores" type="text" placeholder="Pesquisar por nome, email, role, status..."
                 value={search} onChange={e => setSearch(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-800 text-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none focus:border-emerald-500/50 transition-colors placeholder-slate-600" />
             </div>
@@ -665,8 +665,8 @@ function UserRow({ user: u, myLevel, actionLoading, onApprove, onReject, onSuspe
         <div className="flex items-center gap-2 flex-wrap">
           {/* Botão Editar Perfil — sempre visível para quem tem permissão */}
           {canModify && !isSuperadmin && (
-            <button onClick={onEdit} disabled={isActioning}
-              className="flex items-center gap-1.5 bg-slate-700/50 hover:bg-slate-600/60 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-600/50 transition-all disabled:opacity-30 whitespace-nowrap">
+            <button aria-label="Editar perfil do utilizador" onClick={onEdit} disabled={isActioning}
+              className="flex items-center gap-1.5 bg-slate-700/50 hover:bg-slate-600/60 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-600/50 transition-all disabled:opacity-30 whitespace-nowrap focus-visible:ring-2 focus-visible:ring-emerald-500">
               <Settings size={12} />
               Editar
             </button>
@@ -685,8 +685,8 @@ function UserRow({ user: u, myLevel, actionLoading, onApprove, onReject, onSuspe
                 {isActioning ? <RefreshCw size={12} className="animate-spin" /> : <UserCheck size={12} />}
                 Aprovar
               </button>
-              <button disabled={isActioning} onClick={onReject}
-                className="flex items-center gap-1.5 bg-red-900/40 hover:bg-red-600/50 text-red-300 text-xs font-bold px-3 py-1.5 rounded-lg border border-red-700/50 transition-all disabled:opacity-50 whitespace-nowrap">
+              <button aria-label="Rejeitar utilizador" disabled={isActioning} onClick={onReject}
+                className="flex items-center gap-1.5 bg-red-900/40 hover:bg-red-600/50 text-red-300 text-xs font-bold px-3 py-1.5 rounded-lg border border-red-700/50 transition-all disabled:opacity-50 whitespace-nowrap focus-visible:ring-2 focus-visible:ring-red-500">
                 <XCircle size={12} />
                 Rejeitar
               </button>
@@ -701,8 +701,8 @@ function UserRow({ user: u, myLevel, actionLoading, onApprove, onReject, onSuspe
                 Reativar
               </button>
             ) : (
-              <button disabled={isActioning} onClick={onSuspend}
-                className="flex items-center gap-1.5 bg-amber-600/20 hover:bg-amber-600/40 text-amber-400 text-xs font-bold px-3 py-1.5 rounded-lg border border-amber-500/30 transition-all disabled:opacity-30 whitespace-nowrap">
+              <button aria-label="Suspender utilizador" disabled={isActioning} onClick={onSuspend}
+                className="flex items-center gap-1.5 bg-amber-600/20 hover:bg-amber-600/40 text-amber-400 text-xs font-bold px-3 py-1.5 rounded-lg border border-amber-500/30 transition-all disabled:opacity-30 whitespace-nowrap focus-visible:ring-2 focus-visible:ring-amber-500">
                 {isActioning ? <RefreshCw size={12} className="animate-spin" /> : <AlertCircle size={12} />}
                 Suspender
               </button>
