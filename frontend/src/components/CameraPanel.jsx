@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Maximize, Minimize, WifiOff, Layers, RefreshCw, Camera, Video, AlertCircle } from 'lucide-react';
 import WebRTCVideo from './WebRTCVideo';
 import HeatmapOverlay from './HeatmapOverlay';
@@ -9,6 +9,7 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
   const [videoBlocked, setVideoBlocked] = useState(false);
   const [showHeatmapOverlay, setShowHeatmapOverlay] = useState(false);
   const [useWebRTC, setUseWebRTC] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   
   // Local Webcam State
   const [source, setSource] = useState('server'); // 'server' or 'local'
@@ -22,7 +23,9 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
   const baseUrl = getBaseUrl(serverIP);
   const webrtcUrl = `${baseUrl}/api/webrtc/offer`;
   const mjpegUrl = token ? `${baseUrl}/api/video?token=${token}` : `${baseUrl}/api/video`;
-  const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Câmera Principal';
+  const farmName = useMemo(() => {
+    return cameras.find(c => c.camera_id === activeCamera)?.name || 'Câmera Principal';
+  }, [cameras, activeCamera]);
 
   // Toggle Fullscreen mode using HTML5 API
   const toggleFullscreen = () => {
