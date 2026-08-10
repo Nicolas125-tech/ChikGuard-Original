@@ -130,3 +130,7 @@
 **Vulnerability:** Hardcoded tokens and configuration keys in `frontend/src/utils/config.js` (`STORAGE` object).
 **Learning:** When resolving 'hardcoded token/key' vulnerabilities, do not leave the literal string in the source code as a fallback (e.g., `fallback || 'hardcoded_value'`). This fails to resolve the security scanner flag because the hardcoded string remains in the repository. Additionally, in the frontend project, Vite requires precise syntactical matching (`import.meta.env.VITE_VAR`) during the build step. Dynamic property access like `(import.meta.env || {}).VITE_VAR` will not be replaced during production builds, causing the app to fail or silently revert to hardcoded values.
 **Prevention:** Use exact Vite replacement syntax combined with standard Node.js backups for test environments: `(import.meta.env && import.meta.env.VITE_VAR) || process.env.VITE_VAR`. Ensure test and production environments are properly configured with these variables, and never leave the original literal strings as fallbacks in the codebase.
+## 2024-08-10 - Command Injection Fix
+**Vulnerability:** Found `os.system` using string concatenation/formatting with arguments in `backend/scripts/autolabel_with_roboflow.py` (Command Injection risk).
+**Learning:** Using `os.system(f"...")` allows arbitrary command execution if variables are attacker-controlled.
+**Prevention:** Use `subprocess.run` with a list of arguments instead of shell strings to safely execute external commands without invoking a shell.
