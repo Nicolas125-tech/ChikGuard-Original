@@ -112,42 +112,42 @@ function ProfileDrawer({ user, myRole, onClose, onSaved }) {
         <div className="overflow-y-auto p-5 space-y-4 flex-1">
           {/* Nome */}
           <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Nome Completo</label>
-            <input aria-label="Nome Completo" value={form.full_name} onChange={e => setForm(f=>({...f, full_name:e.target.value}))}
+            <label htmlFor="full_name" className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Nome Completo</label>
+            <input id="full_name" aria-label="Nome Completo" value={form.full_name} onChange={e => setForm(f=>({...f, full_name:e.target.value}))}
               className="w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-500/60 transition-colors"
               placeholder="Nome do utilizador" />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Telefone</label>
-              <input aria-label="Telefone" value={form.phone} onChange={e => setForm(f=>({...f, phone:e.target.value}))}
+              <label htmlFor="phone" className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Telefone</label>
+              <input id="phone" aria-label="Telefone" value={form.phone} onChange={e => setForm(f=>({...f, phone:e.target.value}))}
                 className="w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-500/60 transition-colors"
                 placeholder="(00) 00000-0000" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Idade</label>
-              <input aria-label="Idade" type="number" value={form.age} onChange={e => setForm(f=>({...f, age:e.target.value}))}
+              <label htmlFor="age" className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Idade</label>
+              <input id="age" aria-label="Idade" type="number" value={form.age} onChange={e => setForm(f=>({...f, age:e.target.value}))}
                 className="w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-500/60 transition-colors"
                 placeholder="—" />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Localidade</label>
-            <input aria-label="Localidade" value={form.location} onChange={e => setForm(f=>({...f, location:e.target.value}))}
+            <label htmlFor="location" className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Localidade</label>
+            <input id="location" aria-label="Localidade" value={form.location} onChange={e => setForm(f=>({...f, location:e.target.value}))}
               className="w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-500/60 transition-colors"
               placeholder="Cidade/Estado" />
           </div>
 
           {/* Role */}
           <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Função (Role)</label>
+            <label id="role-label" className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Função (Role)</label>
             <div className="grid grid-cols-2 gap-2">
               {roles.map(([r, meta]) => {
                 const Icon = meta.icon;
                 return (
-                  <button key={r} onClick={() => setForm(f=>({...f, role:r}))}
+                  <button key={r} aria-labelledby="role-label" aria-pressed={form.role === r} onClick={() => setForm(f=>({...f, role:r}))}
                     className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-semibold transition-all ${
                       form.role === r
                         ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-300'
@@ -163,10 +163,10 @@ function ProfileDrawer({ user, myRole, onClose, onSaved }) {
 
           {/* Status */}
           <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Status da Conta</label>
+            <label id="status-label" className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Status da Conta</label>
             <div className="grid grid-cols-2 gap-2">
               {Object.entries(STATUS_META).filter(([s]) => s !== 'REJECTED').map(([s, meta]) => (
-                <button key={s} onClick={() => setForm(f=>({...f, status:s}))}
+                <button key={s} aria-labelledby="status-label" aria-pressed={form.status === s} onClick={() => setForm(f=>({...f, status:s}))}
                   className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-semibold transition-all ${
                     form.status === s
                       ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-300'
@@ -422,7 +422,8 @@ export default function AdminPanel({ token, serverIP, role: myRole }) {
           message="Informe o motivo da rejeição (opcional)."
           onConfirm={() => handleReject(confirm.userId, rejectReason)}
           onCancel={() => { setConfirm(null); setRejectReason(''); }}>
-          <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} rows={2}
+          <label htmlFor="rejectReason" className="sr-only">Motivo (opcional)</label>
+          <textarea id="rejectReason" value={rejectReason} onChange={e => setRejectReason(e.target.value)} rows={2}
             placeholder="Motivo (opcional)..."
             className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-300 placeholder-slate-600 outline-none focus:border-red-500/50 resize-none mt-1" />
         </ConfirmModal>
@@ -674,7 +675,8 @@ function UserRow({ user: u, myLevel, actionLoading, onApprove, onReject, onSuspe
 
           {isPending && canModify && (
             <>
-              <select value={approveRole} onChange={e => setApproveRole(e.target.value)}
+              <label htmlFor={`approveRole-${u.id}`} className="sr-only">Role</label>
+              <select id={`approveRole-${u.id}`} value={approveRole} onChange={e => setApproveRole(e.target.value)}
                 className="bg-slate-950 border border-slate-700 text-slate-300 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-emerald-500 cursor-pointer">
                 <option value="viewer">VIEWER</option>
                 <option value="operator">OPERATOR</option>
