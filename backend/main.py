@@ -329,7 +329,7 @@ async def get_alerts(user: UserContext = Depends(get_current_user)):
 
 
 @fastapi_app.get("/api/weather/forecast")
-async def get_weather_forecast():
+async def get_weather_forecast(user: UserContext = Depends(get_current_user)):
     return {
         "loaded": True,
         "next_night_min_c": 14.5,
