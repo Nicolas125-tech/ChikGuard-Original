@@ -74,3 +74,6 @@
 ## 2024-05-18 - HistoryPanel camera lookup memoization
 **Learning:** O(N) searches like `Array.find` inside React components run on every render unless memoized. In HistoryPanel, a camera lookup ran unconditionally.
 **Action:** Wrapped the search in `useMemo`, ensuring it executes only when dependencies change, and placed it before early returns to satisfy React Hook rules.
+## 2024-08-11 - [Optimization of farmName array loop]
+**Learning:** Found multiple components running O(N) array search on every render to extract `farmName`. React components rerender frequently and executing array lookups synchronously inside the component body affects the framerate.
+**Action:** Replaced inline `find()` with `useMemo` hooks, saving unnecessary computations during re-renders.

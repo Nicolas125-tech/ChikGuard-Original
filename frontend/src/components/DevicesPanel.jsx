@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback , useMemo } from 'react';
 import { Cpu, Wind, Zap, SlidersHorizontal } from 'lucide-react';
 import { getBaseUrl } from '../utils/config';
 import { toast } from 'sonner';
@@ -12,6 +12,8 @@ export default function DevicesPanel({ token, serverIP, canControlDevices, camer
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const baseUrl = getBaseUrl(serverIP);
+
+    const farmName = useMemo(() => cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal', [cameras, activeCamera]);
 
   const loadDevices = useCallback(async () => {
     try {
@@ -83,7 +85,7 @@ export default function DevicesPanel({ token, serverIP, canControlDevices, camer
 
   const emergencyCooling = async () => {
     if (!canControlDevices) return;
-    
+
     // 1. Desliga o modo automático
     if (autoMode.enabled) {
       await fetch(`${baseUrl}/api/auto-mode`, {
@@ -92,7 +94,7 @@ export default function DevicesPanel({ token, serverIP, canControlDevices, camer
         body: JSON.stringify({ enabled: false }),
       });
     }
-    
+
     // 2. Desliga aquecedor se estiver ligado
     if (dispositivos.aquecedor) {
       await fetch(`${baseUrl}/api/aquecedor`, {
@@ -115,7 +117,6 @@ export default function DevicesPanel({ token, serverIP, canControlDevices, camer
     toast.error('⚠️ MODO EMERGÊNCIA ATIVADO: Ventilação forçada ativada, aquecedor e IA desligados!', { duration: 5000 });
   };
 
-  const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
 
   if (error) {
     return (
@@ -144,7 +145,7 @@ export default function DevicesPanel({ token, serverIP, canControlDevices, camer
           </h2>
           <p className="text-slate-400 text-sm mt-1">Gerencie remotamente a ventilação, aquecimento e iluminação.</p>
         </div>
-        <button 
+        <button
           onClick={emergencyCooling}
           disabled={!canControlDevices}
           className="bg-rose-600 hover:bg-rose-500 text-white font-bold px-5 py-3 rounded-xl flex items-center gap-2 shadow-[0_0_20px_rgba(225,29,72,0.3)] transition-all hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wider text-sm whitespace-nowrap self-start sm:self-auto"
@@ -153,7 +154,7 @@ export default function DevicesPanel({ token, serverIP, canControlDevices, camer
           Resfriamento de Emergência
         </button>
       </div>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
       <button aria-label={autoMode.enabled ? "Desativar modo automático" : "Ativar modo automático"} disabled={!canControlDevices} onClick={() => toggleAuto(!autoMode.enabled)} className={`rounded-3xl border p-6 sm:p-8 text-left transition-all ${autoMode.enabled ? 'bg-emerald-600/10 border-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 'bg-slate-900 border-slate-800 hover:border-slate-700'} ${!canControlDevices ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-1'}`}>
         <div className="flex items-center justify-between mb-4">

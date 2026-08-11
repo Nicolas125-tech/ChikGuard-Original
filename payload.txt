@@ -1,0 +1,5 @@
+⚡ Bolt: [Otimizar busca de farmName usando useMemo]
+* 💡 What: Adicionada memoização (useMemo) na busca do nome da granja (farmName) no array de câmeras em múltiplos componentes.
+* 🎯 Why: Evitar recálculos O(N) desnecessários e loops de busca na matriz a cada ciclo de renderização.
+* 📊 Impact: Reduz carga computacional e número de operações do lado do cliente em re-renders dos painéis.
+* 🔬 Measurement: Analisando Profiler do React para comparar o tempo de execução e taxa de quadros durante as renderizações dos painéis.
