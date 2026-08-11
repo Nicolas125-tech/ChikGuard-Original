@@ -15,7 +15,8 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
   const [error, setError] = useState(null);
 
   const baseUrl = getBaseUrl(serverIP);
-  const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Galpão Principal 1';
+  const farmName = useMemo(() => cameras.find(c => c.camera_id === activeCamera)?.name || 'Galpão Principal 1', [cameras, activeCamera]);
+
 
   // ── Fetching Data ──
   const fetchData = useCallback(async () => {

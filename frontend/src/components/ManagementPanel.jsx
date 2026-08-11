@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef , useMemo } from 'react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import SystemCard from './SystemCard';
 import { getBaseUrl } from '../utils/config';
@@ -23,7 +23,7 @@ export default function ManagementPanel({ serverIP, prefs, token, cameras = [], 
   const [sensorHistory, setSensorHistory] = useState([]);
   const [weather, setWeather] = useState(null);
   const [error, setError] = useState(null);
-  const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
+  const farmName = useMemo(() => cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal', [cameras, activeCamera]);
 
   const loadManagement = useCallback(async () => {
     try {

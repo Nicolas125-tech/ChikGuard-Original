@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback , useMemo } from 'react';
 import { Wind, Zap, Thermometer, LayoutDashboard, Download, CloudLightning, RefreshCw } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { getBaseUrl } from '../utils/config';
@@ -12,7 +12,7 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
   const [weather, setWeather] = useState(null);
   const [error, setError] = useState(null);
   const baseUrl = getBaseUrl(serverIP);
-  const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
+  const farmName = useMemo(() => cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal', [cameras, activeCamera]);
 
   const fetchDevices = useCallback(async () => {
     try {
