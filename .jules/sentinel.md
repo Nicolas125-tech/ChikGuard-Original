@@ -134,3 +134,7 @@
 **Vulnerability:** Found `os.system` using string concatenation/formatting with arguments in `backend/scripts/autolabel_with_roboflow.py` (Command Injection risk).
 **Learning:** Using `os.system(f"...")` allows arbitrary command execution if variables are attacker-controlled.
 **Prevention:** Use `subprocess.run` with a list of arguments instead of shell strings to safely execute external commands without invoking a shell.
+## 2024-10-26 - [Fix Missing Authentication on Weather Forecast API]
+**Vulnerability:** The `/api/weather/forecast` endpoint in `backend/main.py` lacked the `Depends(get_current_user)` dependency, making it publicly accessible without any authentication.
+**Learning:** During framework migrations (like moving from Flask to FastAPI) or when adding new endpoints directly in main router files, forgetting to add global dependency injection or route-specific protection leaves these endpoints exposed, which can be abused for unauthenticated reconnaissance.
+**Prevention:** Always verify that route decorators in FastAPI contain the necessary `Depends` injections for authentication unless the router itself enforces a global dependency or the route is intentionally public.
