@@ -50,15 +50,37 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
     }
   }, [baseUrl, token]);
 
-  const loadAll = useCallback(() => {
+  const loadAll = useCallback(async () => {
     setError(null);
-    fetchDevices();
-    fetchHistory();
-    fetchWeather();
-  }, [fetchDevices, fetchHistory, fetchWeather]);
+    try {
+      const headers = { Authorization: `Bearer ${token}` };
+      const [rDev, rHist, rWea] = await Promise.all([
+        fetch(`${baseUrl}/api/estado-dispositivos`, { headers }),
+        fetch(`${baseUrl}/api/history`, { headers }),
+        fetch(`${baseUrl}/api/weather/forecast`, { headers })
+      ]);
+      if (rDev.ok) {
+        const data = await rDev.json() || { ventilacao: false, aquecedor: false };
+        setDispositivos(prev => isDeepEqual(prev, data) ? prev : data);
+      } else throw new Error('Device state fetch failed');
+
+      if (rHist.ok) {
+        const data = await rHist.json() || [];
+        setHistorico(prev => isDeepEqual(prev, data) ? prev : data);
+      } else throw new Error('History fetch failed');
+
+      if (rWea.ok) {
+        const data = await rWea.json();
+        setWeather(prev => isDeepEqual(prev, data) ? prev : data);
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Falha ao obter dados da central de climatização.');
+    }
+  }, [baseUrl, token]);
 
   useEffect(() => {
-    loadAll();
+    (async () => { loadAll(); })();
     const c = setInterval(fetchDevices, prefs.devicesMs);
     const h = setInterval(fetchHistory, prefs.historyMs);
     const w = setInterval(fetchWeather, 300000); // 5 min

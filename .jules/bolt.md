@@ -77,3 +77,6 @@
 ## 2024-08-11 - [Optimization of farmName array loop]
 **Learning:** Found multiple components running O(N) array search on every render to extract `farmName`. React components rerender frequently and executing array lookups synchronously inside the component body affects the framerate.
 **Action:** Replaced inline `find()` with `useMemo` hooks, saving unnecessary computations during re-renders.
+## 2024-08-12 - [Sequential Network Waterfall in ClimatePanel]
+**Learning:** Found sequential `await fetch` calls (via independent `fetchDevices`, `fetchHistory`, and `fetchWeather` callbacks) being invoked synchronously one after the other inside `loadAll()` in `ClimatePanel.jsx`. This causes a network waterfall since the endpoints are independent and they end up queuing sequentially in the microtask queue without true concurrency.
+**Action:** Used `Promise.all()` to execute these independent API requests concurrently inside `loadAll` to reduce total network wait time and render cycle delay.
