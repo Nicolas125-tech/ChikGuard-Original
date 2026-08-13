@@ -19,8 +19,8 @@ _cached_total_vistas_time = 0
 
 
 def _get_temperature_summary(Reading):
-    ultima = Reading.query.order_by(Reading.id.desc()).first()
     recentes = Reading.query.order_by(Reading.id.desc()).limit(30).all()
+    ultima = recentes[0] if recentes else None
     temperaturas = [item.temperatura for item in recentes]
     alertas = [item for item in recentes if item.status != "NORMAL"]
 
@@ -287,21 +287,6 @@ def create_system_blueprint(deps):
         return {
             "count": len(carcass_state.get("items", [])),
             "audio_alert": len(carcass_state.get("items", [])) > 0,
-        }
-
-    def _get_temperature_summary(Reading):
-        ultima = Reading.query.order_by(Reading.id.desc()).first()
-        recentes = Reading.query.order_by(Reading.id.desc()).limit(30).all()
-        temperaturas = [item.temperatura for item in recentes]
-        alertas = [item for item in recentes if item.status != "NORMAL"]
-
-        return {
-            "temperatura_atual": ultima.temperatura if ultima else 0,
-            "status_atual": ultima.status if ultima else "INICIANDO",
-            "media_temperatura": (
-                round(sum(temperaturas) / len(temperaturas), 1) if temperaturas else 0
-            ),
-            "total_alertas": len(alertas),
         }
 
     def _get_bird_counts(now, lock, object_count, live_birds, BIRD_LIVE_TTL_SEC, BirdIdentity):

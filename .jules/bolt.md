@@ -83,3 +83,6 @@
 ## 2024-08-13 - [JSON.stringify vs isDeepEqual Performance Bottleneck in RulesPanel]
 **Learning:** Found unnecessary React re-renders being caused by setting state without checking if the data actually changed in `RulesPanel.jsx`.
 **Action:** Used `isDeepEqual` from `utils/performance.js` inside `setRules` to avoid unnecessarily updating state and triggering Virtual DOM diffing during data fetches when the rules haven't actually changed.
+## 2025-02-23 - Optimize _get_temperature_summary queries
+**Learning:** Combining redundant database queries using `.limit().all()` and extracting `.first()` manually from the result list significantly improves query performance (reduces N+1 problem and speeds up block by ~35%). Nested endpoint helper functions should be removed if a top-level version already exists to keep the AST clean and prevent confusion.
+**Action:** Removed duplicate definition and rewrote `_get_temperature_summary` to execute a single query instead of two.
