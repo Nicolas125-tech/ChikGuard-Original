@@ -3,6 +3,7 @@ import { getBaseUrl } from '../utils/config';
 import { ServerCog, Plus, Trash2, ShieldCheck, Thermometer, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import QueryErrorState from './QueryErrorState';
+import { isDeepEqual } from '../utils/performance';
 
 export default function RulesPanel({ serverIP }) {
   const [rules, setRules] = useState([]);
@@ -26,7 +27,7 @@ export default function RulesPanel({ serverIP }) {
       const res = await fetch(`${getBaseUrl(serverIP)}/api/rules`);
       if (!res.ok) throw new Error('Não foi possível obter as regras de automação.');
       const data = await res.json();
-      setRules(data);
+      setRules(prev => isDeepEqual(prev, data) ? prev : data);
     } catch (err) {
       console.error('Failed to fetch rules', err);
       setError(err.message || 'Erro ao carregar as regras.');
@@ -45,7 +46,7 @@ export default function RulesPanel({ serverIP }) {
       const res = await fetch(`${getBaseUrl(serverIP)}/api/rules`);
       if (!res.ok) throw new Error('Não foi possível recarregar as regras de automação.');
       const data = await res.json();
-      setRules(data);
+      setRules(prev => isDeepEqual(prev, data) ? prev : data);
     } catch (err) {
       console.error('Failed to reload rules', err);
       setError(err.message || 'Erro ao recarregar as regras.');

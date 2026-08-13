@@ -80,3 +80,6 @@
 ## 2024-08-12 - [Sequential Network Waterfall in ClimatePanel]
 **Learning:** Found sequential `await fetch` calls (via independent `fetchDevices`, `fetchHistory`, and `fetchWeather` callbacks) being invoked synchronously one after the other inside `loadAll()` in `ClimatePanel.jsx`. This causes a network waterfall since the endpoints are independent and they end up queuing sequentially in the microtask queue without true concurrency.
 **Action:** Used `Promise.all()` to execute these independent API requests concurrently inside `loadAll` to reduce total network wait time and render cycle delay.
+## 2024-08-13 - [JSON.stringify vs isDeepEqual Performance Bottleneck in RulesPanel]
+**Learning:** Found unnecessary React re-renders being caused by setting state without checking if the data actually changed in `RulesPanel.jsx`.
+**Action:** Used `isDeepEqual` from `utils/performance.js` inside `setRules` to avoid unnecessarily updating state and triggering Virtual DOM diffing during data fetches when the rules haven't actually changed.
