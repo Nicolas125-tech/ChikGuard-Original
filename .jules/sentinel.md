@@ -121,3 +121,8 @@
 **Vulnerability:** SQL injection via string formatting in raw SQL execution (`f"SELECT * FROM {table_name}"` and `f"UPDATE {table_name}"`).
 **Learning:** Even when protected by a hardcoded allowlist, executing raw SQL with string interpolation is an inherently unsafe and brittle pattern.
 **Prevention:** Refactor database operations to use SQLAlchemy Core objects (e.g. `Table`, `select()`, `update()`) instead of interpolating strings.
+
+## 2026-08-14 - [Hardcoded Supabase Credentials and Tracked Env File]
+**Vulnerability:** Supabase project URL and anonymous JWT key (`VITE_SUPABASE_ANON_KEY`) were hardcoded in `frontend/.env`, which was tracked and committed to the Git repository.
+**Learning:** Committing environment config files (`.env`) to Git leaks credentials. Even if `.env` is added to `.gitignore`, Git will continue tracking it if it was committed previously.
+**Prevention:** Remove tracked `.env` files from Git cache using `git rm --cached`, use `.env.example` as a template with placeholder values, and never commit real keys to the source control.
