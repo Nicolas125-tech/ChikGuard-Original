@@ -94,8 +94,9 @@ def video_feed(token: str = None):
 
     try:
         # Validate JWT explicitly for streaming endpoint using query parameter
+        jwt_secret = os.environ.get("SUPABASE_JWT_SECRET") or SUPABASE_JWT_SECRET
         jwt.decode(
-            token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated"
+            token, jwt_secret, algorithms=["HS256"], audience="authenticated"
         )
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token JWT expirado")

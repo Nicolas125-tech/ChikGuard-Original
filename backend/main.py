@@ -1,6 +1,6 @@
 import asyncio
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, Depends, HTTPException
+from fastapi import FastAPI, Request, Depends, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -94,6 +94,9 @@ from src.api.fastapi_climate import router as climate_router
 from src.api.fastapi_health import router as health_router
 from src.api.fastapi_heatmap import router as heatmap_router
 from src.api.fastapi_zone_analytics import router as zone_analytics_router
+from src.api.fastapi_sensors import router as sensors_router
+from src.api.fastapi_webrtc import router as webrtc_router
+from src.api.fastapi_iot import router as iot_router
 from src.api.fastapi_ws import socket_app
 from src.security.fastapi_auth import RequireRole, UserContext, get_current_user
 from src.security.headers import ALLOWED_ORIGINS
@@ -116,6 +119,7 @@ fastapi_app.include_router(accounts_router)
 fastapi_app.include_router(cameras_router)
 fastapi_app.include_router(heatmap_router)
 fastapi_app.include_router(zone_analytics_router)
+fastapi_app.include_router(agent_discovery_router)
 
 # CORS middleware
 # Ajustando os ALLOWED_ORIGINS buscando de src.security.headers para seguranca

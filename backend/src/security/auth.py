@@ -19,7 +19,7 @@ if not get_jwt_secret():
         "SUPABASE_JWT_SECRET environment variable is required for secure authentication."
     )
 
-if SUPABASE_URL and SUPABASE_KEY:
+if SUPABASE_URL and SUPABASE_KEY and not os.environ.get("TESTING"):
     supabase_client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 else:
     supabase_client = None

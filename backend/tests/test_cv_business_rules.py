@@ -9,8 +9,19 @@ os.environ.setdefault("ENABLE_SAHI", "false")
 
 # Adiciona o diretório backend ao sys.path para importação limpa dos módulos
 backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if backend_dir not in sys.path:
-    sys.path.insert(0, backend_dir)
+if backend_dir in sys.path:
+    sys.path.remove(backend_dir)
+sys.path.insert(0, backend_dir)
+
+print("DEBUG: sys.path =", sys.path)
+print("DEBUG: plugins in sys.modules =", "plugins" in sys.modules)
+if "plugins" in sys.modules:
+    print("DEBUG: plugins file =", sys.modules["plugins"].__file__)
+
+# Forçamos a remoção de "plugins" do sys.modules se apontar para src
+if "plugins" in sys.modules and "src" in getattr(sys.modules["plugins"], "__file__", ""):
+    print("DEBUG: Evicting conflicting plugins module from sys.modules")
+    del sys.modules["plugins"]
 
 from src.core.state import (
     sensor_state, live_birds, species_counts, weight_state,

@@ -87,15 +87,6 @@ class SensorSyncWorker:
                 
                 client.table("sensor_readings").insert(records).execute()
 
-                    if global_supabase is not None:
-                        global_supabase.table("sensor_readings").insert(
-                            records
-                        ).execute()
-                    else:
-                        raise ConnectionError(
-                            "Cliente Supabase não inicializado no Gateway."
-                        )
-
                 # Sucesso: atualiza localmente para SYNCED em lote
                 ids = [r.id for r in readings]
                 session.execute(

@@ -107,3 +107,6 @@ def set_global_frame(frame):
     global_frame_data = frame
 
 
+_default_get_global_frame = get_global_frame
+
+

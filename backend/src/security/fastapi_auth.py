@@ -15,7 +15,7 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "")
 
-if SUPABASE_URL and SUPABASE_KEY:
+if SUPABASE_URL and SUPABASE_KEY and not os.environ.get("TESTING"):
     supabase_client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 else:
     supabase_client = None
@@ -74,9 +74,10 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserContext:
                 )
 
         # Fallback para HS256 (projetos mais antigos)
-        if decoded is None and SUPABASE_JWT_SECRET:
+        jwt_secret = os.environ.get("SUPABASE_JWT_SECRET") or SUPABASE_JWT_SECRET
+        if decoded is None and jwt_secret:
             decoded = jwt.decode(
-                token, SUPABASE_JWT_SECRET,
+                token, jwt_secret,
                 algorithms=["HS256"],
                 audience="authenticated"
             )

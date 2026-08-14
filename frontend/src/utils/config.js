@@ -1,9 +1,11 @@
+const procEnv = typeof globalThis !== 'undefined' && globalThis.process && globalThis.process.env ? globalThis.process.env : {};
+
 export const STORAGE = {
-  token: (import.meta.env && import.meta.env.VITE_STORAGE_TOKEN) || process.env.VITE_STORAGE_TOKEN,
-  role: (import.meta.env && import.meta.env.VITE_STORAGE_ROLE) || process.env.VITE_STORAGE_ROLE,
-  username: (import.meta.env && import.meta.env.VITE_STORAGE_USERNAME) || process.env.VITE_STORAGE_USERNAME,
-  server: (import.meta.env && import.meta.env.VITE_STORAGE_SERVER) || process.env.VITE_STORAGE_SERVER,
-  prefs: (import.meta.env && import.meta.env.VITE_STORAGE_PREFS) || process.env.VITE_STORAGE_PREFS,
+  token: (import.meta.env && import.meta.env.VITE_STORAGE_TOKEN) || procEnv.VITE_STORAGE_TOKEN,
+  role: (import.meta.env && import.meta.env.VITE_STORAGE_ROLE) || procEnv.VITE_STORAGE_ROLE,
+  username: (import.meta.env && import.meta.env.VITE_STORAGE_USERNAME) || procEnv.VITE_STORAGE_USERNAME,
+  server: (import.meta.env && import.meta.env.VITE_STORAGE_SERVER) || procEnv.VITE_STORAGE_SERVER,
+  prefs: (import.meta.env && import.meta.env.VITE_STORAGE_PREFS) || procEnv.VITE_STORAGE_PREFS,
 };
 
 export const DEFAULT_PREFS = {
@@ -22,7 +24,7 @@ export const getBaseUrl = (ipOrUrl) => {
     return 'http://127.0.0.1:5000';
   }
 
-  const target = ipOrUrl || (import.meta.env && import.meta.env.VITE_API_URL) || process.env.VITE_API_URL;
+  const target = ipOrUrl || (import.meta.env && import.meta.env.VITE_API_URL) || procEnv.VITE_API_URL;
   if (!target) return 'http://127.0.0.1:5000';
   const clean = target.replace(/\/$/, '');
   
