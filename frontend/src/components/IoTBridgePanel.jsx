@@ -44,11 +44,10 @@ export default function IoTBridgePanel({ token, serverIP }) {
   const mqttTopic = iotStatus?.topic ? iotStatus.topic.replace('+', 'farm-1') : 'chikguard/farm/farm-1/sensors';
 
   const arduinoCode = `#include <WiFi.h>
+#include <WiFiManager.h> // 🔒 Substitui credenciais hardcoded por portal cautivo
 #include <PubSubClient.h>
 #include <DHT.h>
 
-const char* ssid = "NOME_DO_SEU_WIFI";
-const char* password = "SENHA_DO_WIFI";
 const char* mqtt_server = "${mqttServerHost}"; // IP do Servidor ChikGuard Edge
 
 WiFiClient espClient;
@@ -62,12 +61,13 @@ void setup() {
   Serial.begin(115200);
   dht.begin();
   
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("\\nWiFi conectado!");
+  // Utiliza WiFiManager para evitar credenciais de WiFi hardcoded no codigo fonte
+  // O ESP32 criara uma rede "ChikGuard-IoT-Node" se nao conseguir conectar.
+  // Conecte-se a ela e acesse 192.168.4.1 para configurar sua rede.
+  WiFiManager wifiManager;
+  wifiManager.autoConnect("ChikGuard-IoT-Node");
+
+  Serial.println("\nWiFi conectado!");
   
   client.setServer(mqtt_server, 1883);
 }
@@ -160,6 +160,7 @@ void loop() {
         {showCode && (
           <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 overflow-hidden relative group">
             <button 
+               aria-label="Copiar código C++ (ESP32/Arduino)"
                onClick={() => {
                  navigator.clipboard.writeText(arduinoCode);
                  setIsCopied(true);

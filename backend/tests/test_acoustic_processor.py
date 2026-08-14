@@ -13,7 +13,7 @@ sys.modules["cv2"] = mock.MagicMock()
 
 # Configuração de variáveis de ambiente para testes do Flask
 os.environ["FLASK_ENV"] = "testing"
-os.environ["SUPABASE_JWT_SECRET"] = os.environ.get("SUPABASE_JWT_SECRET", "dummy_secret_for_tests")
+os.environ["SUPABASE_JWT_SECRET"] = os.environ.get("SUPABASE_JWT_SECRET", "dummy_secret_dummy_secret_dummy_secret_for_tests_32bytes")
 os.environ["ADMIN_PASSWORD"] = "testpassword"
 os.environ["ADMIN_EMAIL"] = "test@example.com"
 os.environ["JWT_SECRET_KEY"] = "testsecret"

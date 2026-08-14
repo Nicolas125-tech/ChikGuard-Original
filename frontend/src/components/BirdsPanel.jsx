@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback , useMemo } from 'react';
 import SystemCard from './SystemCard';
 import { getBaseUrl } from '../utils/config';
 import { isDeepEqual } from '../utils/performance';
@@ -11,7 +11,7 @@ export default function BirdsPanel({ token, serverIP, prefs, cameras = [], activ
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const baseUrl = getBaseUrl(serverIP);
-  const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
+  const farmName = useMemo(() => cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal', [cameras, activeCamera]);
 
   const loadBirds = useCallback(async () => {
     try {
@@ -22,17 +22,17 @@ export default function BirdsPanel({ token, serverIP, prefs, cameras = [], activ
         fetch(`${baseUrl}/api/birds/registry?limit=500`, { headers }),
         fetch(`${baseUrl}/api/birds/history?limit=300`, { headers }),
       ]);
-      
+
       if (!liveRes.ok || !regRes.ok || !historyRes.ok) {
         throw new Error('Falha ao sincronizar com o banco de dados de aves.');
       }
-      
+
       const liveData = await liveRes.json();
       setLive(prev => isDeepEqual(prev, liveData) ? prev : liveData);
-      
+
       const regData = await regRes.json();
       setRegistry(prev => isDeepEqual(prev, regData) ? prev : regData);
-      
+
       const historyData = await historyRes.json();
       setHistory(prev => isDeepEqual(prev, historyData) ? prev : historyData);
     } catch (err) {
@@ -132,7 +132,7 @@ const LiveBirdMap = React.memo(function LiveBirdMap({ items }) {
        </div>
        <div className="flex-1 relative w-full h-full bg-slate-950 overflow-hidden">
           <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'linear-gradient(#334155 1px, transparent 1px), linear-gradient(90deg, #334155 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
-          
+
           {items.map(bird => {
              if (!bird.bbox) return null;
              const [x1, y1, x2, y2] = bird.bbox;
@@ -142,7 +142,7 @@ const LiveBirdMap = React.memo(function LiveBirdMap({ items }) {
              const top = (cy / feedHeight) * 100;
 
              return (
-                <div key={bird.bird_uid} 
+                <div key={bird.bird_uid}
                      className="absolute flex items-center justify-center group"
                      style={{ left: `${left}%`, top: `${top}%`, transform: 'translate(-50%, -50%)' }}
                 >

@@ -10,12 +10,68 @@ from database import (
     Reading,
     SyncQueueItem,
 )
-from src.security.auth import require_auth
 from src.api.system_api_extra import add_remaining_routes
+from src.security.auth import require_auth
 
 # Cache para evitar count() repetitivo em tabela grande
 _cached_total_vistas = None
 _cached_total_vistas_time = 0
+
+
+def _get_temperature_summary(Reading):
+    recentes = Reading.query.order_by(Reading.id.desc()).limit(30).all()
+    ultima = recentes[0] if recentes else None
+    temperaturas = [item.temperatura for item in recentes]
+    alertas = [item for item in recentes if item.status != "NORMAL"]
+
+    return {
+        "temperatura_atual": ultima.temperatura if ultima else 0,
+        "status_atual": ultima.status if ultima else "INICIANDO",
+        "media_temperatura": (
+            round(sum(temperaturas) / len(temperaturas), 1) if temperaturas else 0
+        ),
+        "total_alertas": len(alertas),
+    }
+
+
+def _get_bird_counts(now, lock, object_count, live_birds, BIRD_LIVE_TTL_SEC, BirdIdentity):
+    global _cached_total_vistas, _cached_total_vistas_time
+    if _cached_total_vistas is None or (now - _cached_total_vistas_time) > 60:
+        _cached_total_vistas = BirdIdentity.query.count()
+        _cached_total_vistas_time = now
+
+    count = 0
+    alive_count = 0
+    if lock:
+        with lock:
+            count = object_count.get() if callable(object_count) else object_count
+            alive_count = sum(
+                1
+                for info in live_birds.values()
+                if (now - float(info["last_seen"])) <= BIRD_LIVE_TTL_SEC
+            )
+    else:
+        count = object_count.get() if callable(object_count) else object_count
+        alive_count = sum(
+            1
+            for info in live_birds.values()
+            if (now - float(info["last_seen"])) <= BIRD_LIVE_TTL_SEC
+        )
+    return {
+        "contagem_aves": count,
+        "aves_vivas_individuais": alive_count,
+        "total_aves_vistas": _cached_total_vistas,
+    }
+
+
+def _get_energy_summary(EnergyUsageDaily, ACTIVE_CAMERA_ID, today):
+    energy_today = EnergyUsageDaily.query.filter_by(camera_id=ACTIVE_CAMERA_ID, day=today).first()
+    vent_sec_today = float(energy_today.ventilacao_seconds) if energy_today else 0.0
+    aq_sec_today = float(energy_today.aquecedor_seconds) if energy_today else 0.0
+    return {
+        "ventilacao_seconds": round(vent_sec_today, 2),
+        "aquecedor_seconds": round(aq_sec_today, 2),
+    }
 
 
 def create_system_blueprint(deps):
@@ -75,24 +131,16 @@ def create_system_blueprint(deps):
             {
                 "uptime_seconds": uptime_seconds,
                 "camera_thread_alive": t.is_alive() if t else False,
-                "weekly_scheduler_alive": (
-                    weekly_thread.is_alive() if weekly_thread else False
-                ),
-                "mlops_scheduler_alive": (
-                    mlops_thread.is_alive() if mlops_thread else False
-                ),
+                "weekly_scheduler_alive": (weekly_thread.is_alive() if weekly_thread else False),
+                "mlops_scheduler_alive": (mlops_thread.is_alive() if mlops_thread else False),
                 "sync_thread_alive": sync_thread.is_alive() if sync_thread else False,
-                "weather_thread_alive": (
-                    weather_thread.is_alive() if weather_thread else False
-                ),
+                "weather_thread_alive": (weather_thread.is_alive() if weather_thread else False),
                 "data_lifecycle_thread_alive": (
                     data_lifecycle_thread.is_alive() if data_lifecycle_thread else False
                 ),
                 "modo_deteccao": MODO_DETECCAO,
                 "yolo_loaded": detector.yolo_loaded if detector else False,
-                "yolo_segmentation": (
-                    bool(detector.supports_segmentation) if detector else False
-                ),
+                "yolo_segmentation": (bool(detector.supports_segmentation) if detector else False),
                 "tracker": TRACKER_CONFIG,
                 "modelo_ia": YOLO_MODEL_PATH,
                 "modelo_ia_resolvido": _resolved_model_path,
@@ -114,9 +162,7 @@ def create_system_blueprint(deps):
     @require_auth()
     def get_plugins():
         items = PLUGIN_MANAGER.list_plugins() if PLUGIN_MANAGER else []
-        return jsonify(
-            {"count": len(items), "plugins": items, "plugins_root": PLUGINS_ROOT}
-        )
+        return jsonify({"count": len(items), "plugins": items, "plugins_root": PLUGINS_ROOT})
 
     @bp.route("/api/plugins/reload", methods=["POST"])
     def reload_plugins():
@@ -131,9 +177,7 @@ def create_system_blueprint(deps):
             items = []
         if _audit:
             _audit("plugins_reloaded", source="backend", details={"count": len(items)})
-        return jsonify(
-            {"msg": "Plugins recarregados", "count": len(items), "plugins": items}
-        )
+        return jsonify({"msg": "Plugins recarregados", "count": len(items), "plugins": items})
 
     @bp.route("/api/audit/logs", methods=["GET"])
     def audit_logs():
@@ -185,7 +229,6 @@ def create_system_blueprint(deps):
             count = object_count.get() if callable(object_count) else object_count
         return jsonify({"count": count})
 
-
     def _build_behavior_data(behavior_state):
         return {
             "status": behavior_state.get("status", ""),
@@ -219,25 +262,18 @@ def create_system_blueprint(deps):
             "confidence": weight_state.get("confidence", 0),
             "method": (
                 "segmentation_area"
-                if (
-                    detector
-                    and getattr(detector, "supports_segmentation", False)
-                )
+                if (detector and getattr(detector, "supports_segmentation", False))
                 else "bbox_area_fallback"
             ),
         }
 
     def _build_acoustic_data(acoustic_state, audio_classifier):
         return {
-            "respiratory_health_index": acoustic_state.get(
-                "respiratory_health_index", 0
-            ),
+            "respiratory_health_index": acoustic_state.get("respiratory_health_index", 0),
             "cough_index": acoustic_state.get("cough_index", 0),
             "stress_audio_index": acoustic_state.get("stress_audio_index", 0),
             "source": acoustic_state.get("source", ""),
-            "trained_model_loaded": (
-                bool(audio_classifier.loaded) if audio_classifier else False
-            ),
+            "trained_model_loaded": (bool(audio_classifier.loaded) if audio_classifier else False),
         }
 
     def _build_tamper_data(tamper_state):
@@ -253,22 +289,12 @@ def create_system_blueprint(deps):
             "audio_alert": len(carcass_state.get("items", [])) > 0,
         }
 
-    @bp.route("/api/summary", methods=["GET"])
-    @require_auth()
-    def get_summary():
-        ultima = Reading.query.order_by(Reading.id.desc()).first()
-        recentes = Reading.query.order_by(Reading.id.desc()).limit(30).all()
-        temperaturas = [item.temperatura for item in recentes]
-        alertas = [item for item in recentes if item.status != "NORMAL"]
-
-        now = time.time()
-
+    def _get_bird_counts(now, lock, object_count, live_birds, BIRD_LIVE_TTL_SEC, BirdIdentity):
         global _cached_total_vistas, _cached_total_vistas_time
         if _cached_total_vistas is None or (now - _cached_total_vistas_time) > 60:
             _cached_total_vistas = BirdIdentity.query.count()
             _cached_total_vistas_time = now
 
-        total_vistas = _cached_total_vistas
         count = 0
         alive_count = 0
         if lock:
@@ -286,34 +312,46 @@ def create_system_blueprint(deps):
                 for info in live_birds.values()
                 if (now - float(info["last_seen"])) <= BIRD_LIVE_TTL_SEC
             )
+        return {
+            "contagem_aves": count,
+            "aves_vivas_individuais": alive_count,
+            "total_aves_vistas": _cached_total_vistas,
+        }
 
-        targets = _temperature_targets(ACTIVE_CAMERA_ID) if _temperature_targets else {}
-        batch = _active_batch(ACTIVE_CAMERA_ID) if _active_batch else None
-        pending_sync = SyncQueueItem.query.filter_by(status="pending").count()
-        today = _utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    def _get_energy_summary(EnergyUsageDaily, ACTIVE_CAMERA_ID, today):
         energy_today = EnergyUsageDaily.query.filter_by(
             camera_id=ACTIVE_CAMERA_ID, day=today
         ).first()
         vent_sec_today = float(energy_today.ventilacao_seconds) if energy_today else 0.0
         aq_sec_today = float(energy_today.aquecedor_seconds) if energy_today else 0.0
+        return {
+            "ventilacao_seconds": round(vent_sec_today, 2),
+            "aquecedor_seconds": round(aq_sec_today, 2),
+        }
+
+    @bp.route("/api/summary", methods=["GET"])
+    @require_auth()
+    def get_summary():
+        temp_summary = _get_temperature_summary(Reading)
+        now = time.time()
+        bird_counts = _get_bird_counts(
+            now, lock, object_count, live_birds, BIRD_LIVE_TTL_SEC, BirdIdentity
+        )
+
+        targets = _temperature_targets(ACTIVE_CAMERA_ID) if _temperature_targets else {}
+        batch = _active_batch(ACTIVE_CAMERA_ID) if _active_batch else None
+        pending_sync = SyncQueueItem.query.filter_by(status="pending").count()
+        today = _utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        energy_summary = _get_energy_summary(EnergyUsageDaily, ACTIVE_CAMERA_ID, today)
 
         return jsonify(
             {
-                "temperatura_atual": ultima.temperatura if ultima else 0,
-                "status_atual": ultima.status if ultima else "INICIANDO",
-                "media_temperatura": (
-                    round(sum(temperaturas) / len(temperaturas), 1)
-                    if temperaturas
-                    else 0
-                ),
-                "contagem_aves": count,
-                "aves_vivas_individuais": alive_count,
-                "total_aves_vistas": total_vistas,
+                **temp_summary,
+                **bird_counts,
                 "metodo_temperatura_ave": "estimada_rgb_proxy",
                 "tracker": TRACKER_CONFIG,
                 "classe_ave": BIRD_CLASS_NAME,
                 "dispositivos": estado_dispositivos,
-                "total_alertas": len(alertas),
                 "modo_deteccao": MODO_DETECCAO,
                 "camera_id": ACTIVE_CAMERA_ID,
                 "behavior": _build_behavior_data(behavior_state),
@@ -322,13 +360,8 @@ def create_system_blueprint(deps):
                 "batch": batch.to_dict() if batch else None,
                 "weight": _build_weight_data(weight_state, detector),
                 "acoustic": _build_acoustic_data(acoustic_state, audio_classifier),
-                "energy_today": {
-                    "ventilacao_seconds": round(vent_sec_today, 2),
-                    "aquecedor_seconds": round(aq_sec_today, 2),
-                },
-                "smart_grid_forecast_12h": (
-                    _energy_forecast(hours=12) if _energy_forecast else []
-                ),
+                "energy_today": energy_summary,
+                "smart_grid_forecast_12h": (_energy_forecast(hours=12) if _energy_forecast else []),
                 "sync": {"pending": pending_sync},
                 "weather": weather_state,
                 "tamper": _build_tamper_data(tamper_state),
@@ -390,7 +423,9 @@ def create_system_blueprint(deps):
                     "nivel": (
                         "alto"
                         if ev.level == "high"
-                        else "medio" if ev.level == "medium" else "baixo"
+                        else "medio"
+                        if ev.level == "medium"
+                        else "baixo"
                     ),
                     "mensagem": ev.message,
                     "temperatura": None,

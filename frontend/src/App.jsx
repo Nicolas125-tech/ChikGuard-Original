@@ -4,7 +4,6 @@ import LandingPage from '@/pages/LandingPage';
 import LoginScreen from '@/pages/LoginScreen';
 import TVScreen from '@/pages/TVScreen';
 import Dashboard from '@/pages/Dashboard';
-import SetupScreen from '@/pages/SetupScreen';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { STORAGE, readPrefs } from '@/utils/config';
 import { supabase, isSupabaseConfigured } from '@/utils/supabaseClient';
@@ -62,7 +61,6 @@ class ErrorBoundary extends React.Component {
 // ─── App principal ────────────────────────────────────────────────────────────
 function AppCore() {
   const [booting, setBooting] = useState(true);
-  const [isSetupComplete, setIsSetupComplete] = useState(localStorage.getItem('cg_setup_complete') === 'true');
   const [token, setToken] = useState(localStorage.getItem(STORAGE.token));
   const [role, setRole] = useState(localStorage.getItem(STORAGE.role) || 'viewer');
   const [status, setStatus] = useState(localStorage.getItem('cg_status') || 'PENDING');
@@ -84,40 +82,45 @@ function AppCore() {
       return;
     }
 
-    // Normal boot: busca sessão E perfil real do Supabase
+    // Normal boot: busca sessão e perfil do Supabase (com timeout)
     const checkSession = async () => {
       if (isSupabaseConfigured) {
         try {
           const { data: sessionData } = await Promise.race([
             supabase.auth.getSession(),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase Timeout')), 12000))
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Session Timeout')), 8000))
           ]);
-          
+
           if (sessionData?.session) {
             const session = sessionData.session;
-            // Sempre buscar o perfil real — não confiar no localStorage para status/role
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('role, status')
-              .eq('id', session.user.id)
-              .single();
-            
-            const realRole = profile?.role || 'viewer';
-            const realStatus = profile?.status || 'PENDING';
-            
-            // Atualizar localStorage e state com os valores reais
             localStorage.setItem(STORAGE.token, session.access_token);
-            localStorage.setItem(STORAGE.role, realRole);
-            localStorage.setItem('cg_status', realStatus);
             setToken(session.access_token);
-            setRole(realRole);
-            setStatus(realStatus);
+
+            // Busca perfil com timeout de 4s — não bloqueia a boot se Supabase estiver lento
+            try {
+              const { data: profile } = await Promise.race([
+                supabase.from('profiles').select('role, status').eq('id', session.user.id).single(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Profile Timeout')), 4000))
+              ]);
+
+              if (profile) {
+                const realRole   = (profile.role   || 'viewer').toLowerCase();
+                const realStatus = profile.status  || 'ACTIVE';
+                localStorage.setItem(STORAGE.role,    realRole);
+                localStorage.setItem('cg_status',     realStatus);
+                setRole(realRole);
+                setStatus(realStatus);
+              }
+              // Se profile === null (tabela vazia), mantém o que já estava no localStorage
+            } catch {
+              // Profile fetch timeout/RLS → usa valores do localStorage (já setados acima)
+            }
           }
         } catch (e) {
           console.error('Erro ao conectar ao Supabase:', e);
         }
       }
-      setTimeout(() => setBooting(false), 800);
+      setTimeout(() => setBooting(false), 400);
     };
     checkSession();
   }, []);
@@ -129,38 +132,49 @@ function AppCore() {
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
-        let accessToken = session.access_token;
-        let nextRole = 'viewer';
-        let nextUser = session.user.email;
-        let nextStatus = 'PENDING';
+        const accessToken = session.access_token;
+        let nextRole   = 'viewer';
+        let nextUser   = session.user.email;
+        let nextStatus = 'ACTIVE'; // default seguro — não bloqueia se perfil não existir
 
-        // SEMPRE buscar role/status real da tabela profiles (não confiar em app_metadata do JWT)
+        // Busca role/status com timeout de 4s — não bloqueia o login
         try {
-          const { data: profile, error: profileErr } = await supabase
-            .from('profiles')
-            .select('role, status')
-            .eq('id', session.user.id)
-            .single();
-          if (profile && !profileErr) {
-            nextRole = String(profile.role || 'viewer').toLowerCase();
-            nextStatus = profile.status || 'PENDING';
+          const { data: profile } = await Promise.race([
+            supabase.from('profiles').select('role, status').eq('id', session.user.id).single(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000))
+          ]);
+          if (profile) {
+            nextRole   = (profile.role   || 'viewer').toLowerCase();
+            nextStatus = profile.status  || 'ACTIVE';
           }
         } catch {
-          // Profile ainda não existe — usar valores padrão
+          // Timeout ou RLS → usa defaults seguros
         }
 
+        if (nextStatus === 'PENDING' || nextStatus === 'SUSPENDED' || nextStatus === 'REJECTED') {
+          await supabase.auth.signOut();
+          localStorage.removeItem(STORAGE.token);
+          localStorage.removeItem(STORAGE.role);
+          localStorage.removeItem(STORAGE.username);
+          localStorage.removeItem('cg_status');
+          setToken(null);
+          setRole('viewer');
+          setStatus(nextStatus);
+          setShowLogin(true);
+          setBooting(false);
+          return;
+        }
 
-
-        localStorage.setItem(STORAGE.token, accessToken);
-        localStorage.setItem(STORAGE.role, nextRole);
+        localStorage.setItem(STORAGE.token,    accessToken);
+        localStorage.setItem(STORAGE.role,     nextRole);
         localStorage.setItem(STORAGE.username, nextUser || '');
-        localStorage.setItem('cg_status', nextStatus);
+        localStorage.setItem('cg_status',      nextStatus);
 
         setToken(accessToken);
         setRole(nextRole);
         setStatus(nextStatus);
         setShowLogin(false);
-        setBooting(false); // Stop booting immediately when signed in
+        setBooting(false);
       } else if (event === 'SIGNED_OUT') {
         localStorage.removeItem(STORAGE.token);
         localStorage.removeItem(STORAGE.role);
@@ -253,14 +267,8 @@ function AppCore() {
     localStorage.setItem(STORAGE.prefs, JSON.stringify(next));
   }, []);
 
-  const handleLogout = async () => {
-    if (isSupabaseConfigured) {
-      try {
-        await supabase.auth.signOut();
-      } catch (err) {
-        console.error('Erro ao fazer signOut do Supabase:', err);
-      }
-    }
+  const handleLogout = () => {
+    // Limpa estado IMEDIATAMENTE — não espera o Supabase responder
     localStorage.removeItem(STORAGE.token);
     localStorage.removeItem(STORAGE.role);
     localStorage.removeItem('cg_status');
@@ -269,6 +277,13 @@ function AppCore() {
     setRole('viewer');
     setStatus('PENDING');
     setShowLogin(false);
+
+    // Chama signOut do Supabase em background (não bloqueia a UI)
+    if (isSupabaseConfigured) {
+      supabase.auth.signOut().catch(err =>
+        console.warn('[logout] Supabase signOut falhou (ignorado):', err)
+      );
+    }
   };
 
   const tvMode = window.location.pathname === '/tv';
@@ -278,14 +293,6 @@ function AppCore() {
   if (tvMode) return <TVScreen serverIP={serverIP} />;
 
   if (token) {
-    if (!isSetupComplete) {
-      return (
-        <ProtectedRoute token={token} userRole={role} status={status} onLogout={handleLogout}>
-          <SetupScreen token={token} onComplete={() => setIsSetupComplete(true)} />
-        </ProtectedRoute>
-      );
-    }
-
     return (
       <ProtectedRoute token={token} userRole={role} status={status} onLogout={handleLogout}>
         <Dashboard

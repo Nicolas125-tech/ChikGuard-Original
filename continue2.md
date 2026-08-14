@@ -719,7 +719,6 @@ todos esse erros no f12
 
 ### Planner Response
 
-São 3 problemas distintos. Vou resolver cada um:
 
 *Grep searched codebase*
 

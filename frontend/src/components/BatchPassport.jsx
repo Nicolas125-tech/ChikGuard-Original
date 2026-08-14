@@ -125,6 +125,7 @@ export default function BatchPassport({ token, serverIP }) {
       <div className="mt-8 pt-6 border-t border-slate-800 flex justify-between items-center">
         <p className="text-xs text-slate-500 font-mono">ChikGuard Enterprise - Gerado em {new Date().toLocaleDateString()}</p>
         <button 
+           aria-label="Exportar passaporte do lote para PDF"
            onClick={() => window.print()}
            className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors shadow-lg shadow-indigo-500/20"
         >

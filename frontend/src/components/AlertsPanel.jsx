@@ -50,7 +50,7 @@ export default function AlertsPanel({ serverIP, prefs, token, cameras = [], acti
     };
   }, [loadAlerts, prefs.statusMs, baseUrl]);
 
-  const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
+  const farmName = useMemo(() => cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal', [cameras, activeCamera]);
   
   // Bolt Optimization: Replace O(N*M) array.includes filter with O(N) Set lookup
   // and memoize the result to prevent unnecessary recalculations on re-renders.

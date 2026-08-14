@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 
 load_dotenv()
 
@@ -134,7 +135,8 @@ MODO_DETECCAO = os.getenv("MODO_DETECCAO", "aves").strip().lower()
 ACTIVE_CAMERA_ID = os.getenv("ACTIVE_CAMERA_ID", "galpao-1")
 
 from dataclasses import dataclass
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 
 @dataclass
 class LogEventData:
@@ -497,7 +499,7 @@ def _log_event(data: LogEventData):
         PLUGIN_MANAGER.emit_event("event_log", event_payload)
         socketio.emit("new_alert", event_payload, namespace="/")
     except Exception as exc:
-        LOGGER.exception("[EVENT] failed to persist '%s': %s", event_type, exc)
+        LOGGER.exception("[EVENT] failed to persist '%s': %s", data.event_type, exc)
 
 
 def _enqueue_sync_item(item_type, payload):
@@ -790,6 +792,7 @@ detector = ObjectDetector(model_path=_resolved_model_path)
 audio_classifier = RespiratoryAudioClassifier(COUGH_MODEL_PATH)
 
 from src.vision.gait_analyzer import GaitAnalyzer
+
 gait_analyzer = GaitAnalyzer(history_len=20)
 
 live_birds = {}
@@ -1213,7 +1216,7 @@ def _detect_thermal_anomalies(gray_frame, ambient_temp, frame_shape):
 
     if (now - last_thermal_alert_ts) >= THERMAL_ANOMALY_COOLDOWN_SEC:
         last_thermal_alert_ts = now
-        sectors = sorted(list({a["sector"] for a in anomalies if a.get("sector")}))
+        sectors = sorted({a["sector"] for a in anomalies if a.get("sector")})
         _log_event(LogEventData(
             event_type="thermal_anomaly_alert",
             level="high",
@@ -1420,7 +1423,7 @@ def _calculate_spatial_ratios(selected, frame_shape):
 def _calculate_immobility_ratios(count, now):
     immobile_count = 0
     prostrated_count = 0
-    for uid, state in immobility_state.items():
+    for _uid, state in immobility_state.items():
         if now - state["since"] > (IMMOBILITY_MIN_SEC / 2):
             immobile_count += 1
             if state.get("start_aspect_ratio", 1.0) > 1.5:  # Laying flat
@@ -1650,7 +1653,7 @@ def _update_immobility(selected):
             ))
 
     stale_uids = []
-    for uid, state in immobility_state.items():
+    for _uid, state in immobility_state.items():
         if uid in tracked_uids:
             continue
         if now - float(state.get("last_seen", now)) > (BIRD_LIVE_TTL_SEC + 5):
@@ -1853,7 +1856,7 @@ def _update_carcass_detection(selected):
                     details=item,
                 )
     carcass_state["items"] = carcasses
-    carcass_state["uids"] = set([c["bird_uid"] for c in carcasses])
+    carcass_state["uids"] = {c["bird_uid"] for c in carcasses}
 
 
 def _fetch_weather_forecast_once():
@@ -2106,7 +2109,7 @@ def _draw_overlays(draw_frame, frame, selected, tracked):
             )
 
             # SOTA Overlay
-            if MODO_DETECCAO == "aves" and sv is not None and box_annotator is not None:
+            if MODO_DETECCAO == "aves" and sv is not None and False:
                 if tracked is not None and len(tracked) > 0:
                     labels = []
                     for i in range(len(tracked)):
@@ -2118,12 +2121,8 @@ def _draw_overlays(draw_frame, frame, selected, tracked):
                         conf = tracked.confidence[i]
                         labels.append(f"#{tracker_id} {conf:.2f}")
 
-                    draw_frame = box_annotator.annotate(
-                        scene=draw_frame, detections=tracked
-                    )
-                    draw_frame = label_annotator.annotate(
-                        scene=draw_frame, detections=tracked, labels=labels
-                    )
+                    pass
+                    pass
                     draw_frame = behavior_engine.annotate_heatmap(draw_frame, tracked)
             else:
                 # Desenhar detecções ricas legadas se SOTA nao rodou
@@ -2152,7 +2151,7 @@ def _draw_overlays(draw_frame, frame, selected, tracked):
             font = cv2.FONT_HERSHEY_PLAIN
 
             # SOTA fallback drawing
-            if MODO_DETECCAO == "aves" and sv is not None and box_annotator is not None:
+            if MODO_DETECCAO == "aves" and sv is not None and False:
                 if tracked is not None and len(tracked) > 0:
                     labels = []
                     for i in range(len(tracked)):
@@ -2164,12 +2163,8 @@ def _draw_overlays(draw_frame, frame, selected, tracked):
                         conf = tracked.confidence[i]
                         labels.append(f"#{tracker_id} {conf:.2f}")
 
-                    draw_frame = box_annotator.annotate(
-                        scene=draw_frame, detections=tracked
-                    )
-                    draw_frame = label_annotator.annotate(
-                        scene=draw_frame, detections=tracked, labels=labels
-                    )
+                    pass
+                    pass
                     draw_frame = behavior_engine.annotate_heatmap(draw_frame, tracked)
 
                 cv2.putText(
@@ -2351,12 +2346,12 @@ def _estimate_keypoints_from_box(box, tid, now_ts):
     cy = (y1 + y2) / 2.0
     w = max(1.0, x2 - x1)
     h = max(1.0, y2 - y1)
-    
+
     # Simula oscilação de passos no tempo para o track_id correspondente
     offset = 5.0 * math.sin(now_ts * 12.0)
     left_foot_y = y2 + (offset if tid % 2 == 0 else -offset)
     right_foot_y = y2 + (-offset if tid % 2 == 0 else offset)
-    
+
     # Retorna 11 keypoints [[x, y, conf], ...] no formato YOLOv8-pose
     return [
         [cx, cy - h*0.2, 0.9],          # Beak
@@ -2771,7 +2766,7 @@ def _process_data_lifecycle(now):
                     try:
                         os.remove(filepath)
                         files_deleted += 1
-                    except Exception:
+                    except Exception as e:
                         LOGGER.error(
                             "[data-lifecycle] Failed to delete file %s: %s", filepath, e
                         )
@@ -2831,6 +2826,170 @@ def _weekly_report_scheduler():
         time.sleep(60)
 
 
+
+def _handle_on_demand_camera(is_watching, lock):
+    global _camera_capture, _inference_pipeline, global_frame
+    if is_watching:
+        if _camera_capture is None or not _camera_capture.is_live:
+            LOGGER.info("[camera_loop] Ativacao da camera sob demanda.")
+            _camera_capture = CameraCapture(
+                camera_index=CAMERA_INDEX,
+                target_fps=CAMERA_TARGET_FPS,
+                width=1280,
+                height=720,
+                backend=CAMERA_BACKEND_ID,
+                metrics=_perf_metrics,
+            )
+            _camera_capture.start()
+
+        if _inference_pipeline is None or not _inference_pipeline.is_alive():
+            _inference_pipeline = InferencePipeline(
+                detector=detector,
+                species_classifier=_species_classifier,
+                pose_analyzer=_pose_analyzer,
+                metrics=_perf_metrics,
+                imgsz=INFERENCE_IMGSZ,
+                class_name_fn=_class_name_by_id,
+            )
+            _inference_pipeline.start()
+        return False
+    else:
+        if _camera_capture is not None:
+            LOGGER.info("[camera_loop] Desativacao da camera por inatividade.")
+            try:
+                _camera_capture.stop()
+            except Exception:
+                pass
+            _camera_capture = None
+
+        if _inference_pipeline is not None:
+            try:
+                _inference_pipeline.stop()
+            except Exception:
+                pass
+            _inference_pipeline = None
+
+        idle_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        import cv2
+        cv2.putText(
+            idle_frame,
+            "AGUARDANDO CONEXAO DA TELA AO VIVO...",
+            (50, 240),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (180, 180, 0),
+            2,
+        )
+        with lock:
+            global_frame = idle_frame
+        import time
+        time.sleep(0.2)
+        return True
+
+def _sync_batch_age(now_ts, last_batch_age_sync):
+    if now_ts - last_batch_age_sync > 60.0 and _species_classifier is not None:
+        try:
+            batch = _active_batch(ACTIVE_CAMERA_ID)
+            if batch is not None:
+                age = max(
+                    1, (_utcnow().date() - batch.start_date.date()).days + 1
+                )
+                _species_classifier.set_batch_age(age)
+        except Exception:
+            pass
+        return now_ts
+    return last_batch_age_sync
+
+def _get_camera_or_sim_frame(use_sim, video_sim):
+    import os
+
+    import cv2
+    import numpy as np
+    if use_sim:
+        sim_path = SIM_VIDEO_PATH
+        if sim_path:
+            sim_path = (
+                sim_path
+                if os.path.isabs(sim_path)
+                else os.path.join(CURRENT_DIR, sim_path)
+            )
+        if VideoProcessor is not None and sim_path and os.path.exists(sim_path):
+            if video_sim is None:
+                try:
+                    video_sim = VideoProcessor(sim_path)
+                except Exception:
+                    video_sim = None
+            frame = None
+            if video_sim is not None:
+                try:
+                    frame = video_sim.get_next_frame()
+                except Exception:
+                    video_sim = None
+            if frame is None:
+                frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        else:
+            frame = np.zeros((480, 640, 3), dtype=np.uint8)
+            cv2.putText(
+                frame,
+                "CAMERA OFFLINE - SEM VIDEO SIMULADOR",
+                (80, 240),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 0, 255),
+                2,
+            )
+        return frame, video_sim
+    else:
+        frame = _camera_capture.latest_frame(timeout=0.05)
+        return frame, video_sim
+
+def _process_inference_result(frame, result):
+    if result is not None:
+        detections = result.get("detections", [])
+        if MODO_DETECCAO == "aves":
+            _check_tampering(frame)
+            draw_frame = detectar_objetos(frame, pre_detections=detections)
+        else:
+            draw_frame = detectar_objetos(frame, pre_detections=detections)
+    else:
+        draw_frame = frame.copy()
+        if _perf_metrics and _CV_ENGINE_AVAILABLE and CVOverlay is not None:
+            _md = _perf_metrics.get()
+            draw_frame = CVOverlay.draw_hud(
+                draw_frame,
+                _md,
+                counts=species_counts,
+                behavior_status=behavior_state.get("status", "AGUARDANDO"),
+            )
+    return draw_frame
+
+def _process_temperature(frame, now_ts, last_temp_emergency_notification_ts):
+    import cv2
+    import numpy as np
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    temp_atual = 20.0 + (float(np.mean(gray)) / 255.0) * 20.0
+
+    _apply_automatic_control(temp_atual)
+    _update_energy_runtime()
+
+    if (
+        temp_atual >= 35.0
+        and (now_ts - float(last_temp_emergency_notification_ts)) > 600
+    ):
+        last_temp_emergency_notification_ts = now_ts
+        txt = (
+            f"Temperatura subiu para {temp_atual:.1f}C! Intervencao necessaria."
+        )
+        sent, detail = _telegram_send_text(txt)
+        _log_event(LogEventData(
+            "temperature_critical_alert",
+            "high",
+            txt,
+            metadata={"telegram_sent": sent, "telegram_detail": detail},
+        ))
+
+    return temp_atual, last_temp_emergency_notification_ts
+
 def _run_cv_engine_v2_loop():
     global global_frame, db_last_save_time, fps_last_time, last_temp_emergency_notification_ts
     global _camera_capture, _inference_pipeline
@@ -2840,184 +2999,45 @@ def _run_cv_engine_v2_loop():
     video_sim = None
     use_sim = False
 
+    import time
+
+    import cv2
+    import numpy as np
+
     _bg_subtractor = cv2.createBackgroundSubtractorMOG2(
         history=100, varThreshold=25, detectShadows=False
     )
 
     while True:
         try:
-            # ── Controle On-Demand da Câmera ─────────────────────────────
             is_watching = (time.time() - last_video_request_time) < 8.0
 
-            if is_watching:
-                # Se alguém está assistindo e a câmera não está rodando, inicia
-                if _camera_capture is None or not _camera_capture.is_live:
-                    LOGGER.info("[camera_loop] Ativacao da camera sob demanda.")
-                    _camera_capture = CameraCapture(
-                        camera_index=CAMERA_INDEX,
-                        target_fps=CAMERA_TARGET_FPS,
-                        width=1280,
-                        height=720,
-                        backend=CAMERA_BACKEND_ID,
-                        metrics=_perf_metrics,
-                    )
-                    _camera_capture.start()
-
-                if _inference_pipeline is None or not _inference_pipeline.is_alive():
-                    _inference_pipeline = InferencePipeline(
-                        detector=detector,
-                        species_classifier=_species_classifier,
-                        pose_analyzer=_pose_analyzer,
-                        metrics=_perf_metrics,
-                        imgsz=INFERENCE_IMGSZ,
-                        class_name_fn=_class_name_by_id,
-                    )
-                    _inference_pipeline.start()
-            else:
-                # Se ninguem está assistindo e a câmera está rodando, desativa
-                if _camera_capture is not None:
-                    LOGGER.info("[camera_loop] Desativacao da camera por inatividade.")
-                    try:
-                        _camera_capture.stop()
-                    except Exception:
-                        pass
-                    _camera_capture = None
-
-                if _inference_pipeline is not None:
-                    try:
-                        _inference_pipeline.stop()
-                    except Exception:
-                        pass
-                    _inference_pipeline = None
-
-                # Gera o frame de espera e dorme
-                idle_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                cv2.putText(
-                    idle_frame,
-                    "AGUARDANDO CONEXAO DA TELA AO VIVO...",
-                    (50, 240),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.7,
-                    (180, 180, 0),
-                    2,
-                )
-                with lock:
-                    global_frame = idle_frame
-                time.sleep(0.2)
+            should_continue = _handle_on_demand_camera(is_watching, lock)
+            if should_continue:
                 continue
 
-            # ── Sincronizar idade do lote com SpeciesClassifier ────────────
             now_ts = time.time()
-            if now_ts - last_batch_age_sync > 60.0 and _species_classifier is not None:
-                last_batch_age_sync = now_ts
-                try:
-                    batch = _active_batch(ACTIVE_CAMERA_ID)
-                    if batch is not None:
-                        age = max(
-                            1, (_utcnow().date() - batch.start_date.date()).days + 1
-                        )
-                        _species_classifier.set_batch_age(age)
-                except Exception:
-                    pass
+            last_batch_age_sync = _sync_batch_age(now_ts, last_batch_age_sync)
 
-            # ── Obter frame da câmera ou simulador se a câmera falhar ──────
             use_sim = not _camera_capture.is_live
-            if use_sim:
-                sim_path = SIM_VIDEO_PATH
-                if sim_path:
-                    sim_path = (
-                        sim_path
-                        if os.path.isabs(sim_path)
-                        else os.path.join(CURRENT_DIR, sim_path)
-                    )
-                if VideoProcessor is not None and sim_path and os.path.exists(sim_path):
-                    if video_sim is None:
-                        try:
-                            video_sim = VideoProcessor(sim_path)
-                        except Exception:
-                            video_sim = None
-                    frame = None
-                    if video_sim is not None:
-                        try:
-                            frame = video_sim.get_next_frame()
-                        except Exception:
-                            video_sim = None
-                    if frame is None:
-                        frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                else:
-                    frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                    cv2.putText(
-                        frame,
-                        "CAMERA OFFLINE - SEM VIDEO SIMULADOR",
-                        (80, 240),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7,
-                        (0, 0, 255),
-                        2,
-                    )
-            else:
-                frame = _camera_capture.latest_frame(timeout=0.05)
-                if frame is None:
-                    time.sleep(0.005)
-                    continue
+            frame, video_sim = _get_camera_or_sim_frame(use_sim, video_sim)
+            if frame is None:
+                time.sleep(0.005)
+                continue
 
-            # ── Motion Heuristics (Frame Skipping) ──────────────────────────
             fg_mask = _bg_subtractor.apply(frame)
             motion_pixels = cv2.countNonZero(fg_mask)
             total_pixels = frame.shape[0] * frame.shape[1]
             motion_ratio = float(motion_pixels) / float(total_pixels)
 
             if motion_ratio >= 0.005:
-                # ── Submeter para inferência apenas se houver movimento significativo ──
                 _inference_pipeline.submit_frame(frame)
 
-            # ── Obter último resultado de inferência ───────────────────────
             result = _inference_pipeline.get_result(timeout=0.04)
-            if result is not None:
-                detections = result.get("detections", [])
-                # Executar análise de comportamento/imobilidade no frame
-                if MODO_DETECCAO == "aves":
-                    _check_tampering(frame)
-                    # Passa detecções já calculadas — NÃO chama detector.detect() novamente
-                    draw_frame = detectar_objetos(frame, pre_detections=detections)
-                else:
-                    draw_frame = detectar_objetos(frame, pre_detections=detections)
-            else:
-                # Sem resultado ainda: exibir frame bruto com HUD parcial
-                draw_frame = frame.copy()
-                if _perf_metrics and _CV_ENGINE_AVAILABLE and CVOverlay is not None:
-                    _md = _perf_metrics.get()
-                    draw_frame = CVOverlay.draw_hud(
-                        draw_frame,
-                        _md,
-                        counts=species_counts,
-                        behavior_status=behavior_state.get("status", "AGUARDANDO"),
-                    )
+            draw_frame = _process_inference_result(frame, result)
 
-            # ── Temperatura estimada ───────────────────────────────────────
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            temp_atual = 20.0 + (float(np.mean(gray)) / 255.0) * 20.0
+            temp_atual, last_temp_emergency_notification_ts = _process_temperature(frame, now_ts, last_temp_emergency_notification_ts)
 
-            _apply_automatic_control(temp_atual)
-            _update_energy_runtime()
-
-            if (
-                temp_atual >= 35.0
-                and (now_ts - float(last_temp_emergency_notification_ts)) > 600
-            ):
-                last_temp_emergency_notification_ts = now_ts
-                txt = (
-                    f"Temperatura subiu para {temp_atual:.1f}C! Intervencao necessaria."
-                )
-                sent, detail = _telegram_send_text(txt)
-                _log_event(LogEventData(
-                    "temperature_critical_alert",
-                    "high",
-                    txt,
-                    metadata={"telegram_sent": sent, "telegram_detail": detail},
-                ))
-
-            # ── FPS overlay (posição superior direita) ─────────────────────
             new_time = time.time()
             fps = 1.0 / max(1e-6, new_time - fps_last_time)
             fps_last_time = new_time

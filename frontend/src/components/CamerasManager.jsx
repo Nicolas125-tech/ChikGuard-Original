@@ -10,6 +10,7 @@ export default function CamerasManager({ serverIP, token }) {
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({ camera_id: '', name: '', connection_type: 'url', connection_url: '' });
   const [editingId, setEditingId] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Close modal on escape key
   useEffect(() => {
@@ -46,6 +47,7 @@ export default function CamerasManager({ serverIP, token }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsSaving(true);
     const method = editingId ? 'PUT' : 'POST';
     const url = editingId ? `${serverIP}/api/cameras/${editingId}` : `${serverIP}/api/cameras`;
     
@@ -69,8 +71,11 @@ export default function CamerasManager({ serverIP, token }) {
         const err = await res.json();
         toast.error(err.msg || "Erro ao salvar");
       }
-    } catch (err) { console.error(err);
+    } catch (err) {
+      console.error(err);
       toast.error("Erro de conexão");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -224,7 +229,10 @@ export default function CamerasManager({ serverIP, token }) {
               </div>
               <div className="flex justify-end gap-3 mt-6">
                 <button aria-label="Cancelar edição de câmera" type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-slate-400 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none">Cancelar</button>
-                <button type="submit" className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2 rounded-lg font-medium transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none">Salvar Câmera</button>
+                <button type="submit" disabled={isSaving} className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2 rounded-lg font-medium transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                  {isSaving && <RefreshCw size={16} className="animate-spin" />}
+                  {isSaving ? 'Salvando...' : 'Salvar Câmera'}
+                </button>
               </div>
             </form>
           </div>

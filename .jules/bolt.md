@@ -63,3 +63,26 @@
 ## 2025-05-15 - Replace setTimeout for initial data fetch
 **Learning:** When initializing concurrent data fetches in React `useEffect` hooks, wrapping the fetch calls in `setTimeout(..., 0)` unnecessarily defers execution to the next macrotask and delays the network request.
 **Action:** Calling the async fetch functions directly (e.g., inside an IIFE `(async () => { fetch(); })()`) optimizes Time-To-First-Byte (TTFB) and avoids macro-task queuing delays while also adhering to ESLint synchronous state updates rules.
+## 2025-02-12 - [Heatmap Test Creation]
+**Learning:** Testing logic involving `cv2` needs mock declarations in `sys.modules["cv2"]` *before* the application components are loaded to prevent environment-specific test suite import failures.
+**Action:** Always inject `cv2` and similar heavily-compiled native binary mocks at the very top of `sys.modules` during backend initialization for uncoupled components like APIs.
+## 2025-02-12 - Remove synchronous requests fallback in async_uploader
+
+**Learning:** When an `import aiohttp` fails in a `try/except` block, developers sometimes fallback to `run_in_executor` with `requests`. This introduces unnecessary thread pool overhead (spawning threads, context switching).
+**Action:** Replace `requests` fallback patterns inside `run_in_executor` with native `aiohttp` requests when asynchronous network I/O is required.
+
+## 2024-05-18 - HistoryPanel camera lookup memoization
+**Learning:** O(N) searches like `Array.find` inside React components run on every render unless memoized. In HistoryPanel, a camera lookup ran unconditionally.
+**Action:** Wrapped the search in `useMemo`, ensuring it executes only when dependencies change, and placed it before early returns to satisfy React Hook rules.
+## 2024-08-11 - [Optimization of farmName array loop]
+**Learning:** Found multiple components running O(N) array search on every render to extract `farmName`. React components rerender frequently and executing array lookups synchronously inside the component body affects the framerate.
+**Action:** Replaced inline `find()` with `useMemo` hooks, saving unnecessary computations during re-renders.
+## 2024-08-12 - [Sequential Network Waterfall in ClimatePanel]
+**Learning:** Found sequential `await fetch` calls (via independent `fetchDevices`, `fetchHistory`, and `fetchWeather` callbacks) being invoked synchronously one after the other inside `loadAll()` in `ClimatePanel.jsx`. This causes a network waterfall since the endpoints are independent and they end up queuing sequentially in the microtask queue without true concurrency.
+**Action:** Used `Promise.all()` to execute these independent API requests concurrently inside `loadAll` to reduce total network wait time and render cycle delay.
+## 2024-08-13 - [JSON.stringify vs isDeepEqual Performance Bottleneck in RulesPanel]
+**Learning:** Found unnecessary React re-renders being caused by setting state without checking if the data actually changed in `RulesPanel.jsx`.
+**Action:** Used `isDeepEqual` from `utils/performance.js` inside `setRules` to avoid unnecessarily updating state and triggering Virtual DOM diffing during data fetches when the rules haven't actually changed.
+## 2025-02-23 - Optimize _get_temperature_summary queries
+**Learning:** Combining redundant database queries using `.limit().all()` and extracting `.first()` manually from the result list significantly improves query performance (reduces N+1 problem and speeds up block by ~35%). Nested endpoint helper functions should be removed if a top-level version already exists to keep the AST clean and prevent confusion.
+**Action:** Removed duplicate definition and rewrote `_get_temperature_summary` to execute a single query instead of two.

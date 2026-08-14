@@ -20,6 +20,20 @@ class SensorSyncWorker:
         self.base_interval = interval_seconds
         self.current_interval = interval_seconds
 
+    def _get_supabase_client(self):
+        if self.supabase is not None:
+            return self.supabase
+        import os
+        url = os.getenv("SUPABASE_URL")
+        key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_ANON_KEY")
+        if url and key:
+            try:
+                from supabase import create_client
+                return create_client(url, key)
+            except Exception as exc:
+                logger.warning(f"[Sensor Sync] Erro ao instanciar cliente Supabase: {exc}")
+        return None
+
     async def run_once(self):
         """
         Executa um único ciclo de sincronização de dados pendentes.
@@ -67,12 +81,11 @@ class SensorSyncWorker:
 
             # 3. Tenta persistir remotamente no Supabase
             try:
-                if self.supabase is not None:
-                    # Usando cliente injetado (ex: nos testes)
-                    self.supabase.table("sensor_readings").insert(records).execute()
-                else:
-                    # Usando cliente global instanciado no worker de logs do sistema
-                    from scripts.supabase_sync_worker import supabase as global_supabase
+                client = self._get_supabase_client()
+                if client is None:
+                    raise ConnectionError("Cliente Supabase não configurado ou sem credenciais no Gateway.")
+                
+                client.table("sensor_readings").insert(records).execute()
 
                     if global_supabase is not None:
                         global_supabase.table("sensor_readings").insert(

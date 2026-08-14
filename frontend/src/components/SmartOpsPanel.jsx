@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef , useMemo } from 'react';
 import SystemCard from './SystemCard';
 import { getBaseUrl } from '../utils/config';
 import { RefreshCw, TrendingUp } from 'lucide-react';
@@ -18,6 +18,8 @@ const growthDataMock = [
 
 export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], activeCamera }) {
   const baseUrl = getBaseUrl(serverIP);
+  const farmName = useMemo(() => cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal', [cameras, activeCamera]);
+
   const dadosRef = useRef(null);
   const [behavior, setBehavior] = useState(null);
   const [immobility, setImmobility] = useState({ count: 0, items: [] });
@@ -194,7 +196,6 @@ export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], ac
     }
   };
 
-  const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
 
   return (
     <div className="space-y-4 sm:space-y-6">

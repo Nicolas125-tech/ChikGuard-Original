@@ -1,16 +1,17 @@
 import asyncio
-import time
 import logging
 from src.core.state_machine import BusinessStateMachine
-from src.core.state import sensor_state, sensor_thresholds
+from src.core.state import sensor_state, sensor_thresholds, intrusion_state
 from src.api.fastapi_ws import emit_new_alert
+from src.core.state import sensor_state
+from src.core.state_machine import BusinessStateMachine
 
 logger = logging.getLogger(__name__)
 
 # Instancia global da Maquina de Estados
 fsm = BusinessStateMachine()
 
-# Variaveis de estado global dos atuadores 
+# Variaveis de estado global dos atuadores
 actuator_state = {
     "ventilacao_on": False,
     "aquecedor_on": False,
@@ -19,14 +20,15 @@ actuator_state = {
 async def fsm_loop():
     """Loop continuo que reage a sensores e executa acoes baseadas nas regras de FSM."""
     logger.info("Iniciando FSM Autonoma em Background (FastAPI)")
-    
+
     while True:
         try:
             # Busca lote ativo no banco de dados para calcular a idade real do lote e as metas zootécnicas
-            from src.db.session import SessionLocal
-            from database import Batch
             from datetime import datetime
+
+            from database import Batch
             from src.core.state_machine import get_ideal_temp_for_age
+            from src.db.session import SessionLocal
 
             db_session = SessionLocal()
             batch_age_day = 21
@@ -62,10 +64,10 @@ async def fsm_loop():
                     "target_temp": target_temp,
                     "batch_age_day": batch_age_day
                 },
-                "intrusion_active": False, # Placeholder
+                "intrusion_active": intrusion_state.get("active", False),
                 "preheat_recommended": False
             }
-            
+
             # Submete o cenario para a AI (FSM)
             result = fsm.process_context(context)
 
@@ -80,12 +82,12 @@ async def fsm_loop():
             if (curr_temp + curr_hum) > 115.0 and curr_temp > 24.0 and not result["ventilacao"]:
                 result["ventilacao"] = True
                 result["changes"].append("ventilacao ligada por estresse termico calor+umidade")
-            
+
             # Se a FSM mandar alterar algo, aplicar fisicamente (simulado via state por enquanto)
             if result["changes"]:
                 for change in result["changes"]:
                     logger.warning(f"FSM Acao: {change} | Motivo (Estado): {result['state']}")
-                    
+
                     # Notificar o dashboard em tempo real via WebSocket!
                     await emit_new_alert({
                         "type": "actuator_change",
@@ -96,13 +98,13 @@ async def fsm_loop():
 
                 actuator_state["ventilacao_on"] = result["ventilacao"]
                 actuator_state["aquecedor_on"] = result["aquecedor"]
-                
+
             # --- MANUTENCAO PREDITIVA (Verificacao de Falha de Hardware) ---
             from src.core.predictive_maintenance import run_predictive_diagnostics
             await run_predictive_diagnostics(actuator_state)
-            
+
         except Exception as e:
             logger.error(f"Erro critico na FSM Loop: {e}")
-            
+
         # O FSM processa a cada 5 segundos de forma assincrona sem bloquear a web api
         await asyncio.sleep(5)

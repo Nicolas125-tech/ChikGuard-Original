@@ -1,0 +1,3 @@
+{
+  "content": "⚡ Bolt: Prevent unnecessary React re-renders in RulesPanel\n* 💡 What: Used `isDeepEqual` from `utils/performance.js` inside `setRules`.\n* 🎯 Why: To avoid unnecessarily updating state and triggering Virtual DOM diffing during data fetches when the rules haven't actually changed.\n* 📊 Impact: Prevents unnecessary cascading re-renders when data structures haven't changed.\n* 🔬 Measurement: Observe reduced Virtual DOM diffing overhead when `RulesPanel` components fetch data that is identical to current state."
+}

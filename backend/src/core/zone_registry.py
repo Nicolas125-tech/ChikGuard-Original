@@ -29,8 +29,6 @@ Integracao no camera_loop:
             await uploader.enqueue(frame, track, mask)
 """
 
-from __future__ import annotations
-
 import logging
 import os
 import time

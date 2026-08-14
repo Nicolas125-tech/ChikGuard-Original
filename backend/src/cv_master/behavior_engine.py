@@ -19,16 +19,19 @@ class BehaviorEngine:
         """
         self.logger = logging.getLogger("cv_master.BehaviorEngine")
 
-        # Heatmap
-        try:
-            self.heatmap_annotator = sv.HeatMapAnnotator(
-                position=sv.Position.CENTER,
-                opacity=heatmap_opacity,
-                radius=25,
-                kernel_size=31,
-                cell_size=15,
-            )
-        except Exception:
+        # Heatmap (requer biblioteca supervision)
+        if "sv" in globals() and sv is not None:
+            try:
+                self.heatmap_annotator = sv.HeatMapAnnotator(
+                    position=sv.Position.CENTER,
+                    opacity=heatmap_opacity,
+                    radius=20,
+                    kernel_size=25,
+                    cell_size=10,
+                )
+            except Exception:
+                self.heatmap_annotator = None
+        else:
             self.heatmap_annotator = None
 
         # Imobilidade (X, Y, Timestamp)
@@ -146,8 +149,4 @@ class BehaviorEngine:
         Aplica o mapa de calor no frame
         """
         if self.heatmap_annotator is None or detections is None or len(detections) == 0:
-            return frame
-        try:
-            return self.heatmap_annotator.annotate(scene=frame, detections=detections)
-        except Exception:
             return frame

@@ -5,16 +5,19 @@ try:
     import supervision as sv
     from sahi import AutoDetectionModel
     from sahi.predict import get_sliced_prediction
+    SUPERVISION_AVAILABLE = True
 except ImportError:
-    raise RuntimeError("Alguma dependência SOTA (sahi, supervision) está faltando.")
+    sv = None
+    AutoDetectionModel = None
+    get_sliced_prediction = None
+    SUPERVISION_AVAILABLE = False
+
 
 
 class SOTAInferenceEngine:
-    def __init__(self, model_path, confidence=0.25, iou_threshold=0.45):
-        """
-        Engine SOTA utilizando SAHI para detecção de alvos pequenos/distantes.
-        Detecta automaticamente aceleração de GPU CUDA se disponível, caso contrário cai para CPU.
-        """
+    def __init__(self, model_path, confidence=0.45, iou_threshold=0.5):
+        if not SUPERVISION_AVAILABLE:
+            raise RuntimeError("Alguma dependência SOTA (sahi, supervision) está faltando.")
         self.logger = logging.getLogger("cv_master.SOTAInference")
         self.model_path = model_path
         self.confidence = confidence

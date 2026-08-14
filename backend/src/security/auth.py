@@ -11,7 +11,10 @@ SUPABASE_KEY = os.environ.get(
 )  # Service role key ideally, or anon key if RLS allows
 SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET")
 
-if not SUPABASE_JWT_SECRET:
+def get_jwt_secret():
+    return os.environ.get("SUPABASE_JWT_SECRET")
+
+if not get_jwt_secret():
     raise RuntimeError(
         "SUPABASE_JWT_SECRET environment variable is required for secure authentication."
     )
@@ -38,7 +41,7 @@ def require_auth(roles=None, allow_query_token=False):
             try:
                 # Validate JWT
                 decoded = jwt.decode(
-                    token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated"
+                    token, get_jwt_secret(), algorithms=["HS256"], audience="authenticated"
                 )
 
                 user_id = decoded.get("sub")
