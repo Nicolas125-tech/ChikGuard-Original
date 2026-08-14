@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Maximize, Minimize, WifiOff, Layers, RefreshCw, Camera, Video, AlertCircle } from 'lucide-react';
 import WebRTCVideo from './WebRTCVideo';
 import HeatmapOverlay from './HeatmapOverlay';
@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 export default function CameraPanel({ token, serverIP, cameras = [], activeCamera }) {
   const [videoBlocked, setVideoBlocked] = useState(false);
   const [showHeatmapOverlay, setShowHeatmapOverlay] = useState(false);
-  const [useWebRTC, setUseWebRTC] = useState(true);
+  const [useWebRTC, setUseWebRTC] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   
   // Local Webcam State
@@ -23,7 +23,9 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
   const baseUrl = getBaseUrl(serverIP);
   const webrtcUrl = `${baseUrl}/api/webrtc/offer`;
   const mjpegUrl = token ? `${baseUrl}/api/video?token=${token}` : `${baseUrl}/api/video`;
-  const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Câmera Principal';
+  const farmName = useMemo(() => {
+    return cameras.find(c => c.camera_id === activeCamera)?.name || 'Câmera Principal';
+  }, [cameras, activeCamera]);
 
   // Toggle Fullscreen mode using HTML5 API
   const toggleFullscreen = () => {
@@ -224,15 +226,19 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
                       <span className="text-xs font-semibold text-slate-300 truncate">Câmera activa no dispositivo</span>
                     </div>
                     {devices.length > 1 && (
-                      <select 
-                        value={selectedDeviceId}
-                        onChange={handleDeviceChange}
-                        className="bg-slate-900 text-slate-200 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-medium focus:outline-none focus:border-emerald-500 cursor-pointer max-w-[200px]"
-                      >
-                        {devices.map(d => (
-                          <option key={d.deviceId} value={d.deviceId}>{d.label || `Câmera ${d.deviceId.slice(0, 5)}`}</option>
-                        ))}
-                      </select>
+                      <>
+                        <label htmlFor="deviceSelect" className="sr-only">Selecione a câmera do dispositivo</label>
+                        <select
+                          id="deviceSelect"
+                          value={selectedDeviceId}
+                          onChange={handleDeviceChange}
+                          className="bg-slate-900 text-slate-200 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-medium focus:outline-none focus:border-emerald-500 cursor-pointer max-w-[200px]"
+                        >
+                          {devices.map(d => (
+                            <option key={d.deviceId} value={d.deviceId}>{d.label || `Câmera ${d.deviceId.slice(0, 5)}`}</option>
+                          ))}
+                        </select>
+                      </>
                     )}
                   </div>
                 </>
@@ -247,7 +253,7 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
                   <p className="text-slate-400 font-medium">Aguardando Conexão com Câmera Real</p>
                   <p className="text-slate-500 text-xs mt-2">Sem simuladores disponíveis</p>
                   <button 
-                    onClick={() => { setVideoBlocked(false); setUseWebRTC(true); }}
+                    onClick={() => { setVideoBlocked(false); setUseWebRTC(false); }}
                     className="mt-4 flex items-center gap-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none"
                   >
                     <RefreshCw size={14} aria-hidden="true" />
@@ -285,6 +291,7 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
 
           {isFullscreen && (
             <button
+              aria-label="Sair da Tela Cheia"
               onClick={toggleFullscreen}
               className="absolute top-4 right-4 z-50 bg-slate-950/80 hover:bg-slate-900 border border-slate-700 text-slate-200 p-2.5 rounded-full transition-all shadow-lg flex items-center justify-center cursor-pointer"
               title="Sair da Tela Cheia"

@@ -29,8 +29,6 @@ Exportar modelo YOLO para ONNX com FP16:
   yolo export model=yolov8n.pt format=engine imgsz=640 half=True device=0
 """
 
-from __future__ import annotations
-
 import logging
 import os
 import time

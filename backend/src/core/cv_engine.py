@@ -31,23 +31,33 @@ _MAX_HISTORY = 45
 # Constantes de classificação visual
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Pintinho (1–14 dias): amarelo-palha, muito pequeno
-CHICK_HSV_LOW = np.array([15, 60, 100], dtype=np.uint8)
-CHICK_HSV_HIGH = np.array([38, 255, 255], dtype=np.uint8)
+# Pintinho (1-21 dias): amarelo-palha, amarelo-ouro, branco-amarelado
+# Faixa ampliada para cobrir pintinhos sob diferentes iluminações
+CHICK_HSV_RANGES = [
+    # Amarelo clássico (iluminação branca)
+    (np.array([14, 50, 100], dtype=np.uint8), np.array([40, 255, 255], dtype=np.uint8)),
+    # Amarelo-ouro / férrea (iluminação quente)
+    (np.array([8,  60,  80], dtype=np.uint8), np.array([25, 230, 230], dtype=np.uint8)),
+    # Branco-amarelado (pintinhos claros / iluminação forte)
+    (np.array([12, 20, 180], dtype=np.uint8), np.array([45, 110, 255], dtype=np.uint8)),
+    # Bege / creme (pintinhos mais velhos / 10-21 dias)
+    (np.array([5,  30,  90], dtype=np.uint8), np.array([22, 180, 220], dtype=np.uint8)),
+]
+# Mantido para compatibilidade com código legado
+CHICK_HSV_LOW  = np.array([14, 50, 100], dtype=np.uint8)
+CHICK_HSV_HIGH = np.array([40, 255, 255], dtype=np.uint8)
 
 # Galinha adulta: branco, pardo, castanho, preto
 HEN_HSV_RANGES = [
-    (np.array([0, 0, 160], dtype=np.uint8), np.array([180, 40, 255], dtype=np.uint8)),  # branca
-    (
-        np.array([10, 30, 60], dtype=np.uint8),
-        np.array([30, 200, 200], dtype=np.uint8),
-    ),  # parda/castanha
-    (np.array([0, 0, 0], dtype=np.uint8), np.array([180, 80, 60], dtype=np.uint8)),  # preta
+    (np.array([0,   0, 160], dtype=np.uint8), np.array([180, 40, 255], dtype=np.uint8)),  # branca
+    (np.array([10, 30,  60], dtype=np.uint8), np.array([30, 200, 200], dtype=np.uint8)),  # parda/castanha
+    (np.array([0,   0,   0], dtype=np.uint8), np.array([180, 80,  60], dtype=np.uint8)),  # preta
 ]
 
 # Limites de área para espécie (fração da área do frame)
-CHICK_MAX_AREA_RATIO = 0.010  # pintinho: pequeno
-HEN_MIN_AREA_RATIO = 0.008  # galinha: médio/grande (overlap intencional para casos intermediários)
+# Ampliados: pintinhos em resolução alta podem ocupar até 3% do frame
+CHICK_MAX_AREA_RATIO = 0.030   # pintinho: até 3% do frame (antes: 1%)
+HEN_MIN_AREA_RATIO   = 0.025   # galinha: a partir de 2.5% (antes: 0.8%)
 
 # Aspect ratio para postura
 POSE_LYING_THRESHOLD = 1.45  # w/h > 1.45 → deitada de lado
@@ -130,11 +140,13 @@ class BirdPoseAnalyzer:
 class SpeciesClassifier:
     """
     Classifica cada detecção como 'chick' (pintinho), 'hen' (galinha) ou 'bird' (genérico).
-    Utiliza cor HSV da ROI + tamanho relativo ao frame + idade do lote como prior.
+    Utiliza cor HSV da ROI + tamanho relativo ao frame + idade do lote como prior,
+    com histerese e suavização temporal por track_id para evitar cintilação.
     """
 
     def __init__(self):
         self._batch_age_day: int = 30  # padrão: assume lote adulto
+        self._track_history: Dict[int, deque] = {}
         self._lock = threading.Lock()
 
     def set_batch_age(self, age_day: int):
@@ -142,7 +154,12 @@ class SpeciesClassifier:
             self._batch_age_day = max(1, int(age_day))
 
     def classify(
-        self, frame: np.ndarray, box: List[int], class_name: str = "bird", mask_area_px: float = 0.0
+        self,
+        frame: np.ndarray,
+        box: List[int],
+        class_name: str = "bird",
+        mask_area_px: float = 0.0,
+        track_id: int = -1,
     ) -> Dict[str, Any]:
         """
         Retorna dict:
@@ -182,33 +199,35 @@ class SpeciesClassifier:
         else:
             size_vote = "unknown"
 
-        # ── Classificação por cor HSV da ROI ──────────────────────────────
+        # -- Classificacao por cor HSV da ROI ---------------------------------
         color_vote = "unknown"
         if rx2 > rx1 and ry2 > ry1:
             roi = frame[ry1:ry2, rx1:rx2]
             if roi.size > 0:
                 try:
                     hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-                    # Verifica amarelo-palha (pintinho)
-                    chick_mask = cv2.inRange(hsv, CHICK_HSV_LOW, CHICK_HSV_HIGH)
-                    chick_ratio = float(np.sum(chick_mask > 0)) / max(
-                        1, roi.shape[0] * roi.shape[1]
-                    )
+                    roi_px = max(1, roi.shape[0] * roi.shape[1])
 
-                    # Verifica padrões de galinha
+                    # Testa todas as faixas HSV de pintinho (multi-range)
+                    chick_ratio = 0.0
+                    for c_lo, c_hi in CHICK_HSV_RANGES:
+                        mask = cv2.inRange(hsv, c_lo, c_hi)
+                        chick_ratio = max(chick_ratio, float(np.sum(mask > 0)) / roi_px)
+
+                    # Verifica padroes de galinha
                     hen_ratio = 0.0
                     for lo, hi in HEN_HSV_RANGES:
                         m = cv2.inRange(hsv, lo, hi)
-                        hen_ratio = max(
-                            hen_ratio, float(np.sum(m > 0)) / max(1, roi.shape[0] * roi.shape[1])
-                        )
+                        hen_ratio = max(hen_ratio, float(np.sum(m > 0)) / roi_px)
 
-                    if chick_ratio > 0.30:
+                    # Limiares calibrados para pintinhos
+                    if chick_ratio > 0.20:
                         color_vote = "chick"
-                    elif hen_ratio > 0.35:
+                    elif hen_ratio > 0.40 and chick_ratio < 0.10:
                         color_vote = "hen"
                 except Exception:
                     pass
+
 
         # ── Fusão dos votos ────────────────────────────────────────────────
         votes_chick = sum(
@@ -227,23 +246,52 @@ class SpeciesClassifier:
         )
 
         if votes_chick >= 2:
+            raw_species = "chick"
+        elif votes_hen >= 2:
+            if color_vote == "chick":
+                raw_species = "chick"
+            else:
+                raw_species = "hen"
+        else:
+            if color_vote == "chick" or size_vote == "chick" or age_chick_prior:
+                raw_species = "chick"
+            else:
+                raw_species = "hen"
+
+        # -- Suavizacao Temporal por Track ID (Histerese) --------------------
+        final_species = raw_species
+        if track_id >= 0:
+            with self._lock:
+                if track_id not in self._track_history:
+                    # Janela de 9 frames: mais responsivo em cenas com muitos pintinhos
+                    self._track_history[track_id] = deque(maxlen=9)
+                self._track_history[track_id].append(raw_species)
+
+                # Voto de maioria no historico recente da mesma ave
+                counts_h = {"chick": 0, "hen": 0, "bird": 0}
+                for s in self._track_history[track_id]:
+                    counts_h[s] = counts_h.get(s, 0) + 1
+
+                # Empate favorece pintinho (reduz sub-contagem em lotes jovens)
+                if counts_h["chick"] >= counts_h["hen"]:
+                    final_species = "chick"
+                else:
+                    final_species = "hen"
+
+                # Limpeza parcial: preserva tracks mais recentes (nao apaga tudo)
+                if len(self._track_history) > 1000:
+                    keys = list(self._track_history.keys())
+                    for k in keys[:200]:
+                        del self._track_history[k]
+
+        if final_species == "chick":
             species = "chick"
             species_label = "PINTINHO"
             color = COLOR_CHICK
-        elif votes_hen >= 2:
+        else:
             species = "hen"
             species_label = "GALINHA"
             color = COLOR_HEN
-        else:
-            # Tiebreak: usar age_prior
-            if age_chick_prior:
-                species = "chick"
-                species_label = "PINTINHO"
-                color = COLOR_CHICK
-            else:
-                species = "hen"
-                species_label = "GALINHA"
-                color = COLOR_HEN
 
         return {
             "species": species,
@@ -653,10 +701,15 @@ class CVOverlay:
             color = det.get("color", COLOR_BIRD)
             is_carcass = uid in carcass_uids
 
-            if is_carcass:
+            is_lame = bool(det.get("is_lame", False))
+            is_immobile = bool(det.get("is_immobile", False))
+            if is_carcass or is_immobile:
                 color = COLOR_CARCASS
-                species_lbl = "CARCACA"
+                species_lbl = "CARCACA / IMOVEL" if is_immobile else "CARCACA"
                 pose_lbl = ""
+            elif is_lame:
+                color = (0, 140, 255)  # laranja vibrante para claudicação
+                pose_lbl = "⚠ CLAUDICACAO"
 
             # Neon glow: borda exterior escura + interior brilhante
             cv2.rectangle(draw, (x1 - 1, y1 - 1), (x2 + 1, y2 + 1), (0, 0, 0), 2)
@@ -734,26 +787,27 @@ class CVOverlay:
 
         overlay = frame.copy()
 
-        # -- 1. Zona de Monitoramento: poligono translucido magenta ----------
-        mx = int(w * 0.04)
+        # -- 1. Zonamento Trifásico (Saltoratto et al., 2013) -----------------
         my = int(h * 0.08)
-        zone_pts = np.array(
-            [
-                [mx, my],
-                [w - mx, my],
-                [w - mx, h - my],
-                [mx, h - my],
-            ],
-            dtype=np.int32,
-        )
-        cv2.fillPoly(overlay, [zone_pts], (180, 0, 180))
-        cv2.addWeighted(overlay, 0.08, frame, 0.92, 0, frame)
-        cv2.polylines(
-            frame, [zone_pts], isClosed=True, color=(255, 0, 255), thickness=2, lineType=cv2.LINE_AA
-        )
-        _put_text_shadow(
-            frame, "ZONA DE MONITORAMENTO", (mx + 6, my - 5), FONT, 0.40, (255, 0, 255), 1
-        )
+        w33 = int(w * 0.33)
+        w66 = int(w * 0.66)
+
+        # Zona (a) Bebedouro (Azul)
+        cv2.rectangle(overlay, (4, my), (w33, h - my), (255, 140, 0), -1)
+        # Zona (b) Luz de Aquecimento (Vermelho)
+        cv2.rectangle(overlay, (w33, my), (w66, h - my), (0, 0, 200), -1)
+        # Zona (c) Comedouro (Verde)
+        cv2.rectangle(overlay, (w66, my), (w - 4, h - my), (0, 180, 0), -1)
+
+        cv2.addWeighted(overlay, 0.09, frame, 0.91, 0, frame)
+
+        # Desenha linhas divisórias das zonas
+        cv2.line(frame, (w33, my), (w33, h - my), (255, 200, 0), 1, cv2.LINE_AA)
+        cv2.line(frame, (w66, my), (w66, h - my), (0, 220, 200), 1, cv2.LINE_AA)
+
+        _put_text_shadow(frame, "(a) BEBEDOURO", (10, my + 14), FONT, 0.38, (255, 200, 100), 1)
+        _put_text_shadow(frame, "(b) AQUECIMENTO", (w33 + 10, my + 14), FONT, 0.38, (100, 100, 255), 1)
+        _put_text_shadow(frame, "(c) COMEDOURO", (w66 + 10, my + 14), FONT, 0.38, (100, 255, 100), 1)
 
         # -- 2. Painel HUD: topo-direito ------------------------------------
         pw = min(260, w - 20)

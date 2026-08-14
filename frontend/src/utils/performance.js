@@ -12,6 +12,27 @@ export function isDeepEqual(a, b) {
 
   if (Array.isArray(a) !== Array.isArray(b)) return false;
 
+  if (a.constructor !== b.constructor) return false;
+
+  if (a instanceof Date) return a.getTime() === b.getTime();
+  if (a instanceof RegExp) return a.toString() === b.toString();
+
+  if (a instanceof Map) {
+    if (a.size !== b.size) return false;
+    for (let [key, val] of a) {
+      if (!b.has(key) || !isDeepEqual(val, b.get(key))) return false;
+    }
+    return true;
+  }
+
+  if (a instanceof Set) {
+    if (a.size !== b.size) return false;
+    for (let val of a) {
+      if (!b.has(val)) return false;
+    }
+    return true;
+  }
+
   const keysA = Object.keys(a);
   const keysB = Object.keys(b);
 

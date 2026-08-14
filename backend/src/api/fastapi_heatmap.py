@@ -108,7 +108,22 @@ async def heatmap_3d(
     grid: int = Query(default=24, ge=8, le=64),
     user: UserContext = Depends(get_current_user),
 ):
-    """Dados do heatmap térmico 3D para o Gêmeo Digital."""
+    """Dados do heatmap térmico 3D para o Gêmeo Digital (reais da visão ou simulados)."""
+    try:
+        from src.core.state import spatial_accumulator
+        if spatial_accumulator is not None:
+            points_3d = spatial_accumulator.get_3d_points(grid_size=grid, hours=hours)
+            if points_3d:
+                return {
+                    "grid": grid,
+                    "hours": hours,
+                    "cells": points_3d,
+                    "source": "vision_spatial_accumulator",
+                    "generated_at": datetime.utcnow().isoformat() + "Z",
+                }
+    except Exception:
+        pass
+
     data = await run_in_threadpool(_generate_heatmap_grid, hours, grid)
     return data
 

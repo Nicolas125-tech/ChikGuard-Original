@@ -11,9 +11,10 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   id          UUID        PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email       TEXT        NOT NULL,
   role        TEXT        NOT NULL DEFAULT 'viewer'
-              CHECK (role IN ('viewer', 'operator', 'admin', 'superadmin')),
+              CHECK (role IN ('viewer', 'operator', 'manager', 'admin', 'superadmin')),
   status      TEXT        NOT NULL DEFAULT 'PENDING'
-              CHECK (status IN ('PENDING', 'ACTIVE', 'SUSPENDED')),
+              CHECK (status IN ('PENDING', 'ACTIVE', 'SUSPENDED', 'REJECTED')),
+  tenant_id   BIGINT      DEFAULT 1,
   full_name   TEXT,
   phone       TEXT,
   cpf         TEXT,
@@ -29,6 +30,37 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 CREATE INDEX IF NOT EXISTS idx_profiles_status ON public.profiles(status);
 CREATE INDEX IF NOT EXISTS idx_profiles_role   ON public.profiles(role);
 
+-- ─── Helper Functions com SECURITY DEFINER (Bypassa RLS para evitar recursão) ─
+CREATE OR REPLACE FUNCTION public.get_user_role()
+RETURNS TEXT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  RETURN (
+    SELECT role 
+    FROM public.profiles 
+    WHERE id = auth.uid()
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.get_user_tenant_id()
+RETURNS BIGINT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  RETURN (
+    SELECT tenant_id 
+    FROM public.profiles 
+    WHERE id = auth.uid()
+  );
+END;
+$$;
+
 -- ─── 2. Trigger: criar profile automaticamente no register ───────────────────
 -- Quando um novo utilizador se regista (via email/password ou OAuth),
 -- um profile PENDING é criado automaticamente.
@@ -39,12 +71,13 @@ SECURITY DEFINER              -- Roda com permissão de dono da função
 SET search_path = public      -- Evita search_path injection
 AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, role, status, full_name, phone, cpf, location, age)
+  INSERT INTO public.profiles (id, email, role, status, tenant_id, full_name, phone, cpf, location, age)
   VALUES (
     NEW.id,
     COALESCE(NEW.email, ''),
     'viewer',
     'PENDING',
+    COALESCE((NEW.raw_user_meta_data->>'tenant_id')::BIGINT, 1),
     NEW.raw_user_meta_data->>'full_name',
     NEW.raw_user_meta_data->>'phone',
     NEW.raw_user_meta_data->>'cpf',
@@ -96,33 +129,19 @@ FOR SELECT
 TO authenticated
 USING (auth.uid() = id);
 
--- 4b. Admin/Superadmin podem LER todos os perfis
+-- 4b. Admin/Superadmin/Manager podem LER todos os perfis (usa SECURITY DEFINER helper)
 CREATE POLICY "admins_read_all_profiles"
 ON public.profiles
 FOR SELECT
 TO authenticated
-USING (
-  EXISTS (
-    SELECT 1 FROM public.profiles AS p
-    WHERE p.id = auth.uid()
-      AND p.role IN ('admin', 'superadmin')
-      AND p.status = 'ACTIVE'
-  )
-);
+USING (public.get_user_role() IN ('admin', 'superadmin', 'manager'));
 
 -- 4c. Admin/Superadmin podem ATUALIZAR qualquer perfil (aprovação, mudança de role)
 CREATE POLICY "admins_update_all_profiles"
 ON public.profiles
 FOR UPDATE
 TO authenticated
-USING (
-  EXISTS (
-    SELECT 1 FROM public.profiles AS p
-    WHERE p.id = auth.uid()
-      AND p.role IN ('admin', 'superadmin')
-      AND p.status = 'ACTIVE'
-  )
-);
+USING (public.get_user_role() IN ('admin', 'superadmin'));
 
 -- Nota: DELETE é feito via CASCADE de auth.users — não precisamos de policy explícita.
 

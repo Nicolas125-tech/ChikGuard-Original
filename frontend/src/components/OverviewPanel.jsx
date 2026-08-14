@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Thermometer, Bird, Activity, TrendingUp, TrendingDown, Minus, Database } from 'lucide-react';
 import { getBaseUrl } from '@/utils/config';
 import WeightForecastChart from '@/components/WeightForecastChart';
@@ -116,15 +116,19 @@ export default function OverviewPanel({ token, serverIP, prefs, cameras = [], ac
     ? (temp > prevTemp ? 'up' : temp < prevTemp ? 'down' : 'stable')
     : null;
 
-  const onlineFarms = cameras.filter(c => c.status === 'online').length;
-  const offlineFarms = cameras.length - onlineFarms;
+  const { onlineFarms, offlineFarms, activeCameraName } = useMemo(() => {
+    const online = cameras.filter(c => c.status === 'online').length;
+    const offline = cameras.length - online;
+    const name = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
+    return { onlineFarms: online, offlineFarms: offline, activeCameraName: name };
+  }, [cameras, activeCamera]);
 
   if (error) {
     return (
       <div className="space-y-6">
         <div className="mb-2">
           <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-            Visão Geral - <span className="text-emerald-400">{cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal'}</span>
+            Visão Geral - <span className="text-emerald-400">{activeCameraName}</span>
           </h2>
           <p className="text-slate-400 text-sm mt-1">Monitoramento de telemetria e visão computacional em tempo real.</p>
         </div>
@@ -139,7 +143,7 @@ export default function OverviewPanel({ token, serverIP, prefs, cameras = [], ac
     <div className="space-y-6">
       <div className="mb-2">
         <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-          Visão Geral - <span className="text-emerald-400">{cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal'}</span>
+          Visão Geral - <span className="text-emerald-400">{activeCameraName}</span>
         </h2>
         <p className="text-slate-400 text-sm mt-1">Monitoramento de telemetria e visão computacional em tempo real.</p>
       </div>

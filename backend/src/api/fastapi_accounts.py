@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Security, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from src.db.session import get_db
 from src.security.fastapi_auth import get_current_user, UserContext, RequireRole, supabase_client
@@ -20,6 +20,19 @@ class UserUpdate(BaseModel):
 class ApproveUserRequest(BaseModel):
     target_user_id: str
     target_role: Optional[str] = "VIEWER"
+
+class EnsureProfileRequest(BaseModel):
+    user_id: str
+    email: str
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    cpf: Optional[str] = None
+    location: Optional[str] = None
+    age: Optional[int] = None
+
+class RejectUserRequest(BaseModel):
+    target_user_id: str
+    reason: Optional[str] = "Acesso negado pelo administrador."
 
 def write_audit_log(db: Session, actor: str, action: str, details: dict):
     from database import AuditLog
@@ -223,3 +236,76 @@ async def admin_approve_user(
     except Exception as e:
         logger.error("Error approving user: %s", str(e))
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@router.get("/admin/pending-count")
+async def admin_pending_count(user: UserContext = Depends(RequireRole(["admin", "superadmin"]))):
+    """Retorna contagem rápida de usuários pendentes para o badge da sidebar."""
+    if not supabase_client:
+        return {"count": 0}
+    try:
+        def _count_pending():
+            return supabase_client.table("profiles").select("id", count="exact").eq("status", "PENDING").execute()
+        response = await run_in_threadpool(_count_pending)
+        count = response.count if hasattr(response, "count") and response.count is not None else len(response.data or [])
+        return {"count": count}
+    except Exception as e:
+        logger.error("Error fetching pending count: %s", str(e))
+        return {"count": 0}
+
+
+@router.post("/admin/reject-user")
+async def admin_reject_user(
+    data: RejectUserRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(RequireRole(["admin", "superadmin"]))
+):
+    """Rejeita uma conta pendente — marca como REJECTED e remove do Supabase Auth."""
+    if not supabase_client:
+        raise HTTPException(status_code=500, detail="Supabase não configurado")
+    try:
+        def _reject():
+            supabase_client.table("profiles") \
+                .update({"status": "REJECTED", "rejection_reason": data.reason}) \
+                .eq("id", data.target_user_id).execute()
+        await run_in_threadpool(_reject)
+        write_audit_log(db, user.user_id, "iam_user_rejected", {"target_user_id": data.target_user_id, "reason": data.reason})
+        return {"message": "User rejected successfully"}
+    except Exception as e:
+        logger.error("Error rejecting user: %s", str(e))
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@router.post("/accounts/ensure-profile")
+async def ensure_profile(data: EnsureProfileRequest):
+    """
+    Chamado pelo frontend logo após signUp bem-sucedido.
+    Cria a entrada em 'profiles' com status=PENDING se ainda não existir.
+    Não requer autenticação pois é chamado antes do primeiro login aprovado.
+    """
+    if not supabase_client:
+        return {"created": False, "reason": "Supabase not configured"}
+    try:
+        def _check_or_create():
+            existing = supabase_client.table("profiles").select("id").eq("id", data.user_id).execute()
+            if existing.data:
+                return {"created": False}  # Já existe (trigger criou)
+            # Cria manualmente com status PENDING
+            payload = {
+                "id": data.user_id,
+                "email": data.email,
+                "full_name": data.full_name,
+                "phone": data.phone,
+                "cpf": data.cpf,
+                "location": data.location,
+                "age": data.age,
+                "role": "viewer",
+                "status": "PENDING",
+            }
+            supabase_client.table("profiles").insert(payload).execute()
+            return {"created": True}
+        result = await run_in_threadpool(_check_or_create)
+        return result
+    except Exception as e:
+        logger.error("Error ensuring profile: %s", str(e))
+        return {"created": False, "reason": str(e)}

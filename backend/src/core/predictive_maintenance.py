@@ -1,7 +1,8 @@
-import time
 import logging
-from src.core.state import sensor_state, sensor_thresholds
+import time
+
 from src.api.fastapi_ws import emit_new_alert
+from src.core.state import sensor_state
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +22,12 @@ ALERT_COOLDOWN_SEC = 300     # Nao enviar spam de alertas do mesmo erro
 
 async def run_predictive_diagnostics(actuator_state):
     """
-    Analisa se as acoes dos atuadores (ligar fan/heater) estao realmente 
+    Analisa se as acoes dos atuadores (ligar fan/heater) estao realmente
     causando mudanca nos sensores termicos. Se nao, ha falha de hardware.
     """
     now = time.time()
     current_temp = sensor_state.get("temperature_c", 25.0)
-    
+
     # --- Diagnostico do Ventilador ---
     if actuator_state.get("ventilacao_on"):
         if predictive_memory["fan_turned_on_at"] is None:

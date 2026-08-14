@@ -55,4 +55,52 @@ describe('isDeepEqual', () => {
     assert.strictEqual(isDeepEqual(null, {}), false);
     assert.strictEqual(isDeepEqual({}, null), false);
   });
+
+  it('should handle Date objects correctly', () => {
+    const d1 = new Date('2023-01-01');
+    const d2 = new Date('2023-01-01');
+    const d3 = new Date('2024-01-01');
+    assert.strictEqual(isDeepEqual(d1, d2), true);
+    assert.strictEqual(isDeepEqual(d1, d3), false);
+    assert.strictEqual(isDeepEqual(d1, {}), false);
+  });
+
+  it('should handle RegExp objects correctly', () => {
+    const r1 = /abc/i;
+    const r2 = /abc/i;
+    const r3 = /def/i;
+    const r4 = /abc/g;
+    assert.strictEqual(isDeepEqual(r1, r2), true);
+    assert.strictEqual(isDeepEqual(r1, r3), false);
+    assert.strictEqual(isDeepEqual(r1, r4), false);
+    assert.strictEqual(isDeepEqual(r1, {}), false);
+  });
+
+  it('should handle Map objects correctly', () => {
+    const m1 = new Map([['a', 1], ['b', 2]]);
+    const m2 = new Map([['a', 1], ['b', 2]]);
+    const m3 = new Map([['a', 1]]);
+    const m4 = new Map([['a', 1], ['c', 3]]);
+    const m5 = new Map([['a', { nested: true }]]);
+    const m6 = new Map([['a', { nested: true }]]);
+    const m7 = new Map([['a', { nested: false }]]);
+
+    assert.strictEqual(isDeepEqual(m1, m2), true);
+    assert.strictEqual(isDeepEqual(m1, m3), false);
+    assert.strictEqual(isDeepEqual(m1, m4), false);
+    assert.strictEqual(isDeepEqual(m5, m6), true);
+    assert.strictEqual(isDeepEqual(m5, m7), false);
+    assert.strictEqual(isDeepEqual(m1, {}), false);
+  });
+
+  it('should handle Set objects correctly', () => {
+    const s1 = new Set([1, 2, 3]);
+    const s2 = new Set([1, 2, 3]);
+    const s3 = new Set([1, 2]);
+    const s4 = new Set([1, 2, 4]);
+
+    assert.strictEqual(isDeepEqual(s1, s2), true);
+    assert.strictEqual(isDeepEqual(s1, s3), false);
+    assert.strictEqual(isDeepEqual(s1, s4), false);
+  });
 });

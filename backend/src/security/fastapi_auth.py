@@ -97,21 +97,29 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserContext:
     # Busca role e status reais da tabela profiles via service role (bypassa RLS)
     if supabase_client:
         try:
-            response = (
-                supabase_client.table("profiles")
-                .select("role, status, tenant_id")
-                .eq("id", user_id)
-                .single()
-                .execute()
-            )
+            from fastapi.concurrency import run_in_threadpool
+            
+            def _get_profile():
+                return (
+                    supabase_client.table("profiles")
+                    .select("role, status, tenant_id")
+                    .eq("id", user_id)
+                    .single()
+                    .execute()
+                )
+
+            response = await run_in_threadpool(_get_profile)
             profile = response.data
+
             if not profile:
                 raise HTTPException(status_code=403, detail="Profile not found")
             if profile.get("status") == "PENDING":
                 raise HTTPException(status_code=403, detail="User awaiting approval")
+            if profile.get("status") in ("SUSPENDED", "REJECTED"):
+                raise HTTPException(status_code=403, detail="User access denied")
 
             user_role = profile.get("role", "viewer").lower()
-            tenant_id = profile.get("tenant_id", 1)
+            tenant_id = profile.get("tenant_id") or 1
         except HTTPException:
             raise
         except Exception as e:

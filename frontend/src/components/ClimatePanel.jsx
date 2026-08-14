@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback , useMemo } from 'react';
 import { Wind, Zap, Thermometer, LayoutDashboard, Download, CloudLightning, RefreshCw } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { getBaseUrl } from '../utils/config';
@@ -12,7 +12,7 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
   const [weather, setWeather] = useState(null);
   const [error, setError] = useState(null);
   const baseUrl = getBaseUrl(serverIP);
-  const farmName = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
+  const farmName = useMemo(() => cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal', [cameras, activeCamera]);
 
   const fetchDevices = useCallback(async () => {
     try {
@@ -50,15 +50,37 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
     }
   }, [baseUrl, token]);
 
-  const loadAll = useCallback(() => {
+  const loadAll = useCallback(async () => {
     setError(null);
-    fetchDevices();
-    fetchHistory();
-    fetchWeather();
-  }, [fetchDevices, fetchHistory, fetchWeather]);
+    try {
+      const headers = { Authorization: `Bearer ${token}` };
+      const [rDev, rHist, rWea] = await Promise.all([
+        fetch(`${baseUrl}/api/estado-dispositivos`, { headers }),
+        fetch(`${baseUrl}/api/history`, { headers }),
+        fetch(`${baseUrl}/api/weather/forecast`, { headers })
+      ]);
+      if (rDev.ok) {
+        const data = await rDev.json() || { ventilacao: false, aquecedor: false };
+        setDispositivos(prev => isDeepEqual(prev, data) ? prev : data);
+      } else throw new Error('Device state fetch failed');
+
+      if (rHist.ok) {
+        const data = await rHist.json() || [];
+        setHistorico(prev => isDeepEqual(prev, data) ? prev : data);
+      } else throw new Error('History fetch failed');
+
+      if (rWea.ok) {
+        const data = await rWea.json();
+        setWeather(prev => isDeepEqual(prev, data) ? prev : data);
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Falha ao obter dados da central de climatização.');
+    }
+  }, [baseUrl, token]);
 
   useEffect(() => {
-    loadAll();
+    (async () => { loadAll(); })();
     const c = setInterval(fetchDevices, prefs.devicesMs);
     const h = setInterval(fetchHistory, prefs.historyMs);
     const w = setInterval(fetchWeather, 300000); // 5 min
@@ -168,6 +190,7 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
               <LayoutDashboard size={16} className="text-amber-400" /> Histórico Térmico
             </h3>
             <button
+              aria-label="Baixar histórico térmico em formato CSV"
               onClick={exportHistoryToCSV}
               disabled={historico.length === 0}
               className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg border border-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"

@@ -3,6 +3,7 @@ import { getBaseUrl } from '../utils/config';
 import { ServerCog, Plus, Trash2, ShieldCheck, Thermometer, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import QueryErrorState from './QueryErrorState';
+import { isDeepEqual } from '../utils/performance';
 
 export default function RulesPanel({ serverIP }) {
   const [rules, setRules] = useState([]);
@@ -10,7 +11,7 @@ export default function RulesPanel({ serverIP }) {
   const [error, setError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
-  
+
   // Form state
   const [name, setName] = useState('');
   const [variable, setVariable] = useState('temp_c');
@@ -26,7 +27,7 @@ export default function RulesPanel({ serverIP }) {
       const res = await fetch(`${getBaseUrl(serverIP)}/api/rules`);
       if (!res.ok) throw new Error('Não foi possível obter as regras de automação.');
       const data = await res.json();
-      setRules(data);
+      setRules(prev => isDeepEqual(prev, data) ? prev : data);
     } catch (err) {
       console.error('Failed to fetch rules', err);
       setError(err.message || 'Erro ao carregar as regras.');
@@ -45,7 +46,7 @@ export default function RulesPanel({ serverIP }) {
       const res = await fetch(`${getBaseUrl(serverIP)}/api/rules`);
       if (!res.ok) throw new Error('Não foi possível recarregar as regras de automação.');
       const data = await res.json();
-      setRules(data);
+      setRules(prev => isDeepEqual(prev, data) ? prev : data);
     } catch (err) {
       console.error('Failed to reload rules', err);
       setError(err.message || 'Erro ao recarregar as regras.');
@@ -130,53 +131,57 @@ export default function RulesPanel({ serverIP }) {
         <form onSubmit={handleAddRule} className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
           <div className="md:col-span-2">
             <label htmlFor="ruleName" className="block text-xs font-medium text-slate-400 mb-1">Nome da Regra</label>
-            <input 
+            <input
               id="ruleName"
               value={name} onChange={(e) => setName(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-indigo-500" 
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-indigo-500"
               placeholder="Ex: Ligar Ventilação Calor"
             />
           </div>
-          
+
           <div className="md:col-span-4 grid grid-cols-5 gap-2 bg-slate-800/30 p-3 rounded-xl border border-slate-700/50">
             <div className="col-span-1">
               <label htmlFor="ruleVariable" className="block text-[10px] font-medium text-slate-400 mb-1 uppercase tracking-wider">SE</label>
+              <label htmlFor="ruleVariable" className="sr-only">Variável da regra</label>
               <select id="ruleVariable" value={variable} onChange={(e) => setVariable(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-sm text-slate-200 outline-none">
                 <option value="temp_c">Temperatura</option>
                 <option value="humidity_pct">Umidade</option>
                 <option value="ammonia_ppm">Amônia</option>
               </select>
             </div>
-            
+
             <div className="col-span-1">
               <label htmlFor="ruleOperator" className="block text-[10px] font-medium text-slate-400 mb-1 uppercase tracking-wider">FOR</label>
+              <label htmlFor="ruleOperator" className="sr-only">Operador da regra</label>
               <select id="ruleOperator" value={operator} onChange={(e) => setOperator(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-sm text-slate-200 outline-none">
                 <option value=">">Maior que</option>
                 <option value="<">Menor que</option>
                 <option value="==">Igual a</option>
               </select>
             </div>
-            
+
             <div className="col-span-1">
               <label htmlFor="ruleValue" className="block text-[10px] font-medium text-slate-400 mb-1 uppercase tracking-wider">VALOR</label>
-              <input 
+              <input
                 id="ruleValue"
                 type="number" step="0.1" value={value} onChange={(e) => setValue(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-sm text-slate-200 outline-none text-center" 
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-sm text-slate-200 outline-none text-center"
                 placeholder="Ex: 30.5"
               />
             </div>
-            
+
             <div className="col-span-1">
               <label htmlFor="ruleDevice" className="block text-[10px] font-medium text-slate-400 mb-1 uppercase tracking-wider">ENTÃO</label>
+              <label htmlFor="ruleDevice" className="sr-only">Dispositivo de ação</label>
               <select id="ruleDevice" value={device} onChange={(e) => setDevice(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-sm text-slate-200 outline-none">
                 <option value="exhaust_fan">Ventilador</option>
                 <option value="heater">Aquecedor</option>
               </select>
             </div>
-            
+
             <div className="col-span-1">
               <label htmlFor="ruleActionState" className="block text-[10px] font-medium text-slate-400 mb-1 uppercase tracking-wider">AÇÃO</label>
+              <label htmlFor="ruleActionState" className="sr-only">Estado da ação</label>
               <select id="ruleActionState" value={state} onChange={(e) => setState(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-sm text-slate-200 outline-none">
                 <option value="on">LIGAR</option>
                 <option value="off">DESLIGAR</option>
@@ -225,7 +230,7 @@ export default function RulesPanel({ serverIP }) {
                     </span>
                   </div>
                 </div>
-                <button 
+                <button
                   aria-label="Excluir regra"
                   disabled={deletingId === r.id}
                   onClick={() => handleDelete(r.id)}

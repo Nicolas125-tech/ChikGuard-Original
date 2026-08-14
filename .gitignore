@@ -110,3 +110,5 @@ scratch/
 backend/scratch/
 backend/data/
 backend/reports/
+data/
+runs/

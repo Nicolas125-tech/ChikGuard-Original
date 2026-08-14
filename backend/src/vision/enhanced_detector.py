@@ -31,7 +31,6 @@ Variáveis de ambiente:
   TRACKER_TYPE       = bytetrack     (bytetrack | botsort)
 """
 
-from __future__ import annotations
 
 import logging
 import os
@@ -94,16 +93,16 @@ def _compute_iou_matrix(boxes_a: np.ndarray, boxes_b: np.ndarray) -> np.ndarray:
     """Calcula matriz de IoU vetorizada (N x M) em NumPy para máxima performance."""
     if len(boxes_a) == 0 or len(boxes_b) == 0:
         return np.zeros((len(boxes_a), len(boxes_b)), dtype=np.float32)
-    
+
     tl = np.maximum(boxes_a[:, None, :2], boxes_b[None, :, :2])
     br = np.minimum(boxes_a[:, None, 2:], boxes_b[None, :, 2:])
     wh = np.maximum(0.0, br - tl)
     inter = wh[:, :, 0] * wh[:, :, 1]
-    
+
     area_a = (boxes_a[:, 2] - boxes_a[:, 0]) * (boxes_a[:, 3] - boxes_a[:, 1])
     area_b = (boxes_b[:, 2] - boxes_b[:, 0]) * (boxes_b[:, 3] - boxes_b[:, 1])
     union = area_a[:, None] + area_b[None, :] - inter
-    
+
     return (inter / np.maximum(union, 1e-6)).astype(np.float32)
 
 
@@ -119,7 +118,7 @@ def _nms_detections(detections: List[Dict], iou_thresh: float = 0.45) -> List[Di
     class_to_dets = defaultdict(list)
     boxes = []
     scores = []
-    
+
     for i, d in enumerate(detections):
         x1, y1, x2, y2 = d["box"]
         boxes.append([int(x1), int(y1), int(max(0, x2 - x1)), int(max(0, y2 - y1))])
