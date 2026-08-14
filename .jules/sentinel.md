@@ -121,20 +121,8 @@
 **Vulnerability:** SQL injection via string formatting in raw SQL execution (`f"SELECT * FROM {table_name}"` and `f"UPDATE {table_name}"`).
 **Learning:** Even when protected by a hardcoded allowlist, executing raw SQL with string interpolation is an inherently unsafe and brittle pattern.
 **Prevention:** Refactor database operations to use SQLAlchemy Core objects (e.g. `Table`, `select()`, `update()`) instead of interpolating strings.
-## 2025-02-14 - Fix hardcoded token in configuration
-**Vulnerability:** Hardcoded tokens and configuration keys in `frontend/src/utils/config.js` (`STORAGE` object).
-**Learning:** Hardcoded configuration keys in JavaScript expose the internal storage mechanics and potential secrets to client-side enumeration or version control leaks. While these were keys for local storage rather than secret tokens themselves, hardcoding such values is poor security hygiene. Furthermore, `import.meta.env` can be undefined in Node.js test environments (like `node:test`), so fallback handling (e.g., `(import.meta.env || {}).VAR`) is essential to prevent tests from crashing.
-**Prevention:** Always use environment variables for configurable parameters or secrets, ensuring safe fallback syntax for testing environments.
 
-## 2025-02-14 - Fix hardcoded token in configuration (Revision)
-**Vulnerability:** Hardcoded tokens and configuration keys in `frontend/src/utils/config.js` (`STORAGE` object).
-**Learning:** When resolving 'hardcoded token/key' vulnerabilities, do not leave the literal string in the source code as a fallback (e.g., `fallback || 'hardcoded_value'`). This fails to resolve the security scanner flag because the hardcoded string remains in the repository. Additionally, in the frontend project, Vite requires precise syntactical matching (`import.meta.env.VITE_VAR`) during the build step. Dynamic property access like `(import.meta.env || {}).VITE_VAR` will not be replaced during production builds, causing the app to fail or silently revert to hardcoded values.
-**Prevention:** Use exact Vite replacement syntax combined with standard Node.js backups for test environments: `(import.meta.env && import.meta.env.VITE_VAR) || process.env.VITE_VAR`. Ensure test and production environments are properly configured with these variables, and never leave the original literal strings as fallbacks in the codebase.
-## 2024-08-10 - Command Injection Fix
-**Vulnerability:** Found `os.system` using string concatenation/formatting with arguments in `backend/scripts/autolabel_with_roboflow.py` (Command Injection risk).
-**Learning:** Using `os.system(f"...")` allows arbitrary command execution if variables are attacker-controlled.
-**Prevention:** Use `subprocess.run` with a list of arguments instead of shell strings to safely execute external commands without invoking a shell.
-## 2024-10-26 - [Fix Missing Authentication on Weather Forecast API]
-**Vulnerability:** The `/api/weather/forecast` endpoint in `backend/main.py` lacked the `Depends(get_current_user)` dependency, making it publicly accessible without any authentication.
-**Learning:** During framework migrations (like moving from Flask to FastAPI) or when adding new endpoints directly in main router files, forgetting to add global dependency injection or route-specific protection leaves these endpoints exposed, which can be abused for unauthenticated reconnaissance.
-**Prevention:** Always verify that route decorators in FastAPI contain the necessary `Depends` injections for authentication unless the router itself enforces a global dependency or the route is intentionally public.
+## 2026-08-14 - [Hardcoded Supabase Credentials and Tracked Env File]
+**Vulnerability:** Supabase project URL and anonymous JWT key (`VITE_SUPABASE_ANON_KEY`) were hardcoded in `frontend/.env`, which was tracked and committed to the Git repository.
+**Learning:** Committing environment config files (`.env`) to Git leaks credentials. Even if `.env` is added to `.gitignore`, Git will continue tracking it if it was committed previously.
+**Prevention:** Remove tracked `.env` files from Git cache using `git rm --cached`, use `.env.example` as a template with placeholder values, and never commit real keys to the source control.
