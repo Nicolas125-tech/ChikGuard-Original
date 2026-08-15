@@ -126,3 +126,7 @@
 **Vulnerability:** Supabase project URL and anonymous JWT key (`VITE_SUPABASE_ANON_KEY`) were hardcoded in `frontend/.env`, which was tracked and committed to the Git repository.
 **Learning:** Committing environment config files (`.env`) to Git leaks credentials. Even if `.env` is added to `.gitignore`, Git will continue tracking it if it was committed previously.
 **Prevention:** Remove tracked `.env` files from Git cache using `git rm --cached`, use `.env.example` as a template with placeholder values, and never commit real keys to the source control.
+## 2026-08-14 - [Corrigir credenciais expostas no env example]
+**Vulnerability:** Valores literais de `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` estavam inseridos (hardcoded) no arquivo `frontend/.env.example`.
+**Learning:** Mesmo em arquivos de exemplo que servem apenas como templates, a presença de dados estruturais reais do projeto (URLs e tokens parciais/completos) em código versionado expõe a infraestrutura e pode facilitar ataques ou gerar falsos positivos em ferramentas de detecção de vazamento de segredos.
+**Prevention:** Substituir todos os valores de credenciais e URLs sensíveis em arquivos `.example` por placeholders puramente ilustrativos.
