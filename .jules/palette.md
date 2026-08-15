@@ -20,3 +20,6 @@
 ## 2024-11-20 - Ensure htmlFor properly matches IDs for screen readers in AdminPanel.jsx
 **Learning:** Found an accessibility issue where inputs in AdminPanel.jsx lacked proper htmlFor ID linkages, meaning screen readers couldn't correctly associate labels with forms.
 **Action:** Always add unique `id` elements to `<input>`, `<select>`, and `<textarea>` elements, and correctly reference them with `htmlFor` in the respective `<label>` elements.
+## 2024-05-18 - Fix Voltar button in LoginScreen
+**Learning:** The "Voltar" element was a div with a click handler which violates semantic accessibility rules and causes issues for keyboard users.
+**Action:** Replace actionable divs with native `<button>` elements, include an `aria-label`, and use `focus-visible:ring-*` classes for clear keyboard navigation cues.
