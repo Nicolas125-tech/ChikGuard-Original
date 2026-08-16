@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from src.core.state import get_global_frame
-from src.security.fastapi_auth import SUPABASE_JWT_SECRET, UserContext, get_current_user
+from src.security.fastapi_auth import SUPABASE_JWT_SECRET, UserContext, get_current_user, _get_supabase_public_key
 
 router = APIRouter(prefix="/api/webrtc", tags=["video"])
 logger = logging.getLogger(__name__)
@@ -94,9 +94,24 @@ def video_feed(token: str = None):
 
     try:
         # Validate JWT explicitly for streaming endpoint using query parameter
-        jwt.decode(
-            token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated"
-        )
+        header = jwt.get_unverified_header(token)
+        alg = header.get("alg", "HS256")
+        decoded = None
+
+        if alg == "ES256":
+            public_key = _get_supabase_public_key(token)
+            if public_key:
+                decoded = jwt.decode(
+                    token, public_key, algorithms=["ES256"], audience="authenticated"
+                )
+
+        if decoded is None and SUPABASE_JWT_SECRET:
+            decoded = jwt.decode(
+                token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated"
+            )
+
+        if decoded is None:
+            raise Exception("Token inválido")
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token JWT expirado")
     except Exception as e:

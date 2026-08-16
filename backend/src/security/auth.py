@@ -3,6 +3,8 @@ from functools import wraps
 
 import jwt
 from flask import jsonify, request
+from src.security.fastapi_auth import _get_supabase_public_key
+
 from supabase import Client, create_client
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
@@ -40,9 +42,26 @@ def require_auth(roles=None, allow_query_token=False):
                 return jsonify({"error": "Missing or invalid token"}), 401
             try:
                 # Validate JWT
-                decoded = jwt.decode(
-                    token, get_jwt_secret(), algorithms=["HS256"], audience="authenticated"
-                )
+                header = jwt.get_unverified_header(token)
+                alg = header.get("alg", "HS256")
+                decoded = None
+
+                if alg == "ES256":
+                    public_key = _get_supabase_public_key(token)
+                    if public_key:
+                        decoded = jwt.decode(
+                            token, public_key, algorithms=["ES256"], audience="authenticated"
+                        )
+
+                if decoded is None:
+                    jwt_secret = get_jwt_secret()
+                    if jwt_secret:
+                        decoded = jwt.decode(
+                            token, jwt_secret, algorithms=["HS256"], audience="authenticated"
+                        )
+
+                if decoded is None:
+                    return jsonify({"error": "Invalid token payload"}), 401
 
                 user_id = decoded.get("sub")
                 if not user_id:

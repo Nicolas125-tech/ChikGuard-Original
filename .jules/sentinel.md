@@ -130,3 +130,7 @@
 **Vulnerability:** Valores literais de `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` estavam inseridos (hardcoded) no arquivo `frontend/.env.example`.
 **Learning:** Mesmo em arquivos de exemplo que servem apenas como templates, a presença de dados estruturais reais do projeto (URLs e tokens parciais/completos) em código versionado expõe a infraestrutura e pode facilitar ataques ou gerar falsos positivos em ferramentas de detecção de vazamento de segredos.
 **Prevention:** Substituir todos os valores de credenciais e URLs sensíveis em arquivos `.example` por placeholders puramente ilustrativos.
+## 2024-05-24 - [Auth Upgrade] Fix missing ES256 Support across App
+**Vulnerability:** JWT authentication endpoints only supported legacy HS256 tokens, failing for standard Supabase ES256 tokens and rejecting valid authentication.
+**Learning:** Hardcoding token verification algorithms limits compatibility with auth provider updates. When migrating, multiple entry points in a monolith/hybrid system must be updated concurrently.
+**Prevention:** Centralize token validation logic and support multiple standards, falling back to legacy keys gracefully.

@@ -4,6 +4,8 @@ import jwt
 import os
 
 from src.security.headers import ALLOWED_ORIGINS
+from src.security.fastapi_auth import _get_supabase_public_key
+
 
 logger = logging.getLogger(__name__)
 
@@ -36,10 +38,26 @@ async def connect(sid, environ, auth):
         return False # Rejeita
 
     try:
-        # Valida token simples
-        decoded = jwt.decode(
-            token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated"
-        )
+        # Valida token simples com suporte a ES256
+        header = jwt.get_unverified_header(token)
+        alg = header.get("alg", "HS256")
+        decoded = None
+
+        if alg == "ES256":
+            public_key = _get_supabase_public_key(token)
+            if public_key:
+                decoded = jwt.decode(
+                    token, public_key, algorithms=["ES256"], audience="authenticated"
+                )
+
+        if decoded is None and SUPABASE_JWT_SECRET:
+            decoded = jwt.decode(
+                token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated"
+            )
+
+        if decoded is None:
+            raise Exception("Token inválido")
+
         user_id = decoded.get("sub")
         
         async with sio.session(sid) as session:
