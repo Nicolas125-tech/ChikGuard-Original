@@ -2,14 +2,14 @@ from fastapi import APIRouter, HTTPException, Depends
 import aiohttp
 import logging
 
-from src.security.fastapi_auth import get_current_user, UserContext
+from src.security.fastapi_auth import get_current_user, UserContext, RequireRole
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/climate", tags=["Climate"])
 
 @router.get("/location-forecast")
-async def get_location_forecast(user: UserContext = Depends(get_current_user)):
+async def get_location_forecast(user: UserContext = Depends(RequireRole(["operator", "admin", "superadmin"]))):
     """
     Retorna a localização da granja (baseada no IP) e a previsão do clima atual
     usando a API pública Open-Meteo.
