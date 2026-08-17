@@ -115,7 +115,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserContext:
             if not profile:
                 raise HTTPException(status_code=403, detail="Profile not found")
             if profile.get("status") == "PENDING":
-                raise HTTPException(status_code=403, detail="User awaiting approval")
+                raise HTTPException(status_code=403, detail="Sua conta foi criada, mas aguarda a aprovação de um administrador da granja.")
             if profile.get("status") in ("SUSPENDED", "REJECTED"):
                 raise HTTPException(status_code=403, detail="User access denied")
 

@@ -606,7 +606,7 @@ export default function App() {
         <View style={{ backgroundColor: '#1e293b', padding: 24, borderRadius: 12, width: '85%', alignItems: 'center' }}>
           <AlertTriangle color="#f59e0b" size={48} style={{ marginBottom: 16 }} />
           <Text style={{ color: '#10b981', fontSize: 20, fontWeight: 'bold', marginBottom: 12 }}>Aguardando Aprovação</Text>
-          <Text style={{ color: '#94a3b8', textAlign: 'center', marginBottom: 24 }}>A sua conta foi registada mas precisa ser ativada por um administrador do sistema.</Text>
+          <Text style={{ color: '#94a3b8', textAlign: 'center', marginBottom: 24 }}>Sua conta foi criada, mas aguarda a aprovação de um administrador da granja.</Text>
 
           <TouchableOpacity
             style={[styles.button, { backgroundColor: '#334155', width: '100%' }]}

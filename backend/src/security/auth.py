@@ -80,7 +80,7 @@ def require_auth(roles=None, allow_query_token=False):
                     if not profile:
                         return jsonify({"error": "Profile not found"}), 403
                     if profile.get("status") == "PENDING":
-                        return jsonify({"error": "User awaiting approval"}), 403
+                        return jsonify({"error": "Sua conta foi criada, mas aguarda a aprovação de um administrador da granja."}), 403
 
                     user_role = profile.get("role", "viewer").lower()
                     tenant_id = profile.get("tenant_id", 1)

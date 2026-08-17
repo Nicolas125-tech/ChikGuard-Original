@@ -42,7 +42,7 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
         // Verifica o status de aprovação da conta
         if (status === 'PENDING') {
           await supabase.auth.signOut();
-          setErrorMsg('⏳ Sua conta está aguardando aprovação pelo administrador.');
+          setErrorMsg('⏳ Sua conta foi criada, mas aguarda a aprovação de um administrador da granja.');
           return;
         }
         if (status === 'SUSPENDED') {
@@ -67,7 +67,7 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
       console.error(err);
       const msg = err.message || '';
       if (msg.includes('Invalid login credentials') || msg.includes('invalid_credentials')) {
-        setErrorMsg('E-mail ou senha incorretos. Verifique suas credenciais.');
+        setErrorMsg('Credenciais inválidas ou conta não aprovada.');
       } else if (msg.includes('Email not confirmed')) {
         setErrorMsg('Confirme seu e-mail antes de fazer login. Verifique sua caixa de entrada.');
       } else {
