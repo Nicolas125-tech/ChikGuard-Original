@@ -138,7 +138,8 @@
 **Vulnerability:** The `/accounts/ensure-profile` endpoint in `backend/src/api/fastapi_accounts.py` returned raw exception strings to clients via `str(e)` in its `except` block.
 **Learning:** Returning unhandled exception strings directly to the client exposes internal architecture, database issues, or schema constraints, causing Information Exposure (CWE-209).
 **Prevention:** Always log the actual raw exception server-side and return a generic fallback message (e.g., "Erro interno do servidor") in the response payload when handling unexpected exceptions.
-## 2025-02-17 - Fix Reconnaissance Vulnerability in Climate Endpoint
-**Vulnerability:** The `/api/climate/location-forecast` endpoint relied on a third-party IP API without specifying a target IP, effectively leaking the server's (or edge node's) public IP and location details. Access to the endpoint was broadly permitted for any authenticated user (`Depends(get_current_user)`).
-**Learning:** Any endpoint that queries external location services using the server's own connection can inadvertently act as a reconnaissance oracle for attackers if not restricted.
-**Prevention:** Ensure endpoints that leak sensitive infrastructure details are protected with strict Role-Based Access Control (e.g., `RequireRole`).
+
+## 2026-08-17 - Fix Hardcoded Secret in .env.example
+**Vulnerability:** A hardcoded token was exposed in `frontend/.env.example` as `VITE_SUPABASE_ANON_KEY=your-anon-key-here` and `VITE_SUPABASE_URL=https://your-project-id.supabase.co`. These default values or semi-real templates could be mistakenly considered valid keys or URLs, posing a risk of infrastructure leakage if they trigger secret scanning tools, or are left intact in version control.
+**Learning:** Default configuration examples (e.g. `.env.example`) must use obviously invalid or purely illustrative placeholders such as `your-api-key` or `https://your-project.vercel.app` to prevent exposing any real or test infrastructure configurations, avoiding false positives on security scanners.
+**Prevention:** Always sanitize template configurations and avoid using values like `your-anon-key-here` that might resemble actual secret structures or project URLs. Employ code review to ensure that example files are generic and free of any infrastructure details.
