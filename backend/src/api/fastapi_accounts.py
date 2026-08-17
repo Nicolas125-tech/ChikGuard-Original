@@ -308,4 +308,4 @@ async def ensure_profile(data: EnsureProfileRequest):
         return result
     except Exception as e:
         logger.error("Error ensuring profile: %s", str(e))
-        return {"created": False, "reason": str(e)}
+        return {"created": False, "reason": "Erro interno do servidor"}

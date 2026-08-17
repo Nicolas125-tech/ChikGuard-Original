@@ -134,3 +134,7 @@
 **Vulnerability:** JWT authentication endpoints only supported legacy HS256 tokens, failing for standard Supabase ES256 tokens and rejecting valid authentication.
 **Learning:** Hardcoding token verification algorithms limits compatibility with auth provider updates. When migrating, multiple entry points in a monolith/hybrid system must be updated concurrently.
 **Prevention:** Centralize token validation logic and support multiple standards, falling back to legacy keys gracefully.
+## 2024-10-25 - [Fix Information Exposure in Ensure Profile Endpoint]
+**Vulnerability:** The `/accounts/ensure-profile` endpoint in `backend/src/api/fastapi_accounts.py` returned raw exception strings to clients via `str(e)` in its `except` block.
+**Learning:** Returning unhandled exception strings directly to the client exposes internal architecture, database issues, or schema constraints, causing Information Exposure (CWE-209).
+**Prevention:** Always log the actual raw exception server-side and return a generic fallback message (e.g., "Erro interno do servidor") in the response payload when handling unexpected exceptions.
