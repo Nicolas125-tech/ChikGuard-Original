@@ -58,8 +58,9 @@ export default function SetupScreen({ token, onComplete }) {
 
       // Tenta registrar a granja/câmera no backend, se o token e os dados estiverem disponíveis
       if (token && formData.farmName) {
+        const secureRand = self.crypto ? self.crypto.getRandomValues(new Uint32Array(1))[0] % 10000 : Date.now() % 10000;
         const payload = {
-          camera_id: `granja-${Math.floor(Math.random() * 10000)}`,
+          camera_id: `granja-${secureRand}`,
           name: formData.farmName,
           connection_type: formData.cameraUrl.startsWith('rtsp') ? 'rtsp' : 'url',
           connection_url: formData.cameraUrl || ''

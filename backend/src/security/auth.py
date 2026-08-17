@@ -87,7 +87,7 @@ def require_auth(roles=None, allow_query_token=False):
                 import logging
 
                 logging.getLogger(__name__).error(
-                    f"Erro de autenticacao: {str(e)} - Token: {token[:15]}..."
+                    f"Erro de autenticacao: {str(e)}"
                 )
                 print(f"JWT ERROR: {str(e)}")
                 return jsonify({"error": "Erro de processamento de token"}), 401

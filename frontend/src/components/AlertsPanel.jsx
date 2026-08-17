@@ -32,7 +32,7 @@ export default function AlertsPanel({ serverIP, prefs, token, cameras = [], acti
       if (data.type === 'hardware_anomaly' || data.type === 'actuator_change') {
          const dateObj = new Date();
          setAlerts(prev => [{
-            id: 'rt-' + Date.now() + Math.random(),
+            id: 'rt-' + Date.now() + '-' + (self.crypto ? self.crypto.getRandomValues(new Uint32Array(1))[0] : Date.now()),
             nivel: data.level === 'critical' ? 'alto' : (data.level === 'info' ? 'baixo' : 'medio'),
             tipo: data.type === 'hardware_anomaly' ? `Manutenção Preditiva (${data.component})` : 'Ação da FSM',
             mensagem: data.message,

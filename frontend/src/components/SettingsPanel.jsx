@@ -131,8 +131,9 @@ export default function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServ
             const baseUrl = serverIP.replace(/\/$/, '');
             const finalUrl = baseUrl.startsWith('http') ? baseUrl : `http://${baseUrl}`;
             
+            const secureRand = self.crypto ? self.crypto.getRandomValues(new Uint32Array(1))[0] % 10000 : Date.now() % 10000;
             const payload = {
-              camera_id: `granja-${Math.floor(Math.random() * 10000)}`,
+              camera_id: `granja-${secureRand}`,
               name: nome,
               connection_type: url.startsWith('rtsp') ? 'rtsp' : 'url',
               connection_url: url || ''

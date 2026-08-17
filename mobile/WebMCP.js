@@ -17,7 +17,7 @@ export function registerWebMCPTools(normalizedServerUrl, token, navigatorOverrid
           });
           return res.ok ? await res.json() : { error: 'Failed to fetch status' };
         } catch (e) {
-          return { error: e.message };
+          return { error: 'Erro interno do servidor' };
         }
       }
     },
@@ -35,7 +35,7 @@ export function registerWebMCPTools(normalizedServerUrl, token, navigatorOverrid
           });
           return res.ok ? await res.json() : { error: 'Failed to fetch alerts' };
         } catch (e) {
-          return { error: e.message };
+          return { error: 'Erro interno do servidor' };
         }
       }
     }

@@ -208,7 +208,7 @@ function AppCore() {
             const res = await fetch('/api/status');
             return res.ok ? await res.json() : { error: 'Failed to fetch status' };
           } catch (e) {
-            return { error: e.message };
+            return { error: 'Erro interno do servidor' };
           }
         }
       },
@@ -224,7 +224,7 @@ function AppCore() {
             const res = await fetch('/api/alerts');
             return res.ok ? await res.json() : { error: 'Failed to fetch alerts' };
           } catch (e) {
-            return { error: e.message };
+            return { error: 'Erro interno do servidor' };
           }
         }
       }
