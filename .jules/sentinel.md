@@ -126,3 +126,20 @@
 **Vulnerability:** Supabase project URL and anonymous JWT key (`VITE_SUPABASE_ANON_KEY`) were hardcoded in `frontend/.env`, which was tracked and committed to the Git repository.
 **Learning:** Committing environment config files (`.env`) to Git leaks credentials. Even if `.env` is added to `.gitignore`, Git will continue tracking it if it was committed previously.
 **Prevention:** Remove tracked `.env` files from Git cache using `git rm --cached`, use `.env.example` as a template with placeholder values, and never commit real keys to the source control.
+## 2026-08-14 - [Corrigir credenciais expostas no env example]
+**Vulnerability:** Valores literais de `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` estavam inseridos (hardcoded) no arquivo `frontend/.env.example`.
+**Learning:** Mesmo em arquivos de exemplo que servem apenas como templates, a presença de dados estruturais reais do projeto (URLs e tokens parciais/completos) em código versionado expõe a infraestrutura e pode facilitar ataques ou gerar falsos positivos em ferramentas de detecção de vazamento de segredos.
+**Prevention:** Substituir todos os valores de credenciais e URLs sensíveis em arquivos `.example` por placeholders puramente ilustrativos.
+## 2024-05-24 - [Auth Upgrade] Fix missing ES256 Support across App
+**Vulnerability:** JWT authentication endpoints only supported legacy HS256 tokens, failing for standard Supabase ES256 tokens and rejecting valid authentication.
+**Learning:** Hardcoding token verification algorithms limits compatibility with auth provider updates. When migrating, multiple entry points in a monolith/hybrid system must be updated concurrently.
+**Prevention:** Centralize token validation logic and support multiple standards, falling back to legacy keys gracefully.
+## 2024-10-25 - [Fix Information Exposure in Ensure Profile Endpoint]
+**Vulnerability:** The `/accounts/ensure-profile` endpoint in `backend/src/api/fastapi_accounts.py` returned raw exception strings to clients via `str(e)` in its `except` block.
+**Learning:** Returning unhandled exception strings directly to the client exposes internal architecture, database issues, or schema constraints, causing Information Exposure (CWE-209).
+**Prevention:** Always log the actual raw exception server-side and return a generic fallback message (e.g., "Erro interno do servidor") in the response payload when handling unexpected exceptions.
+
+## 2026-08-17 - Fix Hardcoded Secret in .env.example
+**Vulnerability:** A hardcoded token was exposed in `frontend/.env.example` as `VITE_SUPABASE_ANON_KEY=your-anon-key-here` and `VITE_SUPABASE_URL=https://your-project-id.supabase.co`. These default values or semi-real templates could be mistakenly considered valid keys or URLs, posing a risk of infrastructure leakage if they trigger secret scanning tools, or are left intact in version control.
+**Learning:** Default configuration examples (e.g. `.env.example`) must use obviously invalid or purely illustrative placeholders such as `your-api-key` or `https://your-project.vercel.app` to prevent exposing any real or test infrastructure configurations, avoiding false positives on security scanners.
+**Prevention:** Always sanitize template configurations and avoid using values like `your-anon-key-here` that might resemble actual secret structures or project URLs. Employ code review to ensure that example files are generic and free of any infrastructure details.

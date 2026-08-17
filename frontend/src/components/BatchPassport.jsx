@@ -127,9 +127,9 @@ export default function BatchPassport({ token, serverIP }) {
         <button 
            aria-label="Exportar passaporte do lote para PDF"
            onClick={() => window.print()}
-           className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors shadow-lg shadow-indigo-500/20"
+           className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors shadow-lg shadow-indigo-500/20 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none"
         >
-          <Download size={16} /> Exportar PDF
+          <Download size={16} aria-hidden="true" /> Exportar PDF
         </button>
       </div>
     </div>

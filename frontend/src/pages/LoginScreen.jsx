@@ -101,12 +101,16 @@ export default function LoginScreen({ onBack, onLogin, serverIP, setServerIP }) 
       <div className="absolute bottom-0 right-0 w-[300px] h-[300px] rounded-full bg-blue-600/5 blur-[100px] pointer-events-none" />
 
       {/* Voltar */}
-      <div className="absolute top-6 left-6 flex items-center gap-2 cursor-pointer z-10 group" onClick={onBack}>
+      <button
+        className="absolute top-6 left-6 flex items-center gap-2 cursor-pointer z-10 group focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 focus:outline-none rounded-lg p-1"
+        onClick={onBack}
+        aria-label="Voltar para a página anterior"
+      >
         <div className="bg-emerald-500/10 p-1.5 rounded-lg border border-emerald-500/20 w-8 h-8 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
           <img src="/logo.jpeg" alt="Logo" className="w-5 h-5" />
         </div>
         <span className="text-emerald-400 font-bold tracking-tight group-hover:text-emerald-300 transition-colors">Voltar</span>
-      </div>
+      </button>
 
       {/* Card */}
       <div className="w-full max-w-md glass rounded-3xl shadow-2xl p-8 animate-scale-in relative z-10">
