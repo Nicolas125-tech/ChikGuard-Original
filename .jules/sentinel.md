@@ -138,3 +138,8 @@
 **Vulnerability:** The `/accounts/ensure-profile` endpoint in `backend/src/api/fastapi_accounts.py` returned raw exception strings to clients via `str(e)` in its `except` block.
 **Learning:** Returning unhandled exception strings directly to the client exposes internal architecture, database issues, or schema constraints, causing Information Exposure (CWE-209).
 **Prevention:** Always log the actual raw exception server-side and return a generic fallback message (e.g., "Erro interno do servidor") in the response payload when handling unexpected exceptions.
+
+## 2026-08-17 - Fix Hardcoded Secret in .env.example
+**Vulnerability:** A hardcoded token was exposed in `frontend/.env.example` as `VITE_SUPABASE_ANON_KEY=your-anon-key-here` and `VITE_SUPABASE_URL=https://your-project-id.supabase.co`. These default values or semi-real templates could be mistakenly considered valid keys or URLs, posing a risk of infrastructure leakage if they trigger secret scanning tools, or are left intact in version control.
+**Learning:** Default configuration examples (e.g. `.env.example`) must use obviously invalid or purely illustrative placeholders such as `your-api-key` or `https://your-project.vercel.app` to prevent exposing any real or test infrastructure configurations, avoiding false positives on security scanners.
+**Prevention:** Always sanitize template configurations and avoid using values like `your-anon-key-here` that might resemble actual secret structures or project URLs. Employ code review to ensure that example files are generic and free of any infrastructure details.
