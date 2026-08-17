@@ -138,3 +138,8 @@
 **Vulnerability:** The `/accounts/ensure-profile` endpoint in `backend/src/api/fastapi_accounts.py` returned raw exception strings to clients via `str(e)` in its `except` block.
 **Learning:** Returning unhandled exception strings directly to the client exposes internal architecture, database issues, or schema constraints, causing Information Exposure (CWE-209).
 **Prevention:** Always log the actual raw exception server-side and return a generic fallback message (e.g., "Erro interno do servidor") in the response payload when handling unexpected exceptions.
+
+## 2026-08-17 - Fix SQL Injection / Interpolation Issue in sync_worker
+**Vulnerability:** SAST reports identified direct string interpolation in SQLAlchemy core statements due to unbounded uses of `.in_(ids)`.
+**Learning:** Explicit `bindparam` mappings during bulk updates guarantee type-safety and avoid SAST interpolation rules or DB maximum limits.
+**Prevention:** Always prefer `session.execute(stmt, bulk_data)` with explicit bind parameters rather than using `.in_()` over arbitrarily large lists.

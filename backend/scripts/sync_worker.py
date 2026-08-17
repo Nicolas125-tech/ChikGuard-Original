@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import requests
-from sqlalchemy import create_engine, MetaData, Table, update, select, or_, and_
+from sqlalchemy import create_engine, MetaData, Table, update, select, or_, and_, bindparam
 from sqlalchemy.orm import sessionmaker
 
 # Configuração de Logs
@@ -98,11 +98,12 @@ def mark_records(session, table_name, ids, status):
 
     stmt = (
         update(table)
-        .where(table.c.id.in_(ids))
-        .values(sync_status=status, last_sync_attempt=now)
+        .where(table.c.id == bindparam('b_id'))
+        .values(sync_status=bindparam('b_status'), last_sync_attempt=bindparam('b_now'))
     )
 
-    session.execute(stmt)
+    bulk_data = [{"b_id": i, "b_status": status, "b_now": now} for i in ids]
+    session.execute(stmt, bulk_data)
     session.commit()
 
 
