@@ -23,3 +23,7 @@
 ## 2024-05-18 - Fix Voltar button in LoginScreen
 **Learning:** The "Voltar" element was a div with a click handler which violates semantic accessibility rules and causes issues for keyboard users.
 **Action:** Replace actionable divs with native `<button>` elements, include an `aria-label`, and use `focus-visible:ring-*` classes for clear keyboard navigation cues.
+
+## 2024-05-18 - Decorative Icons in Action Buttons
+**Learning:** Found an accessibility issue where action buttons containing SVG icons (like `RefreshCw` or `Download`) alongside text were reading out confusingly to screen readers or adding unnecessary noise because the icons lacked `aria-hidden="true"`.
+**Action:** Always add `aria-hidden="true"` to decorative or supplementary icons inside buttons that already have descriptive text, and ensure the button itself has `focus-visible` utility classes for clear keyboard navigation cues.
