@@ -138,3 +138,7 @@
 **Vulnerability:** The `/accounts/ensure-profile` endpoint in `backend/src/api/fastapi_accounts.py` returned raw exception strings to clients via `str(e)` in its `except` block.
 **Learning:** Returning unhandled exception strings directly to the client exposes internal architecture, database issues, or schema constraints, causing Information Exposure (CWE-209).
 **Prevention:** Always log the actual raw exception server-side and return a generic fallback message (e.g., "Erro interno do servidor") in the response payload when handling unexpected exceptions.
+## 2025-02-17 - Fix Reconnaissance Vulnerability in Climate Endpoint
+**Vulnerability:** The `/api/climate/location-forecast` endpoint relied on a third-party IP API without specifying a target IP, effectively leaking the server's (or edge node's) public IP and location details. Access to the endpoint was broadly permitted for any authenticated user (`Depends(get_current_user)`).
+**Learning:** Any endpoint that queries external location services using the server's own connection can inadvertently act as a reconnaissance oracle for attackers if not restricted.
+**Prevention:** Ensure endpoints that leak sensitive infrastructure details are protected with strict Role-Based Access Control (e.g., `RequireRole`).
