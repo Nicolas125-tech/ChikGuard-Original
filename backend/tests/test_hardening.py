@@ -131,3 +131,67 @@ def test_blacklist_ip_function(mock_time, mock_logger):
     blacklist_ip(ip_ipv6_localhost, "Should be ignored")
     assert ip_ipv6_localhost not in BLACKLISTED_IPS
     mock_logger.assert_not_called()
+
+from src.security.hardening import check_input_payload, validate_blacklisted_ip, validate_honeypots
+
+@pytest.mark.parametrize("payload,expected", [
+    ("", True),
+    (None, True),
+    ("safe regular text", True),
+    ("user@email.com", True),
+    ("12345", True),
+    ("'<script>alert(\"xss\")</script>'", False),
+    ("javascript:alert(1)", False),
+    ("<iframe src='hack.com'>", False),
+    ("onerror=alert(1)", False),
+    ("onload=evil()", False),
+    ("' OR '1'='1", False),
+    ("UNION SELECT *", False),
+    ("DROP TABLE users", False),
+    ("INSERT INTO data", False),
+    ("admin' --", False),
+    ("/* secret */", False),
+    ("select username from", False)
+])
+def test_check_input_payload(payload, expected):
+    """Verifica se check_input_payload identifica corretamente SQLi e XSS em várias strings."""
+    assert check_input_payload(payload) == expected
+
+def test_validate_blacklisted_ip_not_blocked(secure_app):
+    """Verifica se IPs não bloqueados retornam None."""
+    with secure_app.app_context():
+        assert validate_blacklisted_ip("192.168.1.100") is None
+        assert validate_blacklisted_ip("127.0.0.1") is None
+
+@patch("src.security.hardening.enforce_tarpit")
+def test_validate_blacklisted_ip_blocked(mock_tarpit, secure_app):
+    """Verifica se IPs bloqueados ativam o tarpit e retornam resposta de erro (403)."""
+    from src.security.hardening import blacklist_ip
+    blacklist_ip("192.168.1.200", "test reason")
+
+    with secure_app.app_context():
+        response_tuple = validate_blacklisted_ip("192.168.1.200")
+        assert response_tuple is not None
+        response, status_code = response_tuple
+        assert status_code == 403
+        assert response.json["code"] == "IP_BLACKLISTED"
+        mock_tarpit.assert_called_once()
+
+@patch("src.security.hardening.enforce_tarpit")
+def test_validate_honeypots_triggered(mock_tarpit, secure_app):
+    """Verifica se caminhos de honeypot são detectados, banindo o IP e retornando erro 403."""
+    from src.security.hardening import BLACKLISTED_IPS
+    ip = "192.168.1.55"
+    with secure_app.app_context():
+        response_tuple = validate_honeypots(ip, "/wp-admin/login.php")
+        assert response_tuple is not None
+        response, status_code = response_tuple
+        assert status_code == 403
+        assert response.json["code"] == "HONEYPOT_TRIGGERED"
+        assert ip in BLACKLISTED_IPS
+        mock_tarpit.assert_called_once()
+
+def test_validate_honeypots_safe(secure_app):
+    """Verifica se caminhos normais passam na validação de honeypot."""
+    with secure_app.app_context():
+        assert validate_honeypots("192.168.1.100", "/api/v1/users") is None
