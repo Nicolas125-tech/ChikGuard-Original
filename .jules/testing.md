@@ -9,7 +9,7 @@
 
 ## 2024-05-30 - Unit Tests for TriZoneBehaviorAnalyzer
 **Action:** Created `backend/tests/test_tri_zone_analyzer.py` to cover business rules related to animal welfare inside zones (Comfort, Cold Stress, Heat Stress) and window rolling states in `TriZoneBehaviorAnalyzer`.
-
-## 2025-02-18 - Added testing for RequireRole dependency
-**Learning:** Testing FastAPI dependency closures (`RequireRole`) can be easily accomplished by instantiating the dependency function manually and invoking it directly with mock input parameters (e.g., passing diverse `UserContext` instances).
-**Action:** Added targeted test cases `test_require_role_valid_roles` and `test_require_role_invalid_role` to verify authorized role logic and appropriate exception handling.
+## 2025-03-09 - Added missing test coverage for RadialBrooderLightCorrector
+**Context:** The `RadialBrooderLightCorrector` was missing tests, relying heavily on purely theoretical visual confirmation rather than automatic CI checks.
+**Action:** Created `test_radial_light_corrector.py` to cover happy paths (synthetic array generation and specific pixel assertions based on mathematical reduction), empty frames, edge cases, and helper methods.
+**Learning:** Testing pure CV functions allows validating expected numerical outputs reliably and provides a safety net for future algorithmic modifications.
