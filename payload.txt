@@ -1,0 +1,5 @@
+🧹 [Remove commented out rate limiter code]
+🎯 **What:** Removed a block of commented-out example code showing decorator usage in `backend/src/security/rate_limiter.py`.
+💡 **Why:** Commented-out dead code clutters the file and decreases readability and maintainability.
+✅ **Verification:** Ran backend test suite to ensure no actual functionality was affected by this clean-up.
+✨ **Result:** A cleaner file free from inactive examples.
