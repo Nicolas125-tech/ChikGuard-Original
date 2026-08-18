@@ -122,4 +122,4 @@ def test_behavior_engine_immobility_alert():
     
     alerts_after = engine.update_immobility_and_get_alerts(dets)
     assert len(alerts_after) >= 1
-    assert "101" in alerts_after[0]
+    assert "101" in str(alerts_after[0])
