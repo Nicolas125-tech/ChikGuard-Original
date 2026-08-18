@@ -10,6 +10,5 @@
 ## 2024-05-30 - Unit Tests for TriZoneBehaviorAnalyzer
 **Action:** Created `backend/tests/test_tri_zone_analyzer.py` to cover business rules related to animal welfare inside zones (Comfort, Cold Stress, Heat Stress) and window rolling states in `TriZoneBehaviorAnalyzer`.
 
-## $(date +%Y-%m-%d) - [Add tests for BiometricWeightEstimator]
-**Learning:** Implemented comprehensive unit tests for `BiometricWeightEstimator` in `backend/src/vision/weight_estimator.py` to target clamping extremes, boundary behaviors (like zero or negative ages, bounding boxes exceeding frame dimensions, and inverted coordinates) and fallback mechanisms (like empty detections and mixed species logic). By achieving 100% test coverage for this class, the tests ensure physical limits of biological weight (35g to 4500g) are strictly upheld.
-**Action:** Added `backend/tests/test_weight_estimator.py`.
+## 2024-05-18 - [Testing the validation of rule data]
+**Action:** Implemented a new test suite using `pytest` for `_validate_rule_data` located in `system_api_extra.py`. The suite covers standard valid paths, missing fields, validation failures, non-string types, and empty dictionaries. Checked for regression with existing tests.
