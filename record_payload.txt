@@ -1,0 +1,5 @@
+🎨 Palette: Add loading state to camera deletion
+💡 What: Added visual loading state (spinner) and disabled the delete button while camera deletion is processing.
+🎯 Why: Prevents duplicate submissions and provides clear visual feedback to the user that their destructive action is being processed.
+📸 Before/After: Before: Delete button remained clickable and unchanged during deletion. After: Button shows a loading spinner and is disabled during deletion.
+♿ Accessibility: Added clear visual feedback for async actions, preventing confusion for all users and ensuring focus isn't lost confusingly on double-clicks.

@@ -11,6 +11,7 @@ export default function CamerasManager({ serverIP, token }) {
   const [formData, setFormData] = useState({ camera_id: '', name: '', connection_type: 'url', connection_url: '' });
   const [editingId, setEditingId] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
   // Close modal on escape key
   useEffect(() => {
@@ -81,6 +82,7 @@ export default function CamerasManager({ serverIP, token }) {
 
   const handleDelete = async (id) => {
     if (!window.confirm("Deseja realmente excluir esta câmera?")) return;
+    setDeletingId(id);
     try {
       const res = await fetch(`${serverIP}/api/cameras/${id}`, {
         method: 'DELETE',
@@ -94,6 +96,8 @@ export default function CamerasManager({ serverIP, token }) {
       }
     } catch (err) { console.error(err);
       toast.error("Erro ao conectar");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -184,8 +188,8 @@ export default function CamerasManager({ serverIP, token }) {
                     <button aria-label="Editar câmera" onClick={() => openEdit(cam)} className="p-2 text-blue-400 hover:bg-blue-400/10 rounded transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none" title="Editar">
                       <Edit2 size={16} aria-hidden="true" />
                     </button>
-                    <button aria-label="Excluir câmera" onClick={() => handleDelete(cam.id)} className="p-2 text-rose-400 hover:bg-rose-400/10 rounded transition-colors focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none" title="Excluir">
-                      <Trash2 size={16} aria-hidden="true" />
+                    <button aria-label="Excluir câmera" disabled={deletingId === cam.id} onClick={() => handleDelete(cam.id)} className="p-2 text-rose-400 hover:bg-rose-400/10 rounded transition-colors focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed" title="Excluir">
+                      {deletingId === cam.id ? <RefreshCw size={16} className="animate-spin" aria-hidden="true" /> : <Trash2 size={16} aria-hidden="true" />}
                     </button>
                   </td>
                 </tr>
