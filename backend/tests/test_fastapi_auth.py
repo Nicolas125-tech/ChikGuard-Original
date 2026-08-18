@@ -76,3 +76,28 @@ async def test_get_current_user_no_token():
 
     assert exc_info.value.status_code == 401
     assert exc_info.value.detail == "Missing or invalid token"
+from src.security.fastapi_auth import RequireRole, UserContext
+
+@pytest.mark.asyncio
+async def test_require_role_valid_roles():
+    checker = RequireRole(["operator", "veterinarian"])
+    admin_ctx = UserContext(user_id="1", role="admin", tenant_id=1)
+    superadmin_ctx = UserContext(user_id="2", role="superadmin", tenant_id=1)
+    operator_ctx = UserContext(user_id="3", role="operator", tenant_id=1)
+    vet_ctx = UserContext(user_id="4", role="veterinarian", tenant_id=1)
+
+    assert checker(admin_ctx) == admin_ctx
+    assert checker(superadmin_ctx) == superadmin_ctx
+    assert checker(operator_ctx) == operator_ctx
+    assert checker(vet_ctx) == vet_ctx
+
+@pytest.mark.asyncio
+async def test_require_role_invalid_role():
+    checker = RequireRole(["operator", "veterinarian"])
+    viewer_ctx = UserContext(user_id="5", role="viewer", tenant_id=1)
+
+    with pytest.raises(HTTPException) as excinfo:
+        checker(viewer_ctx)
+
+    assert excinfo.value.status_code == 403
+    assert "Insufficient permissions" in str(excinfo.value.detail)
