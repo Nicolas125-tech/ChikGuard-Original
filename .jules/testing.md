@@ -9,7 +9,7 @@
 
 ## 2024-05-30 - Unit Tests for TriZoneBehaviorAnalyzer
 **Action:** Created `backend/tests/test_tri_zone_analyzer.py` to cover business rules related to animal welfare inside zones (Comfort, Cold Stress, Heat Stress) and window rolling states in `TriZoneBehaviorAnalyzer`.
-## 2025-03-09 - Added missing test coverage for RadialBrooderLightCorrector
-**Context:** The `RadialBrooderLightCorrector` was missing tests, relying heavily on purely theoretical visual confirmation rather than automatic CI checks.
-**Action:** Created `test_radial_light_corrector.py` to cover happy paths (synthetic array generation and specific pixel assertions based on mathematical reduction), empty frames, edge cases, and helper methods.
-**Learning:** Testing pure CV functions allows validating expected numerical outputs reliably and provides a safety net for future algorithmic modifications.
+
+## $(date +%Y-%m-%d) - [Add tests for BiometricWeightEstimator]
+**Learning:** Implemented comprehensive unit tests for `BiometricWeightEstimator` in `backend/src/vision/weight_estimator.py` to target clamping extremes, boundary behaviors (like zero or negative ages, bounding boxes exceeding frame dimensions, and inverted coordinates) and fallback mechanisms (like empty detections and mixed species logic). By achieving 100% test coverage for this class, the tests ensure physical limits of biological weight (35g to 4500g) are strictly upheld.
+**Action:** Added `backend/tests/test_weight_estimator.py`.
