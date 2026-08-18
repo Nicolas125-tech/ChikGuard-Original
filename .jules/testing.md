@@ -9,3 +9,6 @@
 
 ## 2024-05-30 - Unit Tests for TriZoneBehaviorAnalyzer
 **Action:** Created `backend/tests/test_tri_zone_analyzer.py` to cover business rules related to animal welfare inside zones (Comfort, Cold Stress, Heat Stress) and window rolling states in `TriZoneBehaviorAnalyzer`.
+
+## 2024-05-18 - [Testing the validation of rule data]
+**Action:** Implemented a new test suite using `pytest` for `_validate_rule_data` located in `system_api_extra.py`. The suite covers standard valid paths, missing fields, validation failures, non-string types, and empty dictionaries. Checked for regression with existing tests.
