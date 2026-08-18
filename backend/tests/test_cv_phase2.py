@@ -29,8 +29,10 @@ def test_tamper_detector_dark_and_blur():
 
     # 2. Frame normal com brilho suficiente e textura
     frame_bright = np.zeros((480, 640), dtype=np.uint8)
-    frame_bright[::20, :] = 255
-    frame_bright[:, ::20] = 255
+    import cv2
+    frame_bright[::2, ::2] = 255
+    frame_bright[1::2, 1::2] = 255
+    frame_bright[:240, :] = 180
     frame_bright[:240, :] = 180  # garante brilho médio > 15
     
     res_sharp = detector.analyze_frame(frame_bright)
