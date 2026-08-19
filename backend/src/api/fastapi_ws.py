@@ -4,12 +4,12 @@ import jwt
 import os
 
 from src.security.headers import ALLOWED_ORIGINS
-from src.security.fastapi_auth import _get_supabase_public_key
+from src.security.fastapi_auth import SUPABASE_JWT_SECRET, _get_supabase_public_key
 
 logger = logging.getLogger(__name__)
 
 # O mesmo segredo JWT da autenticacao FastAPI
-SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET") or "dummy_secret_dummy_secret_dummy_secret_for_tests_32bytes"
+
 
 # Usamos AsyncServer com allowed_origins restritas para seguranca
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins=ALLOWED_ORIGINS)
