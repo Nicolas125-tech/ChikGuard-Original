@@ -257,35 +257,11 @@ async def video_feed(token: str = None):
     if not token:
         raise HTTPException(status_code=401, detail="Token JWT requerido")
     try:
-        from src.security.fastapi_auth import SUPABASE_JWT_SECRET, _get_supabase_public_key
-        import jwt
-        
-        # Tenta ES256 primeiro (padrão Supabase)
-        header = jwt.get_unverified_header(token)
-        alg = header.get("alg", "HS256")
-        decoded = None
-        
-        if alg == "ES256":
-            public_key = _get_supabase_public_key(token)
-            if public_key:
-                decoded = jwt.decode(
-                    token, public_key,
-                    algorithms=["ES256"],
-                    audience="authenticated"
-                )
-                
-        if decoded is None and SUPABASE_JWT_SECRET:
-            decoded = jwt.decode(
-                token, SUPABASE_JWT_SECRET,
-                algorithms=["HS256"],
-                audience="authenticated"
-            )
-            
-        if decoded is None:
-            raise HTTPException(status_code=401, detail="Token JWT inválido")
-            
+        from src.security.fastapi_auth import get_current_user
+        # get_current_user validates the token and checks the database for profile status (PENDING, SUSPENDED, etc)
+        user = await get_current_user(token)
     except Exception as e:
-        raise HTTPException(status_code=401, detail="Token JWT inválido")
+        raise HTTPException(status_code=401, detail="Token JWT inválido ou acesso negado")
 
     async def generate():
         import cv2

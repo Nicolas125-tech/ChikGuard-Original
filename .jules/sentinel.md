@@ -143,7 +143,7 @@
 **Vulnerability:** A hardcoded token was exposed in `frontend/.env.example` as `VITE_SUPABASE_ANON_KEY=your-anon-key-here` and `VITE_SUPABASE_URL=https://your-project-id.supabase.co`. These default values or semi-real templates could be mistakenly considered valid keys or URLs, posing a risk of infrastructure leakage if they trigger secret scanning tools, or are left intact in version control.
 **Learning:** Default configuration examples (e.g. `.env.example`) must use obviously invalid or purely illustrative placeholders such as `your-api-key` or `https://your-project.vercel.app` to prevent exposing any real or test infrastructure configurations, avoiding false positives on security scanners.
 **Prevention:** Always sanitize template configurations and avoid using values like `your-anon-key-here` that might resemble actual secret structures or project URLs. Employ code review to ensure that example files are generic and free of any infrastructure details.
-## 2024-08-18 - Overly Permissive CORS Default Configuration
-**Vulnerability:** The CORS_ORIGINS fallback configuration allowed multiple origins by default, which is overly permissive for a production environment.
-**Learning:** Default configurations should adhere to the principle of least privilege, requiring explicit allowlisting in production environments.
-**Prevention:** Remove overly permissive defaults in code and enforce configuration via environment variables for critical security boundaries.
+## 2026-08-19 - Fix missing authorization check in video feed endpoint
+**Vulnerability:** The `/api/video` endpoint in `backend/main.py` validated the Supabase JWT signature manually but failed to check the user's profile status in the database, effectively bypassing `get_current_user`.
+**Learning:** Manually decoding JWTs using `jwt.decode` in specific routes bypasses global authorization logic (like role checks, tenant association, or account suspension validation). Even if a JWT is valid, the user's actual database status might deny them access.
+**Prevention:** Never replicate token validation logic. Always use the central dependency (e.g., `await get_current_user(token)`) to evaluate authentication and authorization consistently.
