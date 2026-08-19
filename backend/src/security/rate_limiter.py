@@ -49,14 +49,3 @@ def setup_rate_limiting(app):
             message="Limite de requisicoes excedido. Aguarde antes de tentar novamente.",
             description=str(e.description),
         ), 429
-
-
-# Decorators especificos para proteger rotas criticas
-# Exemplo de uso nas rotas (no Blueprint/View):
-# @app.route('/api/auth/login', methods=['POST'])
-# @limiter.limit("5 per minute")  # Previne forca bruta no login
-# def login(): ...
-#
-# @app.route('/api/telemetry/sync', methods=['POST'])
-# @limiter.limit("60 per minute") # Previne inundacao de telemetria do Edge
-# def sync_telemetry(): ...
