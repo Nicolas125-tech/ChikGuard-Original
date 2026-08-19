@@ -143,3 +143,8 @@
 **Vulnerability:** A hardcoded token was exposed in `frontend/.env.example` as `VITE_SUPABASE_ANON_KEY=your-anon-key-here` and `VITE_SUPABASE_URL=https://your-project-id.supabase.co`. These default values or semi-real templates could be mistakenly considered valid keys or URLs, posing a risk of infrastructure leakage if they trigger secret scanning tools, or are left intact in version control.
 **Learning:** Default configuration examples (e.g. `.env.example`) must use obviously invalid or purely illustrative placeholders such as `your-api-key` or `https://your-project.vercel.app` to prevent exposing any real or test infrastructure configurations, avoiding false positives on security scanners.
 **Prevention:** Always sanitize template configurations and avoid using values like `your-anon-key-here` that might resemble actual secret structures or project URLs. Employ code review to ensure that example files are generic and free of any infrastructure details.
+
+## 2024-05-30 - Fix hardcoded JWT secret fallback in WebSocket
+**Vulnerability:** The `SUPABASE_JWT_SECRET` had a hardcoded string `dummy_secret_dummy_secret_dummy_secret_for_tests_32bytes` as fallback if the environment variable was missing.
+**Learning:** Falling back to a hardcoded development/testing secret in production can lead to compromised token generation and forged authentication tokens.
+**Prevention:** Removed the fallback string so that it will fail securely when the environment variable is missing rather than default to a known dummy string.
