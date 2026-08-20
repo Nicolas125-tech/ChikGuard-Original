@@ -594,28 +594,269 @@ def _inference_thread_func(
             
         time.sleep(0.01)
 
-def camera_worker():
-    global camera_running, _cap, _use_sim, _camera_index, _raw_frame, _latest_detections
-    from src.core.config import load_settings
-    from src.core.state import set_global_frame, sensor_state, species_counts
-    from src.core.cv_engine import SpeciesClassifier, BirdPoseAnalyzer, CVOverlay
-    from ultralytics import YOLO
 
-    settings = load_settings()
-    _camera_index = settings.camera_index
+def _init_camera(camera_index):
+    """Initializes the real camera or falls back to simulation video."""
+    global _cap, _use_sim
+
+    _cap = None
+    _use_sim = False
+
+    import cv2
+    import os
+
+    try:
+        _cap = cv2.VideoCapture(camera_index)
+        if _cap.isOpened():
+            ret, _ = _cap.read()
+            if ret:
+                logger.info(f"Câmera real {camera_index} iniciada com sucesso.")
+            else:
+                _cap.release()
+                _cap = None
+    except Exception as exc:
+        logger.warning(f"Erro ao abrir câmera real: {exc}")
+        _cap = None
+
+    if _cap is None:
+        _use_sim = True
+        sim_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "video_granja.mp4"))
+        logger.info(f"Ativando simulador com vídeo: {sim_path}")
+        print(f"[CAMERA WORKER] Using simulation video: {sim_path}")
+        if os.path.exists(sim_path):
+            _cap = cv2.VideoCapture(sim_path)
+        else:
+            logger.error("Vídeo de simulação 'video_granja.mp4' não encontrado.")
+            _cap = None
+
+    return _cap, _use_sim
+
+def _init_models_and_plugins(settings):
+    """Initializes YOLO and all computer vision plugins."""
+    from src.core.cv_engine import SpeciesClassifier, BirdPoseAnalyzer
+    from ultralytics import YOLO
+    import os
+
+    model = None
+    species_classifier = SpeciesClassifier()
+    pose_analyzer = BirdPoseAnalyzer()
+
+    try:
+        model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "yolov8n-seg.pt"))
+        if not os.path.exists(model_path):
+            model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "yolov8n.pt"))
+
+        if os.path.exists(model_path):
+            model = YOLO(model_path)
+            model.to("cpu")
+            logger.info("YOLO carregado com sucesso.")
+            print("[CAMERA WORKER] YOLO loaded successfully")
+        else:
+            logger.error("Nenhum arquivo de pesos YOLO encontrado.")
+    except Exception as e:
+        logger.error(f"Erro na inicialização do modelo YOLO: {e}")
+        model_path = "yolov8n.pt"
+
+    plugins = {
+        "enhanced_detector": None,
+        "behavior_engine": None,
+        "gait_analyzer": None,
+        "biosafety_plugin": None,
+        "tamper_detector": None,
+        "spatial_heatmap": None,
+        "weight_estimator": None,
+        "radial_corrector": None,
+        "tri_zone_analyzer": None,
+        "zone_time_series": None,
+        "paper_subtractor": None
+    }
     
-    logger.info(f"Iniciando camera_worker. Câmera Index: {_camera_index}")
-    print(f"[CAMERA WORKER] Starting... camera_index={_camera_index}")
+    try:
+        from src.vision.enhanced_detector import EnhancedObjectDetector
+        plugins["enhanced_detector"] = EnhancedObjectDetector(model_path=model_path if os.path.exists(model_path) else "yolov8n.pt")
+    except Exception as exc:
+        logger.warning(f"EnhancedObjectDetector não inicializado: {exc}")
+
+    try:
+        from src.cv_master.behavior_engine import BehaviorEngine
+        plugins["behavior_engine"] = BehaviorEngine()
+    except Exception as exc:
+        logger.warning(f"BehaviorEngine não inicializado: {exc}")
+
+    try:
+        from src.vision.gait_analyzer import GaitAnalyzer
+        plugins["gait_analyzer"] = GaitAnalyzer()
+    except Exception as exc:
+        logger.warning(f"GaitAnalyzer não inicializado: {exc}")
+
+    try:
+        from plugins.biosafety_audit.plugin import BiosafetyAuditPlugin
+        plugins["biosafety_plugin"] = BiosafetyAuditPlugin()
+        plugins["biosafety_plugin"].on_startup({"settings": settings})
+    except Exception as exc:
+        logger.warning(f"BiosafetyAuditPlugin não inicializado: {exc}")
+
+    try:
+        from src.vision.tamper_detector import CameraTamperDetector
+        plugins["tamper_detector"] = CameraTamperDetector()
+    except Exception as exc:
+        logger.warning(f"CameraTamperDetector não inicializado: {exc}")
+
+    try:
+        from src.vision.spatial_heatmap import SpatialHeatmapAccumulator
+        plugins["spatial_heatmap"] = SpatialHeatmapAccumulator()
+        from src.core import state
+        state.spatial_accumulator = plugins["spatial_heatmap"]
+    except Exception as exc:
+        logger.warning(f"SpatialHeatmapAccumulator não inicializado: {exc}")
+
+    try:
+        from src.vision.weight_estimator import BiometricWeightEstimator
+        plugins["weight_estimator"] = BiometricWeightEstimator()
+    except Exception as exc:
+        logger.warning(f"BiometricWeightEstimator não inicializado: {exc}")
+
+    try:
+        from src.vision.radial_light_corrector import RadialBrooderLightCorrector
+        plugins["radial_corrector"] = RadialBrooderLightCorrector()
+    except Exception as exc:
+        logger.warning(f"RadialBrooderLightCorrector não inicializado: {exc}")
+
+    try:
+        from src.vision.tri_zone_analyzer import TriZoneBehaviorAnalyzer
+        plugins["tri_zone_analyzer"] = TriZoneBehaviorAnalyzer()
+    except Exception as exc:
+        logger.warning(f"TriZoneBehaviorAnalyzer não inicializado: {exc}")
+
+    try:
+        from src.vision.zone_time_series import ZoneTimeSeriesTracker
+        plugins["zone_time_series"] = ZoneTimeSeriesTracker()
+        from src.core import state
+        state.zone_time_series_tracker = plugins["zone_time_series"]
+    except Exception as exc:
+        logger.warning(f"ZoneTimeSeriesTracker não inicializado: {exc}")
+
+    try:
+        from src.vision.background_subtractor_paper import PaperBackgroundSubtractor
+        plugins["paper_subtractor"] = PaperBackgroundSubtractor()
+    except Exception as exc:
+        logger.warning(f"PaperBackgroundSubtractor não inicializado: {exc}")
+
+    return model, species_classifier, pose_analyzer, plugins
+
+def _run_coordinator_loop(model, plugins):
+    """Main coordinator loop for processing frames and overlaying metrics."""
+    global camera_running, _raw_frame, _latest_detections
+    from src.core.state import set_global_frame, species_counts
+    from src.core.cv_engine import CVOverlay
+    import time
+    import numpy as np
+    import cv2
+
+    last_telemetry_sim_ts = 0.0
+    last_db_save_ts = 0.0
+    print("[CAMERA WORKER] Entering main coordinator loop...")
+
+    enhanced_detector = plugins.get("enhanced_detector")
+
+    while camera_running:
+        t_loop_start = time.perf_counter()
+
+        now = time.time()
+        if now - last_telemetry_sim_ts >= 1.0:
+            last_telemetry_sim_ts = now
+            try:
+                simulate_telemetry_step()
+            except Exception as e:
+                logger.error(f"Erro na simulação de telemetria: {e}")
+
+        if now - last_db_save_ts >= 3.0:
+            last_db_save_ts = now
+            try:
+                save_telemetry_snapshot_to_db()
+            except Exception as e:
+                logger.error(f"Erro ao salvar snapshot de telemetria: {e}")
+
+        current_frame = None
+        current_detections = []
+
+        with _cv_lock:
+            if _raw_frame is not None:
+                current_frame = _raw_frame.copy()
+            current_detections = list(_latest_detections)
+
+        if current_frame is None:
+            err_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+            cv2.putText(
+                err_frame,
+                "CONECTANDO COM DISPOSITIVO DE VIDEO...",
+                (100, 240),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (0, 200, 100),
+                2,
+                cv2.LINE_AA
+            )
+            set_global_frame(err_frame)
+            time.sleep(0.05)
+            continue
+
+        try:
+            processed_frame = current_frame.copy()
+            if current_detections:
+                processed_frame = CVOverlay.draw_detections(processed_frame, current_detections, set())
+
+            backend_name = "pytorch"
+            sahi_enabled = False
+            if enhanced_detector:
+                backend_name = enhanced_detector.backend_name
+                sahi_enabled = enhanced_detector.sahi_enabled
+
+            metrics_dict = {
+                "fps_camera": 30.0,
+                "fps_inference": 10.0 if (model or enhanced_detector) else 0.0,
+                "latency_ms": 45.0 if (model or enhanced_detector) else 0.0,
+                "sahi_enabled": sahi_enabled,
+                "backend_name": backend_name
+            }
+
+            from src.core.state import behavior_state, zone_analytics_state
+            status_text = f"Bem-Estar: {zone_analytics_state.get('welfare_status', behavior_state.get('status', 'NORMAL'))}"
+
+            processed_frame = CVOverlay.draw_hud(
+                processed_frame,
+                metrics_dict,
+                species_counts,
+                status_text
+            )
+
+            set_global_frame(processed_frame)
+        except Exception as overlay_err:
+            logger.error(f"Erro ao gerar overlay visual no loop: {overlay_err}")
+            set_global_frame(current_frame)
+
+        elapsed = time.perf_counter() - t_loop_start
+        sleep_t = 0.033 - elapsed
+        if sleep_t > 0.001:
+            time.sleep(sleep_t)
+
+
+def _init_camera(camera_index, logger):
+    """Initializes the real camera or falls back to simulation video."""
+    global _cap, _use_sim
     
     _cap = None
     _use_sim = False
     
+    import cv2
+    import os
+
     try:
-        _cap = cv2.VideoCapture(_camera_index)
+        _cap = cv2.VideoCapture(camera_index)
         if _cap.isOpened():
             ret, _ = _cap.read()
             if ret:
-                logger.info(f"Câmera real {_camera_index} iniciada com sucesso.")
+                logger.info(f"Câmera real {camera_index} iniciada com sucesso.")
             else:
                 _cap.release()
                 _cap = None
@@ -634,6 +875,14 @@ def camera_worker():
             logger.error("Vídeo de simulação 'video_granja.mp4' não encontrado.")
             _cap = None
             
+    return _cap, _use_sim
+
+def _init_models_and_plugins(settings, logger):
+    """Initializes YOLO and all computer vision plugins."""
+    from src.core.cv_engine import SpeciesClassifier, BirdPoseAnalyzer
+    from ultralytics import YOLO
+    import os
+
     model = None
     species_classifier = SpeciesClassifier()
     pose_analyzer = BirdPoseAnalyzer()
@@ -652,113 +901,111 @@ def camera_worker():
             logger.error("Nenhum arquivo de pesos YOLO encontrado.")
     except Exception as e:
         logger.error(f"Erro na inicialização do modelo YOLO: {e}")
+        model_path = "yolov8n.pt"
 
-    # Inicialização dos módulos de Visão Computacional ChikGuard (Saltoratto et al., 2013 + Fase 2)
-    enhanced_detector = None
+    plugins = {
+        "enhanced_detector": None,
+        "behavior_engine": None,
+        "gait_analyzer": None,
+        "biosafety_plugin": None,
+        "tamper_detector": None,
+        "spatial_heatmap": None,
+        "weight_estimator": None,
+        "radial_corrector": None,
+        "tri_zone_analyzer": None,
+        "zone_time_series": None,
+        "paper_subtractor": None
+    }
+
     try:
         from src.vision.enhanced_detector import EnhancedObjectDetector
-        enhanced_detector = EnhancedObjectDetector(model_path=model_path if 'model_path' in locals() and os.path.exists(model_path) else "yolov8n.pt")
+        plugins["enhanced_detector"] = EnhancedObjectDetector(model_path=model_path if os.path.exists(model_path) else "yolov8n.pt")
     except Exception as exc:
         logger.warning(f"EnhancedObjectDetector não inicializado: {exc}")
 
-    behavior_engine = None
     try:
         from src.cv_master.behavior_engine import BehaviorEngine
-        behavior_engine = BehaviorEngine()
+        plugins["behavior_engine"] = BehaviorEngine()
     except Exception as exc:
         logger.warning(f"BehaviorEngine não inicializado: {exc}")
 
-    gait_analyzer = None
     try:
         from src.vision.gait_analyzer import GaitAnalyzer
-        gait_analyzer = GaitAnalyzer()
+        plugins["gait_analyzer"] = GaitAnalyzer()
     except Exception as exc:
         logger.warning(f"GaitAnalyzer não inicializado: {exc}")
 
-    biosafety_plugin = None
     try:
         from plugins.biosafety_audit.plugin import BiosafetyAuditPlugin
-        biosafety_plugin = BiosafetyAuditPlugin()
-        biosafety_plugin.on_startup({"settings": settings})
+        plugins["biosafety_plugin"] = BiosafetyAuditPlugin()
+        plugins["biosafety_plugin"].on_startup({"settings": settings})
     except Exception as exc:
         logger.warning(f"BiosafetyAuditPlugin não inicializado: {exc}")
 
-    tamper_detector = None
     try:
         from src.vision.tamper_detector import CameraTamperDetector
-        tamper_detector = CameraTamperDetector()
+        plugins["tamper_detector"] = CameraTamperDetector()
     except Exception as exc:
         logger.warning(f"CameraTamperDetector não inicializado: {exc}")
 
-    spatial_heatmap = None
     try:
         from src.vision.spatial_heatmap import SpatialHeatmapAccumulator
-        spatial_heatmap = SpatialHeatmapAccumulator()
+        plugins["spatial_heatmap"] = SpatialHeatmapAccumulator()
         from src.core import state
-        state.spatial_accumulator = spatial_heatmap
+        state.spatial_accumulator = plugins["spatial_heatmap"]
     except Exception as exc:
         logger.warning(f"SpatialHeatmapAccumulator não inicializado: {exc}")
 
-    weight_estimator = None
     try:
         from src.vision.weight_estimator import BiometricWeightEstimator
-        weight_estimator = BiometricWeightEstimator()
+        plugins["weight_estimator"] = BiometricWeightEstimator()
     except Exception as exc:
         logger.warning(f"BiometricWeightEstimator não inicializado: {exc}")
 
-    radial_corrector = None
     try:
         from src.vision.radial_light_corrector import RadialBrooderLightCorrector
-        radial_corrector = RadialBrooderLightCorrector()
+        plugins["radial_corrector"] = RadialBrooderLightCorrector()
     except Exception as exc:
         logger.warning(f"RadialBrooderLightCorrector não inicializado: {exc}")
 
-    tri_zone_analyzer = None
     try:
         from src.vision.tri_zone_analyzer import TriZoneBehaviorAnalyzer
-        tri_zone_analyzer = TriZoneBehaviorAnalyzer()
+        plugins["tri_zone_analyzer"] = TriZoneBehaviorAnalyzer()
     except Exception as exc:
         logger.warning(f"TriZoneBehaviorAnalyzer não inicializado: {exc}")
 
-    zone_time_series = None
     try:
         from src.vision.zone_time_series import ZoneTimeSeriesTracker
-        zone_time_series = ZoneTimeSeriesTracker()
+        plugins["zone_time_series"] = ZoneTimeSeriesTracker()
         from src.core import state
-        state.zone_time_series_tracker = zone_time_series
+        state.zone_time_series_tracker = plugins["zone_time_series"]
     except Exception as exc:
         logger.warning(f"ZoneTimeSeriesTracker não inicializado: {exc}")
 
-    paper_subtractor = None
     try:
         from src.vision.background_subtractor_paper import PaperBackgroundSubtractor
-        paper_subtractor = PaperBackgroundSubtractor()
+        plugins["paper_subtractor"] = PaperBackgroundSubtractor()
     except Exception as exc:
         logger.warning(f"PaperBackgroundSubtractor não inicializado: {exc}")
 
-    capture_thread = threading.Thread(target=_capture_thread_func, name="CaptureThread", daemon=True)
-    capture_thread.start()
-    
-    inference_thread = None
-    if model is not None or enhanced_detector is not None:
-        inference_thread = threading.Thread(
-            target=_inference_thread_func,
-            args=(
-                model, species_classifier, pose_analyzer, enhanced_detector, 
-                behavior_engine, gait_analyzer, biosafety_plugin,
-                tamper_detector, spatial_heatmap, weight_estimator,
-                radial_corrector, tri_zone_analyzer, zone_time_series,
-                paper_subtractor
-            ),
-            name="InferenceThread",
-            daemon=True
-        )
-        inference_thread.start()
+    return model, species_classifier, pose_analyzer, plugins
 
+def _run_coordinator_loop(model, plugins, logger):
+    """Main coordinator loop for processing frames and overlaying metrics."""
+    global camera_running, _raw_frame, _latest_detections, _cv_lock, _cap
+    from src.core.state import set_global_frame, species_counts
+    from src.core.cv_engine import CVOverlay
+    from src.core.camera_worker import simulate_telemetry_step, save_telemetry_snapshot_to_db
+    import time
+    import numpy as np
+    import cv2
+    
     last_telemetry_sim_ts = 0.0
     last_db_save_ts = 0.0
     print("[CAMERA WORKER] Entering main coordinator loop...")
     
+    enhanced_detector = plugins.get("enhanced_detector")
+
     while camera_running:
         t_loop_start = time.perf_counter()
         
@@ -843,6 +1090,44 @@ def camera_worker():
     if _cap is not None:
         _cap.release()
     logger.info("camera_worker encerrado.")
+
+def camera_worker():
+    """Main function for the camera worker process."""
+    global camera_running, _camera_index
+    from src.core.config import load_settings
+    from src.core.camera_worker import logger, _capture_thread_func, _inference_thread_func
+    import threading
+
+    settings = load_settings()
+    _camera_index = settings.camera_index
+
+    logger.info(f"Iniciando camera_worker. Câmera Index: {_camera_index}")
+    print(f"[CAMERA WORKER] Starting... camera_index={_camera_index}")
+
+    _init_camera(_camera_index, logger)
+
+    model, species_classifier, pose_analyzer, plugins = _init_models_and_plugins(settings, logger)
+
+    capture_thread = threading.Thread(target=_capture_thread_func, name="CaptureThread", daemon=True)
+    capture_thread.start()
+
+    inference_thread = None
+    if model is not None or plugins.get("enhanced_detector") is not None:
+        inference_thread = threading.Thread(
+            target=_inference_thread_func,
+            args=(
+                model, species_classifier, pose_analyzer, plugins.get("enhanced_detector"),
+                plugins.get("behavior_engine"), plugins.get("gait_analyzer"), plugins.get("biosafety_plugin"),
+                plugins.get("tamper_detector"), plugins.get("spatial_heatmap"), plugins.get("weight_estimator"),
+                plugins.get("radial_corrector"), plugins.get("tri_zone_analyzer"), plugins.get("zone_time_series"),
+                plugins.get("paper_subtractor")
+            ),
+            name="InferenceThread",
+            daemon=True
+        )
+        inference_thread.start()
+
+    _run_coordinator_loop(model, plugins, logger)
 
 def start_camera_thread():
     global camera_running, _camera_thread
