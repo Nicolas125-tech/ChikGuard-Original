@@ -8,7 +8,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../s
 # The app logic often instantiates background threads or starts processing
 # We want to import just the function and avoid global execution blocks.
 # Mocking cv2 prevents video loading and pipeline starting side-effects in most cases.
-sys.modules["cv2"] = mock.MagicMock()
 os.environ["ADMIN_PASSWORD"] = "dummy_password"
 
 from app_flask_legacy import _box_center_area

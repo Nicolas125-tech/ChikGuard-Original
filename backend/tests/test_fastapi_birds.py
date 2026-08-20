@@ -6,9 +6,7 @@ import os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-# Need to mock cv2 before importing any application code
 import unittest.mock as mock
-sys.modules["cv2"] = mock.MagicMock()
 
 from main import fastapi_app
 from src.core.state import live_birds

@@ -4,7 +4,6 @@ import unittest.mock as mock
 import sys
 
 # Mock cv2 before importing main
-sys.modules["cv2"] = mock.MagicMock()
 
 from src.db.session import engine as session_engine, SessionLocal
 from main import fastapi_app

@@ -13,9 +13,6 @@ os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 import unittest.mock as mock
 
-# mock cv2 before importing any application code
-sys_modules_mock = mock.patch.dict("sys.modules", {"cv2": mock.MagicMock()})
-sys_modules_mock.start()
 
 from src.api.sync_api import create_sync_blueprint
 

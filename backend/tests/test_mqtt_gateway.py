@@ -10,7 +10,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../s
 
 # Mock do cv2 para evitar erros na inicialização de módulos de visão do app
 import unittest.mock as mock
-sys.modules["cv2"] = mock.MagicMock()
 
 # Configuração de variáveis de ambiente para testes
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"

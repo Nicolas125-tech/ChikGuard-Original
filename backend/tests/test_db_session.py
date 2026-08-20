@@ -5,7 +5,6 @@ import sys
 import unittest.mock as mock
 
 # Ensure cv2 is mocked if any imports trigger it (per memory instructions)
-sys.modules["cv2"] = mock.MagicMock()
 
 from src.db.session import get_db
 

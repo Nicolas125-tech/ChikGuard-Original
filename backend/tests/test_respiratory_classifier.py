@@ -9,7 +9,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 # Mock cv2 to avoid errors in app vision module initialization
-sys.modules["cv2"] = mock.MagicMock()
 
 # Environment variables setup for Flask tests
 os.environ["FLASK_ENV"] = "testing"

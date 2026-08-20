@@ -10,7 +10,6 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Mock cv2 before anything else
-sys.modules["cv2"] = MagicMock()
 
 from src.api.fastapi_accounts import router
 from src.security.fastapi_auth import get_current_user, UserContext

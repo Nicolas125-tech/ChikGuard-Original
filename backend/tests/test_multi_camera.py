@@ -9,7 +9,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 # Mock do cv2 para evitar erros na inicialização de módulos de visão do app
-sys.modules["cv2"] = mock.MagicMock()
 
 from src.core.multi_camera import MultiCameraOrchestrator
 

@@ -10,8 +10,6 @@ os.environ["SUPABASE_JWT_SECRET"] = os.environ.get(
     "SUPABASE_JWT_SECRET", "dummy_secret_dummy_secret_dummy_secret"
 )
 
-sys_modules_mock = mock.patch.dict("sys.modules", {"cv2": mock.MagicMock()})
-sys_modules_mock.start()
 
 from database import Batch, BatchLogbook, db  # noqa: E402
 from src.api.batch_api import create_batch_blueprint  # noqa: E402

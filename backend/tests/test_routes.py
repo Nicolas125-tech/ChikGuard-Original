@@ -12,7 +12,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 os.environ["SUPABASE_JWT_SECRET"] = "dummy_secret_dummy_secret_dummy_secret_for_testing_32b"
 
 # Mock external dependencies
-sys.modules["cv2"] = MagicMock()
 sys.modules["aiortc"] = MagicMock()
 sys.modules["aiortc.contrib.media"] = MagicMock()
 sys.modules["av"] = MagicMock()
