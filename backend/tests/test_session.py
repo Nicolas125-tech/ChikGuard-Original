@@ -1,3 +1,8 @@
+import sys
+import importlib
+if "cv2" in sys.modules and type(sys.modules["cv2"]).__name__ == "MagicMock":
+    del sys.modules["cv2"]
+import cv2
 from unittest.mock import patch, MagicMock
 from src.db.session import get_db
 

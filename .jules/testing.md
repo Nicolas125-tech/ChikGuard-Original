@@ -21,3 +21,6 @@
 ## 2025-02-27 - Test PaperBackgroundSubtractor
 **Learning:** Added unit tests for pure CV components by passing deterministic numpy arrays representing RGB frames.
 **Action:** Created `tests/vision/test_background_subtractor_paper.py` covering edge cases, initialization, background setup, and blob counting with a simulated bird.
+## 2026-08-20 - Fix OpenCV MagicMock pollution
+**Learning:** Found that tests utilizing `cv2` were crashing due to `sys.modules["cv2"] = MagicMock()` pollution from preceding test files in the test suite run.
+**Action:** Applied a programmatic hotfix to forcefully delete `sys.modules["cv2"]` if it was instantiated as a `MagicMock` at the beginning of all test files.
