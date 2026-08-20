@@ -153,6 +153,99 @@ class SpeciesClassifier:
         with self._lock:
             self._batch_age_day = max(1, int(age_day))
 
+    def _get_size_vote(self, area_ratio: float) -> str:
+        if area_ratio < CHICK_MAX_AREA_RATIO:
+            return "chick"
+        elif area_ratio > HEN_MIN_AREA_RATIO:
+            return "hen"
+        return "unknown"
+
+    def _get_color_vote(self, frame: np.ndarray, rx1: int, ry1: int, rx2: int, ry2: int) -> str:
+        color_vote = "unknown"
+        if rx2 > rx1 and ry2 > ry1:
+            roi = frame[ry1:ry2, rx1:rx2]
+            if roi.size > 0:
+                try:
+                    hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+                    roi_px = max(1, roi.shape[0] * roi.shape[1])
+
+                    # Testa todas as faixas HSV de pintinho (multi-range)
+                    chick_ratio = 0.0
+                    for c_lo, c_hi in CHICK_HSV_RANGES:
+                        mask = cv2.inRange(hsv, c_lo, c_hi)
+                        chick_ratio = max(chick_ratio, float(np.sum(mask > 0)) / roi_px)
+
+                    # Verifica padroes de galinha
+                    hen_ratio = 0.0
+                    for lo, hi in HEN_HSV_RANGES:
+                        m = cv2.inRange(hsv, lo, hi)
+                        hen_ratio = max(hen_ratio, float(np.sum(m > 0)) / roi_px)
+
+                    # Limiares calibrados para pintinhos
+                    if chick_ratio > 0.20:
+                        color_vote = "chick"
+                    elif hen_ratio > 0.40 and chick_ratio < 0.10:
+                        color_vote = "hen"
+                except Exception:
+                    pass
+        return color_vote
+
+    def _fuse_votes(self, size_vote: str, color_vote: str, age_chick_prior: bool) -> str:
+        votes_chick = sum(
+            [
+                1 if size_vote == "chick" else 0,
+                1 if color_vote == "chick" else 0,
+                1 if age_chick_prior else 0,
+            ]
+        )
+        votes_hen = sum(
+            [
+                1 if size_vote == "hen" else 0,
+                1 if color_vote == "hen" else 0,
+                1 if not age_chick_prior else 0,
+            ]
+        )
+
+        if votes_chick >= 2:
+            return "chick"
+        elif votes_hen >= 2:
+            if color_vote == "chick":
+                return "chick"
+            else:
+                return "hen"
+        else:
+            if color_vote == "chick" or size_vote == "chick" or age_chick_prior:
+                return "chick"
+            else:
+                return "hen"
+
+    def _apply_temporal_smoothing(self, raw_species: str, track_id: int) -> str:
+        final_species = raw_species
+        if track_id >= 0:
+            with self._lock:
+                if track_id not in self._track_history:
+                    # Janela de 9 frames: mais responsivo em cenas com muitos pintinhos
+                    self._track_history[track_id] = deque(maxlen=9)
+                self._track_history[track_id].append(raw_species)
+
+                # Voto de maioria no historico recente da mesma ave
+                counts_h = {"chick": 0, "hen": 0, "bird": 0}
+                for s in self._track_history[track_id]:
+                    counts_h[s] = counts_h.get(s, 0) + 1
+
+                # Empate favorece pintinho (reduz sub-contagem em lotes jovens)
+                if counts_h["chick"] >= counts_h["hen"]:
+                    final_species = "chick"
+                else:
+                    final_species = "hen"
+
+                # Limpeza parcial: preserva tracks mais recentes (nao apaga tudo)
+                if len(self._track_history) > 1000:
+                    keys = list(self._track_history.keys())
+                    for k in keys[:200]:
+                        del self._track_history[k]
+        return final_species
+
     def classify(
         self,
         frame: np.ndarray,
@@ -187,102 +280,17 @@ class SpeciesClassifier:
         # Prior de idade: ≤ 14 dias → maioritariamente pintinhos
         age_chick_prior = age <= 14
 
-        species = "bird"
-        species_label = "AVE"
-        color = COLOR_BIRD
-
         # ── Classificação por tamanho ──────────────────────────────────────
-        if area_ratio < CHICK_MAX_AREA_RATIO:
-            size_vote = "chick"
-        elif area_ratio > HEN_MIN_AREA_RATIO:
-            size_vote = "hen"
-        else:
-            size_vote = "unknown"
+        size_vote = self._get_size_vote(area_ratio)
 
         # -- Classificacao por cor HSV da ROI ---------------------------------
-        color_vote = "unknown"
-        if rx2 > rx1 and ry2 > ry1:
-            roi = frame[ry1:ry2, rx1:rx2]
-            if roi.size > 0:
-                try:
-                    hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-                    roi_px = max(1, roi.shape[0] * roi.shape[1])
-
-                    # Testa todas as faixas HSV de pintinho (multi-range)
-                    chick_ratio = 0.0
-                    for c_lo, c_hi in CHICK_HSV_RANGES:
-                        mask = cv2.inRange(hsv, c_lo, c_hi)
-                        chick_ratio = max(chick_ratio, float(np.sum(mask > 0)) / roi_px)
-
-                    # Verifica padroes de galinha
-                    hen_ratio = 0.0
-                    for lo, hi in HEN_HSV_RANGES:
-                        m = cv2.inRange(hsv, lo, hi)
-                        hen_ratio = max(hen_ratio, float(np.sum(m > 0)) / roi_px)
-
-                    # Limiares calibrados para pintinhos
-                    if chick_ratio > 0.20:
-                        color_vote = "chick"
-                    elif hen_ratio > 0.40 and chick_ratio < 0.10:
-                        color_vote = "hen"
-                except Exception:
-                    pass
-
+        color_vote = self._get_color_vote(frame, rx1, ry1, rx2, ry2)
 
         # ── Fusão dos votos ────────────────────────────────────────────────
-        votes_chick = sum(
-            [
-                1 if size_vote == "chick" else 0,
-                1 if color_vote == "chick" else 0,
-                1 if age_chick_prior else 0,
-            ]
-        )
-        votes_hen = sum(
-            [
-                1 if size_vote == "hen" else 0,
-                1 if color_vote == "hen" else 0,
-                1 if not age_chick_prior else 0,
-            ]
-        )
-
-        if votes_chick >= 2:
-            raw_species = "chick"
-        elif votes_hen >= 2:
-            if color_vote == "chick":
-                raw_species = "chick"
-            else:
-                raw_species = "hen"
-        else:
-            if color_vote == "chick" or size_vote == "chick" or age_chick_prior:
-                raw_species = "chick"
-            else:
-                raw_species = "hen"
+        raw_species = self._fuse_votes(size_vote, color_vote, age_chick_prior)
 
         # -- Suavizacao Temporal por Track ID (Histerese) --------------------
-        final_species = raw_species
-        if track_id >= 0:
-            with self._lock:
-                if track_id not in self._track_history:
-                    # Janela de 9 frames: mais responsivo em cenas com muitos pintinhos
-                    self._track_history[track_id] = deque(maxlen=9)
-                self._track_history[track_id].append(raw_species)
-
-                # Voto de maioria no historico recente da mesma ave
-                counts_h = {"chick": 0, "hen": 0, "bird": 0}
-                for s in self._track_history[track_id]:
-                    counts_h[s] = counts_h.get(s, 0) + 1
-
-                # Empate favorece pintinho (reduz sub-contagem em lotes jovens)
-                if counts_h["chick"] >= counts_h["hen"]:
-                    final_species = "chick"
-                else:
-                    final_species = "hen"
-
-                # Limpeza parcial: preserva tracks mais recentes (nao apaga tudo)
-                if len(self._track_history) > 1000:
-                    keys = list(self._track_history.keys())
-                    for k in keys[:200]:
-                        del self._track_history[k]
+        final_species = self._apply_temporal_smoothing(raw_species, track_id)
 
         if final_species == "chick":
             species = "chick"
@@ -299,7 +307,6 @@ class SpeciesClassifier:
             "color": color,
             "age_prior": age_chick_prior,
         }
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Métricas de Performance
