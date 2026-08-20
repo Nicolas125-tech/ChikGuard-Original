@@ -17,3 +17,7 @@
 ## 2024-08-18 - Added tests for ZoneTimeSeriesTracker edge cases
 **What:** Created a new test suite `backend/tests/vision/test_zone_time_series.py` targeting the `ZoneTimeSeriesTracker` class to validate its behavior against missing edge cases.
 **Result:** Verified that the `get_cumulative_summary` method returns proper fallback dict structures (e.g. `most_frequented_zone`: "NENHUMA" and 0 counts) when no samples have been recorded or all recorded samples contain zeros.
+
+## 2025-02-27 - Test PaperBackgroundSubtractor
+**Learning:** Added unit tests for pure CV components by passing deterministic numpy arrays representing RGB frames.
+**Action:** Created `tests/vision/test_background_subtractor_paper.py` covering edge cases, initialization, background setup, and blob counting with a simulated bird.
