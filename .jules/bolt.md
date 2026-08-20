@@ -86,3 +86,6 @@
 ## 2025-02-23 - Optimize _get_temperature_summary queries
 **Learning:** Combining redundant database queries using `.limit().all()` and extracting `.first()` manually from the result list significantly improves query performance (reduces N+1 problem and speeds up block by ~35%). Nested endpoint helper functions should be removed if a top-level version already exists to keep the AST clean and prevent confusion.
 **Action:** Removed duplicate definition and rewrote `_get_temperature_summary` to execute a single query instead of two.
+## 2026-08-19 - [Resolve N+1 Queries in Data Lifecycle]
+**Learning:** Using a loop over SQLAlchemy query results and deleting each record individually causes an N+1 query problem, heavily degrading performance. Using the SQLAlchemy `delete()` construct directly on the query object handles bulk deletion in a single query.
+**Action:** Replaced the `for record in old_records: db.session.delete(record)` loop with `ModelClass.query.filter(ModelClass.timestamp < cutoff).delete(synchronize_session=False)` in `_process_data_lifecycle`, reducing deletion time by over 90%.

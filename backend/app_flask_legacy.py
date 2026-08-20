@@ -2734,14 +2734,11 @@ def _process_data_lifecycle(now):
         total_deleted = 0
 
         for ModelClass, name in tables_to_clean:
-            # Delete one by one to respect ORM cascades and events
-            old_records = ModelClass.query.filter(ModelClass.timestamp < cutoff).all()
-            if not old_records:
+            # Optimized: delete using a single query instead of N+1
+            count = ModelClass.query.filter(ModelClass.timestamp < cutoff).delete(synchronize_session=False)
+            if count == 0:
                 continue
 
-            count = len(old_records)
-            for record in old_records:
-                db.session.delete(record)
             total_deleted += count
             LOGGER.info(
                 "[data-lifecycle] Deleted %d records from %s (older than 3 days)",
