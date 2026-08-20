@@ -242,7 +242,7 @@ export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], ac
               <span className="text-xl sm:text-2xl font-bold text-cyan-300">{sensors?.water_level_pct !== undefined ? Number(sensors.water_level_pct).toLocaleString('pt-BR') : '--'} <span className="text-sm text-slate-400">%</span></span>
             </div>
             <button aria-label={autoMode?.enabled ? "Desativar modo automático" : "Ativar modo automático"} aria-pressed={!!autoMode?.enabled} onClick={toggleAuto} className={`rounded-xl p-3 sm:p-4 font-bold text-sm sm:text-base flex flex-col items-center justify-center gap-1 sm:gap-2 border transition-all focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none ${autoMode?.enabled ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={autoMode?.enabled ? 'text-white' : 'text-slate-400'}><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              <svg width="24" height="24" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={autoMode?.enabled ? 'text-white' : 'text-slate-400'}><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
               {autoMode?.enabled ? 'Auto Ativo' : 'Ativar Auto'}
             </button>
           </div>
@@ -269,7 +269,7 @@ export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], ac
             <label htmlFor="batch-start-date" className="sr-only">Data de início do lote</label>
             <input id="batch-start-date" aria-label="Data de início do lote" type="date" disabled={isCreatingBatch} value={batchForm.start_date} onChange={(e) => setBatchForm((p) => ({ ...p, start_date: e.target.value }))} className="flex-1 sm:w-auto bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-2.5 text-sm sm:text-base focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all text-slate-300 disabled:opacity-50" />
             <button aria-label="Criar novo lote" onClick={createBatch} disabled={isCreatingBatch} className="flex items-center gap-2 justify-center bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-5 py-2.5 font-bold shadow-lg shadow-blue-500/20 transition-all text-sm sm:text-base hover:-translate-y-0.5 whitespace-nowrap disabled:opacity-50 disabled:hover:translate-y-0 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none">
-              {isCreatingBatch ? <RefreshCw size={16} className="animate-spin" /> : '+ Novo'}
+              {isCreatingBatch ? <RefreshCw size={16} aria-hidden="true" className="animate-spin" /> : '+ Novo'}
             </button>
           </div>
           <div className="max-h-48 overflow-y-auto space-y-2 pr-2 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
@@ -307,7 +307,7 @@ export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], ac
                 <span className="text-slate-400 text-xs">Gere um consolidado em PDF com gráficos semanais.</span>
               </div>
               <button aria-label="Gerar relatório semanal em PDF" onClick={generateWeeklyReport} disabled={isGeneratingReport} className="flex items-center gap-2 justify-center w-full sm:w-auto bg-amber-600 hover:bg-amber-500 text-white rounded-xl px-5 py-3 font-bold shadow-lg shadow-amber-500/20 transition-all text-sm hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0 focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none">
-                {isGeneratingReport ? <RefreshCw size={16} className="animate-spin" /> : 'Gerar PDF Semanal'}
+                {isGeneratingReport ? <RefreshCw size={16} aria-hidden="true" className="animate-spin" /> : 'Gerar PDF Semanal'}
               </button>
             </div>
             {reportMsg && <div className="mt-3 text-sm font-medium text-emerald-400 bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20 text-center">{reportMsg}</div>}
@@ -363,7 +363,7 @@ export default function SmartOpsPanel({ serverIP, prefs, token, cameras = [], ac
           <label htmlFor="log-note" className="sr-only">Nota de diário</label>
           <input id="log-note" aria-label="Nota de diário" value={logNote} disabled={isSavingLog} onChange={(e) => setLogNote(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && saveLogNote()} placeholder="Descreva eventos importantes..." className="flex-1 bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-3 text-sm sm:text-base focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all placeholder:text-slate-600 disabled:opacity-50" />
           <button aria-label="Registrar log diário" onClick={saveLogNote} disabled={isSavingLog || !logNote} className="flex items-center gap-2 justify-center bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl px-6 py-3 text-sm sm:text-base font-bold shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 whitespace-nowrap disabled:opacity-50 disabled:hover:translate-y-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none">
-            {isSavingLog ? <RefreshCw size={18} className="animate-spin" /> : 'Registrar Log'}
+            {isSavingLog ? <RefreshCw size={18} aria-hidden="true" className="animate-spin" /> : 'Registrar Log'}
           </button>
         </div>
         <div className="bg-slate-950/40 rounded-xl border border-slate-800 overflow-hidden">

@@ -226,7 +226,7 @@ export default function ManagementPanel({ serverIP, prefs, token, cameras = [], 
                   </div>
                 </div>
                 <button aria-label="Analisar áudio enviado" onClick={classifyAudio} disabled={!audioFile || isClassifying} className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-lg font-bold shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none">
-                  {isClassifying ? <RefreshCw size={16} className="animate-spin" /> : 'Analisar'}
+                  {isClassifying ? <RefreshCw size={16} aria-hidden="true" className="animate-spin" /> : 'Analisar'}
                 </button>
               </div>
               {audioMsg && <div className="mt-3 text-sm font-medium text-amber-400 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20 text-center">{audioMsg}</div>}
