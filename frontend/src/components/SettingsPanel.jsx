@@ -180,7 +180,7 @@ export default function SettingsPanel({ serverIP, prefs, onSavePrefs, onSaveServ
           </Field>
           <div className="md:col-span-2 flex justify-end mt-2">
             <button aria-label="Criar Nova Granja" disabled={isCreatingFarm} type="submit" className="bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 px-6 rounded-xl border border-slate-700 transition-all flex items-center gap-2 hover:-translate-y-0.5 shadow-sm disabled:opacity-50 disabled:hover:translate-y-0 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
-              {isCreatingFarm ? <RefreshCw size={18} className="animate-spin" /> : <Plus size={18} />}
+              {isCreatingFarm ? <RefreshCw size={18} aria-hidden="true" className="animate-spin" /> : <Plus size={18} aria-hidden="true" />}
               {isCreatingFarm ? 'Criando...' : 'Criar Nova Granja'}
             </button>
           </div>

@@ -43,7 +43,7 @@ function ConfirmModal({ title, message, onConfirm, onCancel, danger = false, loa
             className={`px-5 py-2 text-sm font-bold rounded-xl transition-all flex items-center gap-2 disabled:opacity-50 ${
               danger ? 'bg-red-600 hover:bg-red-500 text-white' : 'bg-emerald-600 hover:bg-emerald-500 text-white'
             }`}>
-            {loading && <RefreshCw size={13} className="animate-spin" />}
+            {loading && <RefreshCw size={13} aria-hidden="true" className="animate-spin" />}
             Confirmar
           </button>
         </div>
@@ -188,7 +188,7 @@ function ProfileDrawer({ user, myRole, onClose, onSaved }) {
           </button>
           <button onClick={handleSave} disabled={saving}
             className="flex-1 px-4 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2">
-            {saving && <RefreshCw size={13} className="animate-spin" />}
+            {saving && <RefreshCw size={13} aria-hidden="true" className="animate-spin" />}
             {saving ? 'Salvando...' : 'Salvar Alterações'}
           </button>
         </div>
@@ -684,7 +684,7 @@ function UserRow({ user: u, myLevel, actionLoading, onApprove, onReject, onSuspe
               </select>
               <button disabled={isActioning} onClick={() => onApprove(approveRole)}
                 className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-all disabled:opacity-50 shadow shadow-emerald-500/20 whitespace-nowrap">
-                {isActioning ? <RefreshCw size={12} className="animate-spin" /> : <UserCheck size={12} />}
+                {isActioning ? <RefreshCw size={12} aria-hidden="true" className="animate-spin" /> : <UserCheck size={12} aria-hidden="true" />}
                 Aprovar
               </button>
               <button aria-label="Rejeitar utilizador" disabled={isActioning} onClick={onReject}
@@ -699,13 +699,13 @@ function UserRow({ user: u, myLevel, actionLoading, onApprove, onReject, onSuspe
             isSuspended ? (
               <button disabled={isActioning} onClick={onReactivate}
                 className="flex items-center gap-1.5 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 text-xs font-bold px-3 py-1.5 rounded-lg border border-emerald-500/30 transition-all disabled:opacity-30 whitespace-nowrap">
-                {isActioning ? <RefreshCw size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                {isActioning ? <RefreshCw size={12} aria-hidden="true" className="animate-spin" /> : <CheckCircle2 size={12} aria-hidden="true" />}
                 Reativar
               </button>
             ) : (
               <button aria-label="Suspender utilizador" disabled={isActioning} onClick={onSuspend}
                 className="flex items-center gap-1.5 bg-amber-600/20 hover:bg-amber-600/40 text-amber-400 text-xs font-bold px-3 py-1.5 rounded-lg border border-amber-500/30 transition-all disabled:opacity-30 whitespace-nowrap focus-visible:ring-2 focus-visible:ring-amber-500">
-                {isActioning ? <RefreshCw size={12} className="animate-spin" /> : <AlertCircle size={12} />}
+                {isActioning ? <RefreshCw size={12} aria-hidden="true" className="animate-spin" /> : <AlertCircle size={12} aria-hidden="true" />}
                 Suspender
               </button>
             )

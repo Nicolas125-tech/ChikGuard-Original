@@ -191,7 +191,7 @@ export default function RulesPanel({ serverIP }) {
 
           <div className="md:col-span-6 flex justify-end mt-2">
             <button type="submit" disabled={isSaving} className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 px-6 rounded-lg shadow-lg shadow-indigo-900/20 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-              {isSaving ? <RefreshCw size={18} className="animate-spin" /> : <ShieldCheck size={18} />}
+              {isSaving ? <RefreshCw size={18} aria-hidden="true" className="animate-spin" /> : <ShieldCheck size={18} aria-hidden="true" />}
               {isSaving ? 'Salvando...' : 'Salvar Regra'}
             </button>
           </div>
