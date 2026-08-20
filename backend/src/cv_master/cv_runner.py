@@ -103,14 +103,7 @@ class SOTAPipelineRunner:
         self.thread.start()
         self.logger.info("SOTA CV Runner iniciado em thread paralela.")
 
-    def _check_camera_tampering(self, frame, now) -> list:
-        """
-        Detecta obstrução, congelamento, desfocagem/sujeira na lente e telemetria de sensores inativa.
-        Atualiza o estado global e retorna a lista de causas ativas.
-        """
-        if frame is None or frame.size == 0:
-            return []
-
+    def _evaluate_tamper_conditions(self, frame, now):
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         mean_luma = float(np.mean(gray))
         std_luma = float(np.std(gray))
@@ -150,73 +143,83 @@ class SOTAPipelineRunner:
         sensor_stale = (now - sensor_updated_at) > self.TAMPER_SENSOR_STALE_SEC
         state.tamper_state["sensor_stale"] = bool(sensor_stale)
 
-        # Compilar causas ativas
+    def _get_active_tamper_causes(self) -> list:
         causes = []
-        if int(state.tamper_state["dark_frames"]) >= 8:
+        if int(state.tamper_state.get("dark_frames", 0)) >= 8:
             causes.append("camera_obstruida")
-        if int(state.tamper_state["freeze_frames"]) >= self.TAMPER_FREEZE_MIN_FRAMES:
+        if int(state.tamper_state.get("freeze_frames", 0)) >= self.TAMPER_FREEZE_MIN_FRAMES:
             causes.append("camera_congelada")
-        if state.tamper_state["lens_dirty"]:
+        if state.tamper_state.get("lens_dirty", False):
             causes.append("lente_suja_ou_desfocada")
-        if sensor_stale:
+        if state.tamper_state.get("sensor_stale", False):
             causes.append("sensor_sem_update")
+        return causes
 
-        state.tamper_state["last_causes"] = list(causes)
+    def _emit_tamper_alerts(self, causes: list, now: float):
+        last_alert_ts = float(state.tamper_state.get("last_alert_ts", 0.0))
+        if now - last_alert_ts < self.TAMPER_ALERT_COOLDOWN_SEC:
+            return
 
-        if not causes:
+        state.tamper_state["last_alert_ts"] = now
+        state.tamper_state["alerts_count"] = int(state.tamper_state.get("alerts_count", 0)) + 1
+
+        msg_map = {
+            "camera_obstruida": "Câmera obstruída ou sem luz.",
+            "camera_congelada": "Câmera travada/congelada.",
+            "lente_suja_ou_desfocada": "Lente embaçada ou com excesso de poeira.",
+            "sensor_sem_update": "Telemetria de sensores offline."
+        }
+        alert_messages = [msg_map[c] for c in causes if c in msg_map]
+        combined_msg = " | ".join(alert_messages)
+
+        try:
+            db = SessionLocal()
+            log_entry = EventLog(
+                camera_id="galpao-1",
+                event_type="camera_tampering",
+                level="warning",
+                message=f"Tamper detectado: {combined_msg}",
+                metadata_json=json.dumps({"causes": causes}),
+                timestamp=datetime.utcnow()
+            )
+            db.add(log_entry)
+            db.flush()
+            
+            db.add(SyncQueueItem(
+                item_type="event_log",
+                payload_json=json.dumps(log_entry.to_dict()),
+                status="pending"
+            ))
+            db.commit()
+            db.close()
+        except Exception as db_err:
+            self.logger.error(f"Erro ao salvar alerta de tamper no DB: {db_err}")
+
+        if self.loop is not None:
+            asyncio.run_coroutine_threadsafe(
+                emit_new_alert({
+                    "type": "camera_tampering",
+                    "level": "warning",
+                    "message": f"Tamper detectado: {combined_msg}",
+                    "timestamp": now
+                }),
+                self.loop
+            )
+
+    def _check_camera_tampering(self, frame, now) -> list:
+        """
+        Detecta obstrução, congelamento, desfocagem/sujeira na lente e telemetria de sensores inativa.
+        Atualiza o estado global e retorna a lista de causas ativas.
+        """
+        if frame is None or frame.size == 0:
             return []
 
-        # Envia alertas baseados em cooldown
-        last_alert_ts = float(state.tamper_state.get("last_alert_ts", 0.0))
-        if now - last_alert_ts >= self.TAMPER_ALERT_COOLDOWN_SEC:
-            state.tamper_state["last_alert_ts"] = now
-            state.tamper_state["alerts_count"] = int(state.tamper_state.get("alerts_count", 0)) + 1
-            
-            # Mensagem amigável em PT
-            msg_map = {
-                "camera_obstruida": "Câmera obstruída ou sem luz.",
-                "camera_congelada": "Câmera travada/congelada.",
-                "lente_suja_ou_desfocada": "Lente embaçada ou com excesso de poeira.",
-                "sensor_sem_update": "Telemetria de sensores offline."
-            }
-            alert_messages = [msg_map[c] for c in causes if c in msg_map]
-            combined_msg = " | ".join(alert_messages)
+        self._evaluate_tamper_conditions(frame, now)
+        causes = self._get_active_tamper_causes()
+        state.tamper_state["last_causes"] = list(causes)
 
-            # Persiste no banco de dados local EventLog e SyncQueue
-            try:
-                db = SessionLocal()
-                log_entry = EventLog(
-                    camera_id="galpao-1",
-                    event_type="camera_tampering",
-                    level="warning",
-                    message=f"Tamper detectado: {combined_msg}",
-                    metadata_json=json.dumps({"causes": causes}),
-                    timestamp=datetime.utcnow()
-                )
-                db.add(log_entry)
-                db.flush()
-                
-                db.add(SyncQueueItem(
-                    item_type="event_log",
-                    payload_json=json.dumps(log_entry.to_dict()),
-                    status="pending"
-                ))
-                db.commit()
-                db.close()
-            except Exception as db_err:
-                self.logger.error(f"Erro ao salvar alerta de tamper no DB: {db_err}")
-
-            # Notifica WebSocket em tempo real
-            if self.loop is not None:
-                asyncio.run_coroutine_threadsafe(
-                    emit_new_alert({
-                        "type": "camera_tampering",
-                        "level": "warning",
-                        "message": f"Tamper detectado: {combined_msg}",
-                        "timestamp": now
-                    }),
-                    self.loop
-                )
+        if causes:
+            self._emit_tamper_alerts(causes, now)
 
         return causes
 
