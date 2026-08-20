@@ -61,7 +61,7 @@ class PaperBackgroundSubtractor:
             subtracted = neg_frame
 
         # Limiarização com valor empiricamente definido = 150
-        _, thresh = cv2.threshold(subtracted, self.threshold_val, 255, cv2.THRESH_BINARY)
+        ret, thresh = cv2.threshold(subtracted, self.threshold_val, 255, cv2.THRESH_BINARY)
 
         # Equações (7-9): Operação Morfológica de FECHO: Dilatação seguida de Erosão (A • B)
         closing = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, self.kernel)
