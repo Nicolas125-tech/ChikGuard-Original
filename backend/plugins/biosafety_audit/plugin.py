@@ -148,6 +148,88 @@ class BiosafetyAuditPlugin(PluginBase):
         # Se pelo menos 50% (ou threshold) da área do EPI está contida na área da pessoa
         return (intersection_area / epi_area) >= threshold
 
+    def _extract_detections(self, result) -> tuple:
+        """Extracts and categorizes detections into people, EPIs, and vehicles."""
+        boxes = result.boxes.xyxy.cpu().numpy() if hasattr(result.boxes.xyxy, "cpu") else result.boxes.xyxy
+        classes = result.boxes.cls.cpu().numpy().astype(int) if hasattr(result.boxes.cls, "cpu") else result.boxes.cls.astype(int)
+        confidences = result.boxes.conf.cpu().numpy() if hasattr(result.boxes.conf, "cpu") else result.boxes.conf
+
+        people_detections = []
+        epi_detections = []
+        vehicles_detections = []
+
+        for box, cls_id, conf in zip(boxes, classes, confidences):
+            label = self.class_to_label.get(cls_id)
+            if label == "person":
+                people_detections.append((box, conf))
+            elif label in self.required_epis or label in {"mask", "gloves"}:
+                epi_detections.append((box, label, conf))
+            elif label == "vehicle":
+                vehicles_detections.append((box, conf))
+
+        return people_detections, epi_detections, vehicles_detections
+
+    def _audit_epis(self, people_detections: List[tuple], epi_detections: List[tuple]) -> List[Dict[str, Any]]:
+        """Audits EPI compliance for detected people."""
+        events = []
+        for p_box, p_conf in people_detections:
+            worn_epis = set()
+            for epi_box, epi_label, epi_conf in epi_detections:
+                if self._check_overlap(epi_box, p_box):
+                    worn_epis.add(epi_label)
+
+            missing_epis = [epi for epi in self.required_epis if epi not in worn_epis]
+
+            if missing_epis:
+                msg = f"Violação de Biossegurança: Pessoa detectada na barreira sem EPI obrigatório: {', '.join(missing_epis)}."
+                metadata = {
+                    "missing_epis": missing_epis,
+                    "worn_epis": list(worn_epis),
+                    "person_confidence": float(p_conf),
+                }
+                
+                _log_event(
+                    event_type="EPI_VIOLATION",
+                    level="critical",
+                    message=msg,
+                    metadata=metadata,
+                )
+                
+                events.append({
+                    "event_type": "EPI_VIOLATION",
+                    "level": "critical",
+                    "message": msg,
+                    "metadata": metadata,
+                    "timestamp": time.time(),
+                })
+        return events
+
+    def _audit_vehicles(self, vehicles_detections: List[tuple], camera_zone: str) -> List[Dict[str, Any]]:
+        """Audits vehicles entering the border zones."""
+        events = []
+        for v_box, v_conf in vehicles_detections:
+            msg = f"Auditoria de Barreira: Veículo detectado na entrada da zona {camera_zone}."
+            metadata = {
+                "vehicle_confidence": float(v_conf),
+                "box": v_box.tolist(),
+            }
+            
+            _log_event(
+                event_type="VEHICLE_DETECTION",
+                level="critical",
+                message=msg,
+                metadata=metadata,
+            )
+            
+            events.append({
+                "event_type": "VEHICLE_DETECTION",
+                "level": "critical",
+                "message": msg,
+                "metadata": metadata,
+                "timestamp": time.time(),
+            })
+        return events
+
     def process_frame(self, frame: np.ndarray, camera_zone: str) -> Optional[List[Dict[str, Any]]]:
         """
         Executa a análise do frame apenas se a zona da câmera for de fronteira (ENTRANCE / SANITARY_BARRIER).
@@ -173,84 +255,11 @@ class BiosafetyAuditPlugin(PluginBase):
         if result.boxes is None:
             return []
 
-        # Extrai caixas, confianças e classes
-        boxes = result.boxes.xyxy.cpu().numpy() if hasattr(result.boxes.xyxy, "cpu") else result.boxes.xyxy
-        classes = result.boxes.cls.cpu().numpy().astype(int) if hasattr(result.boxes.cls, "cpu") else result.boxes.cls.astype(int)
-        confidences = result.boxes.conf.cpu().numpy() if hasattr(result.boxes.conf, "cpu") else result.boxes.conf
-
-        people_detections = []
-        epi_detections = []
-        vehicles_detections = []
-
-        # Categoriza as detecções do frame
-        for box, cls_id, conf in zip(boxes, classes, confidences):
-            label = self.class_to_label.get(cls_id)
-            if label == "person":
-                people_detections.append((box, conf))
-            elif label in self.required_epis or label in {"mask", "gloves"}:
-                epi_detections.append((box, label, conf))
-            elif label == "vehicle":
-                vehicles_detections.append((box, conf))
+        people_detections, epi_detections, vehicles_detections = self._extract_detections(result)
 
         events = []
-
-        # 1. Auditoria de EPIs para cada pessoa detectada
-        for p_box, p_conf in people_detections:
-            worn_epis = set()
-            for epi_box, epi_label, epi_conf in epi_detections:
-                if self._check_overlap(epi_box, p_box):
-                    worn_epis.add(epi_label)
-
-            # Verifica quais itens obrigatórios estão ausentes
-            missing_epis = [epi for epi in self.required_epis if epi not in worn_epis]
-
-            if missing_epis:
-                msg = f"Violação de Biossegurança: Pessoa detectada na barreira sem EPI obrigatório: {', '.join(missing_epis)}."
-                metadata = {
-                    "missing_epis": missing_epis,
-                    "worn_epis": list(worn_epis),
-                    "person_confidence": float(p_conf),
-                }
-                
-                # Emite log crítico
-                _log_event(
-                    event_type="EPI_VIOLATION",
-                    level="critical",
-                    message=msg,
-                    metadata=metadata,
-                )
-                
-                events.append({
-                    "event_type": "EPI_VIOLATION",
-                    "level": "critical",
-                    "message": msg,
-                    "metadata": metadata,
-                    "timestamp": time.time(),
-                })
-
-        # 2. Auditoria de Veículos
-        for v_box, v_conf in vehicles_detections:
-            msg = f"Auditoria de Barreira: Veículo detectado na entrada da zona {camera_zone}."
-            metadata = {
-                "vehicle_confidence": float(v_conf),
-                "box": v_box.tolist(),
-            }
-            
-            # Emite log crítico para monitoramento rígido de veículos
-            _log_event(
-                event_type="VEHICLE_DETECTION",
-                level="critical",
-                message=msg,
-                metadata=metadata,
-            )
-            
-            events.append({
-                "event_type": "VEHICLE_DETECTION",
-                "level": "critical",
-                "message": msg,
-                "metadata": metadata,
-                "timestamp": time.time(),
-            })
+        events.extend(self._audit_epis(people_detections, epi_detections))
+        events.extend(self._audit_vehicles(vehicles_detections, camera_zone))
 
         return events
 
