@@ -1,3 +1,8 @@
+import sys
+import importlib
+if "cv2" in sys.modules and type(sys.modules["cv2"]).__name__ == "MagicMock":
+    del sys.modules["cv2"]
+import cv2
 import os
 
 os.environ["SUPABASE_JWT_SECRET"] = os.environ.get("SUPABASE_JWT_SECRET", "dummy_secret_dummy_secret_dummy_secret_for_testing_32b")

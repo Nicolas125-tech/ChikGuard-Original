@@ -1,3 +1,8 @@
+import sys
+import importlib
+if "cv2" in sys.modules and type(sys.modules["cv2"]).__name__ == "MagicMock":
+    del sys.modules["cv2"]
+import cv2
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import MagicMock, patch
