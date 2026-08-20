@@ -31,28 +31,10 @@ class AnalyticsEngine:
         }
         self.last_export_time = time.time()
 
-    def export_metrics(
-        self, detections: List[Dict[str, Any]], frame_timestamp: float
-    ) -> Optional[Any]:
-        """
-        Calculates density and activity metrics from the detections, buffers them,
-        and exports them to the database periodically based on `export_interval`.
-        Activity is measured in pixels/second based on tracking IDs.
-        """
-        import time
-
-        from database import EventLog  # Local import to avoid circular dependency
-
-        if not detections:
-            return None
-
+    def _calculate_metrics(self, detections: List[Dict[str, Any]], frame_timestamp: float) -> tuple:
         total_birds = len(detections)
-        total_mask_area = sum(d.get("mask_area_px", 0.0) for d in detections)
-
-        # Calculate activity (pixels/second)
         total_velocity = 0.0
         active_tracked_birds = 0
-
         current_state = {}
 
         for det in detections:
@@ -80,21 +62,23 @@ class AnalyticsEngine:
                         total_velocity += velocity
                         active_tracked_birds += 1
 
-        # Update state for next frame
-        self.bird_last_state = current_state
-
         avg_activity_px_s = (
             total_velocity / active_tracked_birds if active_tracked_birds > 0 else 0.0
         )
         tracked_ratio = active_tracked_birds / total_birds if total_birds > 0 else 0.0
 
-        # Add to buffer
+        return avg_activity_px_s, tracked_ratio, current_state
+
+    def _buffer_metrics(self, total_birds: int, total_mask_area: float, avg_activity_px_s: float, tracked_ratio: float):
         self.metrics_buffer["density_birds"].append(total_birds)
         self.metrics_buffer["density_mask_area_px"].append(total_mask_area)
         self.metrics_buffer["activity_px_s"].append(avg_activity_px_s)
         self.metrics_buffer["tracked_ratio"].append(tracked_ratio)
 
-        # Check if it's time to export
+    def _export_buffered_metrics_if_ready(self) -> Optional[Any]:
+        import time
+        from database import EventLog
+
         current_time = time.time()
         if current_time - self.last_export_time >= self.export_interval:
             try:
@@ -153,3 +137,26 @@ class AnalyticsEngine:
                 self.last_export_time = current_time
 
         return None
+
+    def export_metrics(
+        self, detections: List[Dict[str, Any]], frame_timestamp: float
+    ) -> Optional[Any]:
+        """
+        Calculates density and activity metrics from the detections, buffers them,
+        and exports them to the database periodically based on `export_interval`.
+        Activity is measured in pixels/second based on tracking IDs.
+        """
+        if not detections:
+            return None
+
+        total_birds = len(detections)
+        total_mask_area = sum(d.get("mask_area_px", 0.0) for d in detections)
+
+        avg_activity_px_s, tracked_ratio, current_state = self._calculate_metrics(detections, frame_timestamp)
+
+        # Update state for next frame
+        self.bird_last_state = current_state
+
+        self._buffer_metrics(total_birds, total_mask_area, avg_activity_px_s, tracked_ratio)
+
+        return self._export_buffered_metrics_if_ready()
