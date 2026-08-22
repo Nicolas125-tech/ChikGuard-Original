@@ -3092,21 +3092,12 @@ def _run_cv_engine_v2_loop():
             time.sleep(1)
 
 
-def _run_legacy_camera_loop():
-    global global_frame, db_last_save_time, fps_last_time, last_temp_emergency_notification_ts
-    last_error_print_time = 0.0
-
-    cap = None
-    use_basic_simulation = False
-    video_sim = None
-    consecutive_read_failures = 0
-    last_reopen_attempt_ts = 0.0
-    camera_lost_logged = False
-
+def _init_legacy_camera():
     LOGGER.info(
         f"[camera_loop:legacy] CV Engine indisponivel, usando pipeline monolitico. Backend: {CAMERA_BACKEND_ID}"
     )
     cap = cv2.VideoCapture(CAMERA_INDEX, CAMERA_BACKEND_ID)
+    use_basic_simulation = False
     if cap.isOpened():
         _configure_camera_capture(cap)
     else:
@@ -3122,165 +3113,224 @@ def _run_legacy_camera_loop():
             if VideoProcessor is not None and os.path.exists(sim_path):
                 sim_msg = "Camera real nao encontrada. Simulacao em video ativada."
         _log_event(LogEventData("camera_fallback", "medium", sim_msg))
+    return cap, use_basic_simulation
+
+
+def _try_reopen_legacy_camera(cap, last_reopen_attempt_ts):
+    now_ts = time.time()
+    if (now_ts - last_reopen_attempt_ts) >= CAMERA_REOPEN_INTERVAL_SEC:
+        last_reopen_attempt_ts = now_ts
+        try:
+            if cap is not None:
+                cap.release()
+        except Exception:
+            pass
+        cap = cv2.VideoCapture(CAMERA_INDEX, CAMERA_BACKEND_ID)
+        if cap.isOpened():
+            _configure_camera_capture(cap)
+            _log_event(LogEventData(
+                "camera_reconnected",
+                "info",
+                "Camera reconectada com sucesso.",
+            ))
+            return cap, True, last_reopen_attempt_ts
+    return cap, False, last_reopen_attempt_ts
+
+
+def _read_legacy_simulation_frame(video_sim):
+    frame = None
+    sim_path = SIM_VIDEO_PATH
+    if sim_path:
+        sim_path = (
+            sim_path
+            if os.path.isabs(sim_path)
+            else os.path.join(CURRENT_DIR, sim_path)
+        )
+        if VideoProcessor is not None and os.path.exists(sim_path):
+            if video_sim is None:
+                try:
+                    video_sim = VideoProcessor(sim_path)
+                except Exception:
+                    video_sim = None
+            if video_sim is not None:
+                try:
+                    frame = video_sim.get_next_frame()
+                except Exception:
+                    video_sim = None
+
+    if frame is None:
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        cv2.rectangle(frame, (200, 150), (350, 300), (0, 255, 0), 2)
+        cv2.putText(
+            frame,
+            "TEST_OBJECT",
+            (200, 140),
+            cv2.FONT_HERSHEY_PLAIN,
+            2,
+            (0, 255, 0),
+            2,
+        )
+        processed_frame = frame
+        temp_atual = 0.0
+    else:
+        processed_frame = (
+            detectar_objetos(frame) if MODO_DETECCAO == "aves" else frame
+        )
+        temp_atual = 0.0
+    return frame, processed_frame, temp_atual, video_sim
+
+
+def _read_legacy_real_camera_frame(cap, consecutive_read_failures, camera_lost_logged):
+    ret, frame = cap.read()
+    if not ret:
+        consecutive_read_failures += 1
+        if consecutive_read_failures < CAMERA_FAIL_THRESHOLD:
+            time.sleep(0.03)
+            return None, None, None, consecutive_read_failures, False, camera_lost_logged, True
+        if not camera_lost_logged:
+            _log_event(LogEventData(
+                "camera_signal_lost",
+                "high",
+                "Perda de sinal prolongada. Simulacao ativada.",
+            ))
+            camera_lost_logged = True
+        return None, None, None, 0, True, camera_lost_logged, False
+
+    consecutive_read_failures = 0
+    _check_tampering(frame)
+    processed_frame = detectar_objetos(frame)
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    temp_atual = 20 + (float(np.mean(gray)) / 255.0) * 20
+    return frame, processed_frame, temp_atual, consecutive_read_failures, False, camera_lost_logged, False
+
+
+def _process_legacy_camera_metrics_and_save(frame, processed_frame, temp_atual, use_basic_simulation):
+    global global_frame, db_last_save_time, fps_last_time, last_temp_emergency_notification_ts
+
+    _apply_automatic_control(temp_atual)
+    _update_energy_runtime()
+    if (
+        temp_atual >= 35.0
+        and (time.time() - float(last_temp_emergency_notification_ts)) > 600
+    ):
+        last_temp_emergency_notification_ts = time.time()
+        txt = (
+            f"Temperatura subiu para {temp_atual:.1f}C! Intervencao necessaria."
+        )
+        sent, detail = _telegram_send_text(txt)
+        _log_event(LogEventData(
+            "temperature_critical_alert",
+            "high",
+            txt,
+            metadata={"telegram_sent": sent, "telegram_detail": detail},
+        ))
+
+    new_time = time.time()
+    fps = (
+        1 / (new_time - fps_last_time) if (new_time - fps_last_time) > 0 else 0
+    )
+    fps_last_time = new_time
+    cv2.putText(
+        processed_frame,
+        f"FPS: {int(fps)}",
+        (processed_frame.shape[1] - 120, 30),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (255, 0, 255),
+        2,
+    )
+
+    with lock:
+        global_frame = processed_frame
+
+    if MODO_DETECCAO == "aves" and not use_basic_simulation:
+        _save_bird_snapshots(frame, temp_atual)
+        _save_bird_track_points()
+
+    current_time = time.time()
+    if current_time - db_last_save_time > 30:
+        with app.app_context():
+            status = "NORMAL"
+            if temp_atual < 26:
+                status = "FRIO"
+            elif temp_atual > 32:
+                status = "CALOR"
+            reading = Reading(temperatura=round(temp_atual, 1), status=status)
+            db.session.add(reading)
+            db.session.commit()
+            _enqueue_sync_item("reading", reading.to_dict())
+        db_last_save_time = current_time
+
+
+def _handle_legacy_camera_loop_error(exc, last_error_print_time):
+    global global_frame
+    current_time = time.time()
+    if current_time - last_error_print_time > 5:
+        LOGGER.exception("CRITICAL ERROR IN CAMERA THREAD: %s", exc)
+        last_error_print_time = current_time
+    with lock:
+        if global_frame is None:
+            error_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+            cv2.putText(
+                error_frame,
+                "THREAD ERROR",
+                (50, 240),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                2,
+                (0, 0, 255),
+                3,
+            )
+            global_frame = error_frame
+    time.sleep(1)
+    return last_error_print_time
+
+
+def _run_legacy_camera_loop():
+    """Legacy main loop for handling camera stream processing."""
+    last_error_print_time = 0.0
+    video_sim = None
+    consecutive_read_failures = 0
+    last_reopen_attempt_ts = 0.0
+    camera_lost_logged = False
+
+    cap, use_basic_simulation = _init_legacy_camera()
 
     while True:
         try:
             if use_basic_simulation:
-                now_ts = time.time()
-                if (now_ts - last_reopen_attempt_ts) >= CAMERA_REOPEN_INTERVAL_SEC:
-                    last_reopen_attempt_ts = now_ts
-                    try:
-                        if cap is not None:
-                            cap.release()
-                    except Exception:
-                        pass
-                    cap = cv2.VideoCapture(CAMERA_INDEX, CAMERA_BACKEND_ID)
-                    if cap.isOpened():
-                        _configure_camera_capture(cap)
-                        use_basic_simulation = False
-                        consecutive_read_failures = 0
-                        camera_lost_logged = False
-                        _log_event(LogEventData(
-                            "camera_reconnected",
-                            "info",
-                            "Camera reconectada com sucesso.",
-                        ))
-                        continue
-                frame = None
-                sim_path = SIM_VIDEO_PATH
-                if sim_path:
-                    sim_path = (
-                        sim_path
-                        if os.path.isabs(sim_path)
-                        else os.path.join(CURRENT_DIR, sim_path)
-                    )
-                    if VideoProcessor is not None and os.path.exists(sim_path):
-                        if video_sim is None:
-                            try:
-                                video_sim = VideoProcessor(sim_path)
-                            except Exception:
-                                video_sim = None
-                        if video_sim is not None:
-                            try:
-                                frame = video_sim.get_next_frame()
-                            except Exception:
-                                video_sim = None
-                if frame is None:
-                    frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                    cv2.rectangle(frame, (200, 150), (350, 300), (0, 255, 0), 2)
-                    cv2.putText(
-                        frame,
-                        "TEST_OBJECT",
-                        (200, 140),
-                        cv2.FONT_HERSHEY_PLAIN,
-                        2,
-                        (0, 255, 0),
-                        2,
-                    )
-                    processed_frame = frame
-                    temp_atual = 0.0
-                else:
-                    processed_frame = (
-                        detectar_objetos(frame) if MODO_DETECCAO == "aves" else frame
-                    )
-                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                    temp_atual = 0.0
-            else:
-                ret, frame = cap.read()
-                if not ret:
-                    consecutive_read_failures += 1
-                    if consecutive_read_failures < CAMERA_FAIL_THRESHOLD:
-                        time.sleep(0.03)
-                        continue
-                    use_basic_simulation = True
-                    consecutive_read_failures = 0
-                    if not camera_lost_logged:
-                        _log_event(LogEventData(
-                            "camera_signal_lost",
-                            "high",
-                            "Perda de sinal prolongada. Simulacao ativada.",
-                        ))
-                        camera_lost_logged = True
-                    continue
-                consecutive_read_failures = 0
-                _check_tampering(frame)
-                processed_frame = detectar_objetos(frame)
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                temp_atual = 20 + (float(np.mean(gray)) / 255.0) * 20
-
-            _apply_automatic_control(temp_atual)
-            _update_energy_runtime()
-            if (
-                temp_atual >= 35.0
-                and (time.time() - float(last_temp_emergency_notification_ts)) > 600
-            ):
-                last_temp_emergency_notification_ts = time.time()
-                txt = (
-                    f"Temperatura subiu para {temp_atual:.1f}C! Intervencao necessaria."
+                cap, reconnected, last_reopen_attempt_ts = _try_reopen_legacy_camera(
+                    cap, last_reopen_attempt_ts
                 )
-                sent, detail = _telegram_send_text(txt)
-                _log_event(LogEventData(
-                    "temperature_critical_alert",
-                    "high",
-                    txt,
-                    metadata={"telegram_sent": sent, "telegram_detail": detail},
-                ))
+                if reconnected:
+                    use_basic_simulation = False
+                    consecutive_read_failures = 0
+                    camera_lost_logged = False
+                    continue
+                frame, processed_frame, temp_atual, video_sim = _read_legacy_simulation_frame(video_sim)
+            else:
+                (
+                    frame,
+                    processed_frame,
+                    temp_atual,
+                    consecutive_read_failures,
+                    switch_to_sim,
+                    camera_lost_logged,
+                    should_retry,
+                ) = _read_legacy_real_camera_frame(
+                    cap, consecutive_read_failures, camera_lost_logged
+                )
+                if should_retry:
+                    continue
+                if switch_to_sim:
+                    use_basic_simulation = True
+                    continue
 
-            new_time = time.time()
-            fps = (
-                1 / (new_time - fps_last_time) if (new_time - fps_last_time) > 0 else 0
+            _process_legacy_camera_metrics_and_save(
+                frame, processed_frame, temp_atual, use_basic_simulation
             )
-            fps_last_time = new_time
-            cv2.putText(
-                processed_frame,
-                f"FPS: {int(fps)}",
-                (processed_frame.shape[1] - 120, 30),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (255, 0, 255),
-                2,
-            )
-
-            with lock:
-                global_frame = processed_frame
-
-            if MODO_DETECCAO == "aves" and not use_basic_simulation:
-                _save_bird_snapshots(frame, temp_atual)
-                _save_bird_track_points()
-
-            current_time = time.time()
-            if current_time - db_last_save_time > 30:
-                with app.app_context():
-                    status = "NORMAL"
-                    if temp_atual < 26:
-                        status = "FRIO"
-                    elif temp_atual > 32:
-                        status = "CALOR"
-                    reading = Reading(temperatura=round(temp_atual, 1), status=status)
-                    db.session.add(reading)
-                    db.session.commit()
-                    _enqueue_sync_item("reading", reading.to_dict())
-                db_last_save_time = current_time
 
         except Exception as exc:
-            current_time = time.time()
-            if current_time - last_error_print_time > 5:
-                LOGGER.exception("CRITICAL ERROR IN CAMERA THREAD: %s", exc)
-                last_error_print_time = current_time
-            with lock:
-                if global_frame is None:
-                    error_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                    cv2.putText(
-                        error_frame,
-                        "THREAD ERROR",
-                        (50, 240),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        2,
-                        (0, 0, 255),
-                        3,
-                    )
-                    global_frame = error_frame
-            time.sleep(1)
+            last_error_print_time = _handle_legacy_camera_loop_error(exc, last_error_print_time)
 
 
 def camera_loop():
