@@ -147,3 +147,7 @@
 **Vulnerability:** The `/api/video` endpoint in `backend/main.py` validated the Supabase JWT signature manually but failed to check the user's profile status in the database, effectively bypassing `get_current_user`.
 **Learning:** Manually decoding JWTs using `jwt.decode` in specific routes bypasses global authorization logic (like role checks, tenant association, or account suspension validation). Even if a JWT is valid, the user's actual database status might deny them access.
 **Prevention:** Never replicate token validation logic. Always use the central dependency (e.g., `await get_current_user(token)`) to evaluate authentication and authorization consistently.
+## 2026-08-22 - [Fix Authorization Bypass in WebSocket Connection]
+**Vulnerability:** The SocketIO endpoint `connect` in `backend/src/api/fastapi_ws.py` manually validated the JWT using `jwt.decode` but failed to check the user's status in the database, effectively bypassing `get_current_user`.
+**Learning:** Similar to HTTP endpoints, WebSocket handlers that manually decode tokens bypass global authorization checks (like account suspension). A valid token does not guarantee valid access if the backend profile status dictates otherwise.
+**Prevention:** Never replicate token validation logic in SocketIO connect handlers. Always await the central authentication dependency (e.g., `await get_current_user(token)`) to evaluate authentication and authorization consistently across all protocols.
