@@ -2987,6 +2987,71 @@ def _process_temperature(frame, now_ts, last_temp_emergency_notification_ts):
 
     return temp_atual, last_temp_emergency_notification_ts
 
+def _process_motion_detection(frame, bg_subtractor, inference_pipeline):
+    import cv2
+    fg_mask = bg_subtractor.apply(frame)
+    motion_pixels = cv2.countNonZero(fg_mask)
+    total_pixels = frame.shape[0] * frame.shape[1]
+    motion_ratio = float(motion_pixels) / float(total_pixels)
+
+    if motion_ratio >= 0.005:
+        inference_pipeline.submit_frame(frame)
+
+def _draw_fps_overlay(draw_frame, now_time, prev_fps_time):
+    import cv2
+    fps = 1.0 / max(1e-6, now_time - prev_fps_time)
+    new_fps_time = now_time
+    h_fr, w_fr = draw_frame.shape[:2]
+    cv2.putText(
+        draw_frame,
+        f"LOOP:{int(fps)}fps",
+        (w_fr - 155, h_fr - 12),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.45,
+        (160, 160, 255),
+        1,
+        cv2.LINE_AA,
+    )
+    return draw_frame, new_fps_time
+
+def _save_periodic_reading(temp_atual, current_time, last_save_time):
+    if current_time - last_save_time > 30:
+        with app.app_context():
+            status = "NORMAL"
+            if temp_atual < 26:
+                status = "FRIO"
+            elif temp_atual > 32:
+                status = "CALOR"
+            reading = Reading(temperatura=round(temp_atual, 1), status=status)
+            db.session.add(reading)
+            db.session.commit()
+            _enqueue_sync_item("reading", reading.to_dict())
+        return current_time
+    return last_save_time
+
+def _handle_cv_loop_error(exc, current_time, last_error_print_time):
+    import cv2
+    import numpy as np
+    if current_time - last_error_print_time > 5:
+        LOGGER.exception("[camera_loop:v2] ERRO: %s", exc)
+        last_error_print_time = current_time
+    with lock:
+        global global_frame
+        if global_frame is None:
+            err_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+            cv2.putText(
+                err_frame,
+                "THREAD ERROR",
+                (50, 240),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                2,
+                (0, 0, 255),
+                3,
+            )
+            global_frame = err_frame
+    time.sleep(1)
+    return last_error_print_time
+
 def _run_cv_engine_v2_loop():
     global global_frame, db_last_save_time, fps_last_time, last_temp_emergency_notification_ts
     global _camera_capture, _inference_pipeline
@@ -3022,33 +3087,16 @@ def _run_cv_engine_v2_loop():
                 time.sleep(0.005)
                 continue
 
-            fg_mask = _bg_subtractor.apply(frame)
-            motion_pixels = cv2.countNonZero(fg_mask)
-            total_pixels = frame.shape[0] * frame.shape[1]
-            motion_ratio = float(motion_pixels) / float(total_pixels)
-
-            if motion_ratio >= 0.005:
-                _inference_pipeline.submit_frame(frame)
+            _process_motion_detection(frame, _bg_subtractor, _inference_pipeline)
 
             result = _inference_pipeline.get_result(timeout=0.04)
             draw_frame = _process_inference_result(frame, result)
 
-            temp_atual, last_temp_emergency_notification_ts = _process_temperature(frame, now_ts, last_temp_emergency_notification_ts)
-
-            new_time = time.time()
-            fps = 1.0 / max(1e-6, new_time - fps_last_time)
-            fps_last_time = new_time
-            h_fr, w_fr = draw_frame.shape[:2]
-            cv2.putText(
-                draw_frame,
-                f"LOOP:{int(fps)}fps",
-                (w_fr - 155, h_fr - 12),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.45,
-                (160, 160, 255),
-                1,
-                cv2.LINE_AA,
+            temp_atual, last_temp_emergency_notification_ts = _process_temperature(
+                frame, now_ts, last_temp_emergency_notification_ts
             )
+
+            draw_frame, fps_last_time = _draw_fps_overlay(draw_frame, time.time(), fps_last_time)
 
             with lock:
                 global_frame = draw_frame
@@ -3057,39 +3105,10 @@ def _run_cv_engine_v2_loop():
                 _save_bird_snapshots(frame, temp_atual)
                 _save_bird_track_points()
 
-            current_time = time.time()
-            if current_time - db_last_save_time > 30:
-                with app.app_context():
-                    status = "NORMAL"
-                    if temp_atual < 26:
-                        status = "FRIO"
-                    elif temp_atual > 32:
-                        status = "CALOR"
-                    reading = Reading(temperatura=round(temp_atual, 1), status=status)
-                    db.session.add(reading)
-                    db.session.commit()
-                    _enqueue_sync_item("reading", reading.to_dict())
-                db_last_save_time = current_time
+            db_last_save_time = _save_periodic_reading(temp_atual, time.time(), db_last_save_time)
 
         except Exception as exc:
-            current_time = time.time()
-            if current_time - last_error_print_time > 5:
-                LOGGER.exception("[camera_loop:v2] ERRO: %s", exc)
-                last_error_print_time = current_time
-            with lock:
-                if global_frame is None:
-                    err_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                    cv2.putText(
-                        err_frame,
-                        "THREAD ERROR",
-                        (50, 240),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        2,
-                        (0, 0, 255),
-                        3,
-                    )
-                    global_frame = err_frame
-            time.sleep(1)
+            last_error_print_time = _handle_cv_loop_error(exc, time.time(), last_error_print_time)
 
 
 def _init_legacy_camera():
