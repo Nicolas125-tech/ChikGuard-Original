@@ -1,5 +1,5 @@
-🧹 [Remove commented out rate limiter code]
-🎯 **What:** Removed a block of commented-out example code showing decorator usage in `backend/src/security/rate_limiter.py`.
-💡 **Why:** Commented-out dead code clutters the file and decreases readability and maintainability.
-✅ **Verification:** Ran backend test suite to ensure no actual functionality was affected by this clean-up.
-✨ **Result:** A cleaner file free from inactive examples.
+🎨 Palette: Fix Shared Table Row Loading UX Bug
+* 💡 What: Scoped the actionLoading state in AdminPanel.jsx to both the unique user ID and the specific action being performed (e.g., <userId>-approve).
+* 🎯 Why: Previously, using a single actionLoading = userId state caused all action buttons in a user row to display a loading spinner simultaneously when any one action was triggered, creating a confusing user experience.
+* 📸 Before/After: Before, all buttons showed a spinner. After, only the clicked button shows a spinner while others are disabled.
+* ♿ Accessibility: Improves visual feedback clarity for screen reader and keyboard users by clearly indicating which specific action is processing.

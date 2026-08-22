@@ -317,7 +317,7 @@ export default function AdminPanel({ token, serverIP, role: myRole }) {
 
   // ── Aprovar ───────────────────────────────────────────────────────────────
   const handleApprove = async (userId, targetRole) => {
-    setActionLoading(userId);
+    setActionLoading(`${userId}-approve`);
     try {
       const { error } = await supabase.from('profiles').update({
         status: 'ACTIVE',
@@ -340,7 +340,7 @@ export default function AdminPanel({ token, serverIP, role: myRole }) {
 
   // ── Rejeitar ──────────────────────────────────────────────────────────────
   const handleReject = async (userId, reason) => {
-    setActionLoading(userId);
+    setActionLoading(`${userId}-reject`);
     try {
       const { error } = await supabase.from('profiles').update({
         status: 'REJECTED',
@@ -360,7 +360,7 @@ export default function AdminPanel({ token, serverIP, role: myRole }) {
 
   // ── Suspender ─────────────────────────────────────────────────────────────
   const handleSuspend = async (userId) => {
-    setActionLoading(userId);
+    setActionLoading(`${userId}-suspend`);
     try {
       const { error } = await supabase.from('profiles').update({ status: 'SUSPENDED' }).eq('id', userId);
       if (error) throw error;
@@ -376,7 +376,7 @@ export default function AdminPanel({ token, serverIP, role: myRole }) {
 
   // ── Reativar ──────────────────────────────────────────────────────────────
   const handleReactivate = async (userId) => {
-    setActionLoading(userId);
+    setActionLoading(`${userId}-reactivate`);
     try {
       const { error } = await supabase.from('profiles').update({ status: 'ACTIVE' }).eq('id', userId);
       if (error) throw error;
@@ -608,7 +608,11 @@ function UserRow({ user: u, myLevel, actionLoading, onApprove, onReject, onSuspe
   const [approveRole, setApproveRole] = useState('viewer');
   const isPending   = u.status === 'PENDING';
   const isSuspended = u.status === 'SUSPENDED';
-  const isActioning = actionLoading === u.id;
+  const isAnyActioning = actionLoading && actionLoading.startsWith(u.id);
+  const isApproving = actionLoading === `${u.id}-approve`;
+  const isRejecting = actionLoading === `${u.id}-reject`;
+  const isSuspending = actionLoading === `${u.id}-suspend`;
+  const isReactivating = actionLoading === `${u.id}-reactivate`;
   const isSuperadmin = u.role === 'superadmin';
   const targetLevel  = ROLE_LEVELS[u.role] || 0;
   const canModify    = myLevel > targetLevel || myLevel >= 4;
@@ -666,7 +670,7 @@ function UserRow({ user: u, myLevel, actionLoading, onApprove, onReject, onSuspe
         <div className="flex items-center gap-2 flex-wrap">
           {/* Botão Editar Perfil — sempre visível para quem tem permissão */}
           {canModify && !isSuperadmin && (
-            <button aria-label="Editar perfil do utilizador" onClick={onEdit} disabled={isActioning}
+            <button aria-label="Editar perfil do utilizador" onClick={onEdit} disabled={isAnyActioning}
               className="flex items-center gap-1.5 bg-slate-700/50 hover:bg-slate-600/60 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-600/50 transition-all disabled:opacity-30 whitespace-nowrap focus-visible:ring-2 focus-visible:ring-emerald-500">
               <Settings size={12} />
               Editar
@@ -682,14 +686,14 @@ function UserRow({ user: u, myLevel, actionLoading, onApprove, onReject, onSuspe
                 <option value="operator">OPERATOR</option>
                 <option value="admin" disabled={myLevel < 3}>ADMIN</option>
               </select>
-              <button disabled={isActioning} onClick={() => onApprove(approveRole)}
+              <button disabled={isAnyActioning} onClick={() => onApprove(approveRole)}
                 className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-all disabled:opacity-50 shadow shadow-emerald-500/20 whitespace-nowrap">
-                {isActioning ? <RefreshCw size={12} aria-hidden="true" className="animate-spin" /> : <UserCheck size={12} aria-hidden="true" />}
+                {isApproving ? <RefreshCw size={12} aria-hidden="true" className="animate-spin" /> : <UserCheck size={12} aria-hidden="true" />}
                 Aprovar
               </button>
-              <button aria-label="Rejeitar utilizador" disabled={isActioning} onClick={onReject}
+              <button aria-label="Rejeitar utilizador" disabled={isAnyActioning} onClick={onReject}
                 className="flex items-center gap-1.5 bg-red-900/40 hover:bg-red-600/50 text-red-300 text-xs font-bold px-3 py-1.5 rounded-lg border border-red-700/50 transition-all disabled:opacity-50 whitespace-nowrap focus-visible:ring-2 focus-visible:ring-red-500">
-                <XCircle size={12} />
+                {isRejecting ? <RefreshCw size={12} aria-hidden="true" className="animate-spin" /> : <XCircle size={12} />}
                 Rejeitar
               </button>
             </>
@@ -697,15 +701,15 @@ function UserRow({ user: u, myLevel, actionLoading, onApprove, onReject, onSuspe
 
           {!isPending && canModify && !isSuperadmin && (
             isSuspended ? (
-              <button disabled={isActioning} onClick={onReactivate}
+              <button disabled={isAnyActioning} onClick={onReactivate}
                 className="flex items-center gap-1.5 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 text-xs font-bold px-3 py-1.5 rounded-lg border border-emerald-500/30 transition-all disabled:opacity-30 whitespace-nowrap">
-                {isActioning ? <RefreshCw size={12} aria-hidden="true" className="animate-spin" /> : <CheckCircle2 size={12} aria-hidden="true" />}
+                {isReactivating ? <RefreshCw size={12} aria-hidden="true" className="animate-spin" /> : <CheckCircle2 size={12} aria-hidden="true" />}
                 Reativar
               </button>
             ) : (
-              <button aria-label="Suspender utilizador" disabled={isActioning} onClick={onSuspend}
+              <button aria-label="Suspender utilizador" disabled={isAnyActioning} onClick={onSuspend}
                 className="flex items-center gap-1.5 bg-amber-600/20 hover:bg-amber-600/40 text-amber-400 text-xs font-bold px-3 py-1.5 rounded-lg border border-amber-500/30 transition-all disabled:opacity-30 whitespace-nowrap focus-visible:ring-2 focus-visible:ring-amber-500">
-                {isActioning ? <RefreshCw size={12} aria-hidden="true" className="animate-spin" /> : <AlertCircle size={12} aria-hidden="true" />}
+                {isSuspending ? <RefreshCw size={12} aria-hidden="true" className="animate-spin" /> : <AlertCircle size={12} aria-hidden="true" />}
                 Suspender
               </button>
             )
