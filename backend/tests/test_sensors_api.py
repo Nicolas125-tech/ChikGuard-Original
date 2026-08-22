@@ -7,7 +7,7 @@ import pytest
 import unittest.mock as mock
 from flask import Flask, request
 
-from src.api.sensors_api import handle_get_sensors_history, create_sensors_blueprint
+from src.api.sensors_api import handle_get_sensors_history, handle_acoustic_classify, create_sensors_blueprint
 
 @pytest.fixture
 def app():
@@ -88,3 +88,106 @@ def test_handle_get_sensors_history_limit_clamping(app):
         request.tenant_id = 1
         handle_get_sensors_history(deps)
         mock_order.limit.assert_called_with(1)
+
+
+def test_handle_acoustic_classify_model_not_loaded(app):
+    mock_classifier = mock.MagicMock()
+    mock_classifier.loaded = False
+    mock_classifier.last_error = "Model file not found"
+
+    deps = {
+        "audio_classifier": mock_classifier,
+        "sf": mock.MagicMock()
+    }
+
+    with app.test_request_context('/api/acoustic/classify', method='POST'):
+        response, status_code = handle_acoustic_classify(deps)
+        assert status_code == 400
+        assert response.json["msg"] == "Modelo de tosse nao carregado"
+        assert response.json["model_error"] == "Model file not found"
+
+
+def test_handle_acoustic_classify_sf_missing(app):
+    mock_classifier = mock.MagicMock()
+    mock_classifier.loaded = True
+
+    deps = {
+        "audio_classifier": mock_classifier,
+        "sf": None
+    }
+
+    with app.test_request_context('/api/acoustic/classify', method='POST'):
+        response, status_code = handle_acoustic_classify(deps)
+        assert status_code == 500
+        assert response.json["msg"] == "Dependencia soundfile nao disponivel no backend"
+
+
+def test_handle_acoustic_classify_no_audio_file(app):
+    mock_classifier = mock.MagicMock()
+    mock_classifier.loaded = True
+
+    deps = {
+        "audio_classifier": mock_classifier,
+        "sf": mock.MagicMock()
+    }
+
+    with app.test_request_context('/api/acoustic/classify', method='POST'):
+        response, status_code = handle_acoustic_classify(deps)
+        assert status_code == 400
+        assert response.json["msg"] == "Envie arquivo de audio no campo 'audio'"
+
+
+def test_handle_acoustic_classify_success(app):
+    import io
+    import numpy as np
+
+    mock_classifier = mock.MagicMock()
+    mock_classifier.loaded = True
+    mock_classifier.classify.return_value = {
+        "respiratory_health_index": 85.0,
+        "cough_index": 70.0,
+        "stress_audio_index": 15.0,
+    }
+
+    mock_sf = mock.MagicMock()
+    mock_sf.read.return_value = (np.array([0.1, 0.2]), 16000)
+
+    mock_db = mock.MagicMock()
+    mock_enqueue = mock.MagicMock()
+    mock_log_event = mock.MagicMock()
+    mock_audit = mock.MagicMock()
+    mock_reading_cls = mock.MagicMock()
+
+    acoustic_state = {}
+
+    deps = {
+        "audio_classifier": mock_classifier,
+        "sf": mock_sf,
+        "io": io,
+        "np": np,
+        "acoustic_state": acoustic_state,
+        "AcousticReading": mock_reading_cls,
+        "active_camera_id": "cam-1",
+        "db": mock_db,
+        "enqueue_sync_item": mock_enqueue,
+        "log_event": mock_log_event,
+        "audit": mock_audit,
+    }
+
+    audio_data = io.BytesIO(b"fake audio data")
+
+    with app.test_request_context(
+        '/api/acoustic/classify',
+        method='POST',
+        data={'audio': (audio_data, 'test.wav')}
+    ):
+        request.tenant_id = 1
+        response = handle_acoustic_classify(deps)
+
+        assert response.status_code == 200
+        data = response.json
+        assert data["msg"] == "Audio classificado com sucesso"
+        assert acoustic_state["cough_index"] == 70.0
+        assert mock_db.session.commit.called
+        assert mock_log_event.called
+        assert mock_audit.called
