@@ -151,3 +151,24 @@ def test_vet_welfare_agent_critical_acoustics_and_carcass(test_client):
     assert any("carcaça" in anomaly.lower() for anomaly in result["anomalies"])
     assert any("tosse" in anomaly.lower() for anomaly in result["anomalies"])
     assert result["logbook_entry_created"] is True
+
+
+def test_vet_welfare_agent_diagnostic_note_weight_exception(test_client):
+    """Testa se a exceção ao buscar WeightEstimate em _generate_diagnostic_note é capturada graciosamente sem falhar a geração do relatório."""
+    agent = VetWelfareAgent()
+    averages = {"temp": 25.0, "humi": 60.0, "amon": 5.0, "thi": 70.0, "resp": 0.9, "cough": 0.0, "stress": 0.1}
+    counts = {"carcass": 0, "prostration": 0, "immobility": 0, "behavior": 0}
+    with mock.patch("database.WeightEstimate.query") as mock_query:
+        mock_query.order_by.side_effect = Exception("DB Connection Error")
+        summary = agent._generate_diagnostic_note("NORMAL", averages, counts, [], [])
+        assert "[Diagnóstico Veterinário - NORMAL]" in summary
+        assert "Desempenho de Marcha/Peso" not in summary
+
+
+def test_vet_welfare_agent_fetch_telemetry_db_exception(test_client):
+    """Testa a propagação de exceção no método fetch_telemetry quando ocorre falha no banco de dados."""
+    agent = VetWelfareAgent()
+    with mock.patch("database.SensorReading.query") as mock_query:
+        mock_query.filter.side_effect = Exception("Database query failed")
+        with pytest.raises(Exception, match="Database query failed"):
+            agent.fetch_telemetry()
