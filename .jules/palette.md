@@ -27,3 +27,7 @@
 ## 2024-05-18 - Decorative Icons in Action Buttons
 **Learning:** Found an accessibility issue where action buttons containing SVG icons (like `RefreshCw` or `Download`) alongside text were reading out confusingly to screen readers or adding unnecessary noise because the icons lacked `aria-hidden="true"`.
 **Action:** Always add `aria-hidden="true"` to decorative or supplementary icons inside buttons that already have descriptive text, and ensure the button itself has `focus-visible` utility classes for clear keyboard navigation cues.
+
+## 2024-11-20 - Shared Table Row Loading UX Bug
+**Learning:** Using a single `actionLoading = userId` state for a table row with multiple distinct actions (Approve, Suspend, Delete) causes all buttons in that row to show a loading spinner simultaneously when any one action is triggered. This creates a confusing UX where the user isn't sure which action is actually processing.
+**Action:** Always scope loading states to both the unique entity ID *and* the specific action being performed (e.g., `actionLoading = '${userId}-approve'`) when a row contains multiple interactive elements.
