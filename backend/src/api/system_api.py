@@ -74,14 +74,74 @@ def _get_energy_summary(EnergyUsageDaily, ACTIVE_CAMERA_ID, today):
     }
 
 
-def create_system_blueprint(deps):
-    bp = Blueprint("system_api", __name__)
+def _build_behavior_data(behavior_state):
+    return {
+        "status": behavior_state.get("status", ""),
+        "message": behavior_state.get("message", ""),
+        "dispersion_ratio": behavior_state.get("dispersion_ratio", 0.0),
+        "edge_ratio": behavior_state.get("edge_ratio", 0.0),
+    }
 
-    # Extract all the required deps
-    _utcnow = deps.get("utcnow")
-    _require_permission = deps.get("require_permission")
-    _guard_critical_action = deps.get("guard_critical_action")
-    _audit = deps.get("audit")
+
+def _build_sensors_data(sensor_state):
+    return {
+        "humidity_pct": sensor_state.get("humidity_pct", 0),
+        "ammonia_ppm": sensor_state.get("ammonia_ppm", 0),
+        "feed_level_pct": sensor_state.get("feed_level_pct", 0),
+        "water_level_pct": sensor_state.get("water_level_pct", 0),
+    }
+
+
+def _build_automation_data(estado_dispositivos, targets):
+    return {
+        "enabled": (
+            bool(estado_dispositivos.get("modo_automatico", False))
+            if estado_dispositivos
+            else False
+        ),
+        "targets": targets,
+    }
+
+
+def _build_weight_data(weight_state, detector):
+    return {
+        "avg_weight_g": weight_state.get("avg_weight_g", 0),
+        "ideal_weight_g": weight_state.get("ideal_weight_g", 0),
+        "confidence": weight_state.get("confidence", 0),
+        "method": (
+            "segmentation_area"
+            if (detector and getattr(detector, "supports_segmentation", False))
+            else "bbox_area_fallback"
+        ),
+    }
+
+
+def _build_acoustic_data(acoustic_state, audio_classifier):
+    return {
+        "respiratory_health_index": acoustic_state.get("respiratory_health_index", 0),
+        "cough_index": acoustic_state.get("cough_index", 0),
+        "stress_audio_index": acoustic_state.get("stress_audio_index", 0),
+        "source": acoustic_state.get("source", ""),
+        "trained_model_loaded": (bool(audio_classifier.loaded) if audio_classifier else False),
+    }
+
+
+def _build_tamper_data(tamper_state):
+    return {
+        "last_alert_ts": float(tamper_state.get("last_alert_ts", 0.0)),
+        "last_causes": tamper_state.get("last_causes", []),
+        "alerts_count": int(tamper_state.get("alerts_count", 0)),
+    }
+
+
+def _build_carcass_data(carcass_state):
+    return {
+        "count": len(carcass_state.get("items", [])),
+        "audio_alert": len(carcass_state.get("items", [])) > 0,
+    }
+
+
+def _add_system_info_routes(bp, deps):
     APP_START_TIME = deps.get("APP_START_TIME", time.time())
     t = deps.get("camera_thread")
     weekly_thread = deps.get("weekly_thread")
@@ -102,26 +162,6 @@ def create_system_blueprint(deps):
     ACTIVE_CAMERA_ID = deps.get("active_camera_id")
     audio_classifier = deps.get("audio_classifier")
     COUGH_MODEL_PATH = deps.get("COUGH_MODEL_PATH")
-    PLUGIN_MANAGER = deps.get("PLUGIN_MANAGER")
-    PLUGINS_ROOT = deps.get("PLUGINS_ROOT")
-    LOGGER = deps.get("LOGGER")
-    SETTINGS = deps.get("settings")
-    lock = deps.get("lock")
-    object_count = deps.get("object_count")
-    live_birds = deps.get("live_birds", {})
-    BIRD_LIVE_TTL_SEC = deps.get("BIRD_LIVE_TTL_SEC", 5.0)
-    _temperature_targets = deps.get("temperature_targets")
-    _active_batch = deps.get("active_batch")
-    estado_dispositivos = deps.get("estado_dispositivos")
-    behavior_state = deps.get("behavior_state", {})
-    sensor_state = deps.get("sensor_state", {})
-    weight_state = deps.get("weight_state", {})
-    acoustic_state = deps.get("acoustic_state", {})
-    _energy_forecast = deps.get("energy_forecast")
-    weather_state = deps.get("weather_state", {})
-    tamper_state = deps.get("tamper_state", {})
-    carcass_state = deps.get("carcass_state", {})
-    _comfort_score = deps.get("comfort_score")
 
     @bp.route("/api/system-info", methods=["GET"])
     @require_auth()
@@ -158,6 +198,15 @@ def create_system_blueprint(deps):
             }
         )
 
+
+def _add_plugin_routes(bp, deps):
+    _guard_critical_action = deps.get("guard_critical_action")
+    PLUGIN_MANAGER = deps.get("PLUGIN_MANAGER")
+    PLUGINS_ROOT = deps.get("PLUGINS_ROOT")
+    LOGGER = deps.get("LOGGER")
+    SETTINGS = deps.get("settings")
+    _audit = deps.get("audit")
+
     @bp.route("/api/plugins", methods=["GET"])
     @require_auth()
     def get_plugins():
@@ -179,6 +228,10 @@ def create_system_blueprint(deps):
             _audit("plugins_reloaded", source="backend", details={"count": len(items)})
         return jsonify({"msg": "Plugins recarregados", "count": len(items), "plugins": items})
 
+
+def _add_audit_routes(bp, deps):
+    _require_permission = deps.get("require_permission")
+
     @bp.route("/api/audit/logs", methods=["GET"])
     def audit_logs():
         if _require_permission:
@@ -189,6 +242,12 @@ def create_system_blueprint(deps):
         limit = max(1, min(limit, 5000))
         rows = AuditLog.query.order_by(AuditLog.id.desc()).limit(limit).all()
         return jsonify({"count": len(rows), "items": [r.to_dict() for r in rows]})
+
+
+def _add_status_history_routes(bp, deps):
+    ACTIVE_CAMERA_ID = deps.get("active_camera_id")
+    lock = deps.get("lock")
+    object_count = deps.get("object_count")
 
     @bp.route("/api/status", methods=["GET"])
     @require_auth()
@@ -229,105 +288,31 @@ def create_system_blueprint(deps):
             count = object_count.get() if callable(object_count) else object_count
         return jsonify({"count": count})
 
-    def _build_behavior_data(behavior_state):
-        return {
-            "status": behavior_state.get("status", ""),
-            "message": behavior_state.get("message", ""),
-            "dispersion_ratio": behavior_state.get("dispersion_ratio", 0.0),
-            "edge_ratio": behavior_state.get("edge_ratio", 0.0),
-        }
 
-    def _build_sensors_data(sensor_state):
-        return {
-            "humidity_pct": sensor_state.get("humidity_pct", 0),
-            "ammonia_ppm": sensor_state.get("ammonia_ppm", 0),
-            "feed_level_pct": sensor_state.get("feed_level_pct", 0),
-            "water_level_pct": sensor_state.get("water_level_pct", 0),
-        }
-
-    def _build_automation_data(estado_dispositivos, targets):
-        return {
-            "enabled": (
-                bool(estado_dispositivos.get("modo_automatico", False))
-                if estado_dispositivos
-                else False
-            ),
-            "targets": targets,
-        }
-
-    def _build_weight_data(weight_state, detector):
-        return {
-            "avg_weight_g": weight_state.get("avg_weight_g", 0),
-            "ideal_weight_g": weight_state.get("ideal_weight_g", 0),
-            "confidence": weight_state.get("confidence", 0),
-            "method": (
-                "segmentation_area"
-                if (detector and getattr(detector, "supports_segmentation", False))
-                else "bbox_area_fallback"
-            ),
-        }
-
-    def _build_acoustic_data(acoustic_state, audio_classifier):
-        return {
-            "respiratory_health_index": acoustic_state.get("respiratory_health_index", 0),
-            "cough_index": acoustic_state.get("cough_index", 0),
-            "stress_audio_index": acoustic_state.get("stress_audio_index", 0),
-            "source": acoustic_state.get("source", ""),
-            "trained_model_loaded": (bool(audio_classifier.loaded) if audio_classifier else False),
-        }
-
-    def _build_tamper_data(tamper_state):
-        return {
-            "last_alert_ts": float(tamper_state.get("last_alert_ts", 0.0)),
-            "last_causes": tamper_state.get("last_causes", []),
-            "alerts_count": int(tamper_state.get("alerts_count", 0)),
-        }
-
-    def _build_carcass_data(carcass_state):
-        return {
-            "count": len(carcass_state.get("items", [])),
-            "audio_alert": len(carcass_state.get("items", [])) > 0,
-        }
-
-    def _get_bird_counts(now, lock, object_count, live_birds, BIRD_LIVE_TTL_SEC, BirdIdentity):
-        global _cached_total_vistas, _cached_total_vistas_time
-        if _cached_total_vistas is None or (now - _cached_total_vistas_time) > 60:
-            _cached_total_vistas = BirdIdentity.query.count()
-            _cached_total_vistas_time = now
-
-        count = 0
-        alive_count = 0
-        if lock:
-            with lock:
-                count = object_count.get() if callable(object_count) else object_count
-                alive_count = sum(
-                    1
-                    for info in live_birds.values()
-                    if (now - float(info["last_seen"])) <= BIRD_LIVE_TTL_SEC
-                )
-        else:
-            count = object_count.get() if callable(object_count) else object_count
-            alive_count = sum(
-                1
-                for info in live_birds.values()
-                if (now - float(info["last_seen"])) <= BIRD_LIVE_TTL_SEC
-            )
-        return {
-            "contagem_aves": count,
-            "aves_vivas_individuais": alive_count,
-            "total_aves_vistas": _cached_total_vistas,
-        }
-
-    def _get_energy_summary(EnergyUsageDaily, ACTIVE_CAMERA_ID, today):
-        energy_today = EnergyUsageDaily.query.filter_by(
-            camera_id=ACTIVE_CAMERA_ID, day=today
-        ).first()
-        vent_sec_today = float(energy_today.ventilacao_seconds) if energy_today else 0.0
-        aq_sec_today = float(energy_today.aquecedor_seconds) if energy_today else 0.0
-        return {
-            "ventilacao_seconds": round(vent_sec_today, 2),
-            "aquecedor_seconds": round(aq_sec_today, 2),
-        }
+def _add_summary_routes(bp, deps):
+    _utcnow = deps.get("utcnow")
+    TRACKER_CONFIG = deps.get("TRACKER_CONFIG")
+    BIRD_CLASS_NAME = deps.get("BIRD_CLASS_NAME")
+    ACTIVE_CAMERA_ID = deps.get("active_camera_id")
+    audio_classifier = deps.get("audio_classifier")
+    detector = deps.get("detector")
+    lock = deps.get("lock")
+    object_count = deps.get("object_count")
+    live_birds = deps.get("live_birds", {})
+    BIRD_LIVE_TTL_SEC = deps.get("BIRD_LIVE_TTL_SEC", 5.0)
+    _temperature_targets = deps.get("temperature_targets")
+    _active_batch = deps.get("active_batch")
+    estado_dispositivos = deps.get("estado_dispositivos")
+    MODO_DETECCAO = deps.get("MODO_DETECCAO")
+    behavior_state = deps.get("behavior_state", {})
+    sensor_state = deps.get("sensor_state", {})
+    weight_state = deps.get("weight_state", {})
+    acoustic_state = deps.get("acoustic_state", {})
+    _energy_forecast = deps.get("energy_forecast")
+    weather_state = deps.get("weather_state", {})
+    tamper_state = deps.get("tamper_state", {})
+    carcass_state = deps.get("carcass_state", {})
+    _comfort_score = deps.get("comfort_score")
 
     @bp.route("/api/summary", methods=["GET"])
     @require_auth()
@@ -369,6 +354,10 @@ def create_system_blueprint(deps):
                 "comfort_score": _comfort_score() if _comfort_score else 0,
             }
         )
+
+
+def _add_events_alerts_routes(bp, deps):
+    ACTIVE_CAMERA_ID = deps.get("active_camera_id")
 
     @bp.route("/api/events", methods=["GET"])
     @require_auth()
@@ -441,10 +430,27 @@ def create_system_blueprint(deps):
 
         return jsonify(itens[:100])
 
+
+def _add_weather_routes(bp, deps):
+    weather_state = deps.get("weather_state", {})
+
     @bp.route("/api/weather/forecast", methods=["GET"])
     @require_auth()
     def weather_forecast():
         return jsonify(weather_state)
+
+
+def create_system_blueprint(deps):
+    """Creates the main system blueprint for handling all core API routes."""
+    bp = Blueprint("system_api", __name__)
+
+    _add_system_info_routes(bp, deps)
+    _add_plugin_routes(bp, deps)
+    _add_audit_routes(bp, deps)
+    _add_status_history_routes(bp, deps)
+    _add_summary_routes(bp, deps)
+    _add_events_alerts_routes(bp, deps)
+    _add_weather_routes(bp, deps)
 
     add_remaining_routes(bp, deps)
     return bp
