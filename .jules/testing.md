@@ -24,3 +24,7 @@
 ## 2026-08-20 - Fix OpenCV MagicMock pollution
 **Learning:** Found that tests utilizing `cv2` were crashing due to `sys.modules["cv2"] = MagicMock()` pollution from preceding test files in the test suite run.
 **Action:** Applied a programmatic hotfix to forcefully delete `sys.modules["cv2"]` if it was instantiated as a `MagicMock` at the beginning of all test files.
+
+## 2026-08-22 - Add unit tests for DB exception in Agent Base
+**Learning:** Mocking SQLAlchemy queries with `side_effect = Exception(...)` allows testing exception handling in database access methods like `_generate_diagnostic_note` and failure propagation in `fetch_telemetry`.
+**Action:** Added `test_vet_welfare_agent_diagnostic_note_weight_exception` and `test_vet_welfare_agent_fetch_telemetry_db_exception` in `backend/tests/test_vet_agent.py`.
