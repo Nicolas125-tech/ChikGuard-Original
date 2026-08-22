@@ -129,11 +129,48 @@ def handle_acoustic_history(deps):
     return jsonify({"count": len(rows), "items": [r.to_dict() for r in reversed(rows)]})
 
 
-def handle_acoustic_classify(deps):
+def _validate_acoustic_classify_deps(deps):
+    """Validate dependencies required for acoustic classification."""
     audio_classifier = deps.get("audio_classifier")
     sf_mod = deps.get("sf")
-    io_mod = deps.get("io")
-    np_mod = deps.get("np")
+
+    if not audio_classifier or not getattr(audio_classifier, "loaded", False):
+        return None, (
+            jsonify(
+                {
+                    "msg": "Modelo de tosse nao carregado",
+                    "model_error": getattr(audio_classifier, "last_error", None),
+                }
+            ),
+            400,
+        )
+    if sf_mod is None:
+        return None, (
+            jsonify({"msg": "Dependencia soundfile nao disponivel no backend"}),
+            500,
+        )
+
+    return (audio_classifier, sf_mod), None
+
+
+def _decode_audio_file(f, sf_mod, io_mod, np_mod):
+    """Read and decode audio file data from request, checking size limits."""
+    raw = f.read(5 * 1024 * 1024 + 1)
+    if len(raw) > 5 * 1024 * 1024:
+        return None, (
+            jsonify({"msg": "Arquivo de audio muito grande (max 5MB)"}),
+            413,
+        )
+
+    y, sr = sf_mod.read(io_mod.BytesIO(raw), always_2d=False)
+    if isinstance(y, np_mod.ndarray) and y.ndim > 1:
+        y = np_mod.mean(y, axis=1)
+
+    return (y, int(sr)), None
+
+
+def _save_and_audit_acoustic_result(result, deps):
+    """Update acoustic state, save reading record, enqueue sync, and log audit/alert events."""
     acoustic_state = deps.get("acoustic_state")
     AcousticReading = deps.get("AcousticReading")
     active_camera_id = deps.get("active_camera_id")
@@ -142,33 +179,74 @@ def handle_acoustic_classify(deps):
     log_event = deps.get("log_event")
     audit = deps.get("audit")
 
-    if not audio_classifier.loaded:
-        return (
-            jsonify(
-                {
-                    "msg": "Modelo de tosse nao carregado",
-                    "model_error": audio_classifier.last_error,
-                }
-            ),
-            400,
+    acoustic_state.update(
+        {
+            "respiratory_health_index": float(result["respiratory_health_index"]),
+            "cough_index": float(result["cough_index"]),
+            "stress_audio_index": float(result["stress_audio_index"]),
+            "source": "trained_model",
+            "updated_at": time.time(),
+        }
+    )
+
+    row = AcousticReading(
+        tenant_id=request.tenant_id,
+        camera_id=active_camera_id,
+        respiratory_health_index=acoustic_state["respiratory_health_index"],
+        cough_index=acoustic_state["cough_index"],
+        stress_audio_index=acoustic_state["stress_audio_index"],
+        source="trained_model",
+    )
+
+    db.session.add(row)
+    db.session.commit()
+    if enqueue_sync_item:
+        enqueue_sync_item("acoustic_reading", row.to_dict())
+
+    if acoustic_state["cough_index"] > 60 and log_event:
+        log_event(
+            event_type="respiratory_alert",
+            level="high",
+            message="Pico de tosse detectado por modelo acustico treinado",
+            metadata={
+                "cough_index": acoustic_state["cough_index"],
+                "source": "trained_model",
+            },
         )
-    if sf_mod is None:
-        return jsonify({"msg": "Dependencia soundfile nao disponivel no backend"}), 500
+    if audit:
+        audit(
+            "acoustic_file_classified",
+            source="manual",
+            details={
+                "source": "trained_model",
+                "cough_index": acoustic_state["cough_index"],
+            },
+        )
+
+    return jsonify({"msg": "Audio classificado com sucesso", "result": acoustic_state})
+
+
+def handle_acoustic_classify(deps):
+    """Classify acoustic signals from uploaded audio file."""
+    validated, err_resp = _validate_acoustic_classify_deps(deps)
+    if err_resp:
+        return err_resp
+
+    audio_classifier, sf_mod = validated
+    io_mod = deps.get("io")
+    np_mod = deps.get("np")
 
     f = request.files.get("audio")
     if f is None:
         return jsonify({"msg": "Envie arquivo de audio no campo 'audio'"}), 400
 
     try:
-        # Limite de 5MB para evitar DoS por arquivos gigantes
-        raw = f.read(5 * 1024 * 1024 + 1)
-        if len(raw) > 5 * 1024 * 1024:
-            return jsonify({"msg": "Arquivo de audio muito grande (max 5MB)"}), 413
-        y, sr = sf_mod.read(io_mod.BytesIO(raw), always_2d=False)
-        if isinstance(y, np_mod.ndarray) and y.ndim > 1:
-            y = np_mod.mean(y, axis=1)
+        audio_data, err_resp = _decode_audio_file(f, sf_mod, io_mod, np_mod)
+        if err_resp:
+            return err_resp
 
-        result = audio_classifier.classify(y, int(sr))
+        y, sr = audio_data
+        result = audio_classifier.classify(y, sr)
         if result is None:
             return (
                 jsonify(
@@ -180,51 +258,7 @@ def handle_acoustic_classify(deps):
                 500,
             )
 
-        acoustic_state.update(
-            {
-                "respiratory_health_index": float(result["respiratory_health_index"]),
-                "cough_index": float(result["cough_index"]),
-                "stress_audio_index": float(result["stress_audio_index"]),
-                "source": "trained_model",
-                "updated_at": time.time(),
-            }
-        )
-
-        row = AcousticReading(
-            tenant_id=request.tenant_id,
-            camera_id=active_camera_id,
-            respiratory_health_index=acoustic_state["respiratory_health_index"],
-            cough_index=acoustic_state["cough_index"],
-            stress_audio_index=acoustic_state["stress_audio_index"],
-            source="trained_model",
-        )
-
-        # db interaction without app_context explicitly if this is run inside a request
-        db.session.add(row)
-        db.session.commit()
-        enqueue_sync_item("acoustic_reading", row.to_dict())
-
-        if acoustic_state["cough_index"] > 60:
-            log_event(
-                event_type="respiratory_alert",
-                level="high",
-                message="Pico de tosse detectado por modelo acustico treinado",
-                metadata={
-                    "cough_index": acoustic_state["cough_index"],
-                    "source": "trained_model",
-                },
-            )
-        audit(
-            "acoustic_file_classified",
-            source="manual",
-            details={
-                "source": "trained_model",
-                "cough_index": acoustic_state["cough_index"],
-            },
-        )
-        return jsonify(
-            {"msg": "Audio classificado com sucesso", "result": acoustic_state}
-        )
+        return _save_and_audit_acoustic_result(result, deps)
 
     except Exception as exc:
         import logging
