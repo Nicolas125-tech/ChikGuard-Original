@@ -237,51 +237,24 @@ class VetWelfareAgent(ChikGuardAgent):
             summary += "\nLote saudável e confortável. Nenhuma recomendação."
         return summary
 
-    def run(self, context: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Inicia a análise e opcionalmente gera uma entrada no logbook."""
-        context = context or {}
-        telemetry = self.fetch_telemetry(hours=context.get("hours", 4))
-        averages, counts = self._aggregate_averages(telemetry)
-
-        recommendations = []
-        anomalies = []
-
-        # Executa as regras de diagnóstico em cadeia
-        amonia_status = self._diagnose_ammonia(averages["amon"], recommendations, anomalies)
-        
-        # Correlação patológica de sinergia entre Amônia (NH3) e tosses acústicas
-        synergy_status = "NORMAL"
-        if averages["amon"] > 10.0 and averages["cough"] > 0.3:
+    def _check_ammonia_cough_synergy(
+        self, amon: float, cough: float, recommendations: List[str], anomalies: List[str]
+    ) -> str:
+        """Verifica sinergia patológica entre amônia elevada e tosses acústicas."""
+        if amon > 10.0 and cough > 0.3:
             anomalies.append(
-                f"Sinergia Patológica Detectada: Amônia elevada ({averages['amon']:.1f} ppm) combinada com tosses acústicas recorrentes ({averages['cough']:.2f}). Alto risco de lesão ciliar na traqueia e infecção respiratória secundária (ex: Colibacilose, Micoplasmose)."
+                f"Sinergia Patológica Detectada: Amônia elevada ({amon:.1f} ppm) combinada com tosses acústicas recorrentes ({cough:.2f}). Alto risco de lesão ciliar na traqueia e infecção respiratória secundária (ex: Colibacilose, Micoplasmose)."
             )
             recommendations.append(
                 "Urgente: Incrementar ventilação de renovação para baixar amônia abaixo de 10 ppm e realizar avaliação diagnóstica clínica."
             )
-            synergy_status = "CRITICAL"
+            return "CRITICAL"
+        return "NORMAL"
 
-        resp_status = self._diagnose_respiratory_health(
-            averages["cough"], averages["resp"], averages["stress"], recommendations, anomalies
-        )
-        
-        thermal_status = self._diagnose_thermal_index(
-            averages["thi"], recommendations, anomalies
-        )
-        
-        visual_counts = VisualCounts(
-            carcass=counts["carcass"],
-            prostration=counts["prostration"],
-            immobility=counts["immobility"],
-            behavior=counts["behavior"],
-        )
-        visual_status = self._diagnose_visual_anomalies(
-            visual_counts,
-            recommendations,
-            anomalies,
-        )
-
-        # Análise de desempenho zootécnico e ganho de peso relativo à curva genética Ross 308
-        weight_status = "NORMAL"
+    def _analyze_zootechnical_weight(
+        self, recommendations: List[str], anomalies: List[str]
+    ) -> str:
+        """Analisa o desvio de peso estimado em relação ao padrão da linhagem Ross 308."""
         try:
             latest_weight = WeightEstimate.query.order_by(WeightEstimate.timestamp.desc()).first()
             if latest_weight and latest_weight.ideal_weight_g and latest_weight.ideal_weight_g > 0:
@@ -289,7 +262,6 @@ class VetWelfareAgent(ChikGuardAgent):
                 ideal_w = latest_weight.ideal_weight_g
                 dev_pct = ((avg_w - ideal_w) / ideal_w) * 100.0
                 
-                # Se o peso estiver mais de 15% abaixo do padrão genético
                 if dev_pct < -15.0:
                     anomalies.append(
                         f"Desvio de Desempenho Zootécnico: Peso médio estimado ({avg_w:.1f}g) está {abs(dev_pct):.1f}% abaixo da curva genética Ross 308 (Esperado: {ideal_w:.1f}g)."
@@ -297,25 +269,15 @@ class VetWelfareAgent(ChikGuardAgent):
                     recommendations.append(
                         "Verificar a qualidade da ração, acesso e uniformidade de distribuição dos comedouros/bebedouros e verificar sintomas de infecção subclínica (como disbiose ou coccidiose)."
                     )
-                    weight_status = "WARNING"
-                    
-                    # Se o desvio for extremo (> 25%), eleva para crítico
-                    if dev_pct < -25.0:
-                        weight_status = "CRITICAL"
+                    return "CRITICAL" if dev_pct < -25.0 else "WARNING"
         except Exception as e:
             logger.error(f"Erro ao analisar desvio de peso zootécnico no VetWelfareAgent: {e}")
+        return "NORMAL"
 
-        # Escolhe o status mais grave (CRITICAL > WARNING > NORMAL)
-        status_rank = {"NORMAL": 0, "WARNING": 1, "CRITICAL": 2}
-        welfare_status = max(
-            [amonia_status, synergy_status, resp_status, thermal_status, visual_status, weight_status], key=lambda s: status_rank[s]
-        )
-
-        summary_text = self._generate_diagnostic_note(
-            welfare_status, averages, counts, anomalies, recommendations
-        )
-
-        # Registro no diário de bordo (BatchLogbook) do lote ativo se status for de atenção/crítico
+    def _record_batch_logbook(
+        self, welfare_status: str, summary_text: str, context: Dict[str, Any]
+    ) -> Tuple[bool, str]:
+        """Persiste o relatório clínico no diário de bordo se o status exigir ou for forçado."""
         log_created = False
         if welfare_status in {"WARNING", "CRITICAL"} or context.get("force_log", False):
             active_batch = Batch.query.filter(Batch.active == True).first()
@@ -334,6 +296,54 @@ class VetWelfareAgent(ChikGuardAgent):
             except Exception as e:
                 db.session.rollback()
                 summary_text += f"\n[Erro ao salvar no Logbook: {e}]"
+        return log_created, summary_text
+
+    def run(self, context: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Inicia a análise e opcionalmente gera uma entrada no logbook."""
+        context = context or {}
+        telemetry = self.fetch_telemetry(hours=context.get("hours", 4))
+        averages, counts = self._aggregate_averages(telemetry)
+
+        recommendations = []
+        anomalies = []
+
+        # Executa as regras de diagnóstico em cadeia
+        amonia_status = self._diagnose_ammonia(averages["amon"], recommendations, anomalies)
+        synergy_status = self._check_ammonia_cough_synergy(
+            averages["amon"], averages["cough"], recommendations, anomalies
+        )
+        resp_status = self._diagnose_respiratory_health(
+            averages["cough"], averages["resp"], averages["stress"], recommendations, anomalies
+        )
+        thermal_status = self._diagnose_thermal_index(
+            averages["thi"], recommendations, anomalies
+        )
+
+        visual_counts = VisualCounts(
+            carcass=counts["carcass"],
+            prostration=counts["prostration"],
+            immobility=counts["immobility"],
+            behavior=counts["behavior"],
+        )
+        visual_status = self._diagnose_visual_anomalies(
+            visual_counts,
+            recommendations,
+            anomalies,
+        )
+        weight_status = self._analyze_zootechnical_weight(recommendations, anomalies)
+
+        # Escolhe o status mais grave (CRITICAL > WARNING > NORMAL)
+        status_rank = {"NORMAL": 0, "WARNING": 1, "CRITICAL": 2}
+        welfare_status = max(
+            [amonia_status, synergy_status, resp_status, thermal_status, visual_status, weight_status],
+            key=lambda s: status_rank[s],
+        )
+
+        summary_text = self._generate_diagnostic_note(
+            welfare_status, averages, counts, anomalies, recommendations
+        )
+
+        log_created, summary_text = self._record_batch_logbook(welfare_status, summary_text, context)
 
         return {
             "agent": self.name,
