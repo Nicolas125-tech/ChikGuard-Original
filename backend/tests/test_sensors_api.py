@@ -7,7 +7,7 @@ import pytest
 import unittest.mock as mock
 from flask import Flask, request
 
-from src.api.sensors_api import handle_get_sensors_history, handle_acoustic_classify, create_sensors_blueprint
+from src.api.sensors_api import handle_get_sensors_history, handle_acoustic_classify, handle_check_anomaly, create_sensors_blueprint
 
 @pytest.fixture
 def app():
@@ -191,3 +191,137 @@ def test_handle_acoustic_classify_success(app):
         assert mock_db.session.commit.called
         assert mock_log_event.called
         assert mock_audit.called
+
+
+def test_handle_check_anomaly_bootstrap_history(app):
+    mock_sensor_reading = mock.MagicMock()
+    mock_sensor_reading.camera_id.__eq__.return_value = True
+    mock_sensor_reading.timestamp.__ge__.return_value = True
+
+    mock_query = mock.MagicMock()
+    mock_sensor_reading.query = mock_query
+    mock_filter = mock.MagicMock()
+    mock_order = mock.MagicMock()
+    mock_limit = mock.MagicMock()
+
+    mock_query.filter.return_value = mock_filter
+    mock_filter.order_by.return_value = mock_order
+    mock_order.limit.return_value = mock_limit
+    mock_limit.all.return_value = []
+
+    deps = {
+        "active_camera_id": "cam-1",
+        "SensorReading": mock_sensor_reading,
+        "sensor_state": {"temperature_c": 28.0, "humidity_pct": 60.0, "ammonia_ppm": 15.0},
+        "acoustic_state": {"cough_index": 5.0},
+        "utcnow": mock.MagicMock(),
+        "timedelta": mock.MagicMock(),
+        "log_event": mock.MagicMock(),
+    }
+
+    with app.test_request_context("/api/sensors/anomaly"):
+        request.tenant_id = 1
+        response = handle_check_anomaly(deps)
+        assert response.status_code == 200
+        data = response.json
+        assert "is_anomaly" in data
+        assert data["is_anomaly"] is False
+
+
+def test_handle_check_anomaly_detected_logs_event(app):
+    mock_sensor_reading = mock.MagicMock()
+    mock_sensor_reading.camera_id.__eq__.return_value = True
+    mock_sensor_reading.timestamp.__ge__.return_value = True
+
+    mock_query = mock.MagicMock()
+    mock_sensor_reading.query = mock_query
+    mock_filter = mock.MagicMock()
+    mock_order = mock.MagicMock()
+    mock_limit = mock.MagicMock()
+
+    mock_query.filter.return_value = mock_filter
+    mock_filter.order_by.return_value = mock_order
+    mock_order.limit.return_value = mock_limit
+
+    # Generate normal history points with variance for IsolationForest
+    import random
+    random.seed(42)
+    history_rows = []
+    for _ in range(200):
+        row = mock.MagicMock()
+        row.temperature_c = random.uniform(27.5, 28.5)
+        row.humidity_pct = random.uniform(59.5, 60.5)
+        row.ammonia_ppm = random.uniform(14.5, 15.5)
+        history_rows.append(row)
+
+    mock_limit.all.return_value = history_rows
+    mock_log_event = mock.MagicMock()
+
+    deps = {
+        "active_camera_id": "cam-1",
+        "SensorReading": mock_sensor_reading,
+        "sensor_state": {"temperature_c": 100.0, "humidity_pct": 10.0, "ammonia_ppm": 50.0},
+        "acoustic_state": {"cough_index": 50.0},
+        "utcnow": mock.MagicMock(),
+        "timedelta": mock.MagicMock(),
+        "log_event": mock_log_event,
+    }
+
+    with app.test_request_context("/api/sensors/anomaly"):
+        request.tenant_id = 1
+        response = handle_check_anomaly(deps)
+        assert response.status_code == 200
+        data = response.json
+        assert data["is_anomaly"] is True
+        assert mock_log_event.called
+        assert mock_log_event.call_args[1]["event_type"] == "multivariate_anomaly"
+
+
+def test_check_anomaly_blueprint_route(app):
+    import os
+    import jwt
+
+    os.environ["SUPABASE_JWT_SECRET"] = "dummy_secret_dummy_secret_dummy_secret_for_testing_32b"
+    os.environ["TESTING"] = "1"
+
+    token = jwt.encode(
+        {"sub": "user-123", "aud": "authenticated", "app_metadata": {"role": "operator", "tenant_id": 1}},
+        os.environ["SUPABASE_JWT_SECRET"],
+        algorithm="HS256",
+    )
+
+    mock_sensor_reading = mock.MagicMock()
+    mock_sensor_reading.camera_id.__eq__.return_value = True
+    mock_sensor_reading.timestamp.__ge__.return_value = True
+
+    mock_query = mock.MagicMock()
+    mock_sensor_reading.query = mock_query
+    mock_filter = mock.MagicMock()
+    mock_order = mock.MagicMock()
+    mock_limit = mock.MagicMock()
+
+    mock_query.filter.return_value = mock_filter
+    mock_filter.order_by.return_value = mock_order
+    mock_order.limit.return_value = mock_limit
+    mock_limit.all.return_value = []
+
+    mock_log_event = mock.MagicMock()
+
+    deps = {
+        "active_camera_id": "cam-1",
+        "SensorReading": mock_sensor_reading,
+        "sensor_state": {"temperature_c": 28.0, "humidity_pct": 60.0, "ammonia_ppm": 15.0},
+        "acoustic_state": {"cough_index": 5.0},
+        "utcnow": mock.MagicMock(),
+        "timedelta": mock.MagicMock(),
+        "log_event": mock.MagicMock(),
+    }
+
+    bp = create_sensors_blueprint(deps)
+    app.register_blueprint(bp)
+
+    with app.test_client() as client:
+        res = client.get("/api/sensors/anomaly", headers={"Authorization": f"Bearer {token}"})
+        assert res.status_code == 200
+        data = res.get_json()
+        assert "is_anomaly" in data

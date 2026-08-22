@@ -28,3 +28,8 @@
 ## 2026-08-22 - Add unit tests for DB exception in Agent Base
 **Learning:** Mocking SQLAlchemy queries with `side_effect = Exception(...)` allows testing exception handling in database access methods like `_generate_diagnostic_note` and failure propagation in `fetch_telemetry`.
 **Action:** Added `test_vet_welfare_agent_diagnostic_note_weight_exception` and `test_vet_welfare_agent_fetch_telemetry_db_exception` in `backend/tests/test_vet_agent.py`.
+
+## 2026-08-22 - Add unit and route tests for check_anomaly endpoint
+**What:** Added tests for `handle_check_anomaly` and `/api/sensors/anomaly` blueprint route in `sensors_api.py`.
+**Coverage:** Tested empty sensor history dataset bootstrapping, multivariate anomaly detection triggering global event log, and authenticated endpoint response.
+**Result:** Verified edge case handling and blueprint route execution for check_anomaly endpoint.
