@@ -276,6 +276,65 @@ class GaitAnalyzer:
             return "CLAUDICACAO_DETECTADA"
         return "NORMAL"
 
+    def _resolve_keypoint_indices(self, num_kps: int) -> Dict[str, int]:
+        """Resolve os índices dos keypoints com base na estrutura do esqueleto detectada."""
+        if num_kps >= 17:  # COCO
+            return {
+                "hip_idx": 11,
+                "lknee_idx": 13,
+                "rknee_idx": 14,
+                "lfoot_idx": 15,
+                "rfoot_idx": 16,
+                "neck_idx": 0,
+            }
+        elif num_kps >= 11:  # ChikGuard
+            return {
+                "hip_idx": 6,
+                "lknee_idx": 7,
+                "rknee_idx": 8,
+                "lfoot_idx": 9,
+                "rfoot_idx": 10,
+                "neck_idx": 3,
+            }
+        elif num_kps >= 6:  # Custom Simplificado
+            return {
+                "hip_idx": 2,
+                "lknee_idx": 3,
+                "rknee_idx": 3,
+                "lfoot_idx": 5,
+                "rfoot_idx": 5,
+                "neck_idx": 0,
+            }
+        else:
+            return {
+                "hip_idx": 0,
+                "lknee_idx": 0,
+                "rknee_idx": 0,
+                "lfoot_idx": 0,
+                "rfoot_idx": 0,
+                "neck_idx": 0,
+            }
+
+    def _calculate_sway_metrics(
+        self, history: List[Dict[str, Any]], num_kps: int, hip_idx: int, neck_idx: int, lfoot_idx: int
+    ) -> Tuple[float, float]:
+        """Calcula a oscilação lateral e a razão de oscilação normalizada."""
+        sway_positions = self._extract_positions_by_index(history, neck_idx if num_kps >= 11 else hip_idx)
+        lateral_sway = self._calculate_lateral_sway(sway_positions)
+
+        ref_extensions = []
+        for frame in history:
+            kps = frame["keypoints"]
+            if hip_idx < len(kps) and lfoot_idx < len(kps):
+                pt_hip = kps[hip_idx]
+                pt_foot = kps[lfoot_idx]
+                if pt_hip[0] > 0 and pt_foot[0] > 0:
+                    ref_extensions.append(np.linalg.norm(np.array(pt_foot[:2]) - np.array(pt_hip[:2])))
+
+        avg_ref_size = float(np.mean(ref_extensions)) if ref_extensions else 1.0
+        sway_ratio = lateral_sway / avg_ref_size if avg_ref_size > 0 else 0.0
+        return lateral_sway, sway_ratio
+
     def _analyze_individual(self, track_id: int) -> Dict[str, Any]:
         """Executa a análise biomecânica global para o track do animal."""
         history = self._history[track_id]
@@ -287,35 +346,13 @@ class GaitAnalyzer:
 
         # Resolução de esqueleto baseada no tamanho dos keypoints
         num_kps = len(history[0]["keypoints"])
-        
-        if num_kps >= 17:  # COCO
-            hip_idx = 11
-            lknee_idx = 13
-            rknee_idx = 14
-            lfoot_idx = 15
-            rfoot_idx = 16
-            neck_idx = 0
-        elif num_kps >= 11:  # ChikGuard
-            hip_idx = 6
-            lknee_idx = 7
-            rknee_idx = 8
-            lfoot_idx = 9
-            rfoot_idx = 10
-            neck_idx = 3
-        elif num_kps >= 6:  # Custom Simplificado
-            hip_idx = 2
-            lknee_idx = 3
-            rknee_idx = 3
-            lfoot_idx = 5
-            rfoot_idx = 5
-            neck_idx = 0
-        else:
-            hip_idx = 0
-            lknee_idx = 0
-            rknee_idx = 0
-            lfoot_idx = 0
-            rfoot_idx = 0
-            neck_idx = 0
+        kp_indices = self._resolve_keypoint_indices(num_kps)
+        hip_idx = kp_indices["hip_idx"]
+        lknee_idx = kp_indices["lknee_idx"]
+        rknee_idx = kp_indices["rknee_idx"]
+        lfoot_idx = kp_indices["lfoot_idx"]
+        rfoot_idx = kp_indices["rfoot_idx"]
+        neck_idx = kp_indices["neck_idx"]
 
         # 1. Análise de Mobilidade Geral
         hip_positions = self._extract_positions_by_index(history, hip_idx)
@@ -337,20 +374,9 @@ class GaitAnalyzer:
         )
 
         # 4. Análise de Oscilação Lateral (Lateral Sway)
-        sway_positions = self._extract_positions_by_index(history, neck_idx if num_kps >= 11 else hip_idx)
-        lateral_sway = self._calculate_lateral_sway(sway_positions)
-        
-        ref_extensions = []
-        for frame in history:
-            kps = frame["keypoints"]
-            if hip_idx < len(kps) and lfoot_idx < len(kps):
-                pt_hip = kps[hip_idx]
-                pt_foot = kps[lfoot_idx]
-                if pt_hip[0] > 0 and pt_foot[0] > 0:
-                    ref_extensions.append(np.linalg.norm(np.array(pt_foot[:2]) - np.array(pt_hip[:2])))
-        
-        avg_ref_size = float(np.mean(ref_extensions)) if ref_extensions else 1.0
-        sway_ratio = lateral_sway / avg_ref_size if avg_ref_size > 0 else 0.0
+        lateral_sway, sway_ratio = self._calculate_sway_metrics(
+            history, num_kps, hip_idx, neck_idx, lfoot_idx
+        )
 
         # 5. Classificação Zootécnica de Marcha de Kestin
         kestin_score, kestin_desc = self._calculate_kestin_gait_score(
