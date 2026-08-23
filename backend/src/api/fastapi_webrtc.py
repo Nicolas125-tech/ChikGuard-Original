@@ -86,39 +86,15 @@ def webrtc_pcs(user: UserContext = Depends(get_current_user)):
 
 # --- MJPEG Stream Otmizado ---
 @router.get("/video")
-def video_feed(token: str = None):
+async def video_feed(token: str = None):
     # JWT validacao embutida ou via middleware para streams GET
     # Como e tag <img src="..."/>, usamos query token na autenticacao
     if not token:
         raise HTTPException(status_code=401, detail="Token JWT requerido")
 
-    try:
-        # Validate JWT explicitly for streaming endpoint using query parameter
-        header = jwt.get_unverified_header(token)
-        alg = header.get("alg", "HS256")
-        decoded = None
-
-        if alg == "ES256":
-            public_key = _get_supabase_public_key(token)
-            if public_key:
-                decoded = jwt.decode(
-                    token, public_key, algorithms=["ES256"], audience="authenticated"
-                )
-
-        if decoded is None:
-            jwt_secret = os.environ.get("SUPABASE_JWT_SECRET") or SUPABASE_JWT_SECRET
-            if jwt_secret:
-                decoded = jwt.decode(
-                    token, jwt_secret, algorithms=["HS256"], audience="authenticated"
-                )
-
-        if decoded is None:
-            raise Exception("Token inválido")
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token JWT expirado")
-    except Exception as e:
-        logger.error(f"Erro de autenticacao de video (Token invalido): {str(e)}")
-        raise HTTPException(status_code=401, detail="Token JWT invalido")
+    # Use central authentication to ensure all security checks are applied
+    # This prevents bypassing global profile and status checks
+    await get_current_user(token)
 
     async def generate():
         encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
