@@ -104,7 +104,7 @@ function ProfileDrawer({ user, myRole, onClose, onSaved }) {
             <p className="text-xs text-slate-400 mt-0.5">{user.email}</p>
           </div>
           <button aria-label="Fechar" onClick={onClose} className="p-2 text-slate-500 hover:text-slate-300 rounded-lg hover:bg-slate-800 transition-all focus-visible:ring-2 focus-visible:ring-emerald-500">
-            <XCircle size={18} />
+            <XCircle size={18} aria-hidden="true" />
           </button>
         </div>
 
@@ -153,7 +153,7 @@ function ProfileDrawer({ user, myRole, onClose, onSaved }) {
                         ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-300'
                         : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600 hover:text-slate-200'
                     }`}>
-                    <Icon size={14} />
+                    <Icon size={14} aria-hidden="true" />
                     {meta.label}
                   </button>
                 );
@@ -456,7 +456,7 @@ export default function AdminPanel({ token, serverIP, role: myRole }) {
         <div>
           <h2 className="text-xl font-extrabold text-white tracking-tight flex items-center gap-3">
             <span className="bg-amber-500/15 p-2.5 rounded-xl border border-amber-500/30">
-              <ShieldCheck size={20} className="text-amber-400" />
+              <ShieldCheck size={20} aria-hidden="true" className="text-amber-400" />
             </span>
             Gestão de Identidade e Acesso (IAM)
           </h2>
@@ -466,7 +466,7 @@ export default function AdminPanel({ token, serverIP, role: myRole }) {
         </div>
         <button aria-label="Atualizar lista de utilizadores" onClick={fetchUsers} disabled={loading}
           className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 flex-shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500">
-          <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+          <RefreshCw size={15} aria-hidden="true" className={loading ? 'animate-spin' : ''} />
           Atualizar
         </button>
       </div>
@@ -475,7 +475,7 @@ export default function AdminPanel({ token, serverIP, role: myRole }) {
       {!isSupabaseConfigured && (
         <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-6">
           <div className="flex items-start gap-3">
-            <AlertTriangle size={20} className="text-amber-400 flex-shrink-0 mt-0.5" />
+            <AlertTriangle size={20} aria-hidden="true" className="text-amber-400 flex-shrink-0 mt-0.5" />
             <div>
               <p className="font-bold text-amber-300 mb-1">Supabase não configurado</p>
               <p className="text-amber-200/70 text-sm mb-3">
@@ -503,7 +503,7 @@ VITE_SUPABASE_ANON_KEY=eyJ...`}
                   activeTab === id
                     ? 'border-emerald-500 text-emerald-400 bg-emerald-500/10'
                     : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'}`}>
-                <Icon size={14} />
+                <Icon size={14} aria-hidden="true" />
                 {label}
                 {count > 0 && (
                   <span className="bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-tight">
@@ -517,7 +517,7 @@ VITE_SUPABASE_ANON_KEY=eyJ...`}
           {/* ── Search ── */}
           {!loading && users.length > 0 && (
             <div className="relative">
-              <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+              <Search size={15} aria-hidden="true" className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
               <input aria-label="Pesquisar utilizadores" type="text" placeholder="Pesquisar por nome, email, role, status..."
                 value={search} onChange={e => setSearch(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-800 text-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none focus:border-emerald-500/50 transition-colors placeholder-slate-600" />
@@ -527,7 +527,7 @@ VITE_SUPABASE_ANON_KEY=eyJ...`}
           {/* ── Error ── */}
           {error && (
             <div className="flex items-start gap-3 bg-red-500/10 border border-red-500/20 text-red-300 p-4 rounded-xl">
-              <AlertTriangle size={17} className="flex-shrink-0 mt-0.5 text-red-400" />
+              <AlertTriangle size={17} aria-hidden="true" className="flex-shrink-0 mt-0.5 text-red-400" />
               <span className="text-sm leading-relaxed">{error}</span>
             </div>
           )}
@@ -535,7 +535,7 @@ VITE_SUPABASE_ANON_KEY=eyJ...`}
           {/* ── Loading ── */}
           {loading && (
             <div className="flex items-center justify-center py-20 gap-3 text-slate-500">
-              <RefreshCw size={20} className="animate-spin text-emerald-500" />
+              <RefreshCw size={20} aria-hidden="true" className="animate-spin text-emerald-500" />
               <span className="text-sm">Carregando utilizadores do Supabase...</span>
             </div>
           )}
@@ -543,7 +543,7 @@ VITE_SUPABASE_ANON_KEY=eyJ...`}
           {/* ── Empty State ── */}
           {!loading && !error && filtered.length === 0 && (
             <div className="text-center py-20 bg-slate-900/50 rounded-2xl border border-slate-800">
-              <Users size={40} className="mx-auto mb-3 text-slate-700" />
+              <Users size={40} aria-hidden="true" className="mx-auto mb-3 text-slate-700" />
               <p className="font-semibold text-slate-400">
                 {search
                   ? 'Nenhum utilizador corresponde à pesquisa.'
@@ -648,7 +648,7 @@ function UserRow({ user: u, myLevel, actionLoading, onApprove, onReject, onSuspe
       {/* Role */}
       <td className="py-4 px-5">
         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold uppercase border ${roleMeta.cls}`}>
-          <RoleIcon size={10} />
+          <RoleIcon size={10} aria-hidden="true" />
           {roleMeta.label}
         </span>
       </td>
@@ -672,7 +672,7 @@ function UserRow({ user: u, myLevel, actionLoading, onApprove, onReject, onSuspe
           {canModify && !isSuperadmin && (
             <button aria-label="Editar perfil do utilizador" onClick={onEdit} disabled={isAnyActioning}
               className="flex items-center gap-1.5 bg-slate-700/50 hover:bg-slate-600/60 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-600/50 transition-all disabled:opacity-30 whitespace-nowrap focus-visible:ring-2 focus-visible:ring-emerald-500">
-              <Settings size={12} />
+              <Settings size={12} aria-hidden="true" />
               Editar
             </button>
           )}
@@ -693,7 +693,7 @@ function UserRow({ user: u, myLevel, actionLoading, onApprove, onReject, onSuspe
               </button>
               <button aria-label="Rejeitar utilizador" disabled={isAnyActioning} onClick={onReject}
                 className="flex items-center gap-1.5 bg-red-900/40 hover:bg-red-600/50 text-red-300 text-xs font-bold px-3 py-1.5 rounded-lg border border-red-700/50 transition-all disabled:opacity-50 whitespace-nowrap focus-visible:ring-2 focus-visible:ring-red-500">
-                {isRejecting ? <RefreshCw size={12} aria-hidden="true" className="animate-spin" /> : <XCircle size={12} />}
+                {isRejecting ? <RefreshCw size={12} aria-hidden="true" className="animate-spin" /> : <XCircle size={12} aria-hidden="true" />}
                 Rejeitar
               </button>
             </>
@@ -717,7 +717,7 @@ function UserRow({ user: u, myLevel, actionLoading, onApprove, onReject, onSuspe
 
           {isSuperadmin && (
             <span className="flex items-center gap-1 text-xs text-rose-400/60 font-semibold px-2">
-              <ShieldOff size={12} /> Protegido
+              <ShieldOff size={12} aria-hidden="true" /> Protegido
             </span>
           )}
         </div>
