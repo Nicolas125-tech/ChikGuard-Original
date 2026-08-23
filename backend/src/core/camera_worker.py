@@ -131,6 +131,780 @@ def _capture_thread_func():
             
         time.sleep(0.005)
 
+
+
+def _compute_iou(box_a: list, box_b: list) -> float:
+    ax1, ay1, ax2, ay2 = box_a
+    bx1, by1, bx2, by2 = box_b
+    ix1 = max(ax1, bx1); iy1 = max(ay1, by1)
+    ix2 = min(ax2, bx2); iy2 = min(ay2, by2)
+    inter = max(0, ix2 - ix1) * max(0, iy2 - iy1)
+    if inter == 0:
+        return 0.0
+    area_a = max(1, (ax2 - ax1) * (ay2 - ay1))
+    area_b = max(1, (bx2 - bx1) * (by2 - by1))
+    return inter / float(area_a + area_b - inter)
+
+def _is_human_shaped(box: list, frame_h: int, frame_w: int) -> bool:
+    x1, y1, x2, y2 = box
+    w = max(1, x2 - x1); h = max(1, y2 - y1)
+    ar = w / h
+    area_ratio = (w * h) / max(1, frame_h * frame_w)
+    return ar < 0.55 and area_ratio > 0.03
+
+def _sync_batch_age(now_ts, last_batch_query_ts, species_classifier, logger):
+    if now_ts - last_batch_query_ts >= 15.0:
+        try:
+            from database import Batch
+            from src.db.session import SessionLocal
+            from datetime import datetime
+            db_session = SessionLocal()
+            active_batch = db_session.query(Batch).filter_by(active=True).first()
+            if active_batch:
+                age_days = (datetime.utcnow() - active_batch.start_date.replace(tzinfo=None)).days
+                age_days = max(1, age_days)
+                species_classifier.set_batch_age(age_days)
+                logger.info(f"Fator de idade do lote sincronizado: {age_days} dias.")
+            else:
+                species_classifier.set_batch_age(5)
+            db_session.close()
+        except Exception as db_err:
+            logger.error(f"Erro ao consultar DB para idade do lote: {db_err}")
+        return now_ts
+    return last_batch_query_ts
+
+def _run_yolo_inference(model, enhanced_detector, frame_to_process, logger):
+    import numpy as np
+    frame_h, frame_w = frame_to_process.shape[:2]
+
+    if enhanced_detector:
+        raw_enhanced = enhanced_detector.detect(frame_to_process, run_heavy_inference=True)
+        results = None
+        has_boxes = len(raw_enhanced) > 0
+
+        boxes = np.array([d["box"] for d in raw_enhanced]) if raw_enhanced else np.empty((0, 4))
+        confs = np.array([d["confidence"] for d in raw_enhanced]) if raw_enhanced else np.empty((0,))
+        clss = np.array([d["class_id"] for d in raw_enhanced]) if raw_enhanced else np.empty((0,))
+        ids = np.array([d["track_id"] for d in raw_enhanced]) if raw_enhanced else np.empty((0,))
+    else:
+        results = model.track(
+            frame_to_process,
+            persist=True,
+            tracker="bytetrack.yaml",
+            conf=0.15,
+            iou=0.45,
+            imgsz=960,
+            verbose=False,
+            agnostic_nms=True,
+        )
+        has_boxes = False
+        if results and results[0].boxes is not None:
+            boxes = results[0].boxes.xyxy.cpu().numpy()
+            confs = results[0].boxes.conf.cpu().numpy()
+            clss = results[0].boxes.cls.cpu().numpy()
+            ids = results[0].boxes.id.cpu().numpy() if results[0].boxes.id is not None else [-1] * len(boxes)
+            has_boxes = len(boxes) > 0
+        else:
+            boxes, confs, clss, ids = [], [], [], []
+
+    tile_results_extra = []
+    if not enhanced_detector:
+        try:
+            tiles = [
+                (0,           0,           frame_w//2, frame_h//2),
+                (frame_w//2,  0,           frame_w,    frame_h//2),
+                (0,           frame_h//2,  frame_w//2, frame_h),
+                (frame_w//2,  frame_h//2,  frame_w,    frame_h),
+            ]
+            for tx1, ty1, tx2, ty2 in tiles:
+                tile = frame_to_process[ty1:ty2, tx1:tx2]
+                if tile.size == 0:
+                    continue
+                tile_r = model.predict(tile, conf=0.18, imgsz=640, verbose=False)
+                if tile_r and tile_r[0].boxes is not None:
+                    tb = tile_r[0].boxes.xyxy.cpu().numpy()
+                    tc = tile_r[0].boxes.conf.cpu().numpy()
+                    tl = tile_r[0].boxes.cls.cpu().numpy()
+                    for j in range(len(tb)):
+                        bx1, by1, bx2, by2 = tb[j]
+                        tile_results_extra.append({
+                            "box": [int(bx1+tx1), int(by1+ty1), int(bx2+tx1), int(by2+ty1)],
+                            "conf": float(tc[j]),
+                            "cls":  int(tl[j]),
+                            "tid":  -1,
+                        })
+        except Exception as tile_err:
+            logger.debug(f"Tiling opcional falhou (ignorado): {tile_err}")
+
+    return has_boxes, boxes, confs, clss, ids, tile_results_extra
+
+def _process_detections(has_boxes, boxes, confs, clss, ids, tile_results_extra, frame_to_process, pose_analyzer, species_classifier):
+    new_detections = []
+    chicks_count = 0
+    hens_count = 0
+    person_detected = False
+    person_boxes = []
+
+    frame_h, frame_w = frame_to_process.shape[:2]
+    BIRD_CANDIDATE_CLASSES = {14, 15, 16, 18, 19, 21}
+
+    if has_boxes:
+        for i in range(len(boxes)):
+            cid = int(clss[i])
+            if cid == 0:
+                person_boxes.append([int(v) for v in boxes[i]])
+
+        raw_candidates = []
+        for i in range(len(boxes)):
+            raw_candidates.append({
+                "box": [int(v) for v in boxes[i]],
+                "conf": float(confs[i]),
+                "cls":  int(clss[i]),
+                "tid":  int(ids[i]),
+            })
+        for te in tile_results_extra:
+            te_box = te["box"]
+            is_dup = any(_compute_iou(te_box, rc["box"]) > 0.50 for rc in raw_candidates)
+            if not is_dup:
+                raw_candidates.append(te)
+
+        for cand in raw_candidates:
+            box  = cand["box"]
+            conf = cand["conf"]
+            cid  = cand["cls"]
+            uid  = cand["tid"]
+
+            if cid == 0:
+                person_detected = True
+                det = {
+                    "box": box,
+                    "confidence": conf,
+                    "class_id": cid,
+                    "track_id": uid,
+                    "stable_bird_uid": uid,
+                    "species": "person",
+                    "species_label": "INVASOR",
+                    "color": (0, 0, 255),
+                    "pose_label": "ATENÇÃO"
+                }
+                new_detections.append(det)
+                continue
+
+            if cid not in BIRD_CANDIDATE_CLASSES:
+                continue
+
+            is_overlapping_human = any(_compute_iou(box, pb) > 0.35 for pb in person_boxes)
+            if is_overlapping_human:
+                continue
+
+            if _is_human_shaped(box, frame_h, frame_w):
+                continue
+
+            if cid != 14 and conf < 0.22:
+                continue
+
+            pose_info = pose_analyzer.analyze(box, 0.0, frame_to_process.shape)
+            species_info = species_classifier.classify(frame_to_process, box, "bird", 0.0, track_id=uid)
+
+            det = {
+                "box": box,
+                "confidence": conf,
+                "class_id": 14,
+                "track_id": uid,
+                "stable_bird_uid": uid
+            }
+            det.update(pose_info)
+            det.update(species_info)
+            new_detections.append(det)
+
+            if species_info["species"] == "chick":
+                chicks_count += 1
+            else:
+                hens_count += 1
+
+    return new_detections, chicks_count, hens_count, person_detected
+
+def _apply_analytics_plugins(new_detections, frame_to_process, now_ts, tri_zone_analyzer, zone_time_series, paper_subtractor, spatial_heatmap, weight_estimator, biosafety_plugin, active_camera_id, species_classifier, logger):
+    import math
+    from src.core.state import (
+        intrusion_state, live_birds, species_counts, weight_state,
+        behavior_state, immobility_state, carcass_state, zone_analytics_state,
+        cv_lock
+    )
+
+    frame_h, frame_w = frame_to_process.shape[:2]
+
+    bird_boxes = []
+    bird_centers = []
+    carcass_items = []
+
+    for d in new_detections:
+        if d.get("class_id") == 14 or d.get("species") in ("chick", "hen", "bird"):
+            box = d["box"]
+            uid = d.get("track_id", -1)
+            bird_boxes.append(box)
+            cx = (box[0] + box[2]) / 2.0
+            cy = (box[1] + box[3]) / 2.0
+            bird_centers.append((cx, cy))
+
+            if uid >= 0:
+                if uid not in immobility_state:
+                    immobility_state[uid] = {
+                        "anchor": (cx, cy),
+                        "since": now_ts,
+                        "alerted": False
+                    }
+                else:
+                    st = immobility_state[uid]
+                    ax, ay = st["anchor"]
+                    dist = math.hypot(cx - ax, cy - ay)
+                    if dist > 15.0:
+                        st["anchor"] = (cx, cy)
+                        st["since"] = now_ts
+                        st["alerted"] = False
+                        d["is_immobile"] = False
+                    else:
+                        inact_sec = now_ts - float(st["since"])
+                        if inact_sec > 300.0:
+                            st["alerted"] = True
+                            d["is_immobile"] = True
+                            carcass_items.append({
+                                "bird_uid": int(uid),
+                                "x": int(cx),
+                                "y": int(cy),
+                                "immobile_seconds": round(inact_sec, 1)
+                            })
+
+    # Zonamento Trifásico & Frequência de Permanência por Zona (Saltoratto et al., 2013)
+    z_res = None
+    if tri_zone_analyzer and bird_centers:
+        try:
+            z_res = tri_zone_analyzer.analyze_zones(bird_centers, frame_w, frame_h, timestamp=now_ts)
+            with cv_lock:
+                zone_analytics_state["drinker_count"] = z_res["drinker_count"]
+                zone_analytics_state["brooder_count"] = z_res["brooder_count"]
+                zone_analytics_state["feeder_count"] = z_res["feeder_count"]
+                zone_analytics_state["drinker_pct"] = z_res["drinker_pct"]
+                zone_analytics_state["brooder_pct"] = z_res["brooder_pct"]
+                zone_analytics_state["feeder_pct"] = z_res["feeder_pct"]
+                zone_analytics_state["welfare_status"] = z_res["welfare_status"]
+                zone_analytics_state["welfare_message"] = z_res["welfare_message"]
+                zone_analytics_state["welfare_index"] = z_res["welfare_index"]
+                zone_analytics_state["updated_at"] = now_ts
+        except Exception as z_err:
+            logger.debug(f"Análise de zonamento trifásico falhou: {z_err}")
+
+    # Registrador de Série Temporal de Permanência (Série F_stay(t))
+    if zone_time_series and z_res:
+        try:
+            zone_time_series.record_sample(
+                drinker_count=z_res["drinker_count"],
+                brooder_count=z_res["brooder_count"],
+                feeder_count=z_res["feeder_count"],
+                timestamp=now_ts
+            )
+        except Exception as ts_err:
+            logger.debug(f"Falha ao registrar série temporal de permanência: {ts_err}")
+
+    # Subtração de Fundo & Flood Fill / Inundação Clássico
+    if paper_subtractor and frame_to_process is not None:
+        try:
+            paper_subtractor.process_frame(frame_to_process)
+        except Exception as ps_err:
+            logger.debug(f"Subtrator clássico de fundo falhou: {ps_err}")
+
+    # Acumulador de Heatmap Espacial
+    if spatial_heatmap and bird_centers:
+        try:
+            spatial_heatmap.add_detections(bird_centers, frame_w, frame_h, timestamp=now_ts)
+        except Exception as sh_err:
+            logger.debug(f"Falha ao acumular heatmap espacial: {sh_err}")
+
+    # Estimativa Biométrica de Peso
+    if weight_estimator and new_detections:
+        try:
+            current_age = getattr(species_classifier, "_batch_age_day", 14)
+            flock_weight = weight_estimator.estimate_flock_weight(
+                new_detections, frame_to_process.shape, batch_age_days=current_age
+            )
+            with cv_lock:
+                weight_state["avg_weight_g"] = flock_weight["avg_weight_g"]
+                weight_state["count"] = flock_weight["count"]
+                weight_state["confidence"] = flock_weight["confidence"]
+                weight_state["updated_at"] = now_ts
+        except Exception as w_err:
+            logger.debug(f"Falha na estimativa de peso biométrico: {w_err}")
+
+    # Auditoria de Biossegurança
+    if biosafety_plugin and active_camera_id in ("ENTRANCE", "SANITARY_BARRIER"):
+        try:
+            biosafety_plugin.process_frame(frame_to_process, active_camera_id)
+        except Exception as bio_err:
+            logger.debug(f"Auditoria de biossegurança ignorada: {bio_err}")
+
+    # Métricas de Dispersão e Estresse Térmico
+    tot_birds = len(bird_boxes)
+    edge_count = 0
+    disp_ratio = 0.5
+    edge_ratio = 0.1
+    if tot_birds > 0 and frame_w > 0 and frame_h > 0:
+        for b in bird_boxes:
+            if b[0] < 0.08 * frame_w or b[2] > 0.92 * frame_w or b[1] < 0.08 * frame_h or b[3] > 0.92 * frame_h:
+                edge_count += 1
+        edge_ratio = round(edge_count / tot_birds, 2)
+        if tot_birds > 1:
+            dists = []
+            for i in range(min(tot_birds, 20)):
+                for j in range(i + 1, min(tot_birds, 20)):
+                    d = math.hypot(bird_centers[i][0] - bird_centers[j][0], bird_centers[i][1] - bird_centers[j][1])
+                    dists.append(d)
+            if dists:
+                avg_d = sum(dists) / len(dists)
+                diag = math.hypot(frame_w, frame_h)
+                disp_ratio = round(avg_d / max(1.0, diag), 2)
+
+    status_str = "NORMAL"
+    msg_str = "Dispersão homogênea do lote"
+    if edge_ratio > 0.40:
+        status_str = "ESTRESSE_TERMICO"
+        msg_str = "Atenção: Aves aglomeradas nas bordas (estresse térmico / frio)"
+    elif disp_ratio < 0.20:
+        status_str = "AMONTOAMENTO"
+        msg_str = "Alerta: Alta densidade e amontoamento de aves"
+
+    return carcass_items, status_str, msg_str, disp_ratio, edge_ratio, tot_birds
+
+def _save_db_metrics(now_ts, last_db_save_ts, logger):
+    if now_ts - last_db_save_ts >= 5.0:
+        try:
+            from database import SensorReading, WeightEstimate
+            from src.db.session import SessionLocal
+            from src.core.state import sensor_state, weight_state, species_counts
+
+            db_sess = SessionLocal()
+            try:
+                sr = SensorReading(
+                    camera_id="galpao-1",
+                    temperature_c=sensor_state.get("temperature_c", 25.0),
+                    humidity_pct=sensor_state.get("humidity_pct", 60.0),
+                    ammonia_ppm=sensor_state.get("ammonia_ppm", 5.0),
+                    feed_level_pct=sensor_state.get("feed_level_pct", 75.0),
+                    water_level_pct=sensor_state.get("water_level_pct", 85.0),
+                    source="camera_worker"
+                )
+                if hasattr(sr, "mark_pending"):
+                    sr.mark_pending()
+                db_sess.add(sr)
+
+                bird_tot = species_counts.get("total", 0)
+                if bird_tot > 0:
+                    we = WeightEstimate(
+                        camera_id="galpao-1",
+                        avg_weight_g=weight_state.get("avg_weight_g", 1200.0),
+                        ideal_weight_g=1250.0,
+                        flock_count=bird_tot,
+                        confidence=0.93,
+                        source="vision_estimate"
+                    )
+                    db_sess.add(we)
+                db_sess.commit()
+            except Exception as db_save_err:
+                db_sess.rollback()
+                logger.error(f"Erro ao salvar histórico visual no SQLite: {db_save_err}")
+            finally:
+                db_sess.close()
+        except Exception as exc:
+            logger.error(f"Falha na abertura de sessão de persistência: {exc}")
+        return now_ts
+    return last_db_save_ts
+
+
+
+def _compute_iou(box_a: list, box_b: list) -> float:
+    ax1, ay1, ax2, ay2 = box_a
+    bx1, by1, bx2, by2 = box_b
+    ix1 = max(ax1, bx1); iy1 = max(ay1, by1)
+    ix2 = min(ax2, bx2); iy2 = min(ay2, by2)
+    inter = max(0, ix2 - ix1) * max(0, iy2 - iy1)
+    if inter == 0:
+        return 0.0
+    area_a = max(1, (ax2 - ax1) * (ay2 - ay1))
+    area_b = max(1, (bx2 - bx1) * (by2 - by1))
+    return inter / float(area_a + area_b - inter)
+
+def _is_human_shaped(box: list, frame_h: int, frame_w: int) -> bool:
+    x1, y1, x2, y2 = box
+    w = max(1, x2 - x1); h = max(1, y2 - y1)
+    ar = w / h
+    area_ratio = (w * h) / max(1, frame_h * frame_w)
+    return ar < 0.55 and area_ratio > 0.03
+
+def _sync_batch_age(now_ts, last_batch_query_ts, species_classifier, logger):
+    if now_ts - last_batch_query_ts >= 15.0:
+        try:
+            from database import Batch
+            from src.db.session import SessionLocal
+            from datetime import datetime
+            db_session = SessionLocal()
+            active_batch = db_session.query(Batch).filter_by(active=True).first()
+            if active_batch:
+                age_days = (datetime.utcnow() - active_batch.start_date.replace(tzinfo=None)).days
+                age_days = max(1, age_days)
+                species_classifier.set_batch_age(age_days)
+                logger.info(f"Fator de idade do lote sincronizado: {age_days} dias.")
+            else:
+                species_classifier.set_batch_age(5)
+            db_session.close()
+        except Exception as db_err:
+            logger.error(f"Erro ao consultar DB para idade do lote: {db_err}")
+        return now_ts
+    return last_batch_query_ts
+
+def _run_yolo_inference(model, enhanced_detector, frame_to_process, logger):
+    import numpy as np
+    frame_h, frame_w = frame_to_process.shape[:2]
+
+    if enhanced_detector:
+        raw_enhanced = enhanced_detector.detect(frame_to_process, run_heavy_inference=True)
+        results = None
+        has_boxes = len(raw_enhanced) > 0
+
+        boxes = np.array([d["box"] for d in raw_enhanced]) if raw_enhanced else np.empty((0, 4))
+        confs = np.array([d["confidence"] for d in raw_enhanced]) if raw_enhanced else np.empty((0,))
+        clss = np.array([d["class_id"] for d in raw_enhanced]) if raw_enhanced else np.empty((0,))
+        ids = np.array([d["track_id"] for d in raw_enhanced]) if raw_enhanced else np.empty((0,))
+    else:
+        results = model.track(
+            frame_to_process,
+            persist=True,
+            tracker="bytetrack.yaml",
+            conf=0.15,
+            iou=0.45,
+            imgsz=960,
+            verbose=False,
+            agnostic_nms=True,
+        )
+        has_boxes = False
+        if results and results[0].boxes is not None:
+            boxes = results[0].boxes.xyxy.cpu().numpy()
+            confs = results[0].boxes.conf.cpu().numpy()
+            clss = results[0].boxes.cls.cpu().numpy()
+            ids = results[0].boxes.id.cpu().numpy() if results[0].boxes.id is not None else [-1] * len(boxes)
+            has_boxes = len(boxes) > 0
+        else:
+            boxes, confs, clss, ids = [], [], [], []
+
+    tile_results_extra = []
+    if not enhanced_detector:
+        try:
+            tiles = [
+                (0,           0,           frame_w//2, frame_h//2),
+                (frame_w//2,  0,           frame_w,    frame_h//2),
+                (0,           frame_h//2,  frame_w//2, frame_h),
+                (frame_w//2,  frame_h//2,  frame_w,    frame_h),
+            ]
+            for tx1, ty1, tx2, ty2 in tiles:
+                tile = frame_to_process[ty1:ty2, tx1:tx2]
+                if tile.size == 0:
+                    continue
+                tile_r = model.predict(tile, conf=0.18, imgsz=640, verbose=False)
+                if tile_r and tile_r[0].boxes is not None:
+                    tb = tile_r[0].boxes.xyxy.cpu().numpy()
+                    tc = tile_r[0].boxes.conf.cpu().numpy()
+                    tl = tile_r[0].boxes.cls.cpu().numpy()
+                    for j in range(len(tb)):
+                        bx1, by1, bx2, by2 = tb[j]
+                        tile_results_extra.append({
+                            "box": [int(bx1+tx1), int(by1+ty1), int(bx2+tx1), int(by2+ty1)],
+                            "conf": float(tc[j]),
+                            "cls":  int(tl[j]),
+                            "tid":  -1,
+                        })
+        except Exception as tile_err:
+            logger.debug(f"Tiling opcional falhou (ignorado): {tile_err}")
+
+    return has_boxes, boxes, confs, clss, ids, tile_results_extra
+
+def _process_detections(has_boxes, boxes, confs, clss, ids, tile_results_extra, frame_to_process, pose_analyzer, species_classifier):
+    new_detections = []
+    chicks_count = 0
+    hens_count = 0
+    person_detected = False
+    person_boxes = []
+
+    frame_h, frame_w = frame_to_process.shape[:2]
+    BIRD_CANDIDATE_CLASSES = {14, 15, 16, 18, 19, 21}
+
+    if has_boxes:
+        for i in range(len(boxes)):
+            cid = int(clss[i])
+            if cid == 0:
+                person_boxes.append([int(v) for v in boxes[i]])
+
+        raw_candidates = []
+        for i in range(len(boxes)):
+            raw_candidates.append({
+                "box": [int(v) for v in boxes[i]],
+                "conf": float(confs[i]),
+                "cls":  int(clss[i]),
+                "tid":  int(ids[i]),
+            })
+        for te in tile_results_extra:
+            te_box = te["box"]
+            is_dup = any(_compute_iou(te_box, rc["box"]) > 0.50 for rc in raw_candidates)
+            if not is_dup:
+                raw_candidates.append(te)
+
+        for cand in raw_candidates:
+            box  = cand["box"]
+            conf = cand["conf"]
+            cid  = cand["cls"]
+            uid  = cand["tid"]
+
+            if cid == 0:
+                person_detected = True
+                det = {
+                    "box": box,
+                    "confidence": conf,
+                    "class_id": cid,
+                    "track_id": uid,
+                    "stable_bird_uid": uid,
+                    "species": "person",
+                    "species_label": "INVASOR",
+                    "color": (0, 0, 255),
+                    "pose_label": "ATENÇÃO"
+                }
+                new_detections.append(det)
+                continue
+
+            if cid not in BIRD_CANDIDATE_CLASSES:
+                continue
+
+            is_overlapping_human = any(_compute_iou(box, pb) > 0.35 for pb in person_boxes)
+            if is_overlapping_human:
+                continue
+
+            if _is_human_shaped(box, frame_h, frame_w):
+                continue
+
+            if cid != 14 and conf < 0.22:
+                continue
+
+            pose_info = pose_analyzer.analyze(box, 0.0, frame_to_process.shape)
+            species_info = species_classifier.classify(frame_to_process, box, "bird", 0.0, track_id=uid)
+
+            det = {
+                "box": box,
+                "confidence": conf,
+                "class_id": 14,
+                "track_id": uid,
+                "stable_bird_uid": uid
+            }
+            det.update(pose_info)
+            det.update(species_info)
+            new_detections.append(det)
+
+            if species_info["species"] == "chick":
+                chicks_count += 1
+            else:
+                hens_count += 1
+
+    return new_detections, chicks_count, hens_count, person_detected
+
+def _apply_analytics_plugins(new_detections, frame_to_process, now_ts, tri_zone_analyzer, zone_time_series, paper_subtractor, spatial_heatmap, weight_estimator, biosafety_plugin, active_camera_id, species_classifier, logger):
+    import math
+    from src.core.state import (
+        intrusion_state, live_birds, species_counts, weight_state,
+        behavior_state, immobility_state, carcass_state, zone_analytics_state,
+        cv_lock
+    )
+
+    frame_h, frame_w = frame_to_process.shape[:2]
+
+    bird_boxes = []
+    bird_centers = []
+    carcass_items = []
+
+    for d in new_detections:
+        if d.get("class_id") == 14 or d.get("species") in ("chick", "hen", "bird"):
+            box = d["box"]
+            uid = d.get("track_id", -1)
+            bird_boxes.append(box)
+            cx = (box[0] + box[2]) / 2.0
+            cy = (box[1] + box[3]) / 2.0
+            bird_centers.append((cx, cy))
+
+            if uid >= 0:
+                if uid not in immobility_state:
+                    immobility_state[uid] = {
+                        "anchor": (cx, cy),
+                        "since": now_ts,
+                        "alerted": False
+                    }
+                else:
+                    st = immobility_state[uid]
+                    ax, ay = st["anchor"]
+                    dist = math.hypot(cx - ax, cy - ay)
+                    if dist > 15.0:
+                        st["anchor"] = (cx, cy)
+                        st["since"] = now_ts
+                        st["alerted"] = False
+                        d["is_immobile"] = False
+                    else:
+                        inact_sec = now_ts - float(st["since"])
+                        if inact_sec > 300.0:
+                            st["alerted"] = True
+                            d["is_immobile"] = True
+                            carcass_items.append({
+                                "bird_uid": int(uid),
+                                "x": int(cx),
+                                "y": int(cy),
+                                "immobile_seconds": round(inact_sec, 1)
+                            })
+
+    # Zonamento Trifásico & Frequência de Permanência por Zona (Saltoratto et al., 2013)
+    z_res = None
+    if tri_zone_analyzer and bird_centers:
+        try:
+            z_res = tri_zone_analyzer.analyze_zones(bird_centers, frame_w, frame_h, timestamp=now_ts)
+            with cv_lock:
+                zone_analytics_state["drinker_count"] = z_res["drinker_count"]
+                zone_analytics_state["brooder_count"] = z_res["brooder_count"]
+                zone_analytics_state["feeder_count"] = z_res["feeder_count"]
+                zone_analytics_state["drinker_pct"] = z_res["drinker_pct"]
+                zone_analytics_state["brooder_pct"] = z_res["brooder_pct"]
+                zone_analytics_state["feeder_pct"] = z_res["feeder_pct"]
+                zone_analytics_state["welfare_status"] = z_res["welfare_status"]
+                zone_analytics_state["welfare_message"] = z_res["welfare_message"]
+                zone_analytics_state["welfare_index"] = z_res["welfare_index"]
+                zone_analytics_state["updated_at"] = now_ts
+        except Exception as z_err:
+            logger.debug(f"Análise de zonamento trifásico falhou: {z_err}")
+
+    # Registrador de Série Temporal de Permanência (Série F_stay(t))
+    if zone_time_series and z_res:
+        try:
+            zone_time_series.record_sample(
+                drinker_count=z_res["drinker_count"],
+                brooder_count=z_res["brooder_count"],
+                feeder_count=z_res["feeder_count"],
+                timestamp=now_ts
+            )
+        except Exception as ts_err:
+            logger.debug(f"Falha ao registrar série temporal de permanência: {ts_err}")
+
+    # Subtração de Fundo & Flood Fill / Inundação Clássico
+    if paper_subtractor and frame_to_process is not None:
+        try:
+            paper_subtractor.process_frame(frame_to_process)
+        except Exception as ps_err:
+            logger.debug(f"Subtrator clássico de fundo falhou: {ps_err}")
+
+    # Acumulador de Heatmap Espacial
+    if spatial_heatmap and bird_centers:
+        try:
+            spatial_heatmap.add_detections(bird_centers, frame_w, frame_h, timestamp=now_ts)
+        except Exception as sh_err:
+            logger.debug(f"Falha ao acumular heatmap espacial: {sh_err}")
+
+    # Estimativa Biométrica de Peso
+    if weight_estimator and new_detections:
+        try:
+            current_age = getattr(species_classifier, "_batch_age_day", 14)
+            flock_weight = weight_estimator.estimate_flock_weight(
+                new_detections, frame_to_process.shape, batch_age_days=current_age
+            )
+            with cv_lock:
+                weight_state["avg_weight_g"] = flock_weight["avg_weight_g"]
+                weight_state["count"] = flock_weight["count"]
+                weight_state["confidence"] = flock_weight["confidence"]
+                weight_state["updated_at"] = now_ts
+        except Exception as w_err:
+            logger.debug(f"Falha na estimativa de peso biométrico: {w_err}")
+
+    # Auditoria de Biossegurança
+    if biosafety_plugin and active_camera_id in ("ENTRANCE", "SANITARY_BARRIER"):
+        try:
+            biosafety_plugin.process_frame(frame_to_process, active_camera_id)
+        except Exception as bio_err:
+            logger.debug(f"Auditoria de biossegurança ignorada: {bio_err}")
+
+    # Métricas de Dispersão e Estresse Térmico
+    tot_birds = len(bird_boxes)
+    edge_count = 0
+    disp_ratio = 0.5
+    edge_ratio = 0.1
+    if tot_birds > 0 and frame_w > 0 and frame_h > 0:
+        for b in bird_boxes:
+            if b[0] < 0.08 * frame_w or b[2] > 0.92 * frame_w or b[1] < 0.08 * frame_h or b[3] > 0.92 * frame_h:
+                edge_count += 1
+        edge_ratio = round(edge_count / tot_birds, 2)
+        if tot_birds > 1:
+            dists = []
+            for i in range(min(tot_birds, 20)):
+                for j in range(i + 1, min(tot_birds, 20)):
+                    d = math.hypot(bird_centers[i][0] - bird_centers[j][0], bird_centers[i][1] - bird_centers[j][1])
+                    dists.append(d)
+            if dists:
+                avg_d = sum(dists) / len(dists)
+                diag = math.hypot(frame_w, frame_h)
+                disp_ratio = round(avg_d / max(1.0, diag), 2)
+
+    status_str = "NORMAL"
+    msg_str = "Dispersão homogênea do lote"
+    if edge_ratio > 0.40:
+        status_str = "ESTRESSE_TERMICO"
+        msg_str = "Atenção: Aves aglomeradas nas bordas (estresse térmico / frio)"
+    elif disp_ratio < 0.20:
+        status_str = "AMONTOAMENTO"
+        msg_str = "Alerta: Alta densidade e amontoamento de aves"
+
+    return carcass_items, status_str, msg_str, disp_ratio, edge_ratio, tot_birds
+
+def _save_db_metrics(now_ts, last_db_save_ts, logger):
+    if now_ts - last_db_save_ts >= 5.0:
+        try:
+            from database import SensorReading, WeightEstimate
+            from src.db.session import SessionLocal
+            from src.core.state import sensor_state, weight_state, species_counts
+
+            db_sess = SessionLocal()
+            try:
+                sr = SensorReading(
+                    camera_id="galpao-1",
+                    temperature_c=sensor_state.get("temperature_c", 25.0),
+                    humidity_pct=sensor_state.get("humidity_pct", 60.0),
+                    ammonia_ppm=sensor_state.get("ammonia_ppm", 5.0),
+                    feed_level_pct=sensor_state.get("feed_level_pct", 75.0),
+                    water_level_pct=sensor_state.get("water_level_pct", 85.0),
+                    source="camera_worker"
+                )
+                if hasattr(sr, "mark_pending"):
+                    sr.mark_pending()
+                db_sess.add(sr)
+
+                bird_tot = species_counts.get("total", 0)
+                if bird_tot > 0:
+                    we = WeightEstimate(
+                        camera_id="galpao-1",
+                        avg_weight_g=weight_state.get("avg_weight_g", 1200.0),
+                        ideal_weight_g=1250.0,
+                        flock_count=bird_tot,
+                        confidence=0.93,
+                        source="vision_estimate"
+                    )
+                    db_sess.add(we)
+                db_sess.commit()
+            except Exception as db_save_err:
+                db_sess.rollback()
+                logger.error(f"Erro ao salvar histórico visual no SQLite: {db_save_err}")
+            finally:
+                db_sess.close()
+        except Exception as exc:
+            logger.error(f"Falha na abertura de sessão de persistência: {exc}")
+        return now_ts
+    return last_db_save_ts
+
 def _inference_thread_func(
     model, species_classifier, pose_analyzer, enhanced_detector=None, 
     behavior_engine=None, gait_analyzer=None, biosafety_plugin=None,
@@ -145,27 +919,6 @@ def _inference_thread_func(
     last_db_save_ts = 0.0
     frame_counter = 0
 
-    BIRD_CANDIDATE_CLASSES = {14, 15, 16, 18, 19, 21}
-
-    def _compute_iou(box_a: list, box_b: list) -> float:
-        ax1, ay1, ax2, ay2 = box_a
-        bx1, by1, bx2, by2 = box_b
-        ix1 = max(ax1, bx1); iy1 = max(ay1, by1)
-        ix2 = min(ax2, bx2); iy2 = min(ay2, by2)
-        inter = max(0, ix2 - ix1) * max(0, iy2 - iy1)
-        if inter == 0:
-            return 0.0
-        area_a = max(1, (ax2 - ax1) * (ay2 - ay1))
-        area_b = max(1, (bx2 - bx1) * (by2 - by1))
-        return inter / float(area_a + area_b - inter)
-
-    def _is_human_shaped(box: list, frame_h: int, frame_w: int) -> bool:
-        x1, y1, x2, y2 = box
-        w = max(1, x2 - x1); h = max(1, y2 - y1)
-        ar = w / h
-        area_ratio = (w * h) / max(1, frame_h * frame_w)
-        return ar < 0.55 and area_ratio > 0.03
-    
     while camera_running:
         frame_to_process = None
         with _cv_lock:
@@ -179,18 +932,18 @@ def _inference_thread_func(
         now_ts = time.time()
         frame_counter += 1
 
-        # 0. Correção Radial de Iluminação da Campânula (Saltoratto et al., 2013)
+        # 0. Correção Radial de Iluminação da Campânula
         if radial_corrector:
             try:
                 frame_to_process = radial_corrector.correct_intensity(frame_to_process)
             except Exception as rc_err:
                 logger.debug(f"Correção radial de intensidade falhou: {rc_err}")
 
-        # 1. Análise Anti-Sabotagem e Qualidade da Câmera (Tamper Detection)
+        # 1. Análise Anti-Sabotagem e Qualidade da Câmera
         if tamper_detector:
             try:
                 t_res = tamper_detector.analyze_frame(frame_to_process)
-                from src.core.state import tamper_state
+                from src.core.state import tamper_state, cv_lock
                 with cv_lock:
                     if t_res["tamper_detected"]:
                         tamper_state["last_alert_ts"] = now_ts
@@ -201,312 +954,31 @@ def _inference_thread_func(
             except Exception as t_err:
                 logger.debug(f"Detector de tamper falhou: {t_err}")
 
-        # 2. Consulta idade do lote do DB periodicamente (a cada 15s)
-        if now_ts - last_batch_query_ts >= 15.0:
-            last_batch_query_ts = now_ts
-            try:
-                from database import Batch
-                from src.db.session import SessionLocal
-                from datetime import datetime
-                db_session = SessionLocal()
-                active_batch = db_session.query(Batch).filter_by(active=True).first()
-                if active_batch:
-                    age_days = (datetime.utcnow() - active_batch.start_date.replace(tzinfo=None)).days
-                    age_days = max(1, age_days)
-                    species_classifier.set_batch_age(age_days)
-                    logger.info(f"Fator de idade do lote sincronizado: {age_days} dias.")
-                else:
-                    species_classifier.set_batch_age(5)
-                db_session.close()
-            except Exception as db_err:
-                logger.error(f"Erro ao consultar DB para idade do lote: {db_err}")
+        # 2. Consulta idade do lote do DB
+        last_batch_query_ts = _sync_batch_age(now_ts, last_batch_query_ts, species_classifier, logger)
 
-        # 3. Inferência YOLO / EnhancedObjectDetector
+        # 3. Inferência YOLO
         try:
-            frame_h, frame_w = frame_to_process.shape[:2]
-
-            if enhanced_detector:
-                raw_enhanced = enhanced_detector.detect(frame_to_process, run_heavy_inference=True)
-                boxes = np.array([d["box"] for d in raw_enhanced]) if raw_enhanced else np.empty((0, 4))
-                confs = np.array([d["confidence"] for d in raw_enhanced]) if raw_enhanced else np.empty((0,))
-                clss = np.array([d["class_id"] for d in raw_enhanced]) if raw_enhanced else np.empty((0,))
-                ids = np.array([d["track_id"] for d in raw_enhanced]) if raw_enhanced else np.empty((0,))
-                results = None
-            else:
-                results = model.track(
-                    frame_to_process,
-                    persist=True,
-                    tracker="bytetrack.yaml",
-                    conf=0.15,
-                    iou=0.45,
-                    imgsz=960,
-                    verbose=False,
-                    agnostic_nms=True,
-                )
-
-            tile_results_extra = []
-            if not enhanced_detector:
-                try:
-                    tiles = [
-                        (0,           0,           frame_w//2, frame_h//2),
-                        (frame_w//2,  0,           frame_w,    frame_h//2),
-                        (0,           frame_h//2,  frame_w//2, frame_h),
-                        (frame_w//2,  frame_h//2,  frame_w,    frame_h),
-                    ]
-                    for tx1, ty1, tx2, ty2 in tiles:
-                        tile = frame_to_process[ty1:ty2, tx1:tx2]
-                        if tile.size == 0:
-                            continue
-                        tile_r = model.predict(tile, conf=0.18, imgsz=640, verbose=False)
-                        if tile_r and tile_r[0].boxes is not None:
-                            tb = tile_r[0].boxes.xyxy.cpu().numpy()
-                            tc = tile_r[0].boxes.conf.cpu().numpy()
-                            tl = tile_r[0].boxes.cls.cpu().numpy()
-                            for j in range(len(tb)):
-                                bx1, by1, bx2, by2 = tb[j]
-                                tile_results_extra.append({
-                                    "box": [int(bx1+tx1), int(by1+ty1), int(bx2+tx1), int(by2+ty1)],
-                                    "conf": float(tc[j]),
-                                    "cls":  int(tl[j]),
-                                    "tid":  -1,
-                                })
-                except Exception as tile_err:
-                    logger.debug(f"Tiling opcional falhou (ignorado): {tile_err}")
-
-            new_detections = []
-            chicks_count = 0
-            hens_count = 0
-            person_detected = False
-            person_boxes = []
-
-            has_boxes = False
-            if enhanced_detector:
-                has_boxes = len(raw_enhanced) > 0
-            elif results and results[0].boxes is not None:
-                boxes = results[0].boxes.xyxy.cpu().numpy()
-                confs = results[0].boxes.conf.cpu().numpy()
-                clss = results[0].boxes.cls.cpu().numpy()
-                ids = results[0].boxes.id.cpu().numpy() if results[0].boxes.id is not None else [-1] * len(boxes)
-                has_boxes = len(boxes) > 0
-
-            if has_boxes:
-                for i in range(len(boxes)):
-                    cid = int(clss[i])
-                    if cid == 0:
-                        person_boxes.append([int(v) for v in boxes[i]])
-
-                raw_candidates = []
-                for i in range(len(boxes)):
-                    raw_candidates.append({
-                        "box": [int(v) for v in boxes[i]],
-                        "conf": float(confs[i]),
-                        "cls":  int(clss[i]),
-                        "tid":  int(ids[i]),
-                    })
-                for te in tile_results_extra:
-                    te_box = te["box"]
-                    is_dup = any(_compute_iou(te_box, rc["box"]) > 0.50 for rc in raw_candidates)
-                    if not is_dup:
-                        raw_candidates.append(te)
-
-                for cand in raw_candidates:
-                    box  = cand["box"]
-                    conf = cand["conf"]
-                    cid  = cand["cls"]
-                    uid  = cand["tid"]
-
-                    if cid == 0:
-                        person_detected = True
-                        det = {
-                            "box": box,
-                            "confidence": conf,
-                            "class_id": cid,
-                            "track_id": uid,
-                            "stable_bird_uid": uid,
-                            "species": "person",
-                            "species_label": "INVASOR",
-                            "color": (0, 0, 255),
-                            "pose_label": "ATENÇÃO"
-                        }
-                        new_detections.append(det)
-                        continue
-                        
-                    if cid not in BIRD_CANDIDATE_CLASSES:
-                        continue
-
-                    is_overlapping_human = any(_compute_iou(box, pb) > 0.35 for pb in person_boxes)
-                    if is_overlapping_human:
-                        continue
-
-                    if _is_human_shaped(box, frame_h, frame_w):
-                        continue
-
-                    if cid != 14 and conf < 0.22:
-                        continue
-
-                    pose_info = pose_analyzer.analyze(box, 0.0, frame_to_process.shape)
-                    species_info = species_classifier.classify(frame_to_process, box, "bird", 0.0, track_id=uid)
-                    
-                    det = {
-                        "box": box,
-                        "confidence": conf,
-                        "class_id": 14,
-                        "track_id": uid,
-                        "stable_bird_uid": uid
-                    }
-                    det.update(pose_info)
-                    det.update(species_info)
-                    new_detections.append(det)
-                    
-                    if species_info["species"] == "chick":
-                        chicks_count += 1
-                    else:
-                        hens_count += 1
-
-            # 4. Biossegurança, Imobilidade, Dispersão, Heatmap, Zonamento e Pesagem Biométrica
-            from src.core.state import (
-                intrusion_state, live_birds, species_counts, weight_state,
-                behavior_state, immobility_state, carcass_state, zone_analytics_state,
-                cv_lock, active_camera_id
+            has_boxes, boxes, confs, clss, ids, tile_results_extra = _run_yolo_inference(
+                model, enhanced_detector, frame_to_process, logger
             )
 
-            bird_boxes = []
-            bird_centers = []
-            carcass_items = []
+            new_detections, chicks_count, hens_count, person_detected = _process_detections(
+                has_boxes, boxes, confs, clss, ids, tile_results_extra, frame_to_process, pose_analyzer, species_classifier
+            )
 
-            for d in new_detections:
-                if d.get("class_id") == 14 or d.get("species") in ("chick", "hen", "bird"):
-                    box = d["box"]
-                    uid = d.get("track_id", -1)
-                    bird_boxes.append(box)
-                    cx = (box[0] + box[2]) / 2.0
-                    cy = (box[1] + box[3]) / 2.0
-                    bird_centers.append((cx, cy))
+            # 4. Plugins e Analytics
+            from src.core.state import active_camera_id
+            carcass_items, status_str, msg_str, disp_ratio, edge_ratio, tot_birds = _apply_analytics_plugins(
+                new_detections, frame_to_process, now_ts, tri_zone_analyzer, zone_time_series, paper_subtractor,
+                spatial_heatmap, weight_estimator, biosafety_plugin, active_camera_id, species_classifier, logger
+            )
 
-                    if uid >= 0:
-                        if uid not in immobility_state:
-                            immobility_state[uid] = {
-                                "anchor": (cx, cy),
-                                "since": now_ts,
-                                "alerted": False
-                            }
-                        else:
-                            st = immobility_state[uid]
-                            ax, ay = st["anchor"]
-                            dist = math.hypot(cx - ax, cy - ay)
-                            if dist > 15.0:
-                                st["anchor"] = (cx, cy)
-                                st["since"] = now_ts
-                                st["alerted"] = False
-                                d["is_immobile"] = False
-                            else:
-                                inact_sec = now_ts - float(st["since"])
-                                if inact_sec > 300.0:
-                                    st["alerted"] = True
-                                    d["is_immobile"] = True
-                                    carcass_items.append({
-                                        "bird_uid": int(uid),
-                                        "x": int(cx),
-                                        "y": int(cy),
-                                        "immobile_seconds": round(inact_sec, 1)
-                                    })
-
-            # Zonamento Trifásico & Frequência de Permanência por Zona (Saltoratto et al., 2013)
-            z_res = None
-            if tri_zone_analyzer and bird_centers:
-                try:
-                    z_res = tri_zone_analyzer.analyze_zones(bird_centers, frame_w, frame_h, timestamp=now_ts)
-                    with cv_lock:
-                        zone_analytics_state["drinker_count"] = z_res["drinker_count"]
-                        zone_analytics_state["brooder_count"] = z_res["brooder_count"]
-                        zone_analytics_state["feeder_count"] = z_res["feeder_count"]
-                        zone_analytics_state["drinker_pct"] = z_res["drinker_pct"]
-                        zone_analytics_state["brooder_pct"] = z_res["brooder_pct"]
-                        zone_analytics_state["feeder_pct"] = z_res["feeder_pct"]
-                        zone_analytics_state["welfare_status"] = z_res["welfare_status"]
-                        zone_analytics_state["welfare_message"] = z_res["welfare_message"]
-                        zone_analytics_state["welfare_index"] = z_res["welfare_index"]
-                        zone_analytics_state["updated_at"] = now_ts
-                except Exception as z_err:
-                    logger.debug(f"Análise de zonamento trifásico falhou: {z_err}")
-
-            # Registrador de Série Temporal de Permanência (Série F_stay(t))
-            if zone_time_series and z_res:
-                try:
-                    zone_time_series.record_sample(
-                        drinker_count=z_res["drinker_count"],
-                        brooder_count=z_res["brooder_count"],
-                        feeder_count=z_res["feeder_count"],
-                        timestamp=now_ts
-                    )
-                except Exception as ts_err:
-                    logger.debug(f"Falha ao registrar série temporal de permanência: {ts_err}")
-
-            # Subtração de Fundo & Flood Fill / Inundação Clássico
-            if paper_subtractor and frame_to_process is not None:
-                try:
-                    paper_subtractor.process_frame(frame_to_process)
-                except Exception as ps_err:
-                    logger.debug(f"Subtrator clássico de fundo falhou: {ps_err}")
-
-            # Acumulador de Heatmap Espacial
-            if spatial_heatmap and bird_centers:
-                try:
-                    spatial_heatmap.add_detections(bird_centers, frame_w, frame_h, timestamp=now_ts)
-                except Exception as sh_err:
-                    logger.debug(f"Falha ao acumular heatmap espacial: {sh_err}")
-
-            # Estimativa Biométrica de Peso
-            if weight_estimator and new_detections:
-                try:
-                    current_age = getattr(species_classifier, "_batch_age_day", 14)
-                    flock_weight = weight_estimator.estimate_flock_weight(
-                        new_detections, frame_to_process.shape, batch_age_days=current_age
-                    )
-                    with cv_lock:
-                        weight_state["avg_weight_g"] = flock_weight["avg_weight_g"]
-                        weight_state["count"] = flock_weight["count"]
-                        weight_state["confidence"] = flock_weight["confidence"]
-                        weight_state["updated_at"] = now_ts
-                except Exception as w_err:
-                    logger.debug(f"Falha na estimativa de peso biométrico: {w_err}")
-
-            # Auditoria de Biossegurança
-            if biosafety_plugin and active_camera_id in ("ENTRANCE", "SANITARY_BARRIER"):
-                try:
-                    biosafety_plugin.process_frame(frame_to_process, active_camera_id)
-                except Exception as bio_err:
-                    logger.debug(f"Auditoria de biossegurança ignorada: {bio_err}")
-
-            # Métricas de Dispersão e Estresse Térmico
-            tot_birds = len(bird_boxes)
-            edge_count = 0
-            disp_ratio = 0.5
-            edge_ratio = 0.1
-            if tot_birds > 0 and frame_w > 0 and frame_h > 0:
-                for b in bird_boxes:
-                    if b[0] < 0.08 * frame_w or b[2] > 0.92 * frame_w or b[1] < 0.08 * frame_h or b[3] > 0.92 * frame_h:
-                        edge_count += 1
-                edge_ratio = round(edge_count / tot_birds, 2)
-                if tot_birds > 1:
-                    dists = []
-                    for i in range(min(tot_birds, 20)):
-                        for j in range(i + 1, min(tot_birds, 20)):
-                            d = math.hypot(bird_centers[i][0] - bird_centers[j][0], bird_centers[i][1] - bird_centers[j][1])
-                            dists.append(d)
-                    if dists:
-                        avg_d = sum(dists) / len(dists)
-                        diag = math.hypot(frame_w, frame_h)
-                        disp_ratio = round(avg_d / max(1.0, diag), 2)
-
-            status_str = "NORMAL"
-            msg_str = "Dispersão homogênea do lote"
-            if edge_ratio > 0.40:
-                status_str = "ESTRESSE_TERMICO"
-                msg_str = "Atenção: Aves aglomeradas nas bordas (estresse térmico / frio)"
-            elif disp_ratio < 0.20:
-                status_str = "AMONTOAMENTO"
-                msg_str = "Alerta: Alta densidade e amontoamento de aves"
+            # Atualizar Estado Global
+            from src.core.state import (
+                intrusion_state, live_birds, species_counts,
+                behavior_state, carcass_state, cv_lock
+            )
 
             with cv_lock:
                 intrusion_state["active"] = person_detected
@@ -547,52 +1019,14 @@ def _inference_thread_func(
             with _cv_lock:
                 _latest_detections = new_detections
 
-            if now_ts - last_db_save_ts >= 5.0:
-                last_db_save_ts = now_ts
-                try:
-                    from database import SensorReading, WeightEstimate
-                    from src.db.session import SessionLocal
-                    from src.core.state import sensor_state
-
-                    db_sess = SessionLocal()
-                    try:
-                        sr = SensorReading(
-                            camera_id="galpao-1",
-                            temperature_c=sensor_state.get("temperature_c", 25.0),
-                            humidity_pct=sensor_state.get("humidity_pct", 60.0),
-                            ammonia_ppm=sensor_state.get("ammonia_ppm", 5.0),
-                            feed_level_pct=sensor_state.get("feed_level_pct", 75.0),
-                            water_level_pct=sensor_state.get("water_level_pct", 85.0),
-                            source="camera_worker"
-                        )
-                        if hasattr(sr, "mark_pending"):
-                            sr.mark_pending()
-                        db_sess.add(sr)
-
-                        bird_tot = species_counts.get("total", 0)
-                        if bird_tot > 0:
-                            we = WeightEstimate(
-                                camera_id="galpao-1",
-                                avg_weight_g=weight_state.get("avg_weight_g", 1200.0),
-                                ideal_weight_g=1250.0,
-                                flock_count=bird_tot,
-                                confidence=0.93,
-                                source="vision_estimate"
-                            )
-                            db_sess.add(we)
-                        db_sess.commit()
-                    except Exception as db_save_err:
-                        db_sess.rollback()
-                        logger.error(f"Erro ao salvar histórico visual no SQLite: {db_save_err}")
-                    finally:
-                        db_sess.close()
-                except Exception as exc:
-                    logger.error(f"Falha na abertura de sessão de persistência: {exc}")
+            last_db_save_ts = _save_db_metrics(now_ts, last_db_save_ts, logger)
 
         except Exception as cv_err:
             logger.error(f"Erro no processamento YOLO da thread: {cv_err}")
             
         time.sleep(0.01)
+
+
 
 
 def _init_camera(camera_index):
