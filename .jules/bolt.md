@@ -89,3 +89,7 @@
 ## 2026-08-19 - [Resolve N+1 Queries in Data Lifecycle]
 **Learning:** Using a loop over SQLAlchemy query results and deleting each record individually causes an N+1 query problem, heavily degrading performance. Using the SQLAlchemy `delete()` construct directly on the query object handles bulk deletion in a single query.
 **Action:** Replaced the `for record in old_records: db.session.delete(record)` loop with `ModelClass.query.filter(ModelClass.timestamp < cutoff).delete(synchronize_session=False)` in `_process_data_lifecycle`, reducing deletion time by over 90%.
+
+## 2024-05-18 - Fix sequential network waterfall in streaming endpoint
+**Learning:** Using synchronous sleep like `time.sleep()` in an asynchronous generator inside an ASGI/WSGI context blocks the event loop and effectively acts as a bottleneck, reducing overall application throughput. In asynchronous streaming endpoints, switching to cooperative yielding via `await asyncio.sleep()` allows other connections and background tasks to be processed efficiently.
+**Action:** Changed `time.sleep` to `await asyncio.sleep` and converted `generate()` to `async def generate()` within `backend/src/api/routes.py:128`.
