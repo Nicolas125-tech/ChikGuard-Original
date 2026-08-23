@@ -2076,178 +2076,194 @@ def _save_bird_track_points():
     last_track_point_save_time = now
 
 
-def _draw_overlays(draw_frame, frame, selected, tracked):
+def _enrich_detections(frame, selected):
+    """Enriches selected detections with species classification and pose analysis."""
+    if _species_classifier is not None and _pose_analyzer is not None:
+        for det in selected:
+            _box = det.get("box", [0, 0, 1, 1])
+            _cid = int(det.get("class_id", 0))
+            _cname = _class_name_by_id(_cid)
+            _mask_area = float(det.get("mask_area_px", 0.0))
+            if "species" not in det:
+                _sp = _species_classifier.classify(
+                    frame, _box, _cname, _mask_area
+                )
+                det.update(_sp)
+            if "pose" not in det:
+                _ps = _pose_analyzer.analyze(_box, _mask_area, frame.shape)
+                det.update(_ps)
+            # Propagar stable_bird_uid como "track_id" para overlay
+            if "stable_bird_uid" in det:
+                det["track_id"] = det["stable_bird_uid"]
+
+
+def _draw_cv_engine_v2_overlays(draw_frame, frame, selected, tracked):
+    """Draws overlays and HUD using CV Engine v2 (CVOverlay)."""
     global species_counts
-    global object_count
-    global behavior_state
-    global carcass_state
-    if detector.yolo_loaded:
-        if _CV_ENGINE_AVAILABLE and CVOverlay is not None:
-            # ── CV Engine v2: Enriquecer com espécie + postura ────────────────
-            if _species_classifier is not None and _pose_analyzer is not None:
-                for det in selected:
-                    _box = det.get("box", [0, 0, 1, 1])
-                    _cid = int(det.get("class_id", 0))
-                    _cname = _class_name_by_id(_cid)
-                    _mask_area = float(det.get("mask_area_px", 0.0))
-                    if "species" not in det:
-                        _sp = _species_classifier.classify(
-                            frame, _box, _cname, _mask_area
-                        )
-                        det.update(_sp)
-                    if "pose" not in det:
-                        _ps = _pose_analyzer.analyze(_box, _mask_area, frame.shape)
-                        det.update(_ps)
-                    # Propagar stable_bird_uid como "track_id" para overlay
-                    if "stable_bird_uid" in det:
-                        det["track_id"] = det["stable_bird_uid"]
 
-            # Atualizar contagem de espécies
-            now_sc = time.time()
-            species_counts = count_by_species(
-                live_birds, selected, now_sc, BIRD_LIVE_TTL_SEC
-            )
+    _enrich_detections(frame, selected)
 
-            # SOTA Overlay
-            if MODO_DETECCAO == "aves" and sv is not None and False:
-                if tracked is not None and len(tracked) > 0:
-                    labels = []
-                    for i in range(len(tracked)):
-                        tracker_id = (
-                            tracked.tracker_id[i]
-                            if tracked.tracker_id is not None
-                            else -1
-                        )
-                        conf = tracked.confidence[i]
-                        labels.append(f"#{tracker_id} {conf:.2f}")
+    # Atualizar contagem de espécies
+    now_sc = time.time()
+    species_counts = count_by_species(
+        live_birds, selected, now_sc, BIRD_LIVE_TTL_SEC
+    )
 
-                    pass
-                    pass
-                    draw_frame = behavior_engine.annotate_heatmap(draw_frame, tracked)
-            else:
-                # Desenhar detecções ricas legadas se SOTA nao rodou
-                draw_frame = CVOverlay.draw_detections(
-                    draw_frame,
-                    selected,
-                    carcass_uids=carcass_state.get("uids", set()),
-                    class_name_fn=_class_name_by_id,
+    # SOTA Overlay
+    if MODO_DETECCAO == "aves" and sv is not None and False:
+        if tracked is not None and len(tracked) > 0:
+            labels = []
+            for i in range(len(tracked)):
+                tracker_id = (
+                    tracked.tracker_id[i]
+                    if tracked.tracker_id is not None
+                    else -1
                 )
+                conf = tracked.confidence[i]
+                labels.append(f"#{tracker_id} {conf:.2f}")
 
-            # HUD de performance
-            _metrics_data = (
-                _perf_metrics.get()
-                if _perf_metrics
-                else {"fps_camera": 0.0, "fps_inference": 0.0, "latency_ms": 0.0}
-            )
-            draw_frame = CVOverlay.draw_hud(
-                draw_frame,
-                metrics=_metrics_data,
-                counts=species_counts,
-                behavior_status=behavior_state.get("status", "NORMAL"),
-                mode=MODO_DETECCAO,
-            )
-        else:
-            # ── Fallback legado ───────────────────────────────────────────────
-            font = cv2.FONT_HERSHEY_PLAIN
+            pass
+            pass
+            draw_frame = behavior_engine.annotate_heatmap(draw_frame, tracked)
+    else:
+        # Desenhar detecções ricas legadas se SOTA nao rodou
+        draw_frame = CVOverlay.draw_detections(
+            draw_frame,
+            selected,
+            carcass_uids=carcass_state.get("uids", set()),
+            class_name_fn=_class_name_by_id,
+        )
 
-            # SOTA fallback drawing
-            if MODO_DETECCAO == "aves" and sv is not None and False:
-                if tracked is not None and len(tracked) > 0:
-                    labels = []
-                    for i in range(len(tracked)):
-                        tracker_id = (
-                            tracked.tracker_id[i]
-                            if tracked.tracker_id is not None
-                            else -1
-                        )
-                        conf = tracked.confidence[i]
-                        labels.append(f"#{tracker_id} {conf:.2f}")
+    # HUD de performance
+    _metrics_data = (
+        _perf_metrics.get()
+        if _perf_metrics
+        else {"fps_camera": 0.0, "fps_inference": 0.0, "latency_ms": 0.0}
+    )
+    draw_frame = CVOverlay.draw_hud(
+        draw_frame,
+        metrics=_metrics_data,
+        counts=species_counts,
+        behavior_status=behavior_state.get("status", "NORMAL"),
+        mode=MODO_DETECCAO,
+    )
+    return draw_frame
 
-                    pass
-                    pass
-                    draw_frame = behavior_engine.annotate_heatmap(draw_frame, tracked)
 
-                cv2.putText(
-                    draw_frame,
-                    f"Aves visiveis: {object_count}",
-                    (10, 30),
-                    font,
-                    2,
-                    (0, 255, 0),
-                    2,
+def _draw_legacy_overlays(draw_frame, selected, tracked):
+    """Fallback drawing logic using legacy cv2 putText/rectangle."""
+    font = cv2.FONT_HERSHEY_PLAIN
+
+    # SOTA fallback drawing
+    if MODO_DETECCAO == "aves" and sv is not None and False:
+        if tracked is not None and len(tracked) > 0:
+            labels = []
+            for i in range(len(tracked)):
+                tracker_id = (
+                    tracked.tracker_id[i]
+                    if tracked.tracker_id is not None
+                    else -1
                 )
-                btxt = f"Comportamento: {behavior_state['status']}"
-                cv2.putText(draw_frame, btxt, (10, 55), font, 1.5, (30, 220, 255), 2)
+                conf = tracked.confidence[i]
+                labels.append(f"#{tracker_id} {conf:.2f}")
+
+            pass
+            pass
+            draw_frame = behavior_engine.annotate_heatmap(draw_frame, tracked)
+
+        cv2.putText(
+            draw_frame,
+            f"Aves visiveis: {object_count}",
+            (10, 30),
+            font,
+            2,
+            (0, 255, 0),
+            2,
+        )
+        btxt = f"Comportamento: {behavior_state['status']}"
+        cv2.putText(draw_frame, btxt, (10, 55), font, 1.5, (30, 220, 255), 2)
+    else:
+        for det in selected:
+            x1, y1, x2, y2 = det["box"]
+            class_name = _class_name_by_id(det["class_id"]) or "obj"
+            tid = int(det.get("stable_bird_uid", det.get("track_id", -1)))
+            confidence = float(det["confidence"])
+            is_carcass = tid in carcass_state.get("uids", set())
+            color = (0, 0, 0) if is_carcass else (0, 255, 0)
+            cv2.rectangle(
+                draw_frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2
+            )
+            if is_carcass:
+                label = f"POSSIVEL CARCACA ID:{tid}"
             else:
-                for det in selected:
-                    x1, y1, x2, y2 = det["box"]
-                    class_name = _class_name_by_id(det["class_id"]) or "obj"
-                    tid = int(det.get("stable_bird_uid", det.get("track_id", -1)))
-                    confidence = float(det["confidence"])
-                    is_carcass = tid in carcass_state.get("uids", set())
-                    color = (0, 0, 0) if is_carcass else (0, 255, 0)
-                    cv2.rectangle(
-                        draw_frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2
-                    )
-                    if is_carcass:
-                        label = f"POSSIVEL CARCACA ID:{tid}"
-                    else:
-                        label = (
-                            f"{class_name} ID:{tid} ({confidence:.2f})"
-                            if tid >= 0
-                            else f"{class_name} ({confidence:.2f})"
-                        )
-                    cv2.putText(
-                        draw_frame,
-                        label,
-                        (int(x1), max(20, int(y1) - 5)),
-                        font,
-                        1.2,
-                        color,
-                        2,
-                    )
-
-                if MODO_DETECCAO == "aves":
-                    cv2.putText(
-                        draw_frame,
-                        f"Aves visiveis: {object_count}",
-                        (10, 30),
-                        font,
-                        2,
-                        (0, 255, 0),
-                        2,
-                    )
-                    btxt = f"Comportamento: {behavior_state['status']}"
-                    cv2.putText(
-                        draw_frame,
-                        btxt,
-                        (10, 55),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5,
-                        (30, 220, 255),
-                        1,
-                    )
-                else:
-                    cv2.putText(
-                        draw_frame,
-                        f"Objetos: {object_count}",
-                        (10, 30),
-                        font,
-                        2,
-                        (0, 255, 0),
-                        2,
-                    )
-
-            cfg = f"tracker={TRACKER_CONFIG} conf={DETECTION_CONF:.2f} classe={BIRD_CLASS_NAME}"
+                label = (
+                    f"{class_name} ID:{tid} ({confidence:.2f})"
+                    if tid >= 0
+                    else f"{class_name} ({confidence:.2f})"
+                )
             cv2.putText(
                 draw_frame,
-                cfg,
-                (10, 78),
+                label,
+                (int(x1), max(20, int(y1) - 5)),
+                font,
+                1.2,
+                color,
+                2,
+            )
+
+        if MODO_DETECCAO == "aves":
+            cv2.putText(
+                draw_frame,
+                f"Aves visiveis: {object_count}",
+                (10, 30),
+                font,
+                2,
+                (0, 255, 0),
+                2,
+            )
+            btxt = f"Comportamento: {behavior_state['status']}"
+            cv2.putText(
+                draw_frame,
+                btxt,
+                (10, 55),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.45,
-                (255, 255, 0),
+                0.5,
+                (30, 220, 255),
                 1,
             )
+        else:
+            cv2.putText(
+                draw_frame,
+                f"Objetos: {object_count}",
+                (10, 30),
+                font,
+                2,
+                (0, 255, 0),
+                2,
+            )
+
+    cfg = f"tracker={TRACKER_CONFIG} conf={DETECTION_CONF:.2f} classe={BIRD_CLASS_NAME}"
+    cv2.putText(
+        draw_frame,
+        cfg,
+        (10, 78),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.45,
+        (255, 255, 0),
+        1,
+    )
+    return draw_frame
+
+
+def _draw_overlays(draw_frame, frame, selected, tracked):
+    """Draws bounding boxes, keypoints, and other analytics on the frame."""
+    if not detector.yolo_loaded:
+        return draw_frame
+
+    if _CV_ENGINE_AVAILABLE and CVOverlay is not None:
+        draw_frame = _draw_cv_engine_v2_overlays(draw_frame, frame, selected, tracked)
+    else:
+        draw_frame = _draw_legacy_overlays(draw_frame, selected, tracked)
 
     return draw_frame
 
