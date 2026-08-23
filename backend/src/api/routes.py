@@ -103,7 +103,7 @@ def create_api_blueprint(deps):
         quality = deps.get("stream_jpeg_quality", 80)
         encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
 
-        def generate():
+        async def generate():
             last_t = time.perf_counter()
             try:
                 while True:
@@ -125,9 +125,22 @@ def create_api_blueprint(deps):
                     elapsed = time.perf_counter() - t0
                     sleep_t = stream_interval - elapsed
                     if sleep_t > 0.001:
-                        time.sleep(sleep_t)
+                        await asyncio.sleep(sleep_t)
             except GeneratorExit:
                 pass  # cliente desconectou — saida limpa
+
+        def sync_generate():
+            loop = asyncio.new_event_loop()
+            gen = generate()
+            while True:
+                try:
+                    yield loop.run_until_complete(gen.__anext__())
+                except StopAsyncIteration:
+                    break
+                except GeneratorExit:
+                    loop.run_until_complete(gen.aclose())
+                    break
+            loop.close()
 
         headers = {
             "Cache-Control": "no-cache, no-store, must-revalidate",
@@ -136,7 +149,7 @@ def create_api_blueprint(deps):
             "X-Accel-Buffering": "no",  # desabilita buffer do Nginx se presente
         }
         return Response(
-            generate(),
+            sync_generate(),
             mimetype="multipart/x-mixed-replace; boundary=frame",
             headers=headers,
         )
