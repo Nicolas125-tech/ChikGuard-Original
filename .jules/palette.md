@@ -31,3 +31,6 @@
 ## 2024-11-20 - Shared Table Row Loading UX Bug
 **Learning:** Using a single `actionLoading = userId` state for a table row with multiple distinct actions (Approve, Suspend, Delete) causes all buttons in that row to show a loading spinner simultaneously when any one action is triggered. This creates a confusing UX where the user isn't sure which action is actually processing.
 **Action:** Always scope loading states to both the unique entity ID *and* the specific action being performed (e.g., `actionLoading = '${userId}-approve'`) when a row contains multiple interactive elements.
+## 2025-08-23 - Decorative Icons in Table Actions
+**Learning:** Supplementary Lucide icons inside action buttons and table header tabs are often missed for accessibility if they don't include `aria-hidden="true"`, causing unnecessary screen reader noise.
+**Action:** Add `aria-hidden="true"` to supplementary icons across standard action UI elements to ensure clean screen reader output.
