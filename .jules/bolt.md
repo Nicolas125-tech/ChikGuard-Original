@@ -93,3 +93,7 @@
 ## 2024-05-18 - Fix sequential network waterfall in streaming endpoint
 **Learning:** Using synchronous sleep like `time.sleep()` in an asynchronous generator inside an ASGI/WSGI context blocks the event loop and effectively acts as a bottleneck, reducing overall application throughput. In asynchronous streaming endpoints, switching to cooperative yielding via `await asyncio.sleep()` allows other connections and background tasks to be processed efficiently.
 **Action:** Changed `time.sleep` to `await asyncio.sleep` and converted `generate()` to `async def generate()` within `backend/src/api/routes.py:128`.
+
+## 2024-05-18 - Optimized Duplicate Network Request in RulesPanel
+**Learning:** Found two separate functions (`fetchRules` and `reloadRules`) making identical API calls to `/api/rules`. `fetchRules` was properly memoized and managed `loading` state, whereas `reloadRules` lacked loading state management. When trying to refactor by replacing `reloadRules` with `fetchRules()`, I noticed that unconditional `setLoading(true)` degraded UX (causing the UI to flash on background updates). Refactoring requires careful state isolation.
+**Action:** Modified `fetchRules` to accept a `showLoading` parameter (defaulting to true) and replaced `reloadRules` with `fetchRules(false)` for smooth background refreshes, reducing bundle size and keeping code DRY without causing a UX regression.
