@@ -155,3 +155,7 @@
 **Vulnerability:** A streaming endpoint (`/api/webrtc/video`) used manual `jwt.decode` logic to validate JWTs instead of invoking the centralized authentication dependency (`get_current_user`). This allowed a valid token to bypass critical account status checks (e.g., account suspension, rejection, or pending approval states) verified during central authentication.
 **Learning:** Bypassing central auth for "simplicity" or "performance" (like checking tokens natively in websockets or streaming endpoints) negates authorization layers, enabling disabled accounts to maintain system access via streaming capabilities.
 **Prevention:** Always reuse global authentication routines/dependencies (`get_current_user`) for validating tokens, even for non-standard vectors like WebSocket connect handlers or streaming queries, rather than reinventing JWT parsing explicitly inside the endpoint.
+## 2024-05-18 - [Exposição de Segredos]
+**Vulnerability:** A chave de API do Supabase (VITE_SUPABASE_ANON_KEY) estava chumbada diretamente no componente frontend AdminPanel.jsx.
+**Learning:** Hardcodar segredos, mesmo em exemplos, pode levar ao vazamento de dados sensíveis para o controle de versão e falsos positivos de SAST.
+**Prevention:** Nunca usar credenciais reais ou pedaços de credenciais no código-fonte, mesmo como comentários ou dicas. Usar sempre placeholders óbvios, como "your-api-key".

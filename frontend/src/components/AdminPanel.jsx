@@ -483,7 +483,7 @@ export default function AdminPanel({ token, serverIP, role: myRole }) {
               </p>
               <pre className="bg-slate-950/80 rounded-lg p-3 text-xs text-emerald-300 font-mono border border-slate-800">
 {`VITE_SUPABASE_URL=https://seu-projeto.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJ...`}
+VITE_SUPABASE_ANON_KEY=your-api-key`}
               </pre>
             </div>
           </div>
