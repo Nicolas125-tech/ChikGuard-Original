@@ -75,7 +75,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserContext:
 
         # Fallback para HS256 (projetos mais antigos)
         jwt_secret = os.environ.get("SUPABASE_JWT_SECRET") or SUPABASE_JWT_SECRET
-        if decoded is None and jwt_secret:
+        if decoded is None and jwt_secret and alg == "HS256":
             decoded = jwt.decode(
                 token, jwt_secret,
                 algorithms=["HS256"],

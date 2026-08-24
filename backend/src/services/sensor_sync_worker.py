@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 from database import SensorReading
-from sqlalchemy import update
+from sqlalchemy import update, bindparam
 
 logger = logging.getLogger("chikguard.sensor_sync")
 
@@ -88,15 +88,20 @@ class SensorSyncWorker:
                 client.table("sensor_readings").insert(records).execute()
 
                 # Sucesso: atualiza localmente para SYNCED em lote
-                ids = [r.id for r in readings]
-                session.execute(
-                    update(SensorReading)
-                    .where(SensorReading.id.in_(ids))
+                stmt = (
+                    update(SensorReading.__table__)
+                    .where(SensorReading.id == bindparam("b_id"))
                     .values(
-                        sync_status="SYNCED",
-                        last_sync_attempt=datetime.now(timezone.utc),
+                        sync_status=bindparam("b_status"),
+                        last_sync_attempt=bindparam("b_time"),
                     )
                 )
+                now_utc = datetime.now(timezone.utc)
+                bulk_data = [
+                    {"b_id": r.id, "b_status": "SYNCED", "b_time": now_utc}
+                    for r in readings
+                ]
+                session.execute(stmt.execution_options(synchronize_session=None), bulk_data)
 
                 session.commit()
                 # Reseta o tempo de espera para o valor padrão (reconexão restabelecida)
@@ -108,15 +113,20 @@ class SensorSyncWorker:
             except Exception as net_err:
                 # Falha de rede/Supabase: marca local como FAILED e aplica backoff
                 session.rollback()
-                ids = [r.id for r in readings]
-                session.execute(
-                    update(SensorReading)
-                    .where(SensorReading.id.in_(ids))
+                stmt = (
+                    update(SensorReading.__table__)
+                    .where(SensorReading.id == bindparam("b_id"))
                     .values(
-                        sync_status="FAILED",
-                        last_sync_attempt=datetime.now(timezone.utc),
+                        sync_status=bindparam("b_status"),
+                        last_sync_attempt=bindparam("b_time"),
                     )
                 )
+                now_utc = datetime.now(timezone.utc)
+                bulk_data = [
+                    {"b_id": r.id, "b_status": "FAILED", "b_time": now_utc}
+                    for r in readings
+                ]
+                session.execute(stmt.execution_options(synchronize_session=None), bulk_data)
 
                 session.commit()
                 # Dobra o tempo de espera até o máximo de 5 minutos (300 segundos)
