@@ -185,10 +185,10 @@ export default function CamerasManager({ serverIP, token }) {
                     </span>
                   </td>
                   <td className="p-4 flex gap-2">
-                    <button aria-label="Editar câmera" onClick={() => openEdit(cam)} className="p-2 text-blue-400 hover:bg-blue-400/10 rounded transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none" title="Editar">
+                    <button aria-label={`Editar câmera ${cam.name}`} onClick={() => openEdit(cam)} className="p-2 text-blue-400 hover:bg-blue-400/10 rounded transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none" title="Editar">
                       <Edit2 size={16} aria-hidden="true" />
                     </button>
-                    <button aria-label="Excluir câmera" disabled={deletingId === cam.id} onClick={() => handleDelete(cam.id)} className="p-2 text-rose-400 hover:bg-rose-400/10 rounded transition-colors focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed" title="Excluir">
+                    <button aria-label={`Excluir câmera ${cam.name}`} disabled={deletingId === cam.id} onClick={() => handleDelete(cam.id)} className="p-2 text-rose-400 hover:bg-rose-400/10 rounded transition-colors focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed" title="Excluir">
                       {deletingId === cam.id ? <RefreshCw size={16} className="animate-spin" aria-hidden="true" /> : <Trash2 size={16} aria-hidden="true" />}
                     </button>
                   </td>
