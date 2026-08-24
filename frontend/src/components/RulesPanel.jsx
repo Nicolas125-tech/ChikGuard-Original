@@ -20,8 +20,8 @@ export default function RulesPanel({ serverIP }) {
   const [device, setDevice] = useState('exhaust_fan');
   const [state, setState] = useState('on');
 
-  const fetchRules = useCallback(async () => {
-    setLoading(true);
+  const fetchRules = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     setError(null);
     try {
       const res = await fetch(`${getBaseUrl(serverIP)}/api/rules`);
@@ -32,26 +32,13 @@ export default function RulesPanel({ serverIP }) {
       console.error('Failed to fetch rules', err);
       setError(err.message || 'Erro ao carregar as regras.');
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, [serverIP]);
 
   useEffect(() => {
     fetchRules();
   }, [fetchRules]);
-
-  const reloadRules = async () => {
-    try {
-      setError(null);
-      const res = await fetch(`${getBaseUrl(serverIP)}/api/rules`);
-      if (!res.ok) throw new Error('Não foi possível recarregar as regras de automação.');
-      const data = await res.json();
-      setRules(prev => isDeepEqual(prev, data) ? prev : data);
-    } catch (err) {
-      console.error('Failed to reload rules', err);
-      setError(err.message || 'Erro ao recarregar as regras.');
-    }
-  };
 
   const handleAddRule = async (e) => {
     e.preventDefault();
@@ -80,7 +67,7 @@ export default function RulesPanel({ serverIP }) {
         toast.success('Regra criada com sucesso!');
         setName('');
         setValue('');
-        reloadRules();
+        fetchRules(false);
       } else {
         toast.error('Erro ao criar regra');
       }
@@ -101,7 +88,7 @@ export default function RulesPanel({ serverIP }) {
       });
       if (res.ok) {
         toast.success('Regra removida!');
-        reloadRules();
+        fetchRules(false);
       }
     } catch (err) {
       console.error(err);

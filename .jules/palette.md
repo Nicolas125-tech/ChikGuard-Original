@@ -34,3 +34,6 @@
 ## 2025-08-23 - Decorative Icons in Table Actions
 **Learning:** Supplementary Lucide icons inside action buttons and table header tabs are often missed for accessibility if they don't include `aria-hidden="true"`, causing unnecessary screen reader noise.
 **Action:** Add `aria-hidden="true"` to supplementary icons across standard action UI elements to ensure clean screen reader output.
+## 2025-02-23 - Dynamic ARIA Labels in Lists
+**Learning:** Generic `aria-label`s like "Editar câmera" and "Excluir câmera" inside repeated table rows or lists are confusing for screen reader users because they lack context about *which* item is being targeted.
+**Action:** Always include a unique identifier (like the item's name or title) in the `aria-label` for action buttons within loops (e.g., `aria-label={\`Editar câmera ${cam.name}\`}`).
