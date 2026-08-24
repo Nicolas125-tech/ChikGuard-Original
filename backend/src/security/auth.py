@@ -55,7 +55,7 @@ def require_auth(roles=None, allow_query_token=False):
 
                 if decoded is None:
                     jwt_secret = get_jwt_secret()
-                    if jwt_secret:
+                    if jwt_secret and alg == "HS256":
                         decoded = jwt.decode(
                             token, jwt_secret, algorithms=["HS256"], audience="authenticated"
                         )

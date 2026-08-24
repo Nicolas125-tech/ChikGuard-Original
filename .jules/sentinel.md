@@ -1,4 +1,4 @@
-## 2026-05-28 - [Overly Permissive WebSocket CORS] 
+## 2026-05-28 - [Overly Permissive WebSocket CORS]
 **Vulnerability:** SocketIO was initialized with `cors_allowed_origins="*"` while the HTTP routes used strict `ALLOWED_ORIGINS`, allowing any origin to connect to the websocket.
 **Learning:** WebSocket implementations can inadvertently bypass strict HTTP CORS policies if not explicitly configured with the same origin restrictions. This creates a gap where attackers might exploit WebSocket connections (CSWSH) even when REST APIs are protected.
 **Prevention:** Always reuse the same `ALLOWED_ORIGINS` constants from security/header modules when configuring WebSocket services like `SocketIO`.
@@ -17,7 +17,7 @@
 **Vulnerability:** The `/api/admin/approve-user` and `/api/accounts/users/<id>` endpoints allowed any user with `accounts.manage` permission (e.g. an "operator" or a lower-privileged "admin") to elevate their own privileges or someone else's to `superadmin` by changing the `target_role` / `role` directly in the payload.
 **Learning:** Checking for general permissions (e.g., `accounts.manage`) is not enough. We must explicitly check if the user is authorized to assign or mutate high-privilege roles to prevent privilege escalation.
 **Prevention:** Implement strict role hierarchy checks. Users should never be able to assign roles that have equal or higher privilege levels than their own.
-## 2026-05-28 - [Overly Permissive WebSocket CORS] 
+## 2026-05-28 - [Overly Permissive WebSocket CORS]
 **Vulnerability:** SocketIO was initialized with `cors_allowed_origins="*"` while the HTTP routes used strict `ALLOWED_ORIGINS`, allowing any origin to connect to the websocket.
 **Learning:** WebSocket implementations can inadvertently bypass strict HTTP CORS policies if not explicitly configured with the same origin restrictions. This creates a gap where attackers might exploit WebSocket connections (CSWSH) even when REST APIs are protected.
 **Prevention:** Always reuse the same `ALLOWED_ORIGINS` constants from security/header modules when configuring WebSocket services like `SocketIO`.
@@ -155,3 +155,7 @@
 **Vulnerability:** A streaming endpoint (`/api/webrtc/video`) used manual `jwt.decode` logic to validate JWTs instead of invoking the centralized authentication dependency (`get_current_user`). This allowed a valid token to bypass critical account status checks (e.g., account suspension, rejection, or pending approval states) verified during central authentication.
 **Learning:** Bypassing central auth for "simplicity" or "performance" (like checking tokens natively in websockets or streaming endpoints) negates authorization layers, enabling disabled accounts to maintain system access via streaming capabilities.
 **Prevention:** Always reuse global authentication routines/dependencies (`get_current_user`) for validating tokens, even for non-standard vectors like WebSocket connect handlers or streaming queries, rather than reinventing JWT parsing explicitly inside the endpoint.
+## 2026-08-24 - [Fix SQLite Parameter Limit Constraint in SQLAlchemy bulk update via parameter binding]
+**Vulnerability:** SQLite Parameter Limit Constraint in SQLAlchemy bulk update using `.in_()` with SQLite parameter limit constraints and unsafe variable interpolation context via `sync_worker`.
+**Learning:** Found usage of `.in_(ids)` in a `session.execute(update(SensorReading).where(SensorReading.id.in_(ids)))` structure that could potentially cause SQLite 'too many variables' limits (exceeding 999) or trigger SAST warnings due to unsafe query interpolation context. The fallback solution uses `bindparam` for proper explicit parameter binding inside the SQLAlchemy `update` query and processes bulk dictionaries properly using `.execution_options(synchronize_session=None)`. Also fixed a potential bug in fallback JWT logic that failed to check `alg == "HS256"`.
+**Prevention:** Avoid `in_(ids)` for dynamic arrays with bulk updates when iterating large datasets for synchronization backlogs; always prefer `bindparam` mappings passed natively to `session.execute(stmt, bulk_data)` for performance and security compliance.

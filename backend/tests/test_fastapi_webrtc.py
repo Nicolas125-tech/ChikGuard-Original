@@ -33,6 +33,8 @@ def test_video_feed_with_valid_token(mock_get_global_frame, mock_get_current_use
     import numpy as np
     mock_frame = np.zeros((480, 640, 3), dtype=np.uint8)
     mock_get_global_frame.return_value = mock_frame
+    import cv2
+    cv2.imencode = MagicMock(return_value=(True, np.array([1, 2, 3], dtype=np.uint8)))
 
     # Using patch to bypass the infinite stream for testing
     with patch("src.api.fastapi_webrtc.asyncio.sleep", side_effect=GeneratorExit()):
