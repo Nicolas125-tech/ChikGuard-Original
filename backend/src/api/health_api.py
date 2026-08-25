@@ -1,3 +1,4 @@
+from sqlalchemy import text
 import time
 
 import psutil
@@ -30,7 +31,7 @@ def create_health_blueprint(deps):
         # Status do DB
         db_status = "Online"
         try:
-            db.session.execute("SELECT 1")
+            db.session.execute(text("SELECT 1"))
         except Exception:
             db_status = "Offline"
 
