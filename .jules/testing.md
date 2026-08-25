@@ -33,6 +33,7 @@
 **What:** Added tests for `handle_check_anomaly` and `/api/sensors/anomaly` blueprint route in `sensors_api.py`.
 **Coverage:** Tested empty sensor history dataset bootstrapping, multivariate anomaly detection triggering global event log, and authenticated endpoint response.
 **Result:** Verified edge case handling and blueprint route execution for check_anomaly endpoint.
-## 2025-02-23 - Add test for write_audit_log
-**Learning:** Testing functions that rely on imported DB models (like `AuditLog` from `database`) requires carefully targeted patching (e.g., `@patch("database.AuditLog")`) to intercept the correct class instantiation and avoid attribute errors from mocking the wrong scope.
-**Action:** Added `test_write_audit_log_success` and `test_write_audit_log_exception` to ensure complete coverage for the database commit and the error logging fallback using proper module patching.
+
+## 2024-05-18 - Anomaly Detection Tests Edge Cases
+**Learning:** Even when statement coverage is 100%, edge cases like missing dict keys in dictionary comprehensions (handled by `.get(f, 0.0)`) might not be explicitly asserted in tests.
+**Action:** Added `test_detect_multivariate_anomaly_missing_fields` to ensure the fallback logic functions correctly without raising KeyError.
