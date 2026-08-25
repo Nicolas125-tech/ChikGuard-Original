@@ -36,3 +36,7 @@
 ## 2025-03-09 - Ensure tests for predict_slaughter_date
 **Learning:** I investigated the task to add tests for `predict_slaughter_date` in `backend/src/ai/forecast.py` and found that a comprehensive test suite was already present in `backend/tests/test_forecast.py`. The suite provides 100% test coverage for the function.
 **Action:** Verified the existing tests and confirmed 100% coverage, requiring no further implementation.
+
+## 2024-05-18 - Anomaly Detection Tests Edge Cases
+**Learning:** Even when statement coverage is 100%, edge cases like missing dict keys in dictionary comprehensions (handled by `.get(f, 0.0)`) might not be explicitly asserted in tests.
+**Action:** Added `test_detect_multivariate_anomaly_missing_fields` to ensure the fallback logic functions correctly without raising KeyError.

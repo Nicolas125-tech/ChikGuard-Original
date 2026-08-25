@@ -1,4 +1,5 @@
 import asyncio
+import aiofiles
 import json
 import os
 import time
@@ -80,8 +81,9 @@ class SupabaseSyncWorker:
             return []
 
         try:
-            with open(self.log_file, "r") as f:
-                data = json.load(f)
+            async with aiofiles.open(self.log_file, "r") as f:
+                content = await f.read()
+                data = json.loads(content)
 
             if len(data) <= self.last_processed_idx:
                 return []

@@ -40,3 +40,39 @@ def test_accounts_users(mock_supabase):
     response = client.get("/api/accounts/users")
     assert response.status_code == 200
     assert response.json() == {"count": 1, "items": [{"id": "1", "name": "User 1"}]}
+
+from src.api.fastapi_accounts import write_audit_log
+import json
+
+@patch("database.AuditLog")
+def test_write_audit_log_success(mock_audit_log_class):
+    mock_db = MagicMock()
+    actor = "admin"
+    action = "delete"
+    details = {"id": 1}
+
+    write_audit_log(mock_db, actor, action, details)
+
+    mock_audit_log_class.assert_called_once_with(
+        actor=actor,
+        action=action,
+        source="security",
+        details_json=json.dumps(details, ensure_ascii=False)
+    )
+
+    mock_db.add.assert_called_once_with(mock_audit_log_class.return_value)
+    mock_db.commit.assert_called_once()
+
+@patch("database.AuditLog")
+@patch("src.api.fastapi_accounts.logger")
+def test_write_audit_log_exception(mock_logger, mock_audit_log_class):
+    mock_db = MagicMock()
+    mock_db.commit.side_effect = Exception("DB error")
+
+    actor = "admin"
+    action = "delete"
+    details = {"id": 1}
+
+    write_audit_log(mock_db, actor, action, details)
+
+    mock_logger.error.assert_called_once_with("Failed to write audit log: %s", "DB error")
