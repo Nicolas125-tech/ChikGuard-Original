@@ -1,4 +1,5 @@
 import asyncio
+import time
 import logging
 from src.core.state_machine import BusinessStateMachine
 from src.core.state import sensor_state, sensor_thresholds, intrusion_state
@@ -17,6 +18,13 @@ actuator_state = {
     "aquecedor_on": False,
 }
 
+
+# Cache para evitar consultas excessivas ao banco
+_last_batch_fetch_time = 0
+_cached_batch_age_day = 21
+_cached_target_temp = 23.0
+CACHE_TTL = 60  # 60 segundos
+
 async def fsm_loop():
     """Loop continuo que reage a sensores e executa acoes baseadas nas regras de FSM."""
     logger.info("Iniciando FSM Autonoma em Background (FastAPI)")
@@ -30,19 +38,24 @@ async def fsm_loop():
             from src.core.state_machine import get_ideal_temp_for_age
             from src.db.session import SessionLocal
 
-            db_session = SessionLocal()
-            batch_age_day = 21
-            target_temp = 23.0
-            try:
-                batch = db_session.query(Batch).filter_by(camera_id="galpao-1", active=True).order_by(Batch.id.desc()).first()
-                if batch:
-                    batch_age_day = max(1, (datetime.utcnow().date() - batch.start_date.date()).days + 1)
-                target_temp = get_ideal_temp_for_age(batch_age_day)
-            except Exception as db_err:
-                logger.error(f"Erro ao buscar lote ativo na FSM: {db_err}")
-                target_temp = get_ideal_temp_for_age(batch_age_day)
-            finally:
-                db_session.close()
+            global _last_batch_fetch_time, _cached_batch_age_day, _cached_target_temp
+            now = time.time()
+            if now - _last_batch_fetch_time > CACHE_TTL:
+                db_session = SessionLocal()
+                try:
+                    batch = db_session.query(Batch).filter_by(camera_id="galpao-1", active=True).order_by(Batch.id.desc()).first()
+                    if batch:
+                        _cached_batch_age_day = max(1, (datetime.utcnow().date() - batch.start_date.date()).days + 1)
+                    _cached_target_temp = get_ideal_temp_for_age(_cached_batch_age_day)
+                    _last_batch_fetch_time = now
+                except Exception as db_err:
+                    logger.error(f"Erro ao buscar lote ativo na FSM: {db_err}")
+                    _cached_target_temp = get_ideal_temp_for_age(_cached_batch_age_day)
+                finally:
+                    db_session.close()
+
+            batch_age_day = _cached_batch_age_day
+            target_temp = _cached_target_temp
 
             # Limites e diferenciais de acionamento dinâmicos e adequados
             heater_on = max(15.0, target_temp - 0.5)
