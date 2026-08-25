@@ -18,8 +18,12 @@ def setup(start_uid, n):
 def original_method(rows):
     now_dt = _utcnow()
     with app.app_context():
+        bird_uids = [r.bird_uid for r in rows]
+        existing = BirdIdentity.query.filter(BirdIdentity.bird_uid.in_(bird_uids)).all()
+        id_map = {idx.bird_uid: idx for idx in existing}
+
         for row in rows:
-            identity = BirdIdentity.query.filter_by(bird_uid=row.bird_uid).first()
+            identity = id_map.get(row.bird_uid)
             if identity is None:
                 identity = BirdIdentity(
                     bird_uid=row.bird_uid,
@@ -30,6 +34,7 @@ def original_method(rows):
                     last_temp_estimada=row.temperatura_estimada,
                 )
                 db.session.add(identity)
+                id_map[row.bird_uid] = identity
             else:
                 identity.last_seen = now_dt
                 identity.sightings = int(identity.sightings) + 1
@@ -37,6 +42,7 @@ def original_method(rows):
                     identity.max_confidence = row.confidence
                 identity.last_temp_estimada = row.temperatura_estimada
         db.session.commit()
+
 
 def optimized_method(rows):
     now_dt = _utcnow()
