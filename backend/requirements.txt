@@ -33,3 +33,4 @@ pydantic
 python-socketio[asyncio]
 Flask-JWT-Extended
 pytest-asyncio
+aiofiles

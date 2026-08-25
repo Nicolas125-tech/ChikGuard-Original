@@ -105,3 +105,28 @@ def test_detect_multivariate_anomaly_abnormal():
     assert "amm" in result["contributions"]
     assert "hum" in result["contributions"]
     assert "cough" in result["contributions"]
+
+def test_detect_multivariate_anomaly_missing_fields():
+    """
+    Test that detect_multivariate_anomaly correctly handles missing features
+    in sensor_history or current_state by falling back to 0.0.
+    """
+    random.seed(42)
+    # Generate points with missing 'temp' and 'hum'
+    sensor_history = [
+        {
+            "amm": random.uniform(14.5, 15.5),
+            "cough": random.uniform(9.5, 10.5)
+        }
+        for _ in range(500)
+    ]
+    # Current state missing 'temp' and 'cough'
+    current_state = {"hum": 60.0, "amm": 15.0}
+
+    result = detect_multivariate_anomaly(sensor_history, current_state)
+
+    if result.get("error") == "scikit-learn is not installed in the environment.":
+        pytest.skip("scikit-learn is not available in the environment")
+
+    assert "is_anomaly" in result
+    assert "score" in result
