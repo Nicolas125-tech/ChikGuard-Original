@@ -1,5 +1,4 @@
-🎨 Palette: Fix Shared Table Row Loading UX Bug
-💡 What: Scoped the actionLoading state in AdminPanel.jsx to both the unique user ID and the specific action being performed (e.g., <userId>-approve).
-🎯 Why: Previously, using a single actionLoading = userId state caused all action buttons in a user row to display a loading spinner simultaneously when any one action was triggered, creating a confusing user experience.
-📸 Before/After: Before, all buttons showed a spinner. After, only the clicked button shows a spinner while others are disabled.
-♿ Accessibility: Improves visual feedback clarity for screen reader and keyboard users by clearly indicating which specific action is processing.
+{
+  "title": "🎨 Palette: [UX improvement]",
+  "description": "* 💡 What: Replaced static generic ARIA labels on user table action buttons with dynamic labels including the user's name or email.\n* 🎯 Why: To provide clear, specific context for screen reader users navigating through repeated action buttons in lists.\n* 📸 Before/After: N/A\n* ♿ Accessibility: Improved screen reader navigation by ensuring each button clearly identifies which user it affects."
+}

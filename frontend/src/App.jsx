@@ -116,7 +116,7 @@ function AppCore() {
               // Profile fetch timeout/RLS → usa valores do localStorage (já setados acima)
             }
           }
-        } catch (e) {
+        } catch {
           console.error('Erro ao conectar ao Supabase:', e);
         }
       }
@@ -207,7 +207,7 @@ function AppCore() {
           try {
             const res = await fetch('/api/status');
             return res.ok ? await res.json() : { error: 'Failed to fetch status' };
-          } catch (e) {
+          } catch {
             return { error: 'Erro interno do servidor' };
           }
         }
@@ -223,7 +223,7 @@ function AppCore() {
           try {
             const res = await fetch('/api/alerts');
             return res.ok ? await res.json() : { error: 'Failed to fetch alerts' };
-          } catch (e) {
+          } catch {
             return { error: 'Erro interno do servidor' };
           }
         }
