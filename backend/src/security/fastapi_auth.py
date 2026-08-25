@@ -13,7 +13,10 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
-SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "")
+SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET")
+
+if not SUPABASE_JWT_SECRET and not os.environ.get("TESTING"):
+    raise RuntimeError("SUPABASE_JWT_SECRET environment variable is required for secure authentication.")
 
 if SUPABASE_URL and SUPABASE_KEY and not os.environ.get("TESTING"):
     supabase_client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -75,6 +78,8 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserContext:
 
         # Fallback para HS256 (projetos mais antigos)
         jwt_secret = os.environ.get("SUPABASE_JWT_SECRET") or SUPABASE_JWT_SECRET
+        if not jwt_secret:
+            raise RuntimeError("SUPABASE_JWT_SECRET environment variable is required for secure authentication.")
         if decoded is None and jwt_secret and alg == "HS256":
             decoded = jwt.decode(
                 token, jwt_secret,
