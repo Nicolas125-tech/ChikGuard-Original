@@ -1,1 +1,6 @@
-{"title":"🛡️ Sentinel: [CRÍTICO/ALTO] Corrigir bypass de autenticação no streaming de vídeo","description":"🚨 Gravidade: ALTA\n💡 Vulnerabilidade: O endpoint de streaming de vídeo `/api/webrtc/video` contava com uma validação manual de JWT (`jwt.decode`) que ignorava as verificações de status globais da conta. Isso permitia que usuários com contas suspensas ou pendentes continuassem a acessar o stream.\n🎯 Impacto: Usuários não autorizados ou bloqueados no sistema podiam manter acesso à visualização de câmeras, o que constitui um acesso não autorizado grave a dados e vídeos restritos.\n🔧 Solução: Substituída a decodificação manual de JWT no endpoint `/api/webrtc/video` pela chamada à dependência central de autenticação `await get_current_user(token)`. Isso garante que todas as políticas, papéis (roles) e validações de status da conta sejam aplicados.\n✅ Verificação: Implementados testes de unidade em `test_fastapi_webrtc.py` validando os fluxos com tokens ausentes e inválidos. Todos os testes para o stream de vídeo passaram localmente."}
+Title: 🎨 Palette: [UX improvement]
+Description:
+* 💡 What: Replaced static generic ARIA labels on user table action buttons with dynamic labels including the user's name or email.
+* 🎯 Why: To provide clear, specific context for screen reader users navigating through repeated action buttons in lists.
+* 📸 Before/After: N/A
+* ♿ Accessibility: Improved screen reader navigation by ensuring each button clearly identifies which user it affects.

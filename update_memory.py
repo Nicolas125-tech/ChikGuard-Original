@@ -1,0 +1,10 @@
+import urllib.request
+import json
+
+payload = {
+    "title": "🎨 Palette: [UX improvement]",
+    "description": "* 💡 What: Replaced static generic ARIA labels on user table action buttons with dynamic labels including the user's name or email.\n* 🎯 Why: To provide clear, specific context for screen reader users navigating through repeated action buttons in lists.\n* 📸 Before/After: N/A\n* ♿ Accessibility: Improved screen reader navigation by ensuring each button clearly identifies which user it affects."
+}
+
+with open("record_payload.json", "w") as f:
+    json.dump(payload, f)
