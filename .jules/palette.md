@@ -37,3 +37,6 @@
 ## 2025-02-23 - Dynamic ARIA Labels in Lists
 **Learning:** Generic `aria-label`s like "Editar câmera" and "Excluir câmera" inside repeated table rows or lists are confusing for screen reader users because they lack context about *which* item is being targeted.
 **Action:** Always include a unique identifier (like the item's name or title) in the `aria-label` for action buttons within loops (e.g., `aria-label={\`Editar câmera ${cam.name}\`}`).
+## 2024-08-25 - Dynamic ARIA labels for action buttons in lists
+**Learning:** Generic static ARIA labels like "Editar perfil do utilizador" on repeated rows provide insufficient context to screen reader users navigating by buttons.
+**Action:** When applying `aria-label`s to repeated action buttons within lists or tables, always include a dynamic unique identifier (such as the item's name or email) to provide specific context.
