@@ -46,7 +46,7 @@ class Reading(db.Model):
     tenant_id = db.Column(db.Integer, nullable=False, default=1, index=True)
     temperatura = db.Column(db.Float, nullable=False)
     status = db.Column(db.String(50), nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)  # Data e hora automática
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)  # Data e hora automática
 
     def to_dict(self):
         return {
