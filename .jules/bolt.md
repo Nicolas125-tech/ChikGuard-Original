@@ -97,3 +97,6 @@
 ## 2024-05-18 - Optimized Duplicate Network Request in RulesPanel
 **Learning:** Found two separate functions (`fetchRules` and `reloadRules`) making identical API calls to `/api/rules`. `fetchRules` was properly memoized and managed `loading` state, whereas `reloadRules` lacked loading state management. When trying to refactor by replacing `reloadRules` with `fetchRules()`, I noticed that unconditional `setLoading(true)` degraded UX (causing the UI to flash on background updates). Refactoring requires careful state isolation.
 **Action:** Modified `fetchRules` to accept a `showLoading` parameter (defaulting to true) and replaced `reloadRules` with `fetchRules(false)` for smooth background refreshes, reducing bundle size and keeping code DRY without causing a UX regression.
+## 2024-05-18 - FSM Database Query Optimization
+**Learning:** Querying the database periodically in high-frequency asynchronous loops (like `fsm_loop`, which runs every 5 seconds) incurs heavy computational overhead due to constant connection establishment, querying, and teardown, even when the data changes infrequently (like `Batch` data).
+**Action:** Implemented an in-memory caching mechanism in `fsm_loop` with a 60-second TTL to cache `batch_age_day` and `target_temp`. This minimizes database I/O while ensuring the FSM logic remains up to date.
