@@ -33,3 +33,7 @@
 **What:** Added tests for `handle_check_anomaly` and `/api/sensors/anomaly` blueprint route in `sensors_api.py`.
 **Coverage:** Tested empty sensor history dataset bootstrapping, multivariate anomaly detection triggering global event log, and authenticated endpoint response.
 **Result:** Verified edge case handling and blueprint route execution for check_anomaly endpoint.
+
+## 2024-05-18 - Anomaly Detection Tests Edge Cases
+**Learning:** Even when statement coverage is 100%, edge cases like missing dict keys in dictionary comprehensions (handled by `.get(f, 0.0)`) might not be explicitly asserted in tests.
+**Action:** Added `test_detect_multivariate_anomaly_missing_fields` to ensure the fallback logic functions correctly without raising KeyError.
