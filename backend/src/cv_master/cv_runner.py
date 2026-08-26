@@ -1,25 +1,26 @@
-import os
-import time
-import math
-import logging
-import threading
-import json
 import asyncio
+import json
+import logging
+import math
+import os
+import threading
+import time
 from datetime import datetime
 from typing import Optional
+
 import cv2
 import numpy as np
 
 import src.core.state as state
+from database import Batch, BirdSnapshot, BirdTrackPoint, EventLog, Reading, SyncQueueItem
+from src.api.fastapi_ws import emit_new_alert
+from src.core.cv_engine import BirdPoseAnalyzer, PerfMetrics, SpeciesClassifier
 from src.core.state import cv_lock
+from src.cv_master.behavior_engine import BehaviorEngine
 from src.cv_master.inference_sota import SOTAInferenceEngine
 from src.cv_master.tracker_spy import SpyTracker
-from src.cv_master.behavior_engine import BehaviorEngine
-from src.core.cv_engine import SpeciesClassifier, BirdPoseAnalyzer, PerfMetrics
-from src.vision.gait_analyzer import GaitAnalyzer
-from src.api.fastapi_ws import emit_new_alert
 from src.db.session import SessionLocal
-from database import Reading, BirdSnapshot, BirdTrackPoint, EventLog, SyncQueueItem, Batch
+from src.vision.gait_analyzer import GaitAnalyzer
 
 
 def _estimate_keypoints_from_box(box, tid, now_ts):
@@ -28,12 +29,12 @@ def _estimate_keypoints_from_box(box, tid, now_ts):
     cy = (y1 + y2) / 2.0
     w = max(1.0, x2 - x1)
     h = max(1.0, y2 - y1)
-    
+
     # Simula oscilação de passos no tempo para o track_id correspondente
     offset = 5.0 * math.sin(now_ts * 12.0)
     left_foot_y = y2 + (offset if tid % 2 == 0 else -offset)
     right_foot_y = y2 + (-offset if tid % 2 == 0 else offset)
-    
+
     # Retorna 11 keypoints [[x, y, conf], ...] no formato YOLOv8-pose
     return [
         [cx, cy - h*0.2, 0.9],          # Beak
@@ -56,11 +57,11 @@ class SOTAPipelineRunner:
         self.running = False
         self.thread = None
         self.loop = None
-        
+
         # Load configs from ENV
         self.video_src = os.getenv("SIM_VIDEO_PATH", "video_granja.mp4")
         self.model_path = os.getenv("YOLO_SEG_MODEL_PATH", "yolov8n-seg.pt")
-        
+
         # Resolve target video source (int index vs filepath)
         try:
             self.video_src = int(self.video_src)
@@ -68,7 +69,7 @@ class SOTAPipelineRunner:
             pass
 
         self.logger.info(f"SOTA Pipeline Runner inicializado: src={self.video_src}, model={self.model_path}")
-        
+
         # Configurações de Tamper/Violacão (skill guide)
         self.TAMPER_DARK_MEAN_THRESHOLD = float(os.getenv("TAMPER_DARK_MEAN_THRESHOLD", "24.0"))
         self.TAMPER_LOW_TEXTURE_STD_THRESHOLD = float(os.getenv("TAMPER_LOW_TEXTURE_STD_THRESHOLD", "8.0"))
@@ -77,11 +78,11 @@ class SOTAPipelineRunner:
         self.TAMPER_SENSOR_STALE_SEC = int(os.getenv("TAMPER_SENSOR_STALE_SEC", "180"))
         self.TAMPER_ALERT_COOLDOWN_SEC = int(os.getenv("TAMPER_ALERT_COOLDOWN_SEC", "180"))
         self.TAMPER_BLUR_LAPLACIAN_THRESHOLD = 10.0 # Lap_var < 10 indica desfocado ou poeira excessiva
-        
+
         # Buffers temporais para tamper
         self.prev_gray = None
         self.last_visible_frame = None
-        
+
         # Engines
         self.inference = None
         self.tracker = None
@@ -90,7 +91,7 @@ class SOTAPipelineRunner:
         self.species_classifier = None
         self.pose_analyzer = None
         self.perf_metrics = None
-        
+
         self.last_annotated = np.zeros((480, 640, 3), dtype=np.uint8)
         self.last_tracked = None
 
@@ -107,7 +108,7 @@ class SOTAPipelineRunner:
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         mean_luma = float(np.mean(gray))
         std_luma = float(np.std(gray))
-        
+
         # 1. Checagem de Obstrução/Escuridão
         visible_ok = (
             mean_luma >= self.TAMPER_DARK_MEAN_THRESHOLD
@@ -184,7 +185,7 @@ class SOTAPipelineRunner:
             )
             db.add(log_entry)
             db.flush()
-            
+
             db.add(SyncQueueItem(
                 item_type="event_log",
                 payload_json=json.dumps(log_entry.to_dict()),
@@ -248,10 +249,10 @@ class SOTAPipelineRunner:
         last_db_save = 0.0
         last_batch_sync = 0.0
         last_snapshot_save = 0.0
-        
+
         # Redirect state frame source
         state.get_global_frame = self.get_annotated_frame
-        
+
         self.logger.info("Fase de warm-up finalizada. Iniciando loop de aquisição.")
 
         while self.running:
@@ -290,9 +291,9 @@ class SOTAPipelineRunner:
             # 1. CLAHE Contrast Enhancement para condições de baixa iluminação/poeira (skill guide)
             try:
                 lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
-                l, a, b = cv2.split(lab)
+                lum, a, b = cv2.split(lab)
                 clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-                l_clahe = clahe.apply(l)
+                l_clahe = clahe.apply(lum)
                 lab_clahe = cv2.merge((l_clahe, a, b))
                 clean_frame = cv2.cvtColor(lab_clahe, cv2.COLOR_LAB2BGR)
             except Exception:
@@ -319,7 +320,7 @@ class SOTAPipelineRunner:
 
             # 3. Sliced Inference SAHI e Rastreamento ByteTrack
             run_inference = (motion_ratio >= 0.005) or (int(now * 10) % 6 == 0)
-            
+
             try:
                 if run_inference:
                     detections = self.inference.process_frame(clean_frame, slice_size=640)
@@ -347,7 +348,7 @@ class SOTAPipelineRunner:
                     tid = int(tracked.tracker_id[i])
                     box = tracked.xyxy[i].tolist()
                     conf = float(tracked.confidence[i])
-                    cid = int(tracked.class_id[i])
+                    _ = int(tracked.class_id[i])
 
                     kps = _estimate_keypoints_from_box(box, tid, now)
                     gait_res = self.gait_analyzer.update_track(tid, kps, now_dt)
@@ -401,7 +402,7 @@ class SOTAPipelineRunner:
                     VIRTUAL_SCALE_CM_PER_PX_AT_1M = 0.09
                     CAMERA_DISTANCE_M = 2.2
                     WEIGHT_CALIBRATION_G_PER_SQRT_PX = 1.85
-                    
+
                     scale = VIRTUAL_SCALE_CM_PER_PX_AT_1M * max(0.5, CAMERA_DISTANCE_M)
                     weights = []
                     for b in state.live_birds.values():
@@ -409,7 +410,7 @@ class SOTAPipelineRunner:
                         area_px = max(1.0, float((x2 - x1) * (y2 - y1)))
                         body_area_cm2 = area_px * (scale ** 2)
                         base_weight = WEIGHT_CALIBRATION_G_PER_SQRT_PX * math.sqrt(body_area_cm2 * 100.0)
-                        
+
                         cy = (y1 + y2) / 2.0
                         perspective = 0.92 + (0.16 * (cy / float(clean_frame.shape[0])))
                         weights.append(base_weight * perspective)
@@ -435,14 +436,14 @@ class SOTAPipelineRunner:
                             level="high",
                             message=alert["message"],
                             metadata_json=json.dumps({
-                                "track_id": alert["track_id"], 
+                                "track_id": alert["track_id"],
                                 "seconds_still": round(alert["seconds_still"], 1)
                             }),
                             timestamp=datetime.utcnow()
                         )
                         db.add(log_entry)
                         db.flush()
-                        
+
                         db.add(SyncQueueItem(
                             item_type="event_log",
                             payload_json=json.dumps(log_entry.to_dict()),
@@ -472,17 +473,17 @@ class SOTAPipelineRunner:
                 uid = det["track_id"]
                 pose_lbl = det["pose_label"]
                 gait_lbl = det["gait"]["mobility_status"] if det["gait"].get("status") == "ANALYZED" else "NORMAL"
-                
+
                 if det["is_carcass"]:
                     color = (0, 0, 180)
 
                 cv2.rectangle(annotated, (x1 - 1, y1 - 1), (x2 + 1, y2 + 1), (0, 0, 0), 2)
                 cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2, cv2.LINE_AA)
-                
+
                 cx, cy = int((x1 + x2) / 2), int((y1 + y2) / 2)
                 cv2.line(annotated, (cx - 5, cy), (cx + 5, cy), color, 1, cv2.LINE_AA)
                 cv2.line(annotated, (cx, cy - 5), (cx, cy + 5), color, 1, cv2.LINE_AA)
-                
+
                 cr = 8
                 tk = 2
                 cv2.line(annotated, (x1, y1), (x1 + cr, y1), color, tk, cv2.LINE_AA)
@@ -493,32 +494,32 @@ class SOTAPipelineRunner:
                 cv2.line(annotated, (x1, y2), (x1, y2 - cr), color, tk, cv2.LINE_AA)
                 cv2.line(annotated, (x2, y2), (x2 - cr, y2), color, tk, cv2.LINE_AA)
                 cv2.line(annotated, (x2, y2), (x2, y2 - cr), color, tk, cv2.LINE_AA)
-                
+
                 id_str = f"#{uid}"
                 (tw, th), _ = cv2.getTextSize(id_str, cv2.FONT_HERSHEY_SIMPLEX, 0.40, 1)
                 cv2.rectangle(annotated, (x1 - 1, y1 - th - 4), (x1 + tw + 2, y1), (0, 0, 0), -1)
                 cv2.putText(annotated, id_str, (x1, y1 - 2), cv2.FONT_HERSHEY_SIMPLEX, 0.40, color, 1, cv2.LINE_AA)
-                
+
                 sp_tag = f"{det['species_label']} {det['conf']:.0%}"
                 cv2.putText(annotated, sp_tag, (x1, y2 + 12), cv2.FONT_HERSHEY_SIMPLEX, 0.38, color, 1, cv2.LINE_AA)
-                
+
                 if "NORMAL" not in pose_lbl:
                     cv2.putText(annotated, pose_lbl, (x1, y2 + 24), cv2.FONT_HERSHEY_SIMPLEX, 0.36, (0, 80, 255), 1, cv2.LINE_AA)
                 elif "NORMAL" not in gait_lbl:
-                    cv2.putText(annotated, f"⚠ CLAUDICANDO", (x1, y2 + 24), cv2.FONT_HERSHEY_SIMPLEX, 0.36, (0, 180, 255), 1, cv2.LINE_AA)
+                    cv2.putText(annotated, "⚠ CLAUDICANDO", (x1, y2 + 24), cv2.FONT_HERSHEY_SIMPLEX, 0.36, (0, 180, 255), 1, cv2.LINE_AA)
 
             # Polígono translúcido de monitoramento
             h, w = annotated.shape[:2]
             mx = int(w * 0.04)
             my = int(h * 0.08)
             zone_pts = np.array([[mx, my], [w - mx, my], [w - mx, h - my], [mx, h - my]], dtype=np.int32)
-            
+
             overlay_poly = annotated.copy()
             cv2.fillPoly(overlay_poly, [zone_pts], (180, 0, 180))
             cv2.addWeighted(overlay_poly, 0.06, annotated, 0.94, 0, annotated)
             cv2.polylines(annotated, [zone_pts], isClosed=True, color=(255, 0, 255), thickness=2, lineType=cv2.LINE_AA)
             cv2.putText(annotated, "ZONA DE MONITORAMENTO", (mx + 6, my - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.40, (255, 0, 255), 1, cv2.LINE_AA)
-            
+
             # Painel HUD Lateral (Topo-direito)
             pw = 260
             ph = 130
@@ -526,46 +527,46 @@ class SOTAPipelineRunner:
             py1 = 8
             px2 = w - 8
             py2 = py1 + ph
-            
+
             panel = annotated.copy()
             cv2.rectangle(panel, (px1, py1), (px2, py2), (10, 10, 10), -1)
             cv2.addWeighted(panel, 0.75, annotated, 0.25, 0, annotated)
             cv2.rectangle(annotated, (px1, py1), (px2, py2), (0, 255, 100), 1, cv2.LINE_AA)
-            
+
             cv2.putText(annotated, "CHIKGUARD SOTA ENGINE", (px1 + 8, py1 + 16), cv2.FONT_HERSHEY_SIMPLEX, 0.44, (0, 255, 120), 1, cv2.LINE_AA)
             cv2.line(annotated, (px1 + 8, py1 + 21), (px2 - 8, py1 + 21), (0, 255, 100), 1)
-            
+
             total_txt = f"TOTAL AVES: {len(state.live_birds)}"
             cv2.putText(annotated, total_txt, (px1 + 8, py1 + 50), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 60), 2, cv2.LINE_AA)
-            
+
             cv2.putText(annotated, f"PINTINHOS: {chicks_count}", (px1 + 8, py1 + 72), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (0, 220, 255), 1, cv2.LINE_AA)
             cv2.putText(annotated, f"GALINHAS : {hens_count}", (px1 + 8, py1 + 88), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (0, 200, 100), 1, cv2.LINE_AA)
-            
+
             comfort_color = (0, 255, 0) if "CONFORTO" in huddling_label else (0, 140, 255)
             cv2.putText(annotated, f"CONFORTO : {huddling_label}", (px1 + 8, py1 + 106), cv2.FONT_HERSHEY_SIMPLEX, 0.40, comfort_color, 1, cv2.LINE_AA)
-            
+
             if self.behavior.dead_or_sick_ids:
                 cv2.putText(annotated, f"ÓBITOS   : {len(self.behavior.dead_or_sick_ids)} DETECTADOS", (px1 + 8, py1 + 122), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (0, 0, 255), 1, cv2.LINE_AA)
-            
+
             # HUD overlay para violação/tamper
             if tamper_causes:
                 # Desenha aviso intermitente na parte superior esquerda do HUD
                 if int(now * 2.5) % 2 == 0:
                     cv2.rectangle(annotated, (8, 30), (280, 52), (0, 0, 180), -1)
                     cv2.putText(annotated, "⚠ FALHA DE CONEXÃO/TAMPER", (14, 46), cv2.FONT_HERSHEY_SIMPLEX, 0.40, (255, 255, 255), 1, cv2.LINE_AA)
-            
+
             # Rodapé informativo
             bar_bg = annotated.copy()
             cv2.rectangle(bar_bg, (0, h - 22), (w, h), (0, 0, 0), -1)
             cv2.addWeighted(bar_bg, 0.60, annotated, 0.40, 0, annotated)
-            
+
             fps_inf = 1.0 / max(1e-6, time.perf_counter() - start_time)
             latency_ms = (time.perf_counter() - start_time) * 1000.0
             self.perf_metrics.tick_inference(latency_ms)
-            
+
             stats_str = f"FPS: {fps_inf:.1f} | Latência: {latency_ms:.1f}ms | Hardware: {self.inference.device.upper()}"
             cv2.putText(annotated, stats_str, (8, h - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (160, 160, 255), 1, cv2.LINE_AA)
-            
+
             # Ponto LIVE piscante
             if int(now * 2) % 2 == 0:
                 cv2.circle(annotated, (12, 14), 5, (0, 0, 255), -1, cv2.LINE_AA)
@@ -586,7 +587,7 @@ class SOTAPipelineRunner:
                         tid = det["track_id"]
                         box = det["box"]
                         conf = det["conf"]
-                        
+
                         snapshot = BirdSnapshot(
                             bird_uid=tid,
                             confidence=conf,
@@ -600,7 +601,7 @@ class SOTAPipelineRunner:
                         )
                         db.add(snapshot)
                         db.flush()
-                        
+
                         db.add(SyncQueueItem(
                             item_type="bird_snapshot",
                             payload_json=json.dumps(snapshot.to_dict()),
@@ -616,7 +617,7 @@ class SOTAPipelineRunner:
                             timestamp=datetime.utcnow()
                         )
                         db.add(tp)
-                        
+
                     db.commit()
                     db.close()
                 except Exception as db_err:
@@ -629,13 +630,13 @@ class SOTAPipelineRunner:
                     db = SessionLocal()
                     gray = cv2.cvtColor(clean_frame, cv2.COLOR_BGR2GRAY)
                     temp_c = 20.0 + (float(np.mean(gray)) / 255.0) * 20.0
-                    
+
                     status = "NORMAL"
                     if temp_c < 24.0:
                         status = "FRIO"
                     elif temp_c > 32.0:
                         status = "CALOR"
-                        
+
                     reading = Reading(
                         temperatura=round(temp_c, 1),
                         status=status,
@@ -643,7 +644,7 @@ class SOTAPipelineRunner:
                     )
                     db.add(reading)
                     db.flush()
-                    
+
                     db.add(SyncQueueItem(
                         item_type="reading",
                         payload_json=json.dumps(reading.to_dict()),
