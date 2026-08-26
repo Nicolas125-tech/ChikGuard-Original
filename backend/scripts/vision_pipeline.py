@@ -120,6 +120,58 @@ class VisionPipeline:
         self.mask_annotator = sv.MaskAnnotator(opacity=0.5)
         self.label_annotator = sv.LabelAnnotator(text_scale=0.5, text_padding=5)
 
+    def _process_frame(self, frame):
+        """Executa a inferência SAHI e o rastreamento no frame."""
+        result = get_sliced_prediction(
+            frame,
+            self.detection_model,
+            slice_height=SLICE_HEIGHT,
+            slice_width=SLICE_WIDTH,
+            overlap_height_ratio=OVERLAP_RATIO,
+            overlap_width_ratio=OVERLAP_RATIO,
+            postprocess_class_agnostic=True,
+            postprocess_match_metric="IOU",
+        )
+        detections = sv.Detections.from_sahi(result)
+        tracked_detections = self.tracker.update_with_detections(detections=detections)
+        return tracked_detections
+
+    def _annotate_frame(self, frame, tracked_detections):
+        """Aplica máscaras, caixas delimitadoras e rótulos no frame."""
+        annotated_frame = frame.copy()
+        labels = []
+
+        for i in range(len(tracked_detections)):
+            tracker_id = tracked_detections.tracker_id[i]
+            confidence = tracked_detections.confidence[i]
+            labels.append(f"#{tracker_id} {confidence:.2f}")
+
+        annotated_frame = self.mask_annotator.annotate(
+            scene=annotated_frame, detections=tracked_detections
+        )
+        annotated_frame = self.box_annotator.annotate(
+            scene=annotated_frame, detections=tracked_detections
+        )
+        annotated_frame = self.label_annotator.annotate(
+            scene=annotated_frame, detections=tracked_detections, labels=labels
+        )
+        return annotated_frame
+
+    def _update_metrics_and_display(self, annotated_frame, tracked_detections, fps):
+        """Adiciona as métricas (FPS, contagem) no frame e o exibe."""
+        num_aves = len(tracked_detections)
+        cv2.putText(
+            annotated_frame,
+            f"Aves: {num_aves} | FPS: {fps:.1f}",
+            (20, 50),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1.2,
+            (0, 255, 255),
+            3,
+        )
+        cv2.imshow("Supervision CV - Industrial Monitor", annotated_frame)
+        return cv2.waitKey(1) & 0xFF
+
     def run(self):
         logging.info(f"Iniciando thread da câmera na fonte: {self.video_src}")
         self.stream = VideoCaptureThread(self.video_src)
@@ -137,82 +189,20 @@ class VisionPipeline:
                     logging.info("Fim da stream. Encerrando o pipeline.")
                     break
 
-                # ==============================================
-                # 3.1. Inferência com Fatiamento SAHI
-                # ==============================================
-                # get_sliced_prediction processa um frame gigante por partes (512x512/640x640)
-                # re-unindo as detecções e os segmentos com Non-Maximum Suppression (NMS)
-                result = get_sliced_prediction(
-                    frame,
-                    self.detection_model,
-                    slice_height=SLICE_HEIGHT,
-                    slice_width=SLICE_WIDTH,
-                    overlap_height_ratio=OVERLAP_RATIO,
-                    overlap_width_ratio=OVERLAP_RATIO,
-                    postprocess_class_agnostic=True,  # Evita NMS desnecessário se houver multi-classes coladas
-                    postprocess_match_metric="IOU",
-                )
+                # Processamento
+                tracked_detections = self._process_frame(frame)
 
-                # ==============================================
-                # 3.2. Ponte SAHI -> Supervision (Detecções e Máscaras)
-                # ==============================================
-                # O Supervision converte o ObjectPredictionList do SAHI no formato Detections arrayizado,
-                # suportando extração nativa das máscaras preditas do YOLO Seg.
-                detections = sv.Detections.from_sahi(result)
+                # Anotação
+                annotated_frame = self._annotate_frame(frame, tracked_detections)
 
-                # Opcional: Remover detecções anômalas gigantes (ex: tratadores em vez de frangos) usando área
-                # detections = detections[(detections.area < 100000) & (detections.area > 50)]
-
-                # ==============================================
-                # 3.3. Estabilidade e Contagem com Tracking
-                # ==============================================
-                # O ByteTrack atua nas caixas e confianças, mas o tracker supervision repassa o índice
-                # mantendo as máscaras linkadas com o tracker ID gerado. Zero flickr.
-                tracked_detections = self.tracker.update_with_detections(detections=detections)
-
-                # ==============================================
-                # 3.4. Anotações Visuais
-                # ==============================================
-                annotated_frame = frame.copy()
-                labels = []
-
-                for i in range(len(tracked_detections)):
-                    # tracked_detections armazena conf, class_id e tracker_id
-                    tracker_id = tracked_detections.tracker_id[i]
-                    confidence = tracked_detections.confidence[i]
-                    labels.append(f"#{tracker_id} {confidence:.2f}")
-
-                # Aplica as overlays gráficas (Mascaras + Caixas + IDs)
-                annotated_frame = self.mask_annotator.annotate(
-                    scene=annotated_frame, detections=tracked_detections
-                )
-                annotated_frame = self.box_annotator.annotate(
-                    scene=annotated_frame, detections=tracked_detections
-                )
-                annotated_frame = self.label_annotator.annotate(
-                    scene=annotated_frame, detections=tracked_detections, labels=labels
-                )
-
-                # Controle de Desempenho e Log Visual
+                # Controle de Desempenho
                 end_time = time.perf_counter()
                 fps = 1.0 / (end_time - start_time)
                 total_fps_time += fps
                 frame_counter += 1
 
-                # Exibição de Resumo em Tela
-                num_aves = len(tracked_detections)
-                cv2.putText(
-                    annotated_frame,
-                    f"Aves: {num_aves} | FPS: {fps:.1f}",
-                    (20, 50),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    1.2,
-                    (0, 255, 255),
-                    3,
-                )
-
-                cv2.imshow("Supervision CV - Industrial Monitor", annotated_frame)
-                if cv2.waitKey(1) & 0xFF == ord("q"):
+                # Exibição
+                if self._update_metrics_and_display(annotated_frame, tracked_detections, fps) == ord("q"):
                     break
 
         except KeyboardInterrupt:
