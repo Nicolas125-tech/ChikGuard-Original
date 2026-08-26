@@ -100,3 +100,6 @@
 ## 2024-05-18 - Optimize BirdIdentity queries
 **Learning:** Performing database queries (like `.first()`) inside a loop causes a significant N+1 performance issue. For inserts and updates of multiple elements, it is better to perform a bulk fetch before the loop (`.in_()`) and map the results in memory. Additionally, adding new records to the memory map prevents duplicate issues inside the same transaction.
 **Action:** Replaced the N+1 `BirdIdentity.query.filter_by().first()` in `original_method` loop with a single `BirdIdentity.query.filter(BirdIdentity.bird_uid.in_(bird_uids)).all()` query upfront and used an `id_map` for fast dictionary lookup.
+## 2024-05-18 - Prevent Unnecessary Re-renders from Background Fetches
+**Learning:** React components that use `setInterval` for background data refreshes will cause unnecessary re-renders if they unconditionally set `loading` state to true on every interval tick. This degrades UX by flashing loading indicators or unnecessarily re-rendering the component tree.
+**Action:** Always parameterize the loading state for data-fetching functions called from background intervals (e.g., `fetchData(showLoading = true)`), allowing the initial load to show a spinner while subsequent background refreshes happen silently.

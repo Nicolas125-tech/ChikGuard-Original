@@ -40,3 +40,6 @@
 ## 2024-05-18 - Anomaly Detection Tests Edge Cases
 **Learning:** Even when statement coverage is 100%, edge cases like missing dict keys in dictionary comprehensions (handled by `.get(f, 0.0)`) might not be explicitly asserted in tests.
 **Action:** Added `test_detect_multivariate_anomaly_missing_fields` to ensure the fallback logic functions correctly without raising KeyError.
+## 2024-08-26 - Added tests for audio_processor.py
+**Learning:** Testing logic that depends on optional or conditionally imported dependencies (like librosa fallback) requires temporarily removing the module reference from the current scope to trigger the desired code paths and ensuring to restore the previous state to avoid breaking other tests.
+**Action:** Created `test_audio_processor.py` covering librosa absence (fallback execution), standard execution, and edge case (empty buffer).

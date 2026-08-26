@@ -137,7 +137,7 @@ export default function AlertsPanel({ serverIP, prefs, token, cameras = [], acti
           )}
 
           <button 
-            aria-label="Marcar como resolvido"
+            aria-label={`Marcar alerta "${alert.tipo}" como resolvido`}
             onClick={() => dismissAlert(alert.id)}
             title="Marcar como resolvido"
             className="absolute top-4 right-4 p-2 bg-slate-950/40 hover:bg-emerald-500/20 text-slate-500 hover:text-emerald-400 rounded-lg transition-all border border-slate-800 hover:border-emerald-500/30 group focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none"
