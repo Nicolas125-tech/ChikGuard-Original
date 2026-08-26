@@ -35,7 +35,7 @@ function ConfirmModal({ title, message, onConfirm, onCancel, danger = false, loa
         <p className="text-slate-400 text-sm mb-4 leading-relaxed">{message}</p>
         {children}
         <div className="flex gap-3 justify-end mt-5">
-          <button onClick={onCancel} disabled={loading}
+          <button aria-label={`Cancelar ${title?.toLowerCase?.() || "ação"}`} onClick={onCancel} disabled={loading}
             className="px-4 py-2 text-sm font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all disabled:opacity-50">
             Cancelar
           </button>
