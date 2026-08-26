@@ -1,29 +1,3 @@
-"""
-ChikGuard — Extração de Frames para Anotação (Dataset Bootstrap)
-=================================================================
-Extrai frames diversos e de alta qualidade do vídeo da câmera de granja
-para serem anotados no Roboflow ou CVAT como passo zero do fine-tuning.
-
-Estratégia de extração inteligente:
-  1. Extrai 1 frame a cada N segundos (configurável)
-  2. Aplica filtro de qualidade (descarta frames borrados/escuros)
-  3. Maximiza diversidade via hash perceptual (evita frames quase idênticos)
-  4. Salva em resolução original (não redimensiona — preserva detalhe dos pintinhos)
-
-Uso:
-  python scripts/extract_frames_for_annotation.py \\
-    --video video_granja.mp4 \\
-    --output data/annotation_frames/ \\
-    --count 200 \\
-    --min-quality 0.4
-
-Meta de anotação sugerida:
-  • 150–300 imagens com polígonos de segmentação de instância
-  • Use Roboflow (https://roboflow.com) — gratuito até 1000 imagens
-  • Exporte no formato "YOLOv8 Segmentation" (.yaml + train/val/test/)
-  • Concentre em cenas variadas: pintinhos dispersos, amontoados, penumbra
-"""
-
 import argparse
 import json
 import os
@@ -31,8 +5,6 @@ import sys
 
 import cv2
 import numpy as np
-
-# ── Utilitários de qualidade ──────────────────────────────────────────────────
 
 
 def _blur_score(frame: np.ndarray) -> float:
@@ -61,7 +33,7 @@ def _perceptual_hash(frame: np.ndarray, size: int = 16) -> str:
 
 
 def _hamming_distance(h1: str, h2: str) -> int:
-    return sum(c1 != c2 for c1, c2 in zip(h1, h2))
+    return sum(c1 != c2 for c1, c2 in zip(h1, h2, strict=False))
 
 
 def _quality_label(blur: float, brightness: float) -> str:
@@ -79,35 +51,15 @@ def _quality_label(blur: float, brightness: float) -> str:
 # ── Seleção inteligente de frames ────────────────────────────────────────────
 
 
-def extract_frames(
+def _print_start_info(
     video_path: str,
-    output_dir: str,
-    target_count: int = 200,
-    min_blur_score: float = 80.0,
-    min_brightness: float = 0.12,
-    max_brightness: float = 0.92,
-    min_hamming_dist: int = 15,  # Diversidade mínima entre frames selecionados
-    verbose: bool = True,
-) -> dict:
-    """
-    Extrai frames representativos do vídeo de granja.
-
-    Returns:
-        dict com estatísticas da extração
-    """
-    os.makedirs(output_dir, exist_ok=True)
-
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        print(f"[ERRO] Não foi possível abrir o vídeo: {video_path}")
-        sys.exit(1)
-
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    fps_video = cap.get(cv2.CAP_PROP_FPS) or 10.0
-    duration_sec = total_frames / fps_video
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
+    duration_sec: float,
+    total_frames: int,
+    fps_video: float,
+    width: int,
+    height: int,
+    target_count: int,
+):
     print(f"\n{'=' * 60}")
     print("  ChikGuard — Extração de Frames para Anotação")
     print(f"{'=' * 60}")
@@ -117,16 +69,19 @@ def extract_frames(
     print(f"  Meta     : {target_count} frames diversificados")
     print(f"{'=' * 60}\n")
 
-    # Distribui timestamps uniformemente pelo vídeo para cobertura máxima
-    # Adiciona margem de 5% no início e no fim
-    margin = int(total_frames * 0.05)
-    candidate_positions = np.linspace(
-        margin,
-        total_frames - margin,
-        num=min(target_count * 8, total_frames),  # 8x candidatos
-        dtype=int,
-    )
 
+def _process_candidate_frames(
+    cap: cv2.VideoCapture,
+    candidate_positions: np.ndarray,
+    output_dir: str,
+    target_count: int,
+    fps_video: float,
+    min_blur_score: float,
+    min_brightness: float,
+    max_brightness: float,
+    min_hamming_dist: int,
+    verbose: bool,
+) -> tuple[int, int, int, int, list]:
     saved = 0
     skipped_blur = 0
     skipped_bright = 0
@@ -186,9 +141,18 @@ def extract_frames(
                 f"blur={blur:.0f} bright={bright:.2f} → salvo: {filename}"
             )
 
-    cap.release()
+    return saved, skipped_blur, skipped_bright, skipped_similar, metadata_rows
 
-    # Salva metadata.json para rastreabilidade
+
+def _save_metadata(
+    output_dir: str,
+    video_path: str,
+    saved: int,
+    skipped_blur: int,
+    skipped_bright: int,
+    skipped_similar: int,
+    metadata_rows: list,
+) -> str:
     meta_path = os.path.join(output_dir, "extraction_metadata.json")
     with open(meta_path, "w", encoding="utf-8") as f:
         json.dump(
@@ -204,16 +168,17 @@ def extract_frames(
             ensure_ascii=False,
             indent=2,
         )
+    return meta_path
 
-    # Relatório final
-    stats = {
-        "saved": saved,
-        "skipped_blur": skipped_blur,
-        "skipped_bright": skipped_bright,
-        "skipped_similar": skipped_similar,
-        "output_dir": output_dir,
-    }
 
+def _print_final_report(
+    saved: int,
+    skipped_blur: int,
+    skipped_bright: int,
+    skipped_similar: int,
+    output_dir: str,
+    meta_path: str,
+):
     print(f"\n{'=' * 60}")
     print("  ✅ Extração concluída!")
     print(f"  Frames salvos    : {saved}")
@@ -248,6 +213,80 @@ def extract_frames(
 
   ⏱ Estimativa: 2–4 horas de anotação para 200 imagens
 """)
+
+
+def extract_frames(
+    video_path: str,
+    output_dir: str,
+    target_count: int = 200,
+    min_blur_score: float = 80.0,
+    min_brightness: float = 0.12,
+    max_brightness: float = 0.92,
+    min_hamming_dist: int = 15,  # Diversidade mínima entre frames selecionados
+    verbose: bool = True,
+) -> dict:
+    """
+    Extrai frames representativos do vídeo de granja.
+
+    Returns:
+        dict com estatísticas da extração
+    """
+    os.makedirs(output_dir, exist_ok=True)
+
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        print(f"[ERRO] Não foi possível abrir o vídeo: {video_path}")
+        sys.exit(1)
+
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps_video = cap.get(cv2.CAP_PROP_FPS) or 10.0
+    duration_sec = total_frames / fps_video
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    _print_start_info(
+        video_path, duration_sec, total_frames, fps_video, width, height, target_count
+    )
+
+    # Distribui timestamps uniformemente pelo vídeo para cobertura máxima
+    # Adiciona margem de 5% no início e no fim
+    margin = int(total_frames * 0.05)
+    candidate_positions = np.linspace(
+        margin,
+        total_frames - margin,
+        num=min(target_count * 8, total_frames),  # 8x candidatos
+        dtype=int,
+    )
+
+    saved, skipped_blur, skipped_bright, skipped_similar, metadata_rows = _process_candidate_frames(
+        cap,
+        candidate_positions,
+        output_dir,
+        target_count,
+        fps_video,
+        min_blur_score,
+        min_brightness,
+        max_brightness,
+        min_hamming_dist,
+        verbose,
+    )
+
+    cap.release()
+
+    meta_path = _save_metadata(
+        output_dir, video_path, saved, skipped_blur, skipped_bright, skipped_similar, metadata_rows
+    )
+
+    _print_final_report(saved, skipped_blur, skipped_bright, skipped_similar, output_dir, meta_path)
+
+    stats = {
+        "saved": saved,
+        "skipped_blur": skipped_blur,
+        "skipped_bright": skipped_bright,
+        "skipped_similar": skipped_similar,
+        "output_dir": output_dir,
+    }
+
     return stats
 
 
