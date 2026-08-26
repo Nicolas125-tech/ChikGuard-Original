@@ -1,8 +1,8 @@
-from sqlalchemy import text
 import time
 
 import psutil
 from flask import Blueprint, jsonify
+from sqlalchemy import text
 
 from database import db
 from src.security.auth import require_auth

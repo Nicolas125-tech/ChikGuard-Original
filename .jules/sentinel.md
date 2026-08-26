@@ -163,3 +163,7 @@
 **Vulnerability:** In `backend/src/security/fastapi_auth.py`, `os.environ.get("SUPABASE_JWT_SECRET", "")` used an empty string as a default fallback if the environment variable was missing. This would allow an attacker to bypass authentication by forging a JWT signed with an empty string.
 **Learning:** Hardcoding or defaulting cryptographic secrets (like a JWT secret) to empty strings is highly insecure and creates a direct path for authentication bypass. Applications must fail securely when missing critical configuration.
 **Prevention:** Always fail-fast at startup (or execution) when essential security configurations (like JWT secrets, API keys) are missing instead of falling back to default or empty values.
+## 2025-02-24 - SQL Injection vulnerability in health check
+**Vulnerability:** Execution of raw string literals inside SQLAlchemy's `db.execute()` method instead of using parameterized queries or `text()`.
+**Learning:** Raw string literals in database query execution are prone to SQL Injection. All queries executed using SQLAlchemy must be wrapped in `text()` or used via the proper ORM models to ensure they are parameterized correctly and to prevent SQL injection vulnerabilities. The existing codebase already uses `text()` wrapping as the fix.
+**Prevention:** Ensure that all direct SQL query executions, particularly through `db.session.execute()` and `db.execute()`, are wrapped with `sqlalchemy.text()` to mitigate the risk of SQL injection, even for seemingly innocuous queries like `SELECT 1`.

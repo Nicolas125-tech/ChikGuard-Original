@@ -1,13 +1,12 @@
 import sys
-import importlib
+
 if "cv2" in sys.modules and type(sys.modules["cv2"]).__name__ == "MagicMock":
     del sys.modules["cv2"]
-import cv2
-import pytest
-from fastapi.testclient import TestClient
-from unittest.mock import MagicMock, patch
-import sys
 import os
+import sys
+from unittest.mock import MagicMock, patch
+
+from fastapi.testclient import TestClient
 
 # Ensure modules can be imported
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -15,10 +14,12 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 # Mock cv2 before anything else
 sys.modules["cv2"] = MagicMock()
 
-from src.api.fastapi_health import router
-from src.security.fastapi_auth import get_current_user, UserContext
-from src.db.session import get_db
 from fastapi import FastAPI
+from sqlalchemy.sql.elements import TextClause
+
+from src.api.fastapi_health import router
+from src.db.session import get_db
+from src.security.fastapi_auth import UserContext, get_current_user
 
 app = FastAPI()
 app.include_router(router)
@@ -68,6 +69,10 @@ def test_system_health_online(mock_psutil):
     assert data["disk_used"] == 1200
     assert "uptime_seconds" in data
     assert data["database"] == "Online"
+
+    args, kwargs = mock_db.execute.call_args
+    assert isinstance(args[0], TextClause) or not isinstance(args[0], str), "Execute should not be called with raw string"
+
     import src.core.state as state
 
     # Test Offline
