@@ -163,3 +163,7 @@
 **Vulnerability:** In `backend/src/security/fastapi_auth.py`, `os.environ.get("SUPABASE_JWT_SECRET", "")` used an empty string as a default fallback if the environment variable was missing. This would allow an attacker to bypass authentication by forging a JWT signed with an empty string.
 **Learning:** Hardcoding or defaulting cryptographic secrets (like a JWT secret) to empty strings is highly insecure and creates a direct path for authentication bypass. Applications must fail securely when missing critical configuration.
 **Prevention:** Always fail-fast at startup (or execution) when essential security configurations (like JWT secrets, API keys) are missing instead of falling back to default or empty values.
+## 2025-02-28 - [Localhost Binding]
+**Vulnerability:** Found insecure default host binding (`0.0.0.0`) in `backend/src/core/config.py`.
+**Learning:** Hardcoded host bindings to all interfaces can accidentally expose internal development APIs to unauthorized access in local networks, bypassing expected firewall or container-level protections if not correctly handled.
+**Prevention:** Default to `127.0.0.1` for local bindings in configuration files unless explicitly overridden by environment variables designed for containerized or production deployments (e.g. `FLASK_HOST`).
