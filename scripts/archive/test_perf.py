@@ -10,7 +10,7 @@ sys.path.append(os.path.join(os.getcwd(), 'backend'))
 
 from flask import Flask
 from database import db, Reading
-import datetime
+from datetime import datetime, timezone
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
@@ -27,7 +27,7 @@ with app.app_context():
         r = Reading(
             temperatura=25.0 + i % 5,
             status=status,
-            timestamp=datetime.datetime.utcnow()
+            timestamp=datetime.now(timezone.utc)
         )
         db.session.add(r)
     db.session.commit()
