@@ -1,6 +1,6 @@
-Title: 🎨 Palette: [UX improvement]
-Description:
-* 💡 What: Replaced static generic ARIA labels on user table action buttons with dynamic labels including the user's name or email.
-* 🎯 Why: To provide clear, specific context for screen reader users navigating through repeated action buttons in lists.
-* 📸 Before/After: N/A
-* ♿ Accessibility: Improved screen reader navigation by ensuring each button clearly identifies which user it affects.
+🛡️ Sentinel: [ALTO] Corrigir [Missing Authentication on Admin Endpoints]
+🚨 Gravidade: HIGH
+💡 Vulnerabilidade: The `/api/plugins/reload` and `/api/audit/logs` endpoints were missing the `@require_auth()` decorator, creating a risk of authentication bypass if internal permission guards failed.
+🎯 Impacto: Unauthenticated users could potentially reload system plugins or access sensitive audit logs if the dependency injection for permission guards failed to initialize properly.
+🔧 Solução: Added the `@require_auth()` decorator explicitly to both endpoints to enforce defense-in-depth and added checks to fail securely if internal permission guards are missing.
+✅ Verificação: Verified by checking the route definitions in `backend/src/api/system_api.py` and running the test suite.
