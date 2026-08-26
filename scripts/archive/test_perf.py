@@ -27,7 +27,7 @@ with app.app_context():
         r = Reading(
             temperatura=25.0 + i % 5,
             status=status,
-            timestamp=datetime.datetime.utcnow()
+            timestamp=datetime.datetime.now(datetime.UTC)
         )
         db.session.add(r)
     db.session.commit()
