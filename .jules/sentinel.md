@@ -163,3 +163,7 @@
 **Vulnerability:** In `backend/src/security/fastapi_auth.py`, `os.environ.get("SUPABASE_JWT_SECRET", "")` used an empty string as a default fallback if the environment variable was missing. This would allow an attacker to bypass authentication by forging a JWT signed with an empty string.
 **Learning:** Hardcoding or defaulting cryptographic secrets (like a JWT secret) to empty strings is highly insecure and creates a direct path for authentication bypass. Applications must fail securely when missing critical configuration.
 **Prevention:** Always fail-fast at startup (or execution) when essential security configurations (like JWT secrets, API keys) are missing instead of falling back to default or empty values.
+## 2024-05-24 - Explicit JWT Signature Verification
+**Vulnerability:** Implicit signature verification defaults in `jwt.decode` functions.
+**Learning:** PyJWT defaults to verify signatures when keys are passed, but security tools (like Semgrep's `detected-jwt-token` and explicit secrets checkers) often flag `jwt.decode` calls that lack explicit verification options.
+**Prevention:** Always enforce signature verification explicitly using `options={"verify_signature": True}` to adopt a defense-in-depth posture and satisfy static analysis tools.

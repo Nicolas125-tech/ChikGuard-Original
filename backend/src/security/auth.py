@@ -50,14 +50,14 @@ def require_auth(roles=None, allow_query_token=False):
                     public_key = _get_supabase_public_key(token)
                     if public_key:
                         decoded = jwt.decode(
-                            token, public_key, algorithms=["ES256"], audience="authenticated"
+                            token, public_key, algorithms=["ES256"], audience="authenticated", options={"verify_signature": True}
                         )
 
                 if decoded is None:
                     jwt_secret = get_jwt_secret()
                     if jwt_secret and alg == "HS256":
                         decoded = jwt.decode(
-                            token, jwt_secret, algorithms=["HS256"], audience="authenticated"
+                            token, jwt_secret, algorithms=["HS256"], audience="authenticated", options={"verify_signature": True}
                         )
 
                 if decoded is None:
