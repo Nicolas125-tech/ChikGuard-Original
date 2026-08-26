@@ -19,8 +19,8 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
 
 
   // ── Fetching Data ──
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const fetchData = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       setError(null);
       const headers = { Authorization: `Bearer ${token}` };
@@ -52,13 +52,13 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
       console.error('Error fetching digital twin data:', err);
       setError(err.message || 'Erro de conexão com o painel 3D.');
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, [baseUrl, token]);
 
   useEffect(() => {
     (async () => { fetchData(); })();
-    const interval = setInterval(fetchData, 6000);
+    const interval = setInterval(() => fetchData(false), 6000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
