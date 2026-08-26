@@ -235,6 +235,7 @@ export default function ProfilePanel({ role, cameras = [] }) {
               {/* Botões de Ação */}
               <div className="pt-6 mt-6 border-t border-slate-800/50 flex items-center justify-end gap-4">
                 <button 
+                  aria-label="Cancelar alterações de perfil"
                   type="button" 
                   className="px-6 py-2.5 rounded-xl text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
                   onClick={() => window.location.reload()}
