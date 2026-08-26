@@ -73,7 +73,8 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserContext:
                 decoded = jwt.decode(
                     token, public_key,
                     algorithms=["ES256"],
-                    audience="authenticated"
+                    audience="authenticated",
+                    options={"verify_signature": True}
                 )
 
         # Fallback para HS256 (projetos mais antigos)
@@ -84,7 +85,8 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserContext:
             decoded = jwt.decode(
                 token, jwt_secret,
                 algorithms=["HS256"],
-                audience="authenticated"
+                audience="authenticated",
+                options={"verify_signature": True}
             )
 
     except jwt.ExpiredSignatureError:
