@@ -214,11 +214,13 @@ def _add_plugin_routes(bp, deps):
         return jsonify({"count": len(items), "plugins": items, "plugins_root": PLUGINS_ROOT})
 
     @bp.route("/api/plugins/reload", methods=["POST"])
+    @require_auth()
     def reload_plugins():
-        if _guard_critical_action:
-            ok, resp = _guard_critical_action("plugins_reload")
-            if not ok:
-                return resp
+        if not _guard_critical_action:
+            return jsonify({"error": "Internal configuration error: missing permission guards"}), 500
+        ok, resp = _guard_critical_action("plugins_reload")
+        if not ok:
+            return resp
         if PLUGIN_MANAGER:
             PLUGIN_MANAGER.load_all({"logger": LOGGER, "settings": SETTINGS})
             items = PLUGIN_MANAGER.list_plugins()
@@ -233,11 +235,13 @@ def _add_audit_routes(bp, deps):
     _require_permission = deps.get("require_permission")
 
     @bp.route("/api/audit/logs", methods=["GET"])
+    @require_auth()
     def audit_logs():
-        if _require_permission:
-            ok, resp = _require_permission("audit.read")
-            if not ok:
-                return resp
+        if not _require_permission:
+            return jsonify({"error": "Internal configuration error: missing permission guards"}), 500
+        ok, resp = _require_permission("audit.read")
+        if not ok:
+            return resp
         limit = request.args.get("limit", default=200, type=int)
         limit = max(1, min(limit, 5000))
         rows = AuditLog.query.order_by(AuditLog.id.desc()).limit(limit).all()
