@@ -1,8 +1,9 @@
-import os
-import time
-import math
 import logging
+import math
+import os
 import threading
+import time
+
 import cv2
 import numpy as np
 
@@ -13,10 +14,11 @@ _camera_thread = None
 
 def simulate_telemetry_step():
     """Simula dados de telemetria variando com base no estado dos atuadores."""
-    from src.core.state import sensor_state
-    from src.core.fsm_task import actuator_state
     import random
-    
+
+    from src.core.fsm_task import actuator_state
+    from src.core.state import sensor_state
+
     temp = sensor_state.get("temperature_c", 0.0)
     if temp == 0.0:
         temp = 24.8
@@ -24,22 +26,22 @@ def simulate_telemetry_step():
         sensor_state["ammonia_ppm"] = 5.2
         sensor_state["feed_level_pct"] = 78.0
         sensor_state["water_level_pct"] = 88.0
-        
+
     if actuator_state.get("aquecedor_on", False):
         temp += 0.15 + random.uniform(-0.03, 0.03)
     elif actuator_state.get("ventilacao_on", False):
         temp -= 0.12 + random.uniform(-0.03, 0.03)
     else:
         temp += (23.0 - temp) * 0.01 + random.uniform(-0.02, 0.02)
-        
+
     temp = max(12.0, min(38.0, temp))
-    
+
     h = sensor_state.get("humidity_pct", 60.0) + random.uniform(-0.15, 0.15)
     h = max(30.0, min(90.0, h))
-    
+
     a = sensor_state.get("ammonia_ppm", 5.0) + random.uniform(-0.03, 0.03)
     a = max(0.0, min(50.0, a))
-    
+
     sensor_state["temperature_c"] = round(temp, 1)
     sensor_state["humidity_pct"] = round(h, 1)
     sensor_state["ammonia_ppm"] = round(a, 1)
@@ -50,8 +52,8 @@ def save_telemetry_snapshot_to_db():
     """Grava as medições atuais de sensores e dados de visão no SQLite local."""
     try:
         from database import SensorReading, WeightEstimate
-        from src.db.session import SessionLocal
         from src.core.state import sensor_state, species_counts, weight_state
+        from src.db.session import SessionLocal
 
         db_sess = SessionLocal()
         try:
@@ -101,14 +103,14 @@ _cv_lock = threading.Lock()
 def _capture_thread_func():
     """Thread de aquisição de imagem dedicada - lê o frame mais recente e limpa buffer."""
     global _raw_frame, _cap, _use_sim, camera_running, _camera_index
-    
+
     consecutive_failures = 0
     while camera_running:
         cap_instance = _cap
         if cap_instance is None or not cap_instance.isOpened():
             time.sleep(0.1)
             continue
-            
+
         ret, frame = cap_instance.read()
         if not ret:
             if _use_sim:
@@ -122,13 +124,13 @@ def _capture_thread_func():
                     consecutive_failures = 0
                 time.sleep(0.05)
             continue
-            
+
         consecutive_failures = 0
         resized = cv2.resize(frame, (640, 480))
-        
+
         with _cv_lock:
             _raw_frame = resized
-            
+
         time.sleep(0.005)
 
 
@@ -155,9 +157,10 @@ def _is_human_shaped(box: list, frame_h: int, frame_w: int) -> bool:
 def _sync_batch_age(now_ts, last_batch_query_ts, species_classifier, logger):
     if now_ts - last_batch_query_ts >= 15.0:
         try:
+            from datetime import datetime
+
             from database import Batch
             from src.db.session import SessionLocal
-            from datetime import datetime
             db_session = SessionLocal()
             active_batch = db_session.query(Batch).filter_by(active=True).first()
             if active_batch:
@@ -174,7 +177,6 @@ def _sync_batch_age(now_ts, last_batch_query_ts, species_classifier, logger):
     return last_batch_query_ts
 
 def _run_yolo_inference(model, enhanced_detector, frame_to_process, logger):
-    import numpy as np
     frame_h, frame_w = frame_to_process.shape[:2]
 
     if enhanced_detector:
@@ -324,16 +326,8 @@ def _process_detections(has_boxes, boxes, confs, clss, ids, tile_results_extra, 
 
     return new_detections, chicks_count, hens_count, person_detected
 
-def _apply_analytics_plugins(new_detections, frame_to_process, now_ts, tri_zone_analyzer, zone_time_series, paper_subtractor, spatial_heatmap, weight_estimator, biosafety_plugin, active_camera_id, species_classifier, logger):
-    import math
-    from src.core.state import (
-        intrusion_state, live_birds, species_counts, weight_state,
-        behavior_state, immobility_state, carcass_state, zone_analytics_state,
-        cv_lock
-    )
 
-    frame_h, frame_w = frame_to_process.shape[:2]
-
+def _process_immobile_birds(new_detections, now_ts, immobility_state):
     bird_boxes = []
     bird_centers = []
     carcass_items = []
@@ -374,8 +368,9 @@ def _apply_analytics_plugins(new_detections, frame_to_process, now_ts, tri_zone_
                                 "y": int(cy),
                                 "immobile_seconds": round(inact_sec, 1)
                             })
+    return bird_boxes, bird_centers, carcass_items
 
-    # Zonamento Trifásico & Frequência de Permanência por Zona (Saltoratto et al., 2013)
+def _process_zone_analytics(bird_centers, frame_w, frame_h, now_ts, tri_zone_analyzer, zone_time_series, zone_analytics_state, cv_lock, logger):
     z_res = None
     if tri_zone_analyzer and bird_centers:
         try:
@@ -394,7 +389,6 @@ def _apply_analytics_plugins(new_detections, frame_to_process, now_ts, tri_zone_
         except Exception as z_err:
             logger.debug(f"Análise de zonamento trifásico falhou: {z_err}")
 
-    # Registrador de Série Temporal de Permanência (Série F_stay(t))
     if zone_time_series and z_res:
         try:
             zone_time_series.record_sample(
@@ -405,22 +399,21 @@ def _apply_analytics_plugins(new_detections, frame_to_process, now_ts, tri_zone_
             )
         except Exception as ts_err:
             logger.debug(f"Falha ao registrar série temporal de permanência: {ts_err}")
+    return z_res
 
-    # Subtração de Fundo & Flood Fill / Inundação Clássico
+def _process_additional_plugins(new_detections, bird_centers, frame_to_process, frame_w, frame_h, now_ts, paper_subtractor, spatial_heatmap, weight_estimator, biosafety_plugin, active_camera_id, species_classifier, weight_state, cv_lock, logger):
     if paper_subtractor and frame_to_process is not None:
         try:
             paper_subtractor.process_frame(frame_to_process)
         except Exception as ps_err:
             logger.debug(f"Subtrator clássico de fundo falhou: {ps_err}")
 
-    # Acumulador de Heatmap Espacial
     if spatial_heatmap and bird_centers:
         try:
             spatial_heatmap.add_detections(bird_centers, frame_w, frame_h, timestamp=now_ts)
         except Exception as sh_err:
             logger.debug(f"Falha ao acumular heatmap espacial: {sh_err}")
 
-    # Estimativa Biométrica de Peso
     if weight_estimator and new_detections:
         try:
             current_age = getattr(species_classifier, "_batch_age_day", 14)
@@ -435,14 +428,13 @@ def _apply_analytics_plugins(new_detections, frame_to_process, now_ts, tri_zone_
         except Exception as w_err:
             logger.debug(f"Falha na estimativa de peso biométrico: {w_err}")
 
-    # Auditoria de Biossegurança
     if biosafety_plugin and active_camera_id in ("ENTRANCE", "SANITARY_BARRIER"):
         try:
             biosafety_plugin.process_frame(frame_to_process, active_camera_id)
         except Exception as bio_err:
             logger.debug(f"Auditoria de biossegurança ignorada: {bio_err}")
 
-    # Métricas de Dispersão e Estresse Térmico
+def _calculate_dispersion_metrics(bird_boxes, bird_centers, frame_w, frame_h):
     tot_birds = len(bird_boxes)
     edge_count = 0
     disp_ratio = 0.5
@@ -472,14 +464,40 @@ def _apply_analytics_plugins(new_detections, frame_to_process, now_ts, tri_zone_
         status_str = "AMONTOAMENTO"
         msg_str = "Alerta: Alta densidade e amontoamento de aves"
 
+    return status_str, msg_str, disp_ratio, edge_ratio, tot_birds
+
+def _apply_analytics_plugins(new_detections, frame_to_process, now_ts, tri_zone_analyzer, zone_time_series, paper_subtractor, spatial_heatmap, weight_estimator, biosafety_plugin, active_camera_id, species_classifier, logger):
+    from src.core.state import cv_lock, immobility_state, weight_state, zone_analytics_state
+
+    frame_h, frame_w = frame_to_process.shape[:2]
+
+    bird_boxes, bird_centers, carcass_items = _process_immobile_birds(
+        new_detections, now_ts, immobility_state
+    )
+
+    _process_zone_analytics(
+        bird_centers, frame_w, frame_h, now_ts,
+        tri_zone_analyzer, zone_time_series, zone_analytics_state, cv_lock, logger
+    )
+
+    _process_additional_plugins(
+        new_detections, bird_centers, frame_to_process, frame_w, frame_h, now_ts,
+        paper_subtractor, spatial_heatmap, weight_estimator, biosafety_plugin,
+        active_camera_id, species_classifier, weight_state, cv_lock, logger
+    )
+
+    status_str, msg_str, disp_ratio, edge_ratio, tot_birds = _calculate_dispersion_metrics(
+        bird_boxes, bird_centers, frame_w, frame_h
+    )
+
     return carcass_items, status_str, msg_str, disp_ratio, edge_ratio, tot_birds
 
 def _save_db_metrics(now_ts, last_db_save_ts, logger):
     if now_ts - last_db_save_ts >= 5.0:
         try:
             from database import SensorReading, WeightEstimate
+            from src.core.state import sensor_state, species_counts, weight_state
             from src.db.session import SessionLocal
-            from src.core.state import sensor_state, weight_state, species_counts
 
             db_sess = SessionLocal()
             try:
@@ -519,7 +537,7 @@ def _save_db_metrics(now_ts, last_db_save_ts, logger):
     return last_db_save_ts
 
 def _inference_thread_func(
-    model, species_classifier, pose_analyzer, enhanced_detector=None, 
+    model, species_classifier, pose_analyzer, enhanced_detector=None,
     behavior_engine=None, gait_analyzer=None, biosafety_plugin=None,
     tamper_detector=None, spatial_heatmap=None, weight_estimator=None,
     radial_corrector=None, tri_zone_analyzer=None, zone_time_series=None,
@@ -527,7 +545,7 @@ def _inference_thread_func(
 ):
     """Thread dedicada de inferência YOLOv8 - processa frames de forma assíncrona com sincronização local/nuvem."""
     global _raw_frame, _latest_detections, camera_running
-    
+
     last_batch_query_ts = 0.0
     last_db_save_ts = 0.0
     frame_counter = 0
@@ -537,11 +555,11 @@ def _inference_thread_func(
         with _cv_lock:
             if _raw_frame is not None:
                 frame_to_process = _raw_frame.copy()
-                
+
         if frame_to_process is None:
             time.sleep(0.05)
             continue
-            
+
         now_ts = time.time()
         frame_counter += 1
 
@@ -556,7 +574,7 @@ def _inference_thread_func(
         if tamper_detector:
             try:
                 t_res = tamper_detector.analyze_frame(frame_to_process)
-                from src.core.state import tamper_state, cv_lock
+                from src.core.state import cv_lock, tamper_state
                 with cv_lock:
                     if t_res["tamper_detected"]:
                         tamper_state["last_alert_ts"] = now_ts
@@ -589,8 +607,12 @@ def _inference_thread_func(
 
             # Atualizar Estado Global
             from src.core.state import (
-                intrusion_state, live_birds, species_counts,
-                behavior_state, carcass_state, cv_lock
+                behavior_state,
+                carcass_state,
+                cv_lock,
+                intrusion_state,
+                live_birds,
+                species_counts,
             )
 
             with cv_lock:
@@ -598,7 +620,7 @@ def _inference_thread_func(
                 if person_detected:
                     intrusion_state["last_alert_ts"] = time.time()
                     intrusion_state["alerts_count"] += 1
-                    
+
                 live_birds.clear()
                 for d in new_detections:
                     if d["class_id"] == 14:
@@ -613,7 +635,7 @@ def _inference_thread_func(
                                 "last_seen": time.time(),
                                 "mask_area_px": 0.0
                             }
-                            
+
                 species_counts["chicks"] = chicks_count
                 species_counts["hens"] = hens_count
                 species_counts["total"] = chicks_count + hens_count
@@ -636,7 +658,7 @@ def _inference_thread_func(
 
         except Exception as cv_err:
             logger.error(f"Erro no processamento YOLO da thread: {cv_err}")
-            
+
         time.sleep(0.01)
 
 
@@ -645,12 +667,11 @@ def _inference_thread_func(
 def _init_camera(camera_index, logger):
     """Initializes the real camera or falls back to simulation video."""
     global _cap, _use_sim
-    
+
     _cap = None
     _use_sim = False
-    
+
     import cv2
-    import os
 
     try:
         _cap = cv2.VideoCapture(camera_index)
@@ -664,7 +685,7 @@ def _init_camera(camera_index, logger):
     except Exception as exc:
         logger.warning(f"Erro ao abrir câmera real: {exc}")
         _cap = None
-        
+
     if _cap is None:
         _use_sim = True
         sim_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "video_granja.mp4"))
@@ -675,15 +696,16 @@ def _init_camera(camera_index, logger):
         else:
             logger.error("Vídeo de simulação 'video_granja.mp4' não encontrado.")
             _cap = None
-            
+
     return _cap, _use_sim
 
 def _instantiate_plugin(plugin_key, settings, model_path, logger):
     """Helper to instantiate a single CV plugin."""
     try:
         if plugin_key == "enhanced_detector":
-            from src.vision.enhanced_detector import EnhancedObjectDetector
             import os
+
+            from src.vision.enhanced_detector import EnhancedObjectDetector
             return EnhancedObjectDetector(model_path=model_path if os.path.exists(model_path) else "yolov8n.pt")
         elif plugin_key == "behavior_engine":
             from src.cv_master.behavior_engine import BehaviorEngine
@@ -729,19 +751,19 @@ def _instantiate_plugin(plugin_key, settings, model_path, logger):
 
 def _init_models_and_plugins(settings, logger):
     """Initializes YOLO and all computer vision plugins."""
-    from src.core.cv_engine import SpeciesClassifier, BirdPoseAnalyzer
     from ultralytics import YOLO
-    import os
+
+    from src.core.cv_engine import BirdPoseAnalyzer, SpeciesClassifier
 
     model = None
     species_classifier = SpeciesClassifier()
     pose_analyzer = BirdPoseAnalyzer()
-    
+
     try:
         model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "yolov8n-seg.pt"))
         if not os.path.exists(model_path):
             model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "yolov8n.pt"))
-            
+
         if os.path.exists(model_path):
             model = YOLO(model_path)
             model.to("cpu")
@@ -769,22 +791,23 @@ def _init_models_and_plugins(settings, logger):
 def _run_coordinator_loop(model, plugins, logger):
     """Main coordinator loop for processing frames and overlaying metrics."""
     global camera_running, _raw_frame, _latest_detections, _cv_lock, _cap
-    from src.core.state import set_global_frame, species_counts
-    from src.core.cv_engine import CVOverlay
-    from src.core.camera_worker import simulate_telemetry_step, save_telemetry_snapshot_to_db
     import time
-    import numpy as np
+
     import cv2
-    
+
+    from src.core.camera_worker import save_telemetry_snapshot_to_db, simulate_telemetry_step
+    from src.core.cv_engine import CVOverlay
+    from src.core.state import set_global_frame, species_counts
+
     last_telemetry_sim_ts = 0.0
     last_db_save_ts = 0.0
     print("[CAMERA WORKER] Entering main coordinator loop...")
-    
+
     enhanced_detector = plugins.get("enhanced_detector")
 
     while camera_running:
         t_loop_start = time.perf_counter()
-        
+
         now = time.time()
         if now - last_telemetry_sim_ts >= 1.0:
             last_telemetry_sim_ts = now
@@ -802,7 +825,7 @@ def _run_coordinator_loop(model, plugins, logger):
 
         current_frame = None
         current_detections = []
-        
+
         with _cv_lock:
             if _raw_frame is not None:
                 current_frame = _raw_frame.copy()
@@ -823,12 +846,12 @@ def _run_coordinator_loop(model, plugins, logger):
             set_global_frame(err_frame)
             time.sleep(0.05)
             continue
-            
+
         try:
             processed_frame = current_frame.copy()
             if current_detections:
                 processed_frame = CVOverlay.draw_detections(processed_frame, current_detections, set())
-                
+
             backend_name = "pytorch"
             sahi_enabled = False
             if enhanced_detector:
@@ -842,7 +865,7 @@ def _run_coordinator_loop(model, plugins, logger):
                 "sahi_enabled": sahi_enabled,
                 "backend_name": backend_name
             }
-            
+
             from src.core.state import behavior_state, zone_analytics_state
             status_text = f"Bem-Estar: {zone_analytics_state.get('welfare_status', behavior_state.get('status', 'NORMAL'))}"
 
@@ -852,17 +875,17 @@ def _run_coordinator_loop(model, plugins, logger):
                 species_counts,
                 status_text
             )
-            
+
             set_global_frame(processed_frame)
         except Exception as overlay_err:
             logger.error(f"Erro ao gerar overlay visual no loop: {overlay_err}")
             set_global_frame(current_frame)
-            
+
         elapsed = time.perf_counter() - t_loop_start
         sleep_t = 0.033 - elapsed
         if sleep_t > 0.001:
             time.sleep(sleep_t)
-            
+
     if _cap is not None:
         _cap.release()
     logger.info("camera_worker encerrado.")
@@ -870,9 +893,10 @@ def _run_coordinator_loop(model, plugins, logger):
 def camera_worker():
     """Main function for the camera worker process."""
     global camera_running, _camera_index
-    from src.core.config import load_settings
-    from src.core.camera_worker import logger, _capture_thread_func, _inference_thread_func
     import threading
+
+    from src.core.camera_worker import _capture_thread_func, _inference_thread_func, logger
+    from src.core.config import load_settings
 
     settings = load_settings()
     _camera_index = settings.camera_index
