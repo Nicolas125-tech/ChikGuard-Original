@@ -77,10 +77,12 @@ def _add_voice_routes(bp, deps):
 
         action_perm = _get_action_permission(action)
 
-        if _guard_critical_action:
-            ok, resp = _guard_critical_action("voice_command_control", permission=action_perm)
-            if not ok:
-                return resp
+        if not _guard_critical_action:
+            return jsonify({"error": "Internal configuration error: missing permission guards"}), 500
+
+        ok, resp = _guard_critical_action("voice_command_control", permission=action_perm)
+        if not ok:
+            return resp
 
         estado_dispositivos.update(target_state)
         if _audit:
@@ -117,10 +119,12 @@ def _add_rules_routes(bp, deps):
     @bp.route("/api/rules", methods=["GET"])
     @require_auth()
     def get_rules():
-        if _require_permission:
-            ok, resp = _require_permission("monitor.read")
-            if not ok:
-                return resp
+        if not _require_permission:
+            return jsonify({"error": "Internal configuration error: missing permission guards"}), 500
+
+        ok, resp = _require_permission("monitor.read")
+        if not ok:
+            return resp
         if AutomationRule:
             rules = AutomationRule.query.all()
             return jsonify([r.to_dict() for r in rules])
@@ -129,10 +133,12 @@ def _add_rules_routes(bp, deps):
     @bp.route("/api/rules", methods=["POST"])
     @require_auth()
     def create_rule():
-        if _guard_critical_action:
-            ok, resp = _guard_critical_action("create_rule", permission="automation.manage")
-            if not ok:
-                return resp
+        if not _guard_critical_action:
+            return jsonify({"error": "Internal configuration error: missing permission guards"}), 500
+
+        ok, resp = _guard_critical_action("create_rule", permission="automation.manage")
+        if not ok:
+            return resp
         data = request.json or {}
 
         if not _validate_rule_data(data):
@@ -156,10 +162,12 @@ def _add_rules_routes(bp, deps):
     @bp.route("/api/rules/<int:rule_id>", methods=["DELETE"])
     @require_auth()
     def delete_rule(rule_id):
-        if _guard_critical_action:
-            ok, resp = _guard_critical_action("delete_rule", permission="automation.manage")
-            if not ok:
-                return resp
+        if not _guard_critical_action:
+            return jsonify({"error": "Internal configuration error: missing permission guards"}), 500
+
+        ok, resp = _guard_critical_action("delete_rule", permission="automation.manage")
+        if not ok:
+            return resp
         if AutomationRule and db:
             rule = AutomationRule.query.get(rule_id)
             if not rule:
