@@ -130,10 +130,11 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
           
           <div className="flex items-center gap-2">
             {/* Segmented Control for Source Selection */}
-            <div className="bg-slate-900 border border-slate-800 rounded-lg p-0.5 flex gap-1 text-xs">
+            <div className="bg-slate-900 border border-slate-800 rounded-lg p-0.5 flex gap-1 text-xs" role="group" aria-label="Fonte do Vídeo">
               <button 
                 onClick={() => setSource('server')}
-                className={`px-3 py-1.5 rounded-md font-semibold transition-all ${source === 'server' ? 'bg-emerald-500 text-white shadow shadow-emerald-500/25' : 'text-slate-400 hover:text-slate-200'}`}
+                aria-pressed={source === 'server'}
+                className={`px-3 py-1.5 rounded-md font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:z-10 relative ${source === 'server' ? 'bg-emerald-500 text-white shadow shadow-emerald-500/25' : 'text-slate-400 hover:text-slate-200'}`}
               >
                 Transmissão da Granja
               </button>
@@ -144,9 +145,10 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
                     initLocalCamera();
                   }
                 }}
-                className={`px-3 py-1.5 rounded-md font-semibold transition-all flex items-center gap-1 ${source === 'local' ? 'bg-emerald-500 text-white shadow shadow-emerald-500/25' : 'text-slate-400 hover:text-slate-200'}`}
+                aria-pressed={source === 'local'}
+                className={`px-3 py-1.5 rounded-md font-semibold transition-all flex items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:z-10 relative ${source === 'local' ? 'bg-emerald-500 text-white shadow shadow-emerald-500/25' : 'text-slate-400 hover:text-slate-200'}`}
               >
-                <Camera size={13} />
+                <Camera size={13} aria-hidden="true" />
                 Câmera Local
               </button>
             </div>
@@ -184,9 +186,9 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
                   </p>
                   <button 
                     onClick={initLocalCamera}
-                    className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-emerald-500/25 flex items-center gap-2"
+                    className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-emerald-500/25 flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                   >
-                    <Camera size={16} />
+                    <Camera size={16} aria-hidden="true" />
                     Autorizar e Iniciar
                   </button>
                 </div>
@@ -201,7 +203,7 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
                   </p>
                   <button 
                     onClick={initLocalCamera}
-                    className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-6 py-2.5 rounded-xl font-bold transition-all"
+                    className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-6 py-2.5 rounded-xl font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                   >
                     Tentar Novamente
                   </button>

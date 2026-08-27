@@ -79,6 +79,7 @@ def _add_voice_routes(bp, deps):
 
         if not _guard_critical_action:
             return jsonify({"error": "Internal configuration error: missing permission guards"}), 500
+
         ok, resp = _guard_critical_action("voice_command_control", permission=action_perm)
         if not ok:
             return resp
@@ -120,6 +121,7 @@ def _add_rules_routes(bp, deps):
     def get_rules():
         if not _require_permission:
             return jsonify({"error": "Internal configuration error: missing permission guards"}), 500
+
         ok, resp = _require_permission("monitor.read")
         if not ok:
             return resp
@@ -133,6 +135,7 @@ def _add_rules_routes(bp, deps):
     def create_rule():
         if not _guard_critical_action:
             return jsonify({"error": "Internal configuration error: missing permission guards"}), 500
+
         ok, resp = _guard_critical_action("create_rule", permission="automation.manage")
         if not ok:
             return resp
@@ -161,6 +164,7 @@ def _add_rules_routes(bp, deps):
     def delete_rule(rule_id):
         if not _guard_critical_action:
             return jsonify({"error": "Internal configuration error: missing permission guards"}), 500
+
         ok, resp = _guard_critical_action("delete_rule", permission="automation.manage")
         if not ok:
             return resp
