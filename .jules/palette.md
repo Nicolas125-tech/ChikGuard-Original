@@ -37,3 +37,7 @@
 ## 2025-02-23 - Dynamic ARIA Labels in Lists
 **Learning:** Generic `aria-label`s like "Editar câmera" and "Excluir câmera" inside repeated table rows or lists are confusing for screen reader users because they lack context about *which* item is being targeted.
 **Action:** Always include a unique identifier (like the item's name or title) in the `aria-label` for action buttons within loops (e.g., `aria-label={\`Editar câmera ${cam.name}\`}`).
+## 2024-05-24 - Accessibility Enhancements in CameraPanel
+
+**Learning:** When turning a pair of buttons into a segmented control, they need to act as a cohesive unit for screen readers. Using `role="group"` and `aria-pressed` makes the context clear. Also, decorative icons within these buttons must be hidden using `aria-hidden="true"` to avoid redundant announcements.
+**Action:** Always add `role="group"` and `aria-label` to the container of segmented controls, and explicitly manage `aria-pressed` states on the child buttons. Mask decorative icons.
