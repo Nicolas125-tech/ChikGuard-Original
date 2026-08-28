@@ -162,7 +162,8 @@ async def accounts_user_delete(
 
     try:
         def _delete_user():
-            return supabase_client.auth.admin.delete_user(account_id)
+            supabase_client.auth.admin.delete_user(account_id)
+            return supabase_client.table("profiles").delete().eq("id", account_id).execute()
 
         await run_in_threadpool(_delete_user)
         write_audit_log(db, user.user_id, "account_deleted_supabase", {"account_id": account_id})
