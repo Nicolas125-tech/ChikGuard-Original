@@ -15,6 +15,7 @@
 [![React Native](https://img.shields.io/badge/React%20Native-Expo-000020?logo=expo&logoColor=white)](https://expo.dev)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](./docker-compose.yml)
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com)
+[![MongoDB](https://img.shields.io/badge/MongoDB-NoSQL-47A248?logo=mongodb&logoColor=white)](https://mongodb.com)
 
 </div>
 
@@ -30,7 +31,7 @@ ChikGuard is a full-stack intelligent monitoring platform for commercial poultry
 | **Vision AI** | YOLOv8 (ONNX), OpenCV, custom tracking pipeline |
 | **Frontend** | React 18, Vite, TailwindCSS, Recharts |
 | **Mobile** | React Native (Expo) |
-| **Database** | Supabase (PostgreSQL) + local SQLite fallback |
+| **Database** | Supabase (PostgreSQL) + MongoDB (NoSQL) + local SQLite fallback |
 | **Infra** | Docker Compose, Cloudflare Tunnel, mTLS |
 
 ---
