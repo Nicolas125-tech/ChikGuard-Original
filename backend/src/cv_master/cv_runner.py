@@ -20,6 +20,7 @@ from src.cv_master.behavior_engine import BehaviorEngine
 from src.cv_master.inference_sota import SOTAInferenceEngine
 from src.cv_master.tracker_spy import SpyTracker
 from src.db.session import SessionLocal
+from src.db.nosql_session import MongoDBBatchWriter
 from src.vision.gait_analyzer import GaitAnalyzer
 
 
@@ -94,6 +95,18 @@ class SOTAPipelineRunner:
 
         self.last_annotated = np.zeros((480, 640, 3), dtype=np.uint8)
         self.last_tracked = None
+
+        # ── MongoDB Batch Writers for high-throughput CV metadata ──
+        # Accumulates documents in memory and flushes via insert_many
+        self.mongo_detections = MongoDBBatchWriter(
+            "cv_detections", batch_size=100, flush_interval_sec=10.0
+        )
+        self.mongo_track_points = MongoDBBatchWriter(
+            "cv_track_points", batch_size=200, flush_interval_sec=10.0
+        )
+        self.mongo_heatmap_coords = MongoDBBatchWriter(
+            "cv_heatmap_coords", batch_size=200, flush_interval_sec=15.0
+        )
 
     def start(self, loop=None):
         if self.running:
@@ -578,7 +591,56 @@ class SOTAPipelineRunner:
             # Armazena o frame final no estado global e LIFO buffer
             self.last_annotated = annotated
 
-            # 7. Salva snapshots e trackpoints no banco de dados local a cada 10s
+            # 7. Persiste metadados visuais no MongoDB (alta frequência) e PostgreSQL (periódico)
+            # ── MongoDB: cada frame grava detecções, track points e coords de heatmap ──
+            if enriched_detections:
+                now_iso = datetime.utcnow().isoformat()
+                mongo_det_docs = []
+                mongo_tp_docs = []
+                mongo_hm_docs = []
+
+                for det in enriched_detections:
+                    tid = det["track_id"]
+                    box = det["box"]
+                    cx = int((box[0] + box[2]) / 2)
+                    cy = int((box[1] + box[3]) / 2)
+
+                    # cv_detections — bounding boxes, confiança, espécie, postura
+                    mongo_det_docs.append({
+                        "camera_id": "galpao-1",
+                        "track_id": tid,
+                        "box": box,
+                        "confidence": det["conf"],
+                        "species": det.get("species", "bird"),
+                        "pose": det.get("pose", "unknown"),
+                        "is_carcass": det.get("is_carcass", False),
+                        "timestamp": now_iso,
+                    })
+
+                    # cv_track_points — trajetórias de centróide
+                    mongo_tp_docs.append({
+                        "camera_id": "galpao-1",
+                        "track_id": tid,
+                        "x": cx,
+                        "y": cy,
+                        "timestamp": now_iso,
+                    })
+
+                    # cv_heatmap_coords — coordenadas para mapa de calor espacial
+                    mongo_hm_docs.append({
+                        "camera_id": "galpao-1",
+                        "x": cx,
+                        "y": cy,
+                        "frame_w": clean_frame.shape[1],
+                        "frame_h": clean_frame.shape[0],
+                        "timestamp": now_iso,
+                    })
+
+                self.mongo_detections.add_many(mongo_det_docs)
+                self.mongo_track_points.add_many(mongo_tp_docs)
+                self.mongo_heatmap_coords.add_many(mongo_hm_docs)
+
+            # ── PostgreSQL: snapshots periódicos a cada 10s (para Supabase sync) ──
             if now - last_snapshot_save > 10.0:
                 last_snapshot_save = now
                 try:
@@ -608,15 +670,6 @@ class SOTAPipelineRunner:
                             status="pending"
                         ))
 
-                        cx = int((box[0] + box[2]) / 2)
-                        cy = int((box[1] + box[3]) / 2)
-                        tp = BirdTrackPoint(
-                            bird_uid=tid,
-                            x=cx,
-                            y=cy,
-                            timestamp=datetime.utcnow()
-                        )
-                        db.add(tp)
 
                     db.commit()
                     db.close()
@@ -673,6 +726,15 @@ class SOTAPipelineRunner:
         if not self.running:
             return
         self.running = False
+
+        # Flush remaining MongoDB buffers before shutdown
+        try:
+            self.mongo_detections.flush_sync(self.loop)
+            self.mongo_track_points.flush_sync(self.loop)
+            self.mongo_heatmap_coords.flush_sync(self.loop)
+        except Exception as exc:
+            self.logger.warning(f"MongoDB flush on shutdown failed: {exc}")
+
         if self.thread:
             self.thread.join(timeout=5.0)
         self.logger.info("SOTA Pipeline Runner parado.")

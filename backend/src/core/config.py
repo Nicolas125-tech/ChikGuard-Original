@@ -8,9 +8,12 @@ import secrets
 
 class Settings:
     def __init__(self):
-        # Database setup
+        # Database setup (PostgreSQL / SQLite)
         self.database_url = os.getenv("DATABASE_URL", "sqlite:///chikguard.db")
         self.jwt_secret_key = os.getenv("JWT_SECRET_KEY", secrets.token_hex(32))
+
+        # MongoDB — NoSQL for high-throughput CV pipeline writes
+        self.mongodb_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017/chikguard")
 
         # Application settings
         self.log_level = os.getenv("LOG_LEVEL", "INFO")

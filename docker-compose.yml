@@ -12,13 +12,39 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
       - CORS_ORIGINS=*
       - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/chikguard.db}
+      - MONGODB_URI=${MONGODB_URI:-mongodb://mongo:27017/chikguard}
       - PYTHONPATH=/app
     volumes:
       - ./data:/app/data
+    depends_on:
+      mongo:
+        condition: service_healthy
     deploy:
       resources:
         limits:
           memory: 4G
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:latest
+    networks:
+      - backend-network
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=chikguard
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     restart: unless-stopped
 
   frontend:
@@ -51,8 +77,10 @@ services:
       - backend-network
     depends_on:
       - backend
+      - mongo
     environment:
       - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/chikguard.db}
+      - MONGODB_URI=${MONGODB_URI:-mongodb://mongo:27017/chikguard}
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     volumes:
@@ -64,3 +92,7 @@ networks:
   backend-network:
     driver: bridge
     internal: true
+
+volumes:
+  mongo_data:
+    driver: local

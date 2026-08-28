@@ -63,6 +63,14 @@ async def lifespan(fastapi_app: FastAPI):
     from src.core.camera_worker import start_camera_thread, stop_camera_thread
     start_camera_thread()
 
+    # Inicializa conexão com MongoDB (Polyglot Persistence — CV Pipeline)
+    from src.db.nosql_session import init_nosql, close_nosql
+    try:
+        init_nosql()
+        LOGGER.info("MongoDB (Motor) inicializado com sucesso.")
+    except Exception as mongo_err:
+        LOGGER.warning(f"MongoDB não disponível (fallback ativo): {mongo_err}")
+
     yield
 
     # Cleanup na finalizacao
@@ -82,6 +90,13 @@ async def lifespan(fastapi_app: FastAPI):
     if mqtt_client:
         mqtt_client.loop_stop()
         mqtt_client.disconnect()
+
+    # Fecha conexão com MongoDB
+    try:
+        await close_nosql()
+        LOGGER.info("MongoDB (Motor) encerrado com sucesso.")
+    except Exception:
+        pass
 
     LOGGER.info("Encerrando o servidor FastAPI - ChikGuard")
 

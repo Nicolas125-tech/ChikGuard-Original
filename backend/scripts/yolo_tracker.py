@@ -2,10 +2,13 @@ import json
 import os
 import time
 from collections import defaultdict, deque
+from datetime import datetime
 
 import cv2
 import numpy as np
 from ultralytics import YOLO
+
+from src.db.nosql_session import MongoDBBatchWriter
 
 
 class PoultryTracker:
@@ -18,6 +21,14 @@ class PoultryTracker:
         self.last_seen = {}
         self.max_missing_frames = max_missing_frames
         self.logs = []
+
+        # MongoDB batch writers for high-throughput tracking persistence
+        self._mongo_detections = MongoDBBatchWriter(
+            "cv_detections", batch_size=100, flush_interval_sec=10.0
+        )
+        self._mongo_tracks = MongoDBBatchWriter(
+            "cv_track_points", batch_size=200, flush_interval_sec=10.0
+        )
 
     def smooth_trajectory(self, track_id, current_centroid, frame_idx):
         """
@@ -98,6 +109,26 @@ class PoultryTracker:
                         }
                     )
 
+                    # ── MongoDB: persist detection + trajectory to NoSQL ──
+                    now_iso = datetime.utcnow().isoformat()
+                    self._mongo_detections.add({
+                        "camera_id": "offline_tracker",
+                        "track_id": int(track_id),
+                        "box": [x1, y1, x2, y2],
+                        "confidence": float(conf),
+                        "class_id": int(cls),
+                        "frame_idx": frame_idx,
+                        "timestamp": now_iso,
+                    })
+                    self._mongo_tracks.add({
+                        "camera_id": "offline_tracker",
+                        "track_id": int(track_id),
+                        "x": smooth_cx,
+                        "y": smooth_cy,
+                        "frame_idx": frame_idx,
+                        "timestamp": now_iso,
+                    })
+
                     # Draw on frame
                     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                     cv2.putText(
@@ -131,6 +162,10 @@ class PoultryTracker:
         if writer:
             writer.release()
         cv2.destroyAllWindows()
+
+        # Flush remaining MongoDB buffers
+        self._mongo_detections.flush_sync()
+        self._mongo_tracks.flush_sync()
 
         # Save logs
         with open(log_file, "w") as f:

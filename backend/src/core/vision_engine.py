@@ -13,11 +13,14 @@ import collections
 import logging
 import threading
 import time
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import cv2
 import numpy as np
 from ultralytics import YOLO
+
+from src.db.nosql_session import MongoDBBatchWriter
 
 try:
     from src.vision.enhanced_detector import AdvancedTrackerWrapper
@@ -98,6 +101,11 @@ class VisionEngine:
         self.stream_thread = None
         self.is_running = False
         self.frame_buffer = collections.deque(maxlen=3)  # Small buffer to prevent lag
+
+        # 6. MongoDB Batch Writer for detection logs
+        self._mongo_writer = MongoDBBatchWriter(
+            "cv_detections", batch_size=80, flush_interval_sec=10.0
+        )
 
         logger.info(f"VisionEngine V3 loaded on {device}. SAHI: {self.use_sahi}")
 
@@ -234,6 +242,21 @@ class VisionEngine:
             analytics_engine.export_metrics(detections, t0)
 
         latency = (time.perf_counter() - t0) * 1000
+
+        # Persist detection logs to MongoDB (async batch)
+        if detections:
+            now_iso = datetime.utcnow().isoformat()
+            for det in detections:
+                self._mongo_writer.add({
+                    "camera_id": "stream",
+                    "track_id": det.get("track_id", -1),
+                    "box": det["box"],
+                    "confidence": det["confidence"],
+                    "class_id": det["class_id"],
+                    "mask_area_px": det.get("mask_area_px", 0.0),
+                    "latency_ms": round(latency, 2),
+                    "timestamp": now_iso,
+                })
 
         return {
             "detections": detections,

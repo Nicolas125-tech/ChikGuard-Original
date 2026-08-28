@@ -34,3 +34,7 @@ python-socketio[asyncio]
 Flask-JWT-Extended
 pytest-asyncio
 aiofiles
+
+# MongoDB (Polyglot Persistence — CV Pipeline)
+motor>=3.3.0
+pymongo>=4.6.0
