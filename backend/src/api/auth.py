@@ -136,6 +136,7 @@ def _accounts_user_delete_handler(account_id, deps):
 
     try:
         supabase.auth.admin.delete_user(str(account_id))
+        supabase.table("profiles").delete().eq("id", str(account_id)).execute()
         audit(
             "account_deleted_supabase",
             source="security",
