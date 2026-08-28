@@ -264,20 +264,16 @@ async def video_feed(token: str = None):
         raise HTTPException(status_code=401, detail="Token JWT inválido ou acesso negado")
 
     async def generate():
-        import cv2
-        from src.core.state import get_global_frame
+        from src.core.state import get_encoded_frame
         import asyncio
-        encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
         stream_interval = 1.0 / 30
         try:
             while True:
                 t0 = time.perf_counter()
-                frame = get_global_frame()
-                if frame is not None:
-                    ret, buf = cv2.imencode(".jpg", frame, encode_params)
-                    if ret:
-                        yield (b"--frame\r\n"
-                               b"Content-Type: image/jpeg\r\n\r\n" + buf.tobytes() + b"\r\n")
+                encoded_frame = get_encoded_frame()
+                if encoded_frame is not None:
+                    yield (b"--frame\r\n"
+                           b"Content-Type: image/jpeg\r\n\r\n" + encoded_frame + b"\r\n")
                 elapsed = time.perf_counter() - t0
                 sleep_t = stream_interval - elapsed
                 if sleep_t > 0.001:

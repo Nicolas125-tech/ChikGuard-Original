@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from src.core.state import get_global_frame
+from src.core.state import get_global_frame, get_encoded_frame
 from src.security.fastapi_auth import SUPABASE_JWT_SECRET, UserContext, get_current_user, _get_supabase_public_key
 
 router = APIRouter(prefix="/api/webrtc", tags=["video"])
@@ -97,17 +97,14 @@ async def video_feed(token: str = None):
     await get_current_user(token)
 
     async def generate():
-        encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
         stream_interval = 1.0 / 30
         try:
             while True:
                 t0 = time.perf_counter()
-                frame = get_global_frame()
-                if frame is not None:
-                    ret, buf = cv2.imencode(".jpg", frame, encode_params)
-                    if ret:
-                        yield (b"--frame\r\n"
-                               b"Content-Type: image/jpeg\r\n\r\n" + buf.tobytes() + b"\r\n")
+                encoded_frame = get_encoded_frame()
+                if encoded_frame is not None:
+                    yield (b"--frame\r\n"
+                           b"Content-Type: image/jpeg\r\n\r\n" + encoded_frame + b"\r\n")
 
                 elapsed = time.perf_counter() - t0
                 sleep_t = stream_interval - elapsed

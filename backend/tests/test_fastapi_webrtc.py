@@ -23,18 +23,13 @@ def test_video_feed_with_invalid_token(mock_get_current_user):
     assert "Invalid token payload" in response.json()["detail"]
 
 @patch("src.api.fastapi_webrtc.get_current_user")
-@patch("src.api.fastapi_webrtc.get_global_frame")
-def test_video_feed_with_valid_token(mock_get_global_frame, mock_get_current_user):
+@patch("src.api.fastapi_webrtc.get_encoded_frame")
+def test_video_feed_with_valid_token(mock_get_encoded_frame, mock_get_current_user):
     # Mock authentication success
     mock_get_current_user.return_value = MagicMock(user_id="test_user", role="operator", tenant_id=1)
 
-    # Mock video generator to exit immediately
-    import cv2
-    import numpy as np
-    mock_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-    mock_get_global_frame.return_value = mock_frame
-    import cv2
-    cv2.imencode = MagicMock(return_value=(True, np.array([1, 2, 3], dtype=np.uint8)))
+    # Mock encoded frame
+    mock_get_encoded_frame.return_value = b'fake_encoded_jpeg_data'
 
     # Using patch to bypass the infinite stream for testing
     with patch("src.api.fastapi_webrtc.asyncio.sleep", side_effect=GeneratorExit()):

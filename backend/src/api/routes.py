@@ -99,27 +99,26 @@ def create_api_blueprint(deps):
         """
         Stream MJPEG de alta performance protegido por token JWT.
         """
+        from src.core.state import get_encoded_frame
         stream_interval = deps.get("stream_frame_interval_sec", 1.0 / 30)
         quality = deps.get("stream_jpeg_quality", 80)
-        encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
+        # Note: the central caching now hardcodes 80 quality for performance,
+        # but we maintain the route configuration signature.
 
         async def generate():
             last_t = time.perf_counter()
             try:
                 while True:
                     t0 = time.perf_counter()
-                    frame = get_global_frame()
+                    encoded_frame = get_encoded_frame()
 
-                    if frame is not None:
-                        ret, buf = cv2.imencode(".jpg", frame, encode_params)
-                        if ret:
-                            data = buf.tobytes()
-                            yield (
-                                b"--frame\r\n"
-                                b"Content-Type: image/jpeg\r\n"
-                                b"Content-Length: " + str(len(data)).encode() + b"\r\n"
-                                b"\r\n" + data + b"\r\n"
-                            )
+                    if encoded_frame is not None:
+                        yield (
+                            b"--frame\r\n"
+                            b"Content-Type: image/jpeg\r\n"
+                            b"Content-Length: " + str(len(encoded_frame)).encode() + b"\r\n"
+                            b"\r\n" + encoded_frame + b"\r\n"
+                        )
 
                     # Sleep adaptativo: dorme apenas o tempo restante
                     elapsed = time.perf_counter() - t0
