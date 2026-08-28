@@ -20,7 +20,7 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
-from src.db.nosql_session import MongoDBBatchWriter
+from src.infrastructure.db.nosql_session import MongoDBBatchWriter
 
 try:
     from src.vision.enhanced_detector import AdvancedTrackerWrapper

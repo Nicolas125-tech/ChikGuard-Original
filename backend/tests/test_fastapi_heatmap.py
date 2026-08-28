@@ -15,7 +15,7 @@ import unittest.mock as mock
 
 sys.modules["cv2"] = mock.MagicMock()
 
-from src.api.fastapi_heatmap import (
+from src.presentation.api.fastapi_heatmap import (
     router,
     _generate_heatmap_grid,
     _generate_thermal_anomalies,
@@ -148,7 +148,7 @@ def test_thermal_anomalies_live_validation_errors():
 
 def test_anomaly_description():
     """Test the internal helper for generating anomaly descriptions."""
-    from src.api.fastapi_heatmap import _anomaly_description
+    from src.presentation.api.fastapi_heatmap import _anomaly_description
 
     desc = _anomaly_description({"type": "hot_spot", "zone": "A1", "temp": 39.0})
     assert "Zona A1" in desc

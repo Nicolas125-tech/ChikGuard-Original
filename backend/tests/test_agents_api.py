@@ -119,7 +119,7 @@ def test_chat_success(client, monkeypatch, auth_headers):
 
 def test_knowledge_base_retrieval():
     """Valida que o utilitário de RAG recupera as seções corretas com base em palavras-chave."""
-    from src.api.agents_api import _retrieve_knowledge_base
+    from src.presentation.api.agents_api import _retrieve_knowledge_base
 
     # Busca por amônia
     res_ammonia = _retrieve_knowledge_base("Qual o nível aceitável de amônia?")
@@ -134,7 +134,7 @@ def test_knowledge_base_retrieval():
 
 def test_knowledge_base_retrieval_fallback(monkeypatch):
     """Valida o comportamento de fallback quando o arquivo da base de conhecimento não existe."""
-    from src.api.agents_api import _retrieve_knowledge_base
+    from src.presentation.api.agents_api import _retrieve_knowledge_base
 
     monkeypatch.setattr("os.path.exists", lambda path: False)
 
@@ -154,7 +154,7 @@ def auth_headers():
 
 def test_knowledge_base_retrieval_error(monkeypatch):
     """Valida o tratamento de erro (ex: IOError) ao tentar ler o arquivo."""
-    from src.api.agents_api import _retrieve_knowledge_base
+    from src.presentation.api.agents_api import _retrieve_knowledge_base
 
     def mock_open(*args, **kwargs):
         raise IOError("Simulated IOError")
@@ -168,7 +168,7 @@ def test_knowledge_base_retrieval_error(monkeypatch):
 
 
 def test_call_gemini_api_success(monkeypatch):
-    from src.api.agents_api import _call_gemini_api
+    from src.presentation.api.agents_api import _call_gemini_api
 
     def mock_post(url, headers, json, timeout):
         assert (
@@ -202,7 +202,7 @@ def test_call_gemini_api_success(monkeypatch):
 
 
 def test_call_gemini_api_error_status(monkeypatch):
-    from src.api.agents_api import _call_gemini_api
+    from src.presentation.api.agents_api import _call_gemini_api
 
     def mock_post(*args, **kwargs):
         class MockResponse:
@@ -219,7 +219,7 @@ def test_call_gemini_api_error_status(monkeypatch):
 
 
 def test_call_gemini_api_fallback_text(monkeypatch):
-    from src.api.agents_api import _call_gemini_api
+    from src.presentation.api.agents_api import _call_gemini_api
 
     def mock_post(*args, **kwargs):
         class MockResponse:

@@ -53,7 +53,7 @@ def save_telemetry_snapshot_to_db():
     try:
         from database import SensorReading, WeightEstimate
         from src.core.state import sensor_state, species_counts, weight_state
-        from src.db.session import SessionLocal
+        from src.infrastructure.db.session import SessionLocal
 
         db_sess = SessionLocal()
         try:
@@ -160,7 +160,7 @@ def _sync_batch_age(now_ts, last_batch_query_ts, species_classifier, logger):
             from datetime import datetime
 
             from database import Batch
-            from src.db.session import SessionLocal
+            from src.infrastructure.db.session import SessionLocal
             db_session = SessionLocal()
             active_batch = db_session.query(Batch).filter_by(active=True).first()
             if active_batch:
@@ -497,7 +497,7 @@ def _save_db_metrics(now_ts, last_db_save_ts, logger):
         try:
             from database import SensorReading, WeightEstimate
             from src.core.state import sensor_state, species_counts, weight_state
-            from src.db.session import SessionLocal
+            from src.infrastructure.db.session import SessionLocal
 
             db_sess = SessionLocal()
             try:

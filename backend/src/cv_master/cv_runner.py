@@ -13,14 +13,14 @@ import numpy as np
 
 import src.core.state as state
 from database import Batch, BirdSnapshot, BirdTrackPoint, EventLog, Reading, SyncQueueItem
-from src.api.fastapi_ws import emit_new_alert
+from src.presentation.api.fastapi_ws import emit_new_alert
 from src.core.cv_engine import BirdPoseAnalyzer, PerfMetrics, SpeciesClassifier
 from src.core.state import cv_lock
 from src.cv_master.behavior_engine import BehaviorEngine
 from src.cv_master.inference_sota import SOTAInferenceEngine
 from src.cv_master.tracker_spy import SpyTracker
-from src.db.session import SessionLocal
-from src.db.nosql_session import MongoDBBatchWriter
+from src.infrastructure.db.session import SessionLocal
+from src.infrastructure.db.nosql_session import MongoDBBatchWriter
 from src.vision.gait_analyzer import GaitAnalyzer
 
 

@@ -22,7 +22,7 @@ import unittest.mock as mock
 sys_modules_mock = mock.patch.dict("sys.modules", {"cv2": mock.MagicMock()})
 sys_modules_mock.start()
 
-from src.api.sync_api import create_sync_blueprint
+from src.presentation.api.sync_api import create_sync_blueprint
 
 @pytest.fixture
 def mock_deps():

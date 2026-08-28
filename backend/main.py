@@ -24,7 +24,7 @@ async def lifespan(fastapi_app: FastAPI):
     # Inicializa o banco de dados SQLite
     try:
         from database import Camera, db
-        from src.db.session import SessionLocal, engine
+        from src.infrastructure.db.session import SessionLocal, engine
 
         db.metadata.create_all(bind=engine)
 
@@ -64,7 +64,7 @@ async def lifespan(fastapi_app: FastAPI):
     start_camera_thread()
 
     # Inicializa conexão com MongoDB (Polyglot Persistence — CV Pipeline)
-    from src.db.nosql_session import init_nosql, close_nosql
+    from src.infrastructure.db.nosql_session import init_nosql, close_nosql
     try:
         init_nosql()
         LOGGER.info("MongoDB (Motor) inicializado com sucesso.")
@@ -101,18 +101,18 @@ async def lifespan(fastapi_app: FastAPI):
     LOGGER.info("Encerrando o servidor FastAPI - ChikGuard")
 
 
-from src.api.fastapi_accounts import router as accounts_router
-from src.api.fastapi_agent_discovery import router as agent_discovery_router
-from src.api.fastapi_birds import router_birds, router_weight
-from src.api.fastapi_cameras import router as cameras_router
-from src.api.fastapi_climate import router as climate_router
-from src.api.fastapi_health import router as health_router
-from src.api.fastapi_heatmap import router as heatmap_router
-from src.api.fastapi_zone_analytics import router as zone_analytics_router
-from src.api.fastapi_sensors import router as sensors_router
-from src.api.fastapi_webrtc import router as webrtc_router
-from src.api.fastapi_iot import router as iot_router
-from src.api.fastapi_ws import socket_app
+from src.presentation.api.fastapi_accounts import router as accounts_router
+from src.presentation.api.fastapi_agent_discovery import router as agent_discovery_router
+from src.presentation.api.fastapi_birds import router_birds, router_weight
+from src.presentation.api.fastapi_cameras import router as cameras_router
+from src.presentation.api.fastapi_climate import router as climate_router
+from src.presentation.api.fastapi_health import router as health_router
+from src.presentation.api.fastapi_heatmap import router as heatmap_router
+from src.presentation.api.fastapi_zone_analytics import router as zone_analytics_router
+from src.presentation.api.fastapi_sensors import router as sensors_router
+from src.presentation.api.fastapi_webrtc import router as webrtc_router
+from src.presentation.api.fastapi_iot import router as iot_router
+from src.presentation.api.fastapi_ws import socket_app
 from src.security.fastapi_auth import RequireRole, UserContext, get_current_user
 from src.security.headers import ALLOWED_ORIGINS
 

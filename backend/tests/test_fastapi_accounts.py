@@ -17,7 +17,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 # Mock cv2 before anything else
 sys.modules["cv2"] = MagicMock()
 
-from src.api.fastapi_accounts import router
+from src.presentation.api.fastapi_accounts import router
 from src.security.fastapi_auth import get_current_user, UserContext
 from fastapi import FastAPI
 
@@ -41,7 +41,7 @@ def test_accounts_users(mock_supabase):
     assert response.status_code == 200
     assert response.json() == {"count": 1, "items": [{"id": "1", "name": "User 1"}]}
 
-from src.api.fastapi_accounts import write_audit_log
+from src.presentation.api.fastapi_accounts import write_audit_log
 import json
 
 @patch("database.AuditLog")

@@ -5,7 +5,7 @@ import time
 
 import paho.mqtt.client as mqtt
 
-from src.api.fastapi_iot import iot_bridge_state
+from src.presentation.api.fastapi_iot import iot_bridge_state
 from src.core.state import sensor_state
 from src.services.mqtt_gateway import LoRaMqttGateway
 

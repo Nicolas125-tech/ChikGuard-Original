@@ -4,7 +4,7 @@ if "cv2" in sys.modules and type(sys.modules["cv2"]).__name__ == "MagicMock":
     del sys.modules["cv2"]
 import cv2
 from unittest.mock import patch, MagicMock
-from src.db.session import get_db
+from src.infrastructure.db.session import get_db
 
 @patch("src.db.session.SessionLocal")
 def test_get_db_success(mock_session_local):

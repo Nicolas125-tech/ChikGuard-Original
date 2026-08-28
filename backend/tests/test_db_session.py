@@ -12,7 +12,7 @@ import unittest.mock as mock
 # Ensure cv2 is mocked if any imports trigger it (per memory instructions)
 sys.modules["cv2"] = mock.MagicMock()
 
-from src.db.session import get_db
+from src.infrastructure.db.session import get_db
 
 def test_get_db_yields_session_and_closes():
     with patch("src.db.session.SessionLocal") as mock_session_local:

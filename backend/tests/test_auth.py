@@ -6,7 +6,7 @@ import cv2
 import os
 import pytest
 from unittest.mock import patch, MagicMock
-from src.api.auth import _get_supabase_client
+from src.presentation.api.auth import _get_supabase_client
 
 def test_get_supabase_client_missing_url():
     env_mock = {"SUPABASE_SERVICE_ROLE_KEY": "some-key"}

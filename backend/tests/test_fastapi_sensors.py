@@ -11,7 +11,7 @@ import sys
 # Mock cv2 before importing main
 sys.modules["cv2"] = mock.MagicMock()
 
-from src.db.session import engine as session_engine, SessionLocal
+from src.infrastructure.db.session import engine as session_engine, SessionLocal
 from main import fastapi_app
 from src.security.fastapi_auth import get_current_user, UserContext
 
@@ -32,7 +32,7 @@ db.init_app(app)
 with app.app_context():
     db.create_all()
 
-import src.db.session
+import src.infrastructure.db.session
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -52,7 +52,7 @@ def override_get_db():
     finally:
         db.close()
 
-from src.db.session import get_db
+from src.infrastructure.db.session import get_db
 fastapi_app.dependency_overrides[get_db] = override_get_db
 
 def test_sensors_live():

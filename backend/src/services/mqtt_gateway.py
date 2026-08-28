@@ -92,7 +92,7 @@ class LoRaMqttGateway:
                 self.db_session.commit()
             else:
                 # Em ambiente de execução real, inicializa sessão do FastAPI
-                from src.db.session import SessionLocal
+                from src.infrastructure.db.session import SessionLocal
                 session = SessionLocal()
                 try:
                     session.add(reading)

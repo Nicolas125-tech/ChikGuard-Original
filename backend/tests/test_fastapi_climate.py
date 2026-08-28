@@ -50,7 +50,7 @@ async def test_location_forecast_success():
 
         mock_session_cls.return_value = AsyncContextManagerMock(mock_session)
 
-        from src.api.fastapi_climate import get_location_forecast
+        from src.presentation.api.fastapi_climate import get_location_forecast
 
         user_ctx = MagicMock()
 

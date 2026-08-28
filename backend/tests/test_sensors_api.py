@@ -7,7 +7,7 @@ import pytest
 import unittest.mock as mock
 from flask import Flask, request
 
-from src.api.sensors_api import handle_get_sensors_history, handle_acoustic_classify, handle_check_anomaly, create_sensors_blueprint
+from src.presentation.api.sensors_api import handle_get_sensors_history, handle_acoustic_classify, handle_check_anomaly, create_sensors_blueprint
 
 @pytest.fixture
 def app():

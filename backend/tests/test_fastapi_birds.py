@@ -17,7 +17,7 @@ sys.modules["cv2"] = mock.MagicMock()
 
 from main import fastapi_app
 from src.core.state import live_birds
-from src.api.fastapi_birds import BIRD_LIVE_TTL_SEC
+from src.presentation.api.fastapi_birds import BIRD_LIVE_TTL_SEC
 from src.security.fastapi_auth import get_current_user, UserContext
 
 # Bypass auth for tests

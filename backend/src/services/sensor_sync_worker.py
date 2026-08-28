@@ -43,7 +43,7 @@ class SensorSyncWorker:
         created_session = False
 
         if session is None:
-            from src.db.session import SessionLocal
+            from src.infrastructure.db.session import SessionLocal
 
             session = SessionLocal()
             created_session = True

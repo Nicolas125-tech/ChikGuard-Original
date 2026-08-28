@@ -1,7 +1,7 @@
 import logging
 import time
 
-from src.api.fastapi_ws import emit_new_alert
+from src.presentation.api.fastapi_ws import emit_new_alert
 from src.core.state import sensor_state
 
 logger = logging.getLogger(__name__)

@@ -37,7 +37,7 @@ import sys
 if 'src.api.routes' in sys.modules:
     sys.modules.pop('src.api.routes')
 
-from src.api.routes import create_api_blueprint
+from src.presentation.api.routes import create_api_blueprint
 
 @pytest.fixture
 def deps():

@@ -3,7 +3,7 @@ import time
 import logging
 from src.core.state_machine import BusinessStateMachine
 from src.core.state import sensor_state, sensor_thresholds, intrusion_state
-from src.api.fastapi_ws import emit_new_alert
+from src.presentation.api.fastapi_ws import emit_new_alert
 from src.core.state import sensor_state
 from src.core.state_machine import BusinessStateMachine
 
@@ -36,7 +36,7 @@ async def fsm_loop():
 
             from database import Batch
             from src.core.state_machine import get_ideal_temp_for_age
-            from src.db.session import SessionLocal
+            from src.infrastructure.db.session import SessionLocal
 
             global _last_batch_fetch_time, _cached_batch_age_day, _cached_target_temp
             now = time.time()
