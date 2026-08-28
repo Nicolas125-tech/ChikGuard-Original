@@ -41,3 +41,6 @@
 
 **Learning:** When turning a pair of buttons into a segmented control, they need to act as a cohesive unit for screen readers. Using `role="group"` and `aria-pressed` makes the context clear. Also, decorative icons within these buttons must be hidden using `aria-hidden="true"` to avoid redundant announcements.
 **Action:** Always add `role="group"` and `aria-label` to the container of segmented controls, and explicitly manage `aria-pressed` states on the child buttons. Mask decorative icons.
+## 2025-08-28 - Explicit Labels for Standalone Inputs and Proper ARIA Labels
+**Learning:** Found an accessibility issue where inputs like search or calculators lacked proper `htmlFor` ID linkages, and many action buttons lacked `aria-label`s. Also discovered a loading state issue where all actions in a table row showed a spinner when only one was clicked.
+**Action:** Always add unique `id` elements to inputs and reference them with `htmlFor` in `sr-only` labels if visually hidden. Ensure all icon buttons or state-toggling buttons have descriptive `aria-label`s. Ensure loading state (`isAnyActioning`) is scoped specifically to the user ID and action via string splitting or exact matching.

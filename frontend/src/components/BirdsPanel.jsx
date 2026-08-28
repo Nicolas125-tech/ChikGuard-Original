@@ -44,7 +44,7 @@ export default function BirdsPanel({ token, serverIP, prefs, cameras = [], activ
   }, [baseUrl, token]);
 
   useEffect(() => {
-    loadBirds();
+    setTimeout(() => { loadBirds() }, 0);
     const timer = setInterval(loadBirds, prefs.countMs);
     return () => clearInterval(timer);
   }, [loadBirds, prefs.countMs]);

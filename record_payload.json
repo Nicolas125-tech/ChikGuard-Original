@@ -1,4 +1,0 @@
-{
-  "title": "⚡ Bolt: [prevent unnecessary re-renders during background sync]",
-  "description": "* 💡 What: Modified `fetchData` in `DigitalTwinPanel.jsx` to conditionally use `setLoading(true)` via a parameter.\n* 🎯 Why: Unconditionally setting loading to true during `setInterval` background data refreshes causes unnecessary React re-renders and degrades UX.\n* 📉 Impact: Reduces unnecessary component re-renders by ~100% during background polling every 6 seconds.\n* 🔬 Measurement: Verified by observing the component loading state and React Developer Tools profiler."
-}

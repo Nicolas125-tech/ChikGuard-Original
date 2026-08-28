@@ -39,7 +39,7 @@ function ConfirmModal({ title, message, onConfirm, onCancel, danger = false, loa
             className="px-4 py-2 text-sm font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all disabled:opacity-50">
             Cancelar
           </button>
-          <button onClick={onConfirm} disabled={loading}
+          <button aria-label="Confirmar" onClick={onConfirm} disabled={loading}
             className={`px-5 py-2 text-sm font-bold rounded-xl transition-all flex items-center gap-2 disabled:opacity-50 ${
               danger ? 'bg-red-600 hover:bg-red-500 text-white' : 'bg-emerald-600 hover:bg-emerald-500 text-white'
             }`}>
@@ -182,11 +182,11 @@ function ProfileDrawer({ user, myRole, onClose, onSaved }) {
 
         {/* Footer */}
         <div className="p-5 border-t border-slate-800 flex gap-3">
-          <button onClick={onClose} disabled={saving}
+          <button aria-label="Cancelar" onClick={onClose} disabled={saving}
             className="flex-1 px-4 py-2.5 text-sm font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all disabled:opacity-50">
             Cancelar
           </button>
-          <button onClick={handleSave} disabled={saving}
+          <button aria-label="Salvar" onClick={handleSave} disabled={saving}
             className="flex-1 px-4 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2">
             {saving && <RefreshCw size={13} aria-hidden="true" className="animate-spin" />}
             {saving ? 'Salvando...' : 'Salvar Alterações'}
@@ -311,7 +311,7 @@ export default function AdminPanel({ token, serverIP, role: myRole }) {
   }, [activeTab, token, serverIP]);
 
   useEffect(() => {
-    fetchUsers();
+    setTimeout(() => { fetchUsers() }, 0);
     return () => { abortRef.current = false; };
   }, [fetchUsers]);
 
@@ -498,7 +498,7 @@ VITE_SUPABASE_ANON_KEY=your-api-key`}
               { id: 'pending', label: 'Aguardando Aprovação', icon: Clock,  count: pendingCount },
               { id: 'all',     label: 'Todos os Utilizadores', icon: Users, count: null },
             ].map(({ id, label, count }) => (
-              <button key={id} onClick={() => setActiveTab(id)}
+              <button aria-label={`Ver aba ${label}`} key={id} onClick={() => setActiveTab(id)}
                 className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-t-xl border-b-2 transition-all ${
                   activeTab === id
                     ? 'border-emerald-500 text-emerald-400 bg-emerald-500/10'
@@ -590,7 +590,7 @@ VITE_SUPABASE_ANON_KEY=your-api-key`}
               <div className="px-5 py-3 bg-slate-800/30 border-t border-slate-800 text-xs text-slate-500 flex justify-between items-center">
                 <span>{filtered.length} de {users.length} utilizador(es)</span>
                 {search && (
-                  <button onClick={() => setSearch('')} className="text-emerald-400 hover:text-emerald-300 text-xs font-medium">
+                  <button aria-label="Limpar filtro de pesquisa" onClick={() => setSearch('')} className="text-emerald-400 hover:text-emerald-300 text-xs font-medium">
                     Limpar filtro
                   </button>
                 )}
@@ -608,7 +608,7 @@ function UserRow({ user: u, myLevel, actionLoading, onApprove, onReject, onSuspe
   const [approveRole, setApproveRole] = useState('viewer');
   const isPending   = u.status === 'PENDING';
   const isSuspended = u.status === 'SUSPENDED';
-  const isAnyActioning = actionLoading && actionLoading.startsWith(u.id);
+  const isAnyActioning = typeof actionLoading === "string" && actionLoading.startsWith(`${u.id}-`);
   const isApproving = actionLoading === `${u.id}-approve`;
   const isRejecting = actionLoading === `${u.id}-reject`;
   const isSuspending = actionLoading === `${u.id}-suspend`;

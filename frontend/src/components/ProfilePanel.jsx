@@ -243,7 +243,7 @@ export default function ProfilePanel({ role, cameras = [] }) {
                   Cancelar
                 </button>
                 <button 
-                  type="submit" 
+                  aria-label="Salvar Alterações de Perfil" type="submit"
                   disabled={loading}
                   className="relative group overflow-hidden px-8 py-2.5 rounded-xl font-bold text-white bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-70 disabled:cursor-not-allowed"
                 >

@@ -46,7 +46,7 @@ export default function DevicesPanel({ token, serverIP, canControlDevices, camer
   }, [baseUrl, token]);
 
   useEffect(() => {
-    loadDevices();
+    setTimeout(() => { loadDevices() }, 0);
   }, [loadDevices]);
 
   const toggleDevice = async (tipo, ligar) => {
@@ -56,7 +56,7 @@ export default function DevicesPanel({ token, serverIP, canControlDevices, camer
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ ligar }),
     });
-    loadDevices();
+    setTimeout(() => { loadDevices() }, 0);
   };
 
   const toggleAuto = async (enabled) => {
@@ -66,7 +66,7 @@ export default function DevicesPanel({ token, serverIP, canControlDevices, camer
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ enabled }),
     });
-    loadDevices();
+    setTimeout(() => { loadDevices() }, 0);
   };
 
   const setDimmer = async (value) => {
@@ -113,7 +113,7 @@ export default function DevicesPanel({ token, serverIP, canControlDevices, camer
       });
     }
 
-    loadDevices();
+    setTimeout(() => { loadDevices() }, 0);
     toast.error('⚠️ MODO EMERGÊNCIA ATIVADO: Ventilação forçada ativada, aquecedor e IA desligados!', { duration: 5000 });
   };
 

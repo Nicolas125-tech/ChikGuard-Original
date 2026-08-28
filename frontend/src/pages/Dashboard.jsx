@@ -240,7 +240,7 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
   }, [role, pendingCount, handleTabChange]);
 
   useEffect(() => {
-    fetchPendingCount();
+    setTimeout(() => { fetchPendingCount() }, 0);
     const t = setInterval(fetchPendingCount, 30000);
     return () => clearInterval(t);
   }, [fetchPendingCount]);
