@@ -1,7 +1,0 @@
-1. Implement action loading state for delete actions in CamerasManager.jsx
-   - Add state `deletingId`
-   - Set `deletingId` to `id` in `handleDelete` function, and reset to null in `finally`
-   - Disable delete button if `deletingId === cam.id`
-   - Show loading spinner if `deletingId === cam.id` instead of trash icon
-2. Follow pre-commit instructions
-3. Submit

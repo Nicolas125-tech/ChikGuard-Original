@@ -1,6 +1,0 @@
-🛡️ Sentinel: [ALTO] Corrigir [Missing Authentication on Admin Endpoints]
-🚨 Gravidade: HIGH
-💡 Vulnerabilidade: The `/api/plugins/reload` and `/api/audit/logs` endpoints were missing the `@require_auth()` decorator, creating a risk of authentication bypass if internal permission guards failed.
-🎯 Impacto: Unauthenticated users could potentially reload system plugins or access sensitive audit logs if the dependency injection for permission guards failed to initialize properly.
-🔧 Solução: Added the `@require_auth()` decorator explicitly to both endpoints to enforce defense-in-depth and added checks to fail securely if internal permission guards are missing.
-✅ Verificação: Verified by checking the route definitions in `backend/src/api/system_api.py` and running the test suite.
