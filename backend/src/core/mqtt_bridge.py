@@ -2,7 +2,6 @@ import os
 import json
 import time
 import logging
-import asyncio
 import paho.mqtt.client as mqtt
 from src.core.state import sensor_state
 from src.api.fastapi_iot import iot_bridge_state
