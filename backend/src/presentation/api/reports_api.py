@@ -4,7 +4,7 @@ from flask import Blueprint, current_app, jsonify, request, send_file
 
 from database import Batch, WeightEstimate
 from src.ai.forecast import predict_slaughter_date
-from src.reports.generator import _send_report_email, generate_esg_report, generate_weekly_report
+from src.infrastructure.reports.generator import _send_report_email, generate_esg_report, generate_weekly_report
 from src.security.auth import require_auth
 from src.security.rate_limiter import limiter
 

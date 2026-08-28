@@ -13,8 +13,8 @@ from datetime import datetime, timedelta
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
-from src.vision.gait_analyzer import GaitAnalyzer
-from src.vision.lameness_detector import LamenessDetector
+from src.domain.vision.gait_analyzer import GaitAnalyzer
+from src.domain.vision.lameness_detector import LamenessDetector
 
 def test_dynamic_skeleton_detection_and_hock_angles():
     analyzer = GaitAnalyzer(history_len=20)

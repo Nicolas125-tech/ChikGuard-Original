@@ -4,7 +4,7 @@ if "cv2" in sys.modules and type(sys.modules["cv2"]).__name__ == "MagicMock":
     del sys.modules["cv2"]
 import cv2
 import pytest
-from src.vision.zone_time_series import ZoneTimeSeriesTracker
+from src.domain.vision.zone_time_series import ZoneTimeSeriesTracker
 
 def test_empty_summary():
     tracker = ZoneTimeSeriesTracker()

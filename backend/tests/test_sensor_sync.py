@@ -21,7 +21,7 @@ sys.modules["cv2"] = mock.MagicMock()
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 from database import SensorReading, db
-from src.services.sensor_sync_worker import SensorSyncWorker
+from src.application.services.sensor_sync_worker import SensorSyncWorker
 from flask import Flask
 
 app = Flask(__name__)

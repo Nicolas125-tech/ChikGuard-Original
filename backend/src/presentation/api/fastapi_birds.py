@@ -5,7 +5,7 @@ from sqlalchemy import desc
 
 from src.infrastructure.db.session import get_db
 from src.core.state import active_camera_id, live_birds, species_counts, weight_state, cv_lock
-from src.schemas.birds import BirdsLiveResponse, WeightLiveResponse
+from src.domain.schemas.birds import BirdsLiveResponse, WeightLiveResponse
 from src.security.fastapi_auth import get_current_user, UserContext
 from src.core.config import load_settings
 

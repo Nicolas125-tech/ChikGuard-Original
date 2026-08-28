@@ -7,7 +7,7 @@ import os
 import sys
 from datetime import datetime, timedelta
 
-from src.vision.gait_analyzer import GaitAnalyzer
+from src.domain.vision.gait_analyzer import GaitAnalyzer
 
 # Ajusta sys.path para enxergar src/ e o backend
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))

@@ -32,9 +32,9 @@ from src.core.state import (
     sensor_state, live_birds, species_counts, weight_state,
     behavior_state, immobility_state, carcass_state, tamper_state
 )
-from src.vision.lameness_detector import LamenessDetector
-from src.vision.gait_analyzer import GaitAnalyzer
-from src.cv_master.behavior_engine import BehaviorEngine
+from src.domain.vision.lameness_detector import LamenessDetector
+from src.domain.vision.gait_analyzer import GaitAnalyzer
+from src.application.cv_master.behavior_engine import BehaviorEngine
 from plugins.biosafety_audit.plugin import BiosafetyAuditPlugin
 
 

@@ -6,7 +6,7 @@ import cv2
 import cv2
 import numpy as np
 import pytest
-from src.vision.background_subtractor_paper import PaperBackgroundSubtractor
+from src.domain.vision.background_subtractor_paper import PaperBackgroundSubtractor
 
 def test_initialization():
     subtractor = PaperBackgroundSubtractor(threshold_val=100, morph_kernel_size=3)

@@ -23,7 +23,7 @@ from ultralytics import YOLO
 from src.infrastructure.db.nosql_session import MongoDBBatchWriter
 
 try:
-    from src.vision.enhanced_detector import AdvancedTrackerWrapper
+    from src.domain.vision.enhanced_detector import AdvancedTrackerWrapper
 
     _TRACKER_AVAILABLE = True
 except ImportError:

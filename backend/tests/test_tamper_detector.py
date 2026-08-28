@@ -6,7 +6,7 @@ import cv2
 import pytest
 import numpy as np
 import cv2
-from src.vision.tamper_detector import CameraTamperDetector
+from src.domain.vision.tamper_detector import CameraTamperDetector
 
 def test_no_frame():
     detector = CameraTamperDetector()

@@ -54,7 +54,7 @@ async def lifespan(fastapi_app: FastAPI):
     fsm_task = asyncio.create_task(fsm_loop())
 
     # Inicia o Worker de Sincronização offline-first de Sensores com o Supabase
-    from src.services.sensor_sync_worker import SensorSyncWorker
+    from src.application.services.sensor_sync_worker import SensorSyncWorker
 
     sync_worker = SensorSyncWorker()
     sync_task = asyncio.create_task(sync_worker.run())
@@ -80,7 +80,7 @@ async def lifespan(fastapi_app: FastAPI):
 
     # Finaliza o SOTA Computer Vision Pipeline
     try:
-        from src.cv_master import get_sota_runner
+        from src.application.cv_master import get_sota_runner
 
         get_sota_runner().stop()
         LOGGER.info("SOTA Computer Vision Pipeline finalizado.")

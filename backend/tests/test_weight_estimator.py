@@ -4,7 +4,7 @@ if "cv2" in sys.modules and type(sys.modules["cv2"]).__name__ == "MagicMock":
     del sys.modules["cv2"]
 import cv2
 import pytest
-from src.vision.weight_estimator import BiometricWeightEstimator
+from src.domain.vision.weight_estimator import BiometricWeightEstimator
 
 def test_weight_estimator_clamping():
     estimator = BiometricWeightEstimator()

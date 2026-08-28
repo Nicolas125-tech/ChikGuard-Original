@@ -15,8 +15,8 @@ backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
-from src.vision.background_subtractor_paper import PaperBackgroundSubtractor
-from src.vision.zone_time_series import ZoneTimeSeriesTracker
+from src.domain.vision.background_subtractor_paper import PaperBackgroundSubtractor
+from src.domain.vision.zone_time_series import ZoneTimeSeriesTracker
 
 
 def test_paper_background_subtractor_and_floodfill():

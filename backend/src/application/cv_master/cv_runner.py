@@ -16,12 +16,12 @@ from database import Batch, BirdSnapshot, BirdTrackPoint, EventLog, Reading, Syn
 from src.presentation.api.fastapi_ws import emit_new_alert
 from src.core.cv_engine import BirdPoseAnalyzer, PerfMetrics, SpeciesClassifier
 from src.core.state import cv_lock
-from src.cv_master.behavior_engine import BehaviorEngine
-from src.cv_master.inference_sota import SOTAInferenceEngine
-from src.cv_master.tracker_spy import SpyTracker
+from src.application.cv_master.behavior_engine import BehaviorEngine
+from src.application.cv_master.inference_sota import SOTAInferenceEngine
+from src.application.cv_master.tracker_spy import SpyTracker
 from src.infrastructure.db.session import SessionLocal
 from src.infrastructure.db.nosql_session import MongoDBBatchWriter
-from src.vision.gait_analyzer import GaitAnalyzer
+from src.domain.vision.gait_analyzer import GaitAnalyzer
 
 
 def _estimate_keypoints_from_box(box, tid, now_ts):

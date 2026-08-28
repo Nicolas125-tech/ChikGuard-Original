@@ -5,7 +5,7 @@ if "cv2" in sys.modules and type(sys.modules["cv2"]).__name__ == "MagicMock":
 import cv2
 import pytest
 import time
-from src.vision.tri_zone_analyzer import TriZoneBehaviorAnalyzer
+from src.domain.vision.tri_zone_analyzer import TriZoneBehaviorAnalyzer
 
 def test_tri_zone_behavior_analyzer():
     analyzer = TriZoneBehaviorAnalyzer(window_size=3)

@@ -15,9 +15,9 @@ backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
-from src.vision.tamper_detector import CameraTamperDetector
-from src.vision.spatial_heatmap import SpatialHeatmapAccumulator
-from src.vision.weight_estimator import BiometricWeightEstimator
+from src.domain.vision.tamper_detector import CameraTamperDetector
+from src.domain.vision.spatial_heatmap import SpatialHeatmapAccumulator
+from src.domain.vision.weight_estimator import BiometricWeightEstimator
 
 
 def test_tamper_detector_dark_and_blur():

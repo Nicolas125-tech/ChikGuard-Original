@@ -15,8 +15,8 @@ backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
-from src.vision.radial_light_corrector import RadialBrooderLightCorrector
-from src.vision.tri_zone_analyzer import TriZoneBehaviorAnalyzer
+from src.domain.vision.radial_light_corrector import RadialBrooderLightCorrector
+from src.domain.vision.tri_zone_analyzer import TriZoneBehaviorAnalyzer
 
 
 def test_radial_brooder_light_corrector():

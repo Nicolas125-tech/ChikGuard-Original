@@ -705,13 +705,13 @@ def _instantiate_plugin(plugin_key, settings, model_path, logger):
         if plugin_key == "enhanced_detector":
             import os
 
-            from src.vision.enhanced_detector import EnhancedObjectDetector
+            from src.domain.vision.enhanced_detector import EnhancedObjectDetector
             return EnhancedObjectDetector(model_path=model_path if os.path.exists(model_path) else "yolov8n.pt")
         elif plugin_key == "behavior_engine":
-            from src.cv_master.behavior_engine import BehaviorEngine
+            from src.application.cv_master.behavior_engine import BehaviorEngine
             return BehaviorEngine()
         elif plugin_key == "gait_analyzer":
-            from src.vision.gait_analyzer import GaitAnalyzer
+            from src.domain.vision.gait_analyzer import GaitAnalyzer
             return GaitAnalyzer()
         elif plugin_key == "biosafety_plugin":
             from plugins.biosafety_audit.plugin import BiosafetyAuditPlugin
@@ -719,31 +719,31 @@ def _instantiate_plugin(plugin_key, settings, model_path, logger):
             plugin.on_startup({"settings": settings})
             return plugin
         elif plugin_key == "tamper_detector":
-            from src.vision.tamper_detector import CameraTamperDetector
+            from src.domain.vision.tamper_detector import CameraTamperDetector
             return CameraTamperDetector()
         elif plugin_key == "spatial_heatmap":
-            from src.vision.spatial_heatmap import SpatialHeatmapAccumulator
+            from src.domain.vision.spatial_heatmap import SpatialHeatmapAccumulator
             plugin = SpatialHeatmapAccumulator()
             from src.core import state
             state.spatial_accumulator = plugin
             return plugin
         elif plugin_key == "weight_estimator":
-            from src.vision.weight_estimator import BiometricWeightEstimator
+            from src.domain.vision.weight_estimator import BiometricWeightEstimator
             return BiometricWeightEstimator()
         elif plugin_key == "radial_corrector":
-            from src.vision.radial_light_corrector import RadialBrooderLightCorrector
+            from src.domain.vision.radial_light_corrector import RadialBrooderLightCorrector
             return RadialBrooderLightCorrector()
         elif plugin_key == "tri_zone_analyzer":
-            from src.vision.tri_zone_analyzer import TriZoneBehaviorAnalyzer
+            from src.domain.vision.tri_zone_analyzer import TriZoneBehaviorAnalyzer
             return TriZoneBehaviorAnalyzer()
         elif plugin_key == "zone_time_series":
-            from src.vision.zone_time_series import ZoneTimeSeriesTracker
+            from src.domain.vision.zone_time_series import ZoneTimeSeriesTracker
             plugin = ZoneTimeSeriesTracker()
             from src.core import state
             state.zone_time_series_tracker = plugin
             return plugin
         elif plugin_key == "paper_subtractor":
-            from src.vision.background_subtractor_paper import PaperBackgroundSubtractor
+            from src.domain.vision.background_subtractor_paper import PaperBackgroundSubtractor
             return PaperBackgroundSubtractor()
     except Exception as exc:
         logger.warning(f"{plugin_key} não inicializado: {exc}")

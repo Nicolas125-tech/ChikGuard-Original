@@ -11,7 +11,7 @@ import paho.mqtt.client as mqtt
 
 # Adiciona o backend ao path para resolver os imports absolutos
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from src.vision.lameness_detector import LamenessDetector
+from src.domain.vision.lameness_detector import LamenessDetector
 
 # Configuração Básica de Logs
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")

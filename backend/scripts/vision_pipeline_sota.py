@@ -4,10 +4,10 @@ import time
 
 import cv2
 
-from src.cv_master.behavior_engine import BehaviorEngine
-from src.cv_master.inference_sota import SOTAInferenceEngine
-from src.cv_master.stream_gateway import HLSStreamGateway
-from src.cv_master.tracker_spy import SpyTracker
+from src.application.cv_master.behavior_engine import BehaviorEngine
+from src.application.cv_master.inference_sota import SOTAInferenceEngine
+from src.application.cv_master.stream_gateway import HLSStreamGateway
+from src.application.cv_master.tracker_spy import SpyTracker
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 

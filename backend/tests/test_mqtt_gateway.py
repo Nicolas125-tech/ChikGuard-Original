@@ -26,7 +26,7 @@ from src.core.state_machine import BusinessStateMachine
 from flask import Flask
 
 # Importamos o serviço que será desenvolvido na Fase GREEN
-from src.services.mqtt_gateway import LoRaMqttGateway
+from src.application.services.mqtt_gateway import LoRaMqttGateway
 
 app = Flask(__name__)
 app.config["TESTING"] = True

@@ -4,7 +4,7 @@ if "cv2" in sys.modules and type(sys.modules["cv2"]).__name__ == "MagicMock":
     del sys.modules["cv2"]
 import cv2
 import pytest
-from src.vision.enhanced_detector import _box_area, _iou
+from src.domain.vision.enhanced_detector import _box_area, _iou
 
 
 def test_box_area():

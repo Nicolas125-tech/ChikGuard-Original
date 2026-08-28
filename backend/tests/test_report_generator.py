@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.reports.generator import generate_esg_report, generate_weekly_report
+from src.infrastructure.reports.generator import generate_esg_report, generate_weekly_report
 
 
 def mock_utcnow():

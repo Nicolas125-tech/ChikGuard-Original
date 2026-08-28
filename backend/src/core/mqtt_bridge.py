@@ -7,7 +7,7 @@ import paho.mqtt.client as mqtt
 
 from src.presentation.api.fastapi_iot import iot_bridge_state
 from src.core.state import sensor_state
-from src.services.mqtt_gateway import LoRaMqttGateway
+from src.application.services.mqtt_gateway import LoRaMqttGateway
 
 logger = logging.getLogger(__name__)
 

@@ -13,7 +13,7 @@ from unittest.mock import patch, MagicMock
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
-from src.vision.lameness_detector import LamenessDetector
+from src.domain.vision.lameness_detector import LamenessDetector
 
 @pytest.fixture
 def mock_yolo():

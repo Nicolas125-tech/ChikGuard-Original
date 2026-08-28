@@ -5,7 +5,7 @@ if "cv2" in sys.modules and type(sys.modules["cv2"]).__name__ == "MagicMock":
 import cv2
 import numpy as np
 import pytest
-from src.vision.radial_light_corrector import RadialBrooderLightCorrector
+from src.domain.vision.radial_light_corrector import RadialBrooderLightCorrector
 
 def test_correct_intensity_empty_frame():
     corrector = RadialBrooderLightCorrector()

@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.infrastructure.db.session import get_async_db
 from src.core.sensors_utils import persist_sensor_reading, evaluate_sensor_alerts
 from src.core.state import active_camera_id, sensor_state, sensor_thresholds
-from src.schemas.sensors import SensorIngest, SensorLiveResponse
+from src.domain.schemas.sensors import SensorIngest, SensorLiveResponse
 from src.security.fastapi_auth import get_current_user, UserContext
 
 router = APIRouter(prefix="/api/sensors", tags=["sensors"])
