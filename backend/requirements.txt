@@ -1,7 +1,3 @@
-Flask
-Flask-Cors
-Flask-SQLAlchemy
-Flask-Migrate
 opencv-python
 numpy
 ultralytics
@@ -11,7 +7,7 @@ librosa
 soundfile
 joblib
 pytest
-Flask-SocketIO==5.3.6
+python-socketio[asyncio]
 psutil
 aiortc
 aiohttp
@@ -21,7 +17,6 @@ psycopg2-binary
 python-dotenv
 sahi
 paho-mqtt>=1.6.1
-Flask-Limiter
 scikit-learn
 PyJWT
 
@@ -30,8 +25,6 @@ fastapi
 uvicorn[standard]
 python-multipart
 pydantic
-python-socketio[asyncio]
-Flask-JWT-Extended
 pytest-asyncio
 aiofiles
 

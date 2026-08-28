@@ -1,22 +1,51 @@
 from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import sessionmaker, declarative_base
 from src.core.config import load_settings
 
 settings = load_settings()
 
-# Engine padrao
+# ---------------------------------------------------------
+# 1. Conexão Síncrona (Para Threads/Background Workers)
+# ---------------------------------------------------------
+sync_url = settings.database_url
 engine = create_engine(
-    settings.database_url, 
-    connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {}
+    sync_url, 
+    connect_args={"check_same_thread": False} if "sqlite" in sync_url else {}
 )
-
-# Sessao SQLAlchemy padrao (Sincrona por enquanto)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Base para criar os modelos novos futuramente ou referenciar os existentes
+
+# ---------------------------------------------------------
+# 2. Conexão Assíncrona (Para FastAPI Endpoints)
+# ---------------------------------------------------------
+# Converte a URL para o driver assíncrono correspondente
+if "sqlite" in sync_url:
+    async_url = sync_url.replace("sqlite://", "sqlite+aiosqlite://")
+elif "postgresql" in sync_url:
+    async_url = sync_url.replace("postgresql://", "postgresql+asyncpg://")
+else:
+    async_url = sync_url
+
+async_engine = create_async_engine(
+    async_url,
+    connect_args={"check_same_thread": False} if "sqlite" in async_url else {}
+)
+AsyncSessionLocal = async_sessionmaker(autocommit=False, autoflush=False, bind=async_engine, class_=AsyncSession)
+
+
+# Base para os modelos
 Base = declarative_base()
 
-# Dependencia FastAPI
+# Dependência FastAPI (Assíncrona - Padrão Moderno)
+async def get_async_db():
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
+
+# Dependência FastAPI Legada (Síncrona)
 def get_db():
     db = SessionLocal()
     try:

@@ -1,8 +1,7 @@
 import time
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-
-from src.db.session import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from src.db.session import get_async_db
 from src.core.sensors_utils import persist_sensor_reading, evaluate_sensor_alerts
 from src.core.state import active_camera_id, sensor_state, sensor_thresholds
 from src.schemas.sensors import SensorIngest, SensorLiveResponse
@@ -10,9 +9,8 @@ from src.security.fastapi_auth import get_current_user, UserContext
 
 router = APIRouter(prefix="/api/sensors", tags=["sensors"])
 
-
 @router.get("/live", response_model=SensorLiveResponse)
-def get_sensors_live(user: UserContext = Depends(get_current_user)):
+async def get_sensors_live(user: UserContext = Depends(get_current_user)):
     """Retorna o estado atual dos sensores."""
     return {
         "camera_id": active_camera_id,
@@ -28,9 +26,9 @@ def get_sensors_live(user: UserContext = Depends(get_current_user)):
 
 
 @router.post("/ingest")
-def ingest_sensor_data(
+async def ingest_sensor_data(
     payload: SensorIngest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     user: UserContext = Depends(get_current_user),
 ):
     """Recebe novos dados de sensores via Edge/IoT e atualiza o estado."""
@@ -46,7 +44,10 @@ def ingest_sensor_data(
         }
     )
 
-    persist_sensor_reading(db, source=payload.source)
-    evaluate_sensor_alerts(db)
+    # Convertendo as utilidades para chamadas thread-pool (para não bloquear o event loop se forem síncronas internamente)
+    import asyncio
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, lambda: persist_sensor_reading(db.sync_session, source=payload.source))
+    await loop.run_in_executor(None, lambda: evaluate_sensor_alerts(db.sync_session))
 
     return {"msg": "Leitura de sensores recebida", "state": sensor_state}
