@@ -1,3 +1,4 @@
+import cv2
 import time
 import numpy as np
 
@@ -97,14 +98,26 @@ spatial_accumulator = None
 zone_time_series_tracker = None
 
 global_frame_data = np.zeros((480, 640, 3), dtype=np.uint8)
+global_encoded_frame = None
 
 def get_global_frame():
     global global_frame_data
     return global_frame_data
 
+def get_encoded_frame():
+    global global_encoded_frame
+    return global_encoded_frame
+
 def set_global_frame(frame):
-    global global_frame_data
+    global global_frame_data, global_encoded_frame
     global_frame_data = frame
+    if frame is not None:
+        encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
+        ret, buf = cv2.imencode(".jpg", frame, encode_params)
+        if ret:
+            global_encoded_frame = buf.tobytes()
+    else:
+        global_encoded_frame = None
 
 
 _default_get_global_frame = get_global_frame

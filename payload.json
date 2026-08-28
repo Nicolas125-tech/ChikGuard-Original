@@ -1,0 +1,4 @@
+{
+  "title": "⚡ Bolt: [performance improvement]",
+  "description": "* 💡 What: Cached the MJPEG encoded frame in the global state.\n* 🎯 Why: Previously, `cv2.imencode` was called per connected client, per frame tick (O(N) operations), which drastically increased CPU overhead when multiple clients were connected. By moving the encoding step to `set_global_frame`, the frame is encoded exactly once (O(1)) and clients just serve the cached bytes.\n* 📊 Impact: Drops MJPEG stream encoding CPU usage from O(N) to O(1). Reduces memory allocations and CPU cycles on the streaming endpoints.\n* 🔬 Measurement: Observe CPU usage of the process dropping significantly when multiple clients are connected to `/api/video` or `/api/webrtc/video` endpoints compared to before."
+}
