@@ -117,7 +117,7 @@ function AppCore() {
             }
           }
         } catch {
-          console.error('Erro ao conectar ao Supabase:', e);
+          console.error('Erro ao conectar ao Supabase:');
         }
       }
       setTimeout(() => setBooting(false), 400);

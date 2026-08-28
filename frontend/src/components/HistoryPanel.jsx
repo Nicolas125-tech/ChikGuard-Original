@@ -28,7 +28,7 @@ export default function HistoryPanel({ serverIP, prefs, token, cameras = [], act
   }, [baseUrl, token]);
 
   useEffect(() => {
-    loadHistory();
+    setTimeout(() => { loadHistory() }, 0);
     const timer = setInterval(loadHistory, prefs.historyMs);
     return () => clearInterval(timer);
   }, [loadHistory, prefs.historyMs]);
