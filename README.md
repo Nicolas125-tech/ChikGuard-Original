@@ -82,6 +82,13 @@ ChikGuard/
     └── migrations/       # Database migrations
 ```
 
+### 🗄️ Polyglot Persistence Architecture
+
+ChikGuard uses a polyglot persistence model to handle the massive throughput of the Computer Vision pipeline while keeping transactional data synchronized with the cloud.
+
+*   **PostgreSQL (Transactional & Cloud Sync):** Handled via SQLAlchemy (`src/db/session.py`). Used for structured data like RBAC, sensor aggregates (`Reading`), events (`EventLog`), and periodic CV snapshots (`BirdSnapshot`). This ensures critical data is lightweight and safely synced to Supabase.
+*   **MongoDB (High-Throughput CV Metadata):** Handled via an async Motor singleton (`src/db/nosql_session.py`). The CV pipeline (`cv_runner.py`) generates huge amounts of spatial data at 30 FPS. This data (bounding boxes, trajectories, and heatmap coordinates) is buffered in memory by a `MongoDBBatchWriter` and flushed asynchronously into MongoDB collections (`cv_detections`, `cv_track_points`, `cv_heatmap_coords`). Analytics APIs then use Aggregation Pipelines to serve rich data (e.g., 3D Heatmaps and Zone Analytics) without blocking the edge inference.
+
 ---
 
 ## 🚀 Quick Start
@@ -125,6 +132,18 @@ python -m venv venv
 pip install -r requirements.txt
 PYTHONPATH=. python app.py
 ```
+
+> **💡 Hybrid Mode (USB Camera Development on Windows):** 
+> Docker on Windows/Mac cannot easily access physical USB cameras. If you want to develop using your local webcam (`SIM_VIDEO_PATH=0`), you should run the infrastructure (MongoDB/PostgreSQL) via Docker, and the Backend natively via Python:
+> ```bash
+> # 1. Start Infrastructure
+> docker-compose up -d mongo
+> 
+> # 2. Run Backend natively (so it can access the USB webcam)
+> cd backend
+> .venv\Scripts\activate
+> python main.py
+> ```
 
 **Frontend:**
 ```bash
