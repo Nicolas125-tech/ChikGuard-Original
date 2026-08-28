@@ -258,7 +258,49 @@ class SOTAPipelineRunner:
             history=100, varThreshold=25, detectShadows=False
         )
 
-        cap = None
+        import queue
+        import concurrent.futures
+        frame_queue = queue.Queue(maxsize=3)
+        db_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+
+        def _camera_producer():
+            cap = None
+            while self.running:
+                if cap is None or not cap.isOpened():
+                    if cap is not None:
+                        cap.release()
+                    self.logger.info(f"Abrindo fonte de captura: {self.video_src}")
+                    cap = cv2.VideoCapture(self.video_src)
+                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                    if not cap.isOpened():
+                        time.sleep(5.0)
+                        continue
+                
+                ret, frame = cap.read()
+                if not ret or frame is None:
+                    if isinstance(self.video_src, str) and self.video_src.endswith(".mp4"):
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    else:
+                        time.sleep(3.0)
+                        cap.release()
+                        cap = None
+                    continue
+                
+                # Desacopla I/O: mantém apenas os frames mais recentes na fila
+                if frame_queue.full():
+                    try:
+                        frame_queue.get_nowait()
+                    except queue.Empty:
+                        pass
+                frame_queue.put(frame)
+            
+            if cap is not None:
+                cap.release()
+
+        # Inicia a thread produtora de frames em paralelo
+        producer_thread = threading.Thread(target=_camera_producer, daemon=True, name="sota-io-producer")
+        producer_thread.start()
+
         last_db_save = 0.0
         last_batch_sync = 0.0
         last_snapshot_save = 0.0
@@ -266,33 +308,15 @@ class SOTAPipelineRunner:
         # Redirect state frame source
         state.get_global_frame = self.get_annotated_frame
 
-        self.logger.info("Fase de warm-up finalizada. Iniciando loop de aquisição.")
+        self.logger.info("Fase de warm-up finalizada. Iniciando loop de IA consumidor.")
 
         while self.running:
-            if cap is None or not cap.isOpened():
-                if cap is not None:
-                    cap.release()
-                self.logger.info(f"Abrindo fonte de captura: {self.video_src}")
-                cap = cv2.VideoCapture(self.video_src)
-                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1) # LIFO buffer logic
-                if not cap.isOpened():
-                    self.logger.error("Falha ao abrir stream de captura. Re-tentando em 5 segundos.")
-                    time.sleep(5.0)
-                    continue
+            try:
+                frame = frame_queue.get(timeout=2.0)
+            except queue.Empty:
+                continue
 
             start_time = time.perf_counter()
-            ret, frame = cap.read()
-            if not ret or frame is None:
-                # Se for vídeo de simulação, realiza o loop contínuo
-                if isinstance(self.video_src, str) and self.video_src.endswith(".mp4"):
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                    continue
-                else:
-                    self.logger.warning("Fim do vídeo ou sinal da câmera perdido. Re-abrindo em 3s.")
-                    time.sleep(3.0)
-                    cap.release()
-                    cap = None
-                    continue
 
             self.perf_metrics.tick_capture()
 
@@ -643,70 +667,65 @@ class SOTAPipelineRunner:
             # ── PostgreSQL: snapshots periódicos a cada 10s (para Supabase sync) ──
             if now - last_snapshot_save > 10.0:
                 last_snapshot_save = now
-                try:
-                    db = SessionLocal()
-                    for det in enriched_detections:
-                        tid = det["track_id"]
-                        box = det["box"]
-                        conf = det["conf"]
+                def _save_snapshots(dets):
+                    try:
+                        db = SessionLocal()
+                        for det in dets:
+                            snapshot = BirdSnapshot(
+                                bird_uid=det["track_id"],
+                                confidence=det["conf"],
+                                x1=det["box"][0],
+                                y1=det["box"][1],
+                                x2=det["box"][2],
+                                y2=det["box"][3],
+                                temperatura_estimada=25.0,
+                                metodo_temperatura="estimada_rgb_proxy",
+                                timestamp=datetime.utcnow()
+                            )
+                            db.add(snapshot)
+                            db.flush()
 
-                        snapshot = BirdSnapshot(
-                            bird_uid=tid,
-                            confidence=conf,
-                            x1=box[0],
-                            y1=box[1],
-                            x2=box[2],
-                            y2=box[3],
-                            temperatura_estimada=25.0,
-                            metodo_temperatura="estimada_rgb_proxy",
-                            timestamp=datetime.utcnow()
-                        )
-                        db.add(snapshot)
-                        db.flush()
-
-                        db.add(SyncQueueItem(
-                            item_type="bird_snapshot",
-                            payload_json=json.dumps(snapshot.to_dict()),
-                            status="pending"
-                        ))
-
-
-                    db.commit()
-                    db.close()
-                except Exception as db_err:
-                    self.logger.error(f"Erro ao salvar snapshots de aves no DB: {db_err}")
+                            db.add(SyncQueueItem(
+                                item_type="bird_snapshot",
+                                payload_json=json.dumps(snapshot.to_dict()),
+                                status="pending"
+                            ))
+                        db.commit()
+                        db.close()
+                    except Exception as db_err:
+                        self.logger.error(f"Erro ao salvar snapshots: {db_err}")
+                
+                db_executor.submit(_save_snapshots, enriched_detections)
 
             # 8. Salva leituras térmicas estimadas no DB a cada 30 segundos
             if now - last_db_save > 30.0:
                 last_db_save = now
-                try:
-                    db = SessionLocal()
-                    gray = cv2.cvtColor(clean_frame, cv2.COLOR_BGR2GRAY)
-                    temp_c = 20.0 + (float(np.mean(gray)) / 255.0) * 20.0
+                def _save_reading(frame_mean):
+                    try:
+                        db = SessionLocal()
+                        temp_c = 20.0 + (frame_mean / 255.0) * 20.0
+                        status = "FRIO" if temp_c < 24.0 else ("CALOR" if temp_c > 32.0 else "NORMAL")
+                        
+                        reading = Reading(
+                            temperatura=round(temp_c, 1),
+                            status=status,
+                            timestamp=datetime.utcnow()
+                        )
+                        db.add(reading)
+                        db.flush()
 
-                    status = "NORMAL"
-                    if temp_c < 24.0:
-                        status = "FRIO"
-                    elif temp_c > 32.0:
-                        status = "CALOR"
-
-                    reading = Reading(
-                        temperatura=round(temp_c, 1),
-                        status=status,
-                        timestamp=datetime.utcnow()
-                    )
-                    db.add(reading)
-                    db.flush()
-
-                    db.add(SyncQueueItem(
-                        item_type="reading",
-                        payload_json=json.dumps(reading.to_dict()),
-                        status="pending"
-                    ))
-                    db.commit()
-                    db.close()
-                except Exception as db_err:
-                    self.logger.error(f"Erro ao salvar leitura termica no DB: {db_err}")
+                        db.add(SyncQueueItem(
+                            item_type="reading",
+                            payload_json=json.dumps(reading.to_dict()),
+                            status="pending"
+                        ))
+                        db.commit()
+                        db.close()
+                    except Exception as db_err:
+                        self.logger.error(f"Erro ao salvar leitura termica: {db_err}")
+                
+                gray = cv2.cvtColor(clean_frame, cv2.COLOR_BGR2GRAY)
+                db_executor.submit(_save_reading, float(np.mean(gray)))
 
             # Limitação de processamento a 30 FPS para evitar sobrecarga
             elapsed = time.perf_counter() - start_time
@@ -714,9 +733,6 @@ class SOTAPipelineRunner:
             if sleep_t > 0.001:
                 time.sleep(sleep_t)
 
-        if cap is not None:
-            cap.release()
-        state.get_global_frame = state._default_get_global_frame
         self.logger.info("Thread do SOTA Pipeline Runner finalizada com sucesso.")
 
     def get_annotated_frame(self):
