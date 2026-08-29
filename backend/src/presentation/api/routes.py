@@ -101,12 +101,10 @@ def create_api_blueprint(deps):
         """
         from src.core.state import get_encoded_frame
         stream_interval = deps.get("stream_frame_interval_sec", 1.0 / 30)
-        quality = deps.get("stream_jpeg_quality", 80)
         # Note: the central caching now hardcodes 80 quality for performance,
         # but we maintain the route configuration signature.
 
         async def generate():
-            last_t = time.perf_counter()
             try:
                 while True:
                     t0 = time.perf_counter()
