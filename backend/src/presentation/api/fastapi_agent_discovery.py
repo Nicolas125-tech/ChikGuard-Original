@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Response, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 
 router = APIRouter()
@@ -156,8 +156,7 @@ async def mcp_server_card(request: Request):
     return JSONResponse(content=card)
 
 @router.get("/.well-known/agent-skills/index.json")
-async def agent_skills_index(request: Request):
-    base_url = str(request.base_url)
+async def agent_skills_index():
     index = {
         "$schema": "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
         "skills": [
