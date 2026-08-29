@@ -6,8 +6,6 @@ from typing import Any, Optional, Tuple
 
 import numpy as np
 
-from src.audio.audio_processor import compute_mel_spectrogram
-
 logger = logging.getLogger("chikguard.audio.classifier")
 
 
@@ -60,7 +58,7 @@ class RespiratoryDiseaseClassifier:
             Uma tupla contendo a classe predita e o índice de confiança (score).
         """
         # Extrai Espectrograma (Feature Extraction)
-        mel_features = compute_mel_spectrogram(audio_buffer, sr=sr)
+
 
         # Lógica de Inferência Base (Substituído pela lógica real do TFLite/ONNX)
         # No ambiente corporativo real de IA:
