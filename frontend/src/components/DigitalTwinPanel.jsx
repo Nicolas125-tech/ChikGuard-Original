@@ -144,7 +144,7 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
   return (
     <div className="space-y-6">
       {/* ── View Selectors ── */}
-      <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-900/60 border border-slate-800 rounded-2xl w-fit">
+      <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-900/60 border border-slate-800 rounded-2xl w-fit" role="group" aria-label="Camadas de Visualização">
         <button
           aria-pressed={activeLayer === 'sensors'}
           onClick={() => setActiveLayer('sensors')}

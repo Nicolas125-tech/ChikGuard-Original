@@ -44,3 +44,6 @@
 ## 2025-08-28 - Explicit Labels for Standalone Inputs and Proper ARIA Labels
 **Learning:** Found an accessibility issue where inputs like search or calculators lacked proper `htmlFor` ID linkages, and many action buttons lacked `aria-label`s. Also discovered a loading state issue where all actions in a table row showed a spinner when only one was clicked.
 **Action:** Always add unique `id` elements to inputs and reference them with `htmlFor` in `sr-only` labels if visually hidden. Ensure all icon buttons or state-toggling buttons have descriptive `aria-label`s. Ensure loading state (`isAnyActioning`) is scoped specifically to the user ID and action via string splitting or exact matching.
+## 2024-05-19 - Segmented Controls in React
+**Learning:** Found a group of toggle buttons functioning as segmented controls wrapped in a standard div without an explicit grouping role. While `aria-pressed` was correctly handling the state, screen readers could not determine the buttons were part of a related set.
+**Action:** Always wrap segmented toggle buttons in a container with `role="group"` and provide a descriptive `aria-label` to provide context to assistive technologies.
