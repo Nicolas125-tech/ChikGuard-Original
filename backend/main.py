@@ -190,15 +190,11 @@ async def get_summary(user: UserContext = Depends(get_current_user)):
     import time
 
     temp = sensor_state.get("temperature_c", 25.0)
-    chicks = species_counts.get("chicks", 0)
-    hens = species_counts.get("hens", 0)
     total = species_counts.get("total", 0)
 
     # Se ainda não houver detecções reais ativas, fornece um fallback visual para o painel inicializar
     if total == 0:
         total = 8
-        chicks = 3
-        hens = 5
 
     return {
         "temperatura_atual": temp,
