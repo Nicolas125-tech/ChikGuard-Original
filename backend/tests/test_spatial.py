@@ -72,3 +72,21 @@ def test_sklearn_not_available():
         result = detect_huddling([])
         assert "error" in result
         assert "scikit-learn is not installed" in result["error"]
+
+def test_sklearn_import_error():
+    import builtins
+    import importlib
+    import src.ai.spatial
+
+    real_import = builtins.__import__
+    def mock_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == 'sklearn.cluster' or (name == 'sklearn' and fromlist and 'cluster' in fromlist):
+            raise ImportError("Mocked ImportError")
+        return real_import(name, globals, locals, fromlist, level)
+
+    with mock.patch('builtins.__import__', side_effect=mock_import):
+        importlib.reload(src.ai.spatial)
+        assert src.ai.spatial._SKLEARN_AVAILABLE is False
+
+    # Restore the module to original state for other tests
+    importlib.reload(src.ai.spatial)
