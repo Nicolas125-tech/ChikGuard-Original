@@ -9,13 +9,10 @@ from src.security.auth import require_auth
 def create_birds_blueprint(deps):
     bp = Blueprint("birds_api", __name__)
 
-    _utcnow = deps.get("utcnow")
-    timedelta = deps.get("timedelta")
     lock = deps.get("lock")
     live_birds = deps.get("live_birds", {})
     species_counts = deps.get("species_counts", {})
     BIRD_LIVE_TTL_SEC = deps.get("BIRD_LIVE_TTL_SEC", 5.0)
-    ACTIVE_CAMERA_ID = deps.get("active_camera_id")
 
     @bp.route("/api/birds/live", methods=["GET"])
     @require_auth()
