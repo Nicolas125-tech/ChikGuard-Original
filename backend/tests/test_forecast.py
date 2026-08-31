@@ -101,3 +101,28 @@ def test_predict_slaughter_date_target_weight_at_start():
     assert result["target_date"] is not None
     assert result["target_day"] == 31
     assert result["target_weight"] == 2800.0
+
+def test_predict_slaughter_date_out_of_order():
+    start_date = datetime(2023, 1, 1)
+    weight_data = [
+        {"day": 20, "avg_weight": 1200.0},
+        {"day": 10, "avg_weight": 500.0},
+        {"day": 30, "avg_weight": 2100.0},
+        {"day": 1, "avg_weight": 50.0}
+    ]
+    result = predict_slaughter_date(weight_data, start_date, target_weight=2800.0)
+    assert result is not None
+    assert result["target_date"] is not None
+    assert result["target_day"] > 30
+
+def test_predict_slaughter_date_exact_target():
+    start_date = datetime(2023, 1, 1)
+    weight_data = [
+        {"day": 1, "avg_weight": 50.0},
+        {"day": 10, "avg_weight": 1000.0},
+        {"day": 20, "avg_weight": 2000.0}
+    ]
+    # Predict growth where the next day hits exactly target_weight
+    result = predict_slaughter_date(weight_data, start_date, target_weight=2800.0)
+    assert result is not None
+    assert result["target_day"] > 20
