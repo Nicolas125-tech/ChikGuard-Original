@@ -305,8 +305,6 @@ def test_check_anomaly_blueprint_route(app):
     mock_order.limit.return_value = mock_limit
     mock_limit.all.return_value = []
 
-    mock_log_event = mock.MagicMock()
-
     deps = {
         "active_camera_id": "cam-1",
         "SensorReading": mock_sensor_reading,
