@@ -6,7 +6,7 @@
 
 ![ChikGuard Banner](docs/screenshots/banner.png)
 
-**AI-powered poultry monitoring system with real-time computer vision, IoT sensor integration, and edge intelligence.**
+**Poultry monitoring system with computer vision, IoT sensors, and edge computing.**
 
 [![CI](https://github.com/Nicolas125-tech/ChikGuard-Original/actions/workflows/ci.yml/badge.svg)](https://github.com/Nicolas125-tech/ChikGuard-Original/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
@@ -19,11 +19,9 @@
 
 </div>
 
----
+## What is ChikGuard?
 
-## 🧠 What is ChikGuard?
-
-ChikGuard is a full-stack intelligent monitoring platform for commercial poultry farms. It combines **YOLOv8-based computer vision**, **real-time WebRTC video streaming**, **IoT sensor fusion** (temperature, humidity, ammonia), and **autonomous FSM-driven actuator control** to reduce flock mortality and improve biosecurity compliance.
+ChikGuard is a monitoring platform for commercial poultry farms. It uses YOLOv8 for computer vision, WebRTC for video, sensors for temperature, humidity, and ammonia, and an FSM to control actuators.
 
 | Layer | Stack |
 |---|---|
@@ -34,24 +32,20 @@ ChikGuard is a full-stack intelligent monitoring platform for commercial poultry
 | **Database** | Supabase (PostgreSQL) + MongoDB (NoSQL) + local SQLite fallback |
 | **Infra** | Docker Compose, Cloudflare Tunnel, mTLS |
 
----
+## Features
 
-## ✨ Features
+- Live video streaming via WebRTC with per-camera AI inference
+- Bird counting and behavior analysis
+- Sensor data collection (temperature, humidity, ammonia, audio)
+- Autonomous FSM for actuator control (ventilation, heating)
+- ESG compliance reports (PDF generation with ReportLab)
+- RBAC and JWT auth with Supabase Auth and OAuth providers
+- Mobile app for remote monitoring
+- Plugin system for custom AI modules
+- Lameness detection (pose estimation) using YOLOv8-Pose and MQTT
+- Local execution with Cloudflare Tunnel for remote access
 
-- 🎥 **Live video streaming** via WebRTC with per-camera AI inference
-- 🐔 **Bird counting & behavior analysis** in real time
-- 🌡️ **Sensor fusion** — temperature, humidity, ammonia, acoustic anomaly detection
-- 🤖 **Autonomous FSM** — actuator control (ventilation, heating) without human input
-- 📊 **ESG compliance reports** (PDF generation with ReportLab)
-- 🔐 **RBAC + JWT auth** with Supabase Auth and OAuth providers
-- 📱 **Mobile app** for remote farm monitoring
-- 🧩 **Plugin system** — extend with custom AI modules (fire detection, disease detection, etc.)
-- 🦆 **Lameness Detection (Pose Estimation)** — advanced geometric and stride analysis for early lameness alerts using YOLOv8-Pose and MQTT.
-- 🌐 **Edge-ready** — runs locally with Cloudflare Tunnel for secure remote access
-
----
-
-## 🏗️ Architecture
+## Architecture
 
 ```
 ChikGuard/
@@ -83,25 +77,23 @@ ChikGuard/
     └── migrations/       # Database migrations
 ```
 
-### 🗄️ Polyglot Persistence Architecture
+### Polyglot Persistence Architecture
 
-ChikGuard uses a polyglot persistence model to handle the massive throughput of the Computer Vision pipeline while keeping transactional data synchronized with the cloud.
+ChikGuard uses multiple databases to handle the computer vision pipeline and sync transactional data with the cloud.
 
-*   **PostgreSQL (Transactional & Cloud Sync):** Handled via SQLAlchemy (`src/db/session.py`). Used for structured data like RBAC, sensor aggregates (`Reading`), events (`EventLog`), and periodic CV snapshots (`BirdSnapshot`). This ensures critical data is lightweight and safely synced to Supabase.
-*   **MongoDB (High-Throughput CV Metadata):** Handled via an async Motor singleton (`src/db/nosql_session.py`). The CV pipeline (`cv_runner.py`) generates huge amounts of spatial data at 30 FPS. This data (bounding boxes, trajectories, and heatmap coordinates) is buffered in memory by a `MongoDBBatchWriter` and flushed asynchronously into MongoDB collections (`cv_detections`, `cv_track_points`, `cv_heatmap_coords`). Analytics APIs then use Aggregation Pipelines to serve rich data (e.g., 3D Heatmaps and Zone Analytics) without blocking the edge inference.
+*   **PostgreSQL:** Handled via SQLAlchemy (`src/db/session.py`). Used for RBAC, sensor aggregates (`Reading`), events (`EventLog`), and periodic CV snapshots (`BirdSnapshot`).
+*   **MongoDB:** Handled via an async Motor singleton (`src/db/nosql_session.py`). The CV pipeline (`cv_runner.py`) buffers bounding boxes, trajectories, and heatmap coordinates in memory using `MongoDBBatchWriter` and writes them asynchronously to MongoDB (`cv_detections`, `cv_track_points`, `cv_heatmap_coords`).
 
----
-
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
 - Python 3.12+
 - Node.js 18+ & npm
-- Docker & Docker Compose *(recommended)*
+- Docker & Docker Compose
 - A [Supabase](https://supabase.com) project
 
-### 1. Clone & configure
+### 1. Clone and configure
 
 ```bash
 git clone https://github.com/Nicolas125-tech/ChikGuard-Original.git
@@ -112,9 +104,9 @@ cp .env.example .env
 
 ### 2. Download AI Models
 
-See [`backend/models/README.md`](backend/models/README.md) for instructions to download the required YOLOv8 model weights.
+See [`backend/models/README.md`](backend/models/README.md) for instructions to download the YOLOv8 model weights.
 
-### 3. Run with Docker (recommended)
+### 3. Run with Docker
 
 ```bash
 docker-compose up --build
@@ -134,13 +126,13 @@ pip install -r requirements.txt
 PYTHONPATH=. python app.py
 ```
 
-> **💡 Hybrid Mode (USB Camera Development on Windows):** 
-> Docker on Windows/Mac cannot easily access physical USB cameras. If you want to develop using your local webcam (`SIM_VIDEO_PATH=0`), you should run the infrastructure (MongoDB/PostgreSQL) via Docker, and the Backend natively via Python:
+> **Hybrid Mode (USB Camera Development on Windows):** 
+> Docker on Windows and Mac cannot easily access physical USB cameras. To use a local webcam (`SIM_VIDEO_PATH=0`), run the databases via Docker and the backend natively via Python:
 > ```bash
 > # 1. Start Infrastructure
 > docker-compose up -d mongo
 > 
-> # 2. Run Backend natively (so it can access the USB webcam)
+> # 2. Run Backend natively
 > cd backend
 > .venv\Scripts\activate
 > python main.py
@@ -160,26 +152,21 @@ npm install
 npm start
 ```
 
-### 5. Running the Edge Lameness Detection Pipeline (Enterprise Edition)
-To run the specialized Edge inference pipeline with the advanced **Hock Angle Gait Analysis** and MQTT integration:
+### 5. Running the Edge Lameness Detection Pipeline
 
-**How it works (Business Rules):**
-The pipeline calculates the exact Tibiotarsal (Hock) Angle dynamically. An event is triggered and sent to MQTT if:
-- **Average Angle < 60°** (indicates the bird is crouched or refusing to stand).
-- **Angle Variance < 5.0** (indicates a locked or stiff leg over the temporal window).
+The pipeline calculates the tibiotarsal angle. It triggers an MQTT event if:
+- Average angle < 60°
+- Angle variance < 5.0
 
 ```bash
 cd backend
-# Make sure you have a local MQTT broker installed and running (e.g., Mosquitto)
 # Install paho-mqtt if not present: pip install paho-mqtt
 python scripts/run_lameness_edge.py
 ```
 
----
+## Plugin System
 
-## 🔌 Plugin System
-
-ChikGuard supports pluggable AI modules. Each plugin lives in `backend/plugins/<name>/plugin.py`:
+ChikGuard supports custom plugins. Each plugin lives in `backend/plugins/<name>/plugin.py`:
 
 ```python
 from src.plugins.base import PluginBase, PluginInfo
@@ -191,18 +178,18 @@ def register():
     return FireDetectionPlugin()
 ```
 
-### 🛂 Biosafety Audit Plugin (Heimdall)
-The **Biosafety Audit Plugin** monitors compliance of mandatory Personal Protective Equipment (EPIs) and audits vehicle presence in critical perimeter cameras (`ENTRANCE` and `SANITARY_BARRIER` zones).
+### Biosafety Audit Plugin (Heimdall)
+This plugin monitors compliance for Personal Protective Equipment (PPE) and vehicle presence in the `ENTRANCE` and `SANITARY_BARRIER` zones.
 
 * **How it works:**
-  - Runs pure inference using a custom YOLOv8 model (`yolov8n-epi.engine`) without overhead on bird-tracking pipelines.
-  - Automatically targets only restricted entry zones (`ENTRANCE` or `SANITARY_BARRIER`).
-  - Matches detected people with required EPI categories (e.g. `helmet`, `vest`, `boots`) through bounding box containment/overlap analysis.
-  - Generates JSON event logs with `CRITICAL` severity to the database if any requirement is violated.
+  - Runs inference using a custom YOLOv8 model (`yolov8n-epi.engine`).
+  - Targets restricted entry zones.
+  - Matches detected people with required PPE categories like helmets, vests, and boots.
+  - Logs `CRITICAL` severity events to the database if a requirement is violated.
 
-* **Configuration (via context settings):**
-  - `BIOSAFETY_MODEL_PATH`: Path to the custom trained YOLOv8 weight file.
-  - `BIOSAFETY_REQUIRED_EPIS`: List of mandatory items to monitor (e.g. `["helmet", "vest", "boots"]`).
+* **Configuration:**
+  - `BIOSAFETY_MODEL_PATH`: Path to the YOLOv8 weight file.
+  - `BIOSAFETY_REQUIRED_EPIS`: List of mandatory items to monitor (e.g., `["helmet", "vest", "boots"]`).
 
 * **Running tests:**
   ```bash
@@ -210,29 +197,25 @@ The **Biosafety Audit Plugin** monitors compliance of mandatory Personal Protect
   .venv\Scripts\pytest tests/plugins/
   ```
 
----
-
-## 📡 Key API Endpoints
+## Key API Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/summary` | Real-time system summary (CV + Sensors) |
+| `GET` | `/api/summary` | System summary (CV and sensors) |
 | `GET` | `/api/sensors/live` | Live sensor readings |
 | `POST` | `/api/auto-mode` | Update FSM automation rules |
-| `POST` | `/api/ventilacao` | Turn ventilation on/off (Manual Control) |
-| `POST` | `/api/aquecedor` | Turn heater on/off (Manual Control) |
+| `POST` | `/api/ventilacao` | Turn ventilation on/off |
+| `POST` | `/api/aquecedor` | Turn heater on/off |
 | `GET` | `/api/estado-dispositivos` | Get current state of devices |
-| `GET` | `/api/history` | Historical sensor data for charts |
+| `GET` | `/api/history` | Historical sensor data |
 | `POST` | `/api/webrtc/offer` | WebRTC video stream handshake |
 | `POST` | `/api/reports/esg` | Generate ESG compliance PDF |
-| `GET` | `/api/accounts/me` | Authenticated user details (RBAC) |
+| `GET` | `/api/accounts/me` | Authenticated user details |
 
----
-
-## 📸 Screenshots
+## Screenshots
 
 <details>
-<summary><b>🖥️ Web Dashboard</b> (click to expand)</summary>
+<summary><b>Web Dashboard</b></summary>
 
 | Landing | Login | Admin Dashboard |
 |---|---|---|
@@ -249,7 +232,7 @@ The **Biosafety Audit Plugin** monitors compliance of mandatory Personal Protect
 </details>
 
 <details>
-<summary><b>📱 Mobile App</b> (click to expand)</summary>
+<summary><b>Mobile App</b></summary>
 
 | Login | Monitor | Birds |
 |---|---|---|
@@ -265,25 +248,19 @@ The **Biosafety Audit Plugin** monitors compliance of mandatory Personal Protect
 
 </details>
 
----
-
-## 📄 Documentation
+## Documentation
 
 | Document | Description |
 |---|---|
 | [Edge Security Architecture](docs/EDGE_SECURITY_ARCHITECTURE.md) | mTLS, Cloudflare Tunnel, edge hardening |
-| [IAM & Supabase Proposal](docs/IAM_SUPABASE_PROPOSAL.md) | Identity & access management design |
+| [IAM and Supabase Proposal](docs/IAM_SUPABASE_PROPOSAL.md) | Identity and access management design |
 | [Linux Setup (CV)](docs/LINUX_SETUP_CV.md) | Setting up computer vision on Linux |
 | [Windows Setup (CV)](docs/WINDOWS_SETUP_CV.md) | Setting up computer vision on Windows |
 
----
+## Contributing
 
-## 🤝 Contributing
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a pull request.
 
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a pull request.
+## License
 
----
-
-## 📝 License
-
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.

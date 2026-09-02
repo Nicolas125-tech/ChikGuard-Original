@@ -1,6 +1,6 @@
 # Configuração do Ambiente ChikGuard Vision v3 - Windows
 
-Este guia detalha como configurar o pipeline de visão de alta performance em máquinas Windows 10/11, utilizando aceleração por GPU (NVIDIA) ou CPU (Intel).
+Este guia detalha como configurar o pipeline de visão em máquinas Windows 10/11, utilizando aceleração por GPU (NVIDIA) ou CPU (Intel).
 
 ## 1. Pré-requisitos de Sistema
 
@@ -42,9 +42,9 @@ pip install ultralytics sahi onnxruntime
 
 ## 5. Exportação e Otimização (Edge)
 
-Para obter o máximo de FPS no Windows, utilize o formato **ONNX** ou **OpenVINO**:
+Para obter mais FPS no Windows, utilize o formato **ONNX** ou **OpenVINO**:
 
-### A. Para Intel (OpenVINO - Excelente em CPUs modernas)
+### A. Para Intel (OpenVINO)
 ```powershell
 python -c "from ultralytics import YOLO; model = YOLO('yolov8n-seg.pt'); model.export(format='openvino', half=True)"
 ```
@@ -65,4 +65,4 @@ python -c "from ultralytics import YOLO; model = YOLO('yolov8n-seg.pt'); model.e
   Se houver erro de instalação, habilite caminhos longos no Windows Registry ou via `git config --system core.longpaths true`.
 
 > [!TIP]
-> No Windows, o backend OpenCV pode ser melhor performado usando `cv2.CAP_DSHOW` ou `cv2.CAP_MSMF`. O código na `VisionEngine` já está preparado para essas nuances.
+> No Windows, o backend OpenCV pode ser mais rápido usando `cv2.CAP_DSHOW` ou `cv2.CAP_MSMF`. O código na `VisionEngine` já está preparado para essas nuances.

@@ -1,6 +1,6 @@
 # Configuração do Ambiente Industrial (ChikGuard Vision v3)
 
-Este guia detalha o processo de configuração de um Mini PC Linux para rodar o pipeline de visão de alta performance com SAHI, YOLO e ByteTrack.
+Este guia detalha o processo de configuração de um Mini PC Linux para rodar o pipeline de visão com SAHI, YOLO e ByteTrack.
 
 ## 1. Dependências do Sistema (Ubuntu/Debian)
 
@@ -36,7 +36,7 @@ pip install ultralytics sahi onnxruntime-gpu  # onnxruntime-gpu para aceleraçã
 
 ## 4. Otimização para Edge (Hardware Local)
 
-Para atingir FPS de nível industrial em Mini PCs, você deve exportar os pesos `.pt` para formatos otimizados:
+Para aumentar o FPS em Mini PCs, você deve exportar os pesos `.pt` para formatos otimizados:
 
 ### A. Para NVIDIA (TensorRT)
 ```bash
@@ -54,7 +54,7 @@ python -c "from ultralytics import YOLO; model = YOLO('yolov8n-seg.pt'); model.e
 A classe `VisionEngine` configurada em `src/core/vision_engine.py` irá automaticamente detectar os arquivos `.engine` ou `.xml` se os caminhos forem atualizados no `.env`.
 
 > [!TIP]
-> **Use SAHI com moderação em Edge**: Em dispositivos muito limitados, prefira o `use_sahi=False` no construtor da `VisionEngine` e aumente o parâmetro `imgsz` para 1280 para manter o detalhe dos pintinhos sem o overhead do fatiamento massivo.
+> **Use SAHI com moderação em Edge**: Em dispositivos limitados, prefira o `use_sahi=False` no construtor da `VisionEngine` e aumente o parâmetro `imgsz` para 1280 para manter o detalhe dos pintinhos sem o overhead do fatiamento.
 
 > [!IMPORTANT]
 > **Permissões de Câmera**: Certifique-se de que o usuário tem grupos `video` e `render`:

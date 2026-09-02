@@ -6,7 +6,7 @@
 **Status:** COMPLETED · **Executado em:** 2026-08-14T11:09:08.877Z · **Concluído em:** 2026-08-14T11:12:01.759Z
 **Relatório gerado em:** 2026-08-14T11:13:56.679Z por GitGuard
 
-## Instruções para a IA que for corrigir isto
+## Instruções de correção
 
 - Repositório alvo: Nicolas125-tech/ChikGuard-Original, branch "main", commit 3c5d2e7a6eb7c10df9afc112daf5873f480ed39a. Aplique as correções diretamente nesse checkout.
 - Em "dependencyUpgrades", cada entrada agrupa TODOS os CVEs de um mesmo pacote — faça UM upgrade por pacote (para "recommendedVersion" ou mais recente), não uma correção por CVE.

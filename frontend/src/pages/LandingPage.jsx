@@ -68,7 +68,7 @@ export default function LandingPage({ onLoginClick }) {
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
           </span>
-          Sistema Operacional v3.0 — Enterprise
+          Sistema Operacional v3.0, Enterprise
         </div>
 
         {/* Headline */}
@@ -80,7 +80,7 @@ export default function LandingPage({ onLoginClick }) {
         </h1>
 
         <p className="text-base sm:text-lg md:text-xl text-slate-400 max-w-3xl mb-12 leading-relaxed animate-fade-in-up stagger-2">
-          Monitoramento comportamental 24/7, controle de ambiência integrado e predição de anomalias na granja. Centralize sua operação com visão computacional de ponta.
+          Monitoramento comportamental contínuo, controle de ambiência integrado e predição de anomalias. Centralize a operação com visão computacional.
         </p>
 
         {/* CTA */}
@@ -115,17 +115,17 @@ export default function LandingPage({ onLoginClick }) {
             {
               icon: BrainCircuit, color: 'blue',
               title: 'Visão Computacional',
-              desc: 'Detecção YOLO SOTA + ByteTrack. Identificação de anomalias e análise comportamental do lote em tempo real.',
+              desc: 'Detecção com YOLO e ByteTrack. Identificação de anomalias e análise comportamental do lote.',
             },
             {
               icon: Activity, color: 'emerald',
               title: 'Controle de Ambiência',
-              desc: 'Telemetria IoT unificada e controle autônomo de ventilação, nebulização e aquecimento baseados em IA.',
+              desc: 'Telemetria IoT e controle de ventilação, nebulização e aquecimento.',
             },
             {
               icon: ShieldCheck, color: 'purple',
               title: 'Auditoria e Segurança',
-              desc: 'RBAC enterprise, audit trail completo, alertas push multicanal e controle de acesso Zero-Trust.',
+              desc: 'Controle de acesso baseado em roles, registro de auditoria, alertas push e Zero Trust.',
             },
           ].map((card, i) => {
             const colors = {
@@ -153,7 +153,7 @@ export default function LandingPage({ onLoginClick }) {
 
       {/* Footer */}
       <footer className="relative z-10 border-t border-slate-800/40 py-6 text-center text-xs text-slate-600">
-        © {new Date().getFullYear()} ChickGuard AI — Todos os direitos reservados
+        © {new Date().getFullYear()} ChickGuard AI, Todos os direitos reservados.
       </footer>
     </div>
   );

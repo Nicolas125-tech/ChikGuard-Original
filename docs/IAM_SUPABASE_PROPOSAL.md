@@ -1,8 +1,8 @@
 # Proposta de Arquitetura IAM (Identity and Access Management) - ChikGuard
 
-Este documento detalha o design e a implementação do módulo de IAM para o ChikGuard utilizando Supabase, focado num modelo de *Onboarding com Aprovação Manual* (Closed Beta).
+Este documento detalha o design e a implementação do módulo de IAM para o ChikGuard utilizando Supabase, com o modelo de *Onboarding com Aprovação Manual* (Closed Beta).
 
-A segurança principal é garantida na base de dados (PostgreSQL) através de Row Level Security (RLS) e Remote Procedure Calls (RPCs), garantindo que clientes (Frontend/Mobile) não podem escalar privilégios.
+A base de dados (PostgreSQL) usa Row Level Security (RLS) e Remote Procedure Calls (RPCs) para que clientes (Frontend/Mobile) não possam escalar privilégios.
 
 ## 1. Modelagem da Base de Dados (Schema `public` vs `auth`)
 
@@ -211,7 +211,7 @@ export function useRequireAuth() {
 
 ### Backend (Python) - Exemplo de Consumo da RPC
 
-No backend, podemos ter rotas que o painel de admin chama, e o backend interage com o Supabase usando o cliente oficial de Python usando as credenciais do Admin (Service Role ou token do utilizador).
+O backend interage com o Supabase usando o cliente oficial de Python com as credenciais do Admin (Service Role ou token do utilizador).
 
 ```python
 # Exemplo no backend (src/api/admin_api.py ou similar)
@@ -258,9 +258,9 @@ def approve_user_endpoint():
 
 ### Opcional: Custom JWT Claims (Postgres Hooks)
 
-Em vez de fazer `SELECT * FROM profiles` a cada request ou em cada RLS policy, o Supabase suporta injetar dados no próprio token JWT através de **Custom Access Token Hooks** (atualmente em Beta).
+Em vez de fazer `SELECT * FROM profiles` a cada request ou em cada RLS policy, o Supabase suporta injetar dados no token JWT através de **Custom Access Token Hooks** (atualmente em Beta).
 
-**Vantagem**: RLS mais rápido e menos pedidos na base de dados pelo frontend.
+RLS mais rápido e menos pedidos na base de dados pelo frontend.
 
 1. **Ativar o Hook:** No painel do Supabase, em `Authentication > Hooks`, configuramos uma função PL/pgSQL que corre *antes* do token ser emitido.
 2. **Exemplo do Hook:**
@@ -302,7 +302,7 @@ Em vez de `(SELECT status FROM profiles WHERE id = auth.uid()) = 'ACTIVE'`, pode
 
 ### Exemplo de Painel de Controlo do SuperAdmin (React)
 
-Este é um exemplo básico de um componente React (Painel Admin) que lista os utilizadores pendentes e permite aprová-los definindo uma `role`. O componente interage diretamente com as RPCs configuradas na base de dados.
+Este é um exemplo básico de um componente React (Painel Admin) que lista os utilizadores pendentes e permite aprová-los definindo uma `role`. O componente interage com as RPCs configuradas na base de dados.
 
 ```tsx
 import { useEffect, useState } from 'react';
@@ -490,7 +490,7 @@ def webhook_notify_new_user():
     return jsonify({"message": "Evento ignorado ou formato inválido"}), 400
 ```
 
-Desta forma, assim que o `handle_new_user()` cria o perfil `PENDING` no banco de dados, o trigger do Webhook do Supabase dispara instantaneamente, alertando o(s) administrador(es).
+Desta forma, assim que o `handle_new_user()` cria o perfil `PENDING` no banco de dados, o trigger do Webhook do Supabase dispara, alertando o(s) administrador(es).
 
 ### Exemplo de Painel de Controlo do SuperAdmin (Mobile / React Native / Expo)
 
