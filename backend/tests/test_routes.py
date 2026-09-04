@@ -34,8 +34,8 @@ def dummy_require_auth(*args, **kwargs):
     return decorator
 src.security.auth.require_auth = dummy_require_auth
 import sys
-if 'src.api.routes' in sys.modules:
-    sys.modules.pop('src.api.routes')
+if 'src.presentation.api.fastapi_webrtc' in sys.modules:
+    sys.modules.pop('src.presentation.api.fastapi_webrtc')
 
 from src.presentation.api.routes import create_api_blueprint
 
@@ -83,7 +83,7 @@ def test_webrtc_offer_route_missing_params(client):
     response = client.post("/api/webrtc/offer", json={"type": "offer"})
     assert response.status_code == 400
 
-@patch('src.api.routes.asyncio.run_coroutine_threadsafe')
+@patch('src.presentation.api.fastapi_webrtc.asyncio.run_coroutine_threadsafe')
 def test_webrtc_offer_route_success(mock_run_coroutine_threadsafe, client):
     """Test the /api/webrtc/offer route with successful connection."""
     # Mock the future returned by run_coroutine_threadsafe
@@ -110,7 +110,7 @@ def test_webrtc_offer_route_success(mock_run_coroutine_threadsafe, client):
     for coro in submitted_coros:
         coro.close()
 
-@patch('src.api.routes.asyncio.run_coroutine_threadsafe')
+@patch('src.presentation.api.fastapi_webrtc.asyncio.run_coroutine_threadsafe')
 def test_webrtc_offer_route_exception(mock_run_coroutine_threadsafe, client):
     """Test the /api/webrtc/offer route with internal exception."""
     # Mock the future to raise an exception

@@ -13,7 +13,7 @@ def test_video_feed_without_token():
     assert response.status_code == 401
     assert "Token JWT requerido" in response.json()["detail"]
 
-@patch("src.api.fastapi_webrtc.get_current_user")
+@patch("src.presentation.api.fastapi_webrtc.get_current_user")
 def test_video_feed_with_invalid_token(mock_get_current_user):
     from fastapi import HTTPException
     mock_get_current_user.side_effect = HTTPException(status_code=401, detail="Invalid token payload")
@@ -22,8 +22,8 @@ def test_video_feed_with_invalid_token(mock_get_current_user):
     assert response.status_code == 401
     assert "Invalid token payload" in response.json()["detail"]
 
-@patch("src.api.fastapi_webrtc.get_current_user")
-@patch("src.api.fastapi_webrtc.get_encoded_frame")
+@patch("src.presentation.api.fastapi_webrtc.get_current_user")
+@patch("src.presentation.api.fastapi_webrtc.get_encoded_frame")
 def test_video_feed_with_valid_token(mock_get_encoded_frame, mock_get_current_user):
     # Mock authentication success
     mock_get_current_user.return_value = MagicMock(user_id="test_user", role="operator", tenant_id=1)
@@ -32,7 +32,7 @@ def test_video_feed_with_valid_token(mock_get_encoded_frame, mock_get_current_us
     mock_get_encoded_frame.return_value = b'fake_encoded_jpeg_data'
 
     # Using patch to bypass the infinite stream for testing
-    with patch("src.api.fastapi_webrtc.asyncio.sleep", side_effect=GeneratorExit()):
+    with patch("src.presentation.api.fastapi_webrtc.asyncio.sleep", side_effect=GeneratorExit()):
         response = client.get("/api/webrtc/video?token=valid_token")
         assert response.status_code == 200
         assert "multipart/x-mixed-replace" in response.headers["content-type"]
