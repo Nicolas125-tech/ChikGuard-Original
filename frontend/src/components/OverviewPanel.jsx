@@ -191,7 +191,7 @@ export default function OverviewPanel({ token, serverIP, prefs, cameras = [], ac
           }
         }}
         className="card-premium p-6 animate-fade-in-up stagger-1 hover-lift cursor-pointer hover:border-rose-500/40 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-        role="button"
+        role="button" aria-label="Abrir painel de clima"
         tabIndex={0}
       >
         <div className="flex items-center justify-between mb-4">
@@ -230,7 +230,7 @@ export default function OverviewPanel({ token, serverIP, prefs, cameras = [], ac
           }
         }}
         className="card-premium p-6 animate-fade-in-up stagger-2 hover-lift cursor-pointer hover:border-indigo-500/40 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-        role="button"
+        role="button" aria-label="Abrir painel de aves"
         tabIndex={0}
       >
         <div className="flex justify-between items-start mb-4">
@@ -262,7 +262,7 @@ export default function OverviewPanel({ token, serverIP, prefs, cameras = [], ac
           }
         }}
         className="card-premium p-6 animate-fade-in-up stagger-3 hover-lift cursor-pointer hover:border-emerald-500/40 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-        role="button"
+        role="button" aria-label="Abrir painel do gêmeo digital"
         tabIndex={0}
       >
         <div className="text-xs uppercase font-semibold tracking-widest text-slate-400 mb-4 flex items-center gap-2">
