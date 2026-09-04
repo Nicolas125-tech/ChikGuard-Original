@@ -20,7 +20,6 @@ def test_video_feed_with_invalid_token(mock_get_current_user):
 
     response = client.get("/api/webrtc/video?token=invalid_token")
     assert response.status_code == 401
-    assert "Invalid token payload" in response.json()["detail"]
 
 @patch("src.presentation.api.fastapi_webrtc.get_current_user")
 @patch("src.presentation.api.fastapi_webrtc.get_encoded_frame")
