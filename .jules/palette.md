@@ -47,3 +47,6 @@
 ## 2024-05-19 - Segmented Controls in React
 **Learning:** Found a group of toggle buttons functioning as segmented controls wrapped in a standard div without an explicit grouping role. While `aria-pressed` was correctly handling the state, screen readers could not determine the buttons were part of a related set.
 **Action:** Always wrap segmented toggle buttons in a container with `role="group"` and provide a descriptive `aria-label` to provide context to assistive technologies.
+## 2026-09-04 - Add localized aria-labels to clickable cards in OverviewPanel
+**Learning:** Found a missing ARIA label pattern in clickable cards used for navigation in the OverviewPanel. Localized these for Portuguese.
+**Action:** Always add properly localized aria-labels to elements functioning as buttons, especially when they represent complex information cards.
