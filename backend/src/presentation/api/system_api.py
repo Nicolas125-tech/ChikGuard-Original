@@ -1,4 +1,5 @@
 import time
+from datetime import datetime
 
 from flask import Blueprint, jsonify, request
 
@@ -360,6 +361,35 @@ def _add_summary_routes(bp, deps):
         )
 
 
+_cached_events = {}
+_cached_events_time = {}
+EVENTS_CACHE_TTL = 5
+
+def _get_cached_events(camera_id, limit):
+    global _cached_events, _cached_events_time
+    now = time.time()
+
+    # We always fetch up to 2000 for the cache
+    max_cache_limit = 2000
+
+    last_fetch_time = _cached_events_time.get(camera_id, 0)
+    cached_list = _cached_events.get(camera_id, None)
+
+    if cached_list is None or (now - last_fetch_time) > EVENTS_CACHE_TTL:
+        records = (
+            EventLog.query.filter_by(camera_id=camera_id)
+            .order_by(EventLog.id.desc())
+            .limit(max_cache_limit)
+            .all()
+        )
+        # Store as dictionaries to prevent DetachedInstanceError
+        cached_list = [row.to_dict() for row in records]
+        _cached_events[camera_id] = cached_list
+        _cached_events_time[camera_id] = now
+
+    return cached_list[:limit]
+
+
 def _add_events_alerts_routes(bp, deps):
     ACTIVE_CAMERA_ID = deps.get("active_camera_id")
 
@@ -368,13 +398,8 @@ def _add_events_alerts_routes(bp, deps):
     def get_events():
         limit = request.args.get("limit", default=100, type=int)
         limit = max(1, min(limit, 2000))
-        rows = (
-            EventLog.query.filter_by(camera_id=ACTIVE_CAMERA_ID)
-            .order_by(EventLog.id.desc())
-            .limit(limit)
-            .all()
-        )
-        return jsonify({"count": len(rows), "items": [row.to_dict() for row in rows]})
+        rows = _get_cached_events(ACTIVE_CAMERA_ID, limit)
+        return jsonify({"count": len(rows), "items": rows})
 
     @bp.route("/api/alerts", methods=["GET"])
     @require_auth()
@@ -402,29 +427,26 @@ def _add_events_alerts_routes(bp, deps):
                 }
             )
 
-        event_rows = (
-            EventLog.query.filter_by(camera_id=ACTIVE_CAMERA_ID)
-            .order_by(EventLog.id.desc())
-            .limit(50)
-            .all()
-        )
+        event_rows = _get_cached_events(ACTIVE_CAMERA_ID, 50)
         for ev in event_rows:
+            # event_rows are now dictionaries!
+            ev_ts = datetime.fromisoformat(ev['timestamp'].replace(" ", "T"))
             itens.append(
                 {
-                    "id": f"event-{ev.id}",
-                    "tipo": ev.event_type.upper(),
+                    "id": f"event-{ev['id']}",
+                    "tipo": ev['event_type'].upper(),
                     "nivel": (
                         "alto"
-                        if ev.level == "high"
+                        if ev['level'] == "high"
                         else "medio"
-                        if ev.level == "medium"
+                        if ev['level'] == "medium"
                         else "baixo"
                     ),
-                    "mensagem": ev.message,
+                    "mensagem": ev['message'],
                     "temperatura": None,
-                    "hora": ev.timestamp.strftime("%H:%M:%S"),
-                    "data": ev.timestamp.strftime("%d/%m/%Y"),
-                    "_ts": ev.timestamp,
+                    "hora": ev_ts.strftime("%H:%M:%S"),
+                    "data": ev_ts.strftime("%d/%m/%Y"),
+                    "_ts": ev_ts,
                 }
             )
 
