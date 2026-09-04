@@ -103,4 +103,42 @@ describe('isDeepEqual', () => {
     assert.strictEqual(isDeepEqual(s1, s3), false);
     assert.strictEqual(isDeepEqual(s1, s4), false);
   });
+  it('should handle NaN correctly', () => {
+    assert.strictEqual(isDeepEqual(NaN, NaN), true);
+  });
+
+  it('should handle deep nesting', () => {
+    const a = { x: [ { y: { z: 1 } } ] };
+    const b = { x: [ { y: { z: 1 } } ] };
+    const c = { x: [ { y: { z: 2 } } ] };
+    assert.strictEqual(isDeepEqual(a, b), true);
+    assert.strictEqual(isDeepEqual(a, c), false);
+  });
+
+  it('should handle objects with undefined values vs missing keys', () => {
+    assert.strictEqual(isDeepEqual({ a: 1, b: undefined }, { a: 1 }), false);
+    assert.strictEqual(isDeepEqual({ a: 1 }, { a: 1, b: undefined }), false);
+    assert.strictEqual(isDeepEqual({ a: 1, b: undefined }, { a: 1, b: undefined }), true);
+  });
+
+  it('should handle Object.create(null)', () => {
+    const obj1 = Object.create(null);
+    obj1.a = 1;
+    const obj2 = Object.create(null);
+    obj2.a = 1;
+    const obj3 = { a: 1 };
+    assert.strictEqual(isDeepEqual(obj1, obj2), true);
+    assert.strictEqual(isDeepEqual(obj1, obj3), false); // different constructors
+  });
+
+  it('should handle sparse arrays', () => {
+    const arr1 = [];
+    arr1[2] = 1;
+    const arr2 = [];
+    arr2[2] = 1;
+    const arr3 = [undefined, undefined, 1];
+    assert.strictEqual(isDeepEqual(arr1, arr2), true);
+    assert.strictEqual(isDeepEqual(arr1, arr3), false); // Object.keys check should catch this
+  });
+
 });
