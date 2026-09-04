@@ -1,6 +1,8 @@
 import asyncio
+import time
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, Depends, HTTPException, Response
+
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -8,8 +10,6 @@ from src.core.config import load_settings
 from src.core.fsm_task import fsm_loop
 from src.core.logger import configure_logging
 from src.core.mqtt_bridge import start_mqtt_bridge
-import asyncio
-import time
 
 # Configuracoes e Logger base
 SETTINGS = load_settings()
@@ -64,7 +64,7 @@ async def lifespan(fastapi_app: FastAPI):
     start_camera_thread()
 
     # Inicializa conexão com MongoDB (Polyglot Persistence — CV Pipeline)
-    from src.infrastructure.db.nosql_session import init_nosql, close_nosql
+    from src.infrastructure.db.nosql_session import close_nosql, init_nosql
     try:
         init_nosql()
         LOGGER.info("MongoDB (Motor) inicializado com sucesso.")
@@ -108,11 +108,11 @@ from src.presentation.api.fastapi_cameras import router as cameras_router
 from src.presentation.api.fastapi_climate import router as climate_router
 from src.presentation.api.fastapi_health import router as health_router
 from src.presentation.api.fastapi_heatmap import router as heatmap_router
-from src.presentation.api.fastapi_zone_analytics import router as zone_analytics_router
+from src.presentation.api.fastapi_iot import router as iot_router
 from src.presentation.api.fastapi_sensors import router as sensors_router
 from src.presentation.api.fastapi_webrtc import router as webrtc_router
-from src.presentation.api.fastapi_iot import router as iot_router
 from src.presentation.api.fastapi_ws import socket_app
+from src.presentation.api.fastapi_zone_analytics import router as zone_analytics_router
 from src.security.fastapi_auth import RequireRole, UserContext, get_current_user
 from src.security.headers import ALLOWED_ORIGINS
 
@@ -185,9 +185,9 @@ Welcome to the ChikGuard intelligent poultry monitoring node.
 
 @fastapi_app.get("/api/summary")
 async def get_summary(user: UserContext = Depends(get_current_user)):
-    from src.core.state import sensor_state, species_counts, weight_state, acoustic_state
+
     from src.core.fsm_task import actuator_state
-    import time
+    from src.core.state import acoustic_state, sensor_state, species_counts, weight_state
 
     temp = sensor_state.get("temperature_c", 25.0)
     total = species_counts.get("total", 0)
@@ -270,13 +270,14 @@ async def video_feed(token: str = None):
     try:
         from src.security.fastapi_auth import get_current_user
         # get_current_user validates the token and checks the database for profile status (PENDING, SUSPENDED, etc)
-        user = await get_current_user(token)
-    except Exception as e:
+        await get_current_user(token)
+    except Exception:
         raise HTTPException(status_code=401, detail="Token JWT inválido ou acesso negado")
 
     async def generate():
-        from src.core.state import get_encoded_frame
         import asyncio
+
+        from src.core.state import get_encoded_frame
         stream_interval = 1.0 / 30
         try:
             while True:
