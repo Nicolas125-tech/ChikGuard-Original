@@ -30,7 +30,10 @@ async def get_cameras(
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user)
 ):
-    cameras = db.query(Camera).order_by(Camera.created_at.desc()).all()
+    query = db.query(Camera)
+    if user.role != "superadmin":
+        query = query.filter(Camera.tenant_id == user.tenant_id)
+    cameras = query.order_by(Camera.created_at.desc()).all()
     from src.core.state import active_camera_id
     return {
         "active_camera_id": active_camera_id,
@@ -47,10 +50,11 @@ async def create_camera(
     if len(data.camera_id) > 50 or len(data.name) > 100 or len(data.connection_url or "") > 500:
         raise HTTPException(status_code=400, detail="Input length limits exceeded")
 
-    if db.query(Camera).filter_by(camera_id=data.camera_id).first():
+    if db.query(Camera).filter_by(camera_id=data.camera_id, tenant_id=user.tenant_id).first():
         raise HTTPException(status_code=400, detail="camera_id already exists")
 
     c = Camera(
+        tenant_id=user.tenant_id,
         camera_id=data.camera_id,
         name=data.name,
         connection_type=data.connection_type,
@@ -70,7 +74,10 @@ async def update_camera(
     db: Session = Depends(get_db),
     user: UserContext = Depends(RequireRole(["admin", "superadmin"]))
 ):
-    c = db.query(Camera).get(id)
+    query = db.query(Camera).filter(Camera.id == id)
+    if user.role != "superadmin":
+        query = query.filter(Camera.tenant_id == user.tenant_id)
+    c = query.first()
     if not c:
         raise HTTPException(status_code=404, detail="Camera not found")
 
@@ -97,7 +104,10 @@ async def delete_camera(
     db: Session = Depends(get_db),
     user: UserContext = Depends(RequireRole(["admin", "superadmin"]))
 ):
-    c = db.query(Camera).get(id)
+    query = db.query(Camera).filter(Camera.id == id)
+    if user.role != "superadmin":
+        query = query.filter(Camera.tenant_id == user.tenant_id)
+    c = query.first()
     if not c:
         raise HTTPException(status_code=404, detail="Camera not found")
 
@@ -114,11 +124,13 @@ async def switch_camera(
     if len(data.camera_id) > 50:
         raise HTTPException(status_code=400, detail="Input length limits exceeded")
 
-    c = db.query(Camera).filter_by(camera_id=data.camera_id).first()
-    if not c:
+    query = db.query(Camera).filter(Camera.camera_id == data.camera_id)
+    if user.role != "superadmin":
+        query = query.filter(Camera.tenant_id == user.tenant_id)
+    cam = query.first()
+    if not cam:
         raise HTTPException(status_code=404, detail="Camera not found")
 
     import src.core.state as state
     state.active_camera_id = data.camera_id
-
-    return {"msg": "Camera switched successfully", "active_camera": data.camera_id}
+    return {"msg": f"Active camera switched to {data.camera_id}", "active_camera_id": data.camera_id}

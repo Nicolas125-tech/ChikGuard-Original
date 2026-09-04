@@ -31,10 +31,11 @@ app.dependency_overrides[get_current_user] = override_get_current_user
 
 client = TestClient(app)
 
-@patch("src.api.fastapi_accounts.supabase_client")
+@patch("src.presentation.api.fastapi_accounts.supabase_client")
 def test_accounts_users(mock_supabase):
     mock_execute = MagicMock()
     mock_execute.execute.return_value.data = [{"id": "1", "name": "User 1"}]
+    mock_execute.eq.return_value = mock_execute
     mock_supabase.table.return_value.select.return_value = mock_execute
 
     response = client.get("/api/accounts/users")
@@ -64,7 +65,7 @@ def test_write_audit_log_success(mock_audit_log_class):
     mock_db.commit.assert_called_once()
 
 @patch("database.AuditLog")
-@patch("src.api.fastapi_accounts.logger")
+@patch("src.presentation.api.fastapi_accounts.logger")
 def test_write_audit_log_exception(mock_logger, mock_audit_log_class):
     mock_db = MagicMock()
     mock_db.commit.side_effect = Exception("DB error")

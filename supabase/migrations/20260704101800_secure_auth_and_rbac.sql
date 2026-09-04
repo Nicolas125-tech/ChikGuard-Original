@@ -63,8 +63,10 @@ BEGIN
   -- Conta quantos perfis ativos já existem
   SELECT COUNT(*) INTO active_count FROM public.profiles WHERE status = 'ACTIVE';
 
-  -- Se for o primeiro usuário ativo, ou se o e-mail contiver 'admin' ou for do domínio '@chikguard.com', ativa automaticamente
-  IF active_count = 0 OR NEW.email LIKE '%admin%' OR NEW.email LIKE '%@chikguard.com' THEN
+  -- Apenas o primeiro usuário do sistema é ativado como admin inicial (bootstrap).
+  -- Todos os demais usuários entram estritamente como 'viewer' e 'PENDING',
+  -- exigindo aprovação explícita de um Administrador.
+  IF active_count = 0 THEN
     new_role := 'admin';
     new_status := 'ACTIVE';
   ELSE
@@ -190,7 +192,12 @@ CREATE POLICY profiles_insert_by_trigger ON public.profiles
 CREATE POLICY profiles_update_own ON public.profiles
   FOR UPDATE TO authenticated
   USING (auth.uid() = id)
-  WITH CHECK (auth.uid() = id);
+  WITH CHECK (
+    auth.uid() = id
+    AND role = (SELECT p.role FROM public.profiles p WHERE p.id = auth.uid())
+    AND status = (SELECT p.status FROM public.profiles p WHERE p.id = auth.uid())
+    AND tenant_id = (SELECT p.tenant_id FROM public.profiles p WHERE p.id = auth.uid())
+  );
 
 -- Admins e superadmins atualizam qualquer perfil (aprovar/suspender usuários)
 CREATE POLICY profiles_update_admin ON public.profiles

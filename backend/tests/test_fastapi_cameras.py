@@ -56,7 +56,11 @@ def test_get_cameras():
         "created_at": "2023-01-02 10:00:00"
     }
 
-    mock_db.query.return_value.order_by.return_value.all.return_value = [mock_camera_1, mock_camera_2]
+    mock_query = MagicMock()
+    mock_query.filter.return_value = mock_query
+    mock_query.order_by.return_value = mock_query
+    mock_query.all.return_value = [mock_camera_1, mock_camera_2]
+    mock_db.query.return_value = mock_query
 
     def override_get_db():
         yield mock_db

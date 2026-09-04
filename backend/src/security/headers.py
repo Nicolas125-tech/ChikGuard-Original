@@ -3,11 +3,14 @@ import os
 
 from flask_cors import CORS
 
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
+
 logger = logging.getLogger(__name__)
 
 # Definir os dominios confiaveis autorizados a acessar a API.
-# Este array deve ser mapeado a partir de variaveis de ambiente# Origins permitidas
-ALLOWED_ORIGINS = [
+raw_origins = [
     origin.strip()
     for origin in os.environ.get(
         "CORS_ORIGINS",
@@ -15,6 +18,55 @@ ALLOWED_ORIGINS = [
     ).split(",")
     if origin.strip()
 ]
+
+# Fallback seguro para desenvolvimento local se não configurado explicitamente
+ALLOWED_ORIGINS = raw_origins if raw_origins else [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+]
+
+
+class FastAPISecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware ASGI nativo para FastAPI que injeta cabeçalhos de proteção
+    (HSTS, CSP, X-Frame-Options, X-Content-Type-Options) em todas as respostas.
+    """
+    async def dispatch(self, request: Request, call_next):
+        response: Response = await call_next(request)
+
+        # Evita clickjacking
+        response.headers["X-Frame-Options"] = "DENY"
+        # Previne MIME sniffing
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        # Proteção XSS básica
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        # Referrer Policy
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+        # HSTS para produção
+        if os.environ.get("ENVIRONMENT", "production").lower() != "development":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
+        # Content Security Policy (CSP)
+        if request.url.path.startswith("/docs") or request.url.path.startswith("/openapi.json"):
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https://fastapi.tiangolo.com;"
+            )
+        else:
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; img-src 'self' data: blob:; "
+                "connect-src 'self' ws: wss:; frame-ancestors 'none';"
+            )
+
+        # Oculta assinatura do servidor
+        response.headers["Server"] = "Secure-Edge-Node"
+        if "x-powered-by" in response.headers:
+            del response.headers["x-powered-by"]
+
+        return response
 
 
 def setup_cors(app):

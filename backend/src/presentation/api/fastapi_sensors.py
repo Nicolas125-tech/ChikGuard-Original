@@ -5,7 +5,7 @@ from src.infrastructure.db.session import get_async_db
 from src.core.sensors_utils import persist_sensor_reading, evaluate_sensor_alerts
 from src.core.state import active_camera_id, sensor_state, sensor_thresholds
 from src.domain.schemas.sensors import SensorIngest, SensorLiveResponse
-from src.security.fastapi_auth import get_current_user, UserContext
+from src.security.fastapi_auth import get_current_user, UserContext, RequireRole
 
 router = APIRouter(prefix="/api/sensors", tags=["sensors"])
 
@@ -29,7 +29,7 @@ async def get_sensors_live(user: UserContext = Depends(get_current_user)):
 async def ingest_sensor_data(
     payload: SensorIngest,
     db: AsyncSession = Depends(get_async_db),
-    user: UserContext = Depends(get_current_user),
+    user: UserContext = Depends(RequireRole(["operator", "admin", "superadmin"])),
 ):
     """Recebe novos dados de sensores via Edge/IoT e atualiza o estado."""
     sensor_state.update(
@@ -47,7 +47,8 @@ async def ingest_sensor_data(
     # Convertendo as utilidades para chamadas thread-pool (para não bloquear o event loop se forem síncronas internamente)
     import asyncio
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, lambda: persist_sensor_reading(db.sync_session, source=payload.source))
-    await loop.run_in_executor(None, lambda: evaluate_sensor_alerts(db.sync_session))
+    raw_session = getattr(db, "sync_session", db)
+    await loop.run_in_executor(None, lambda: persist_sensor_reading(raw_session, source=payload.source))
+    await loop.run_in_executor(None, lambda: evaluate_sensor_alerts(raw_session))
 
     return {"msg": "Leitura de sensores recebida", "state": sensor_state}

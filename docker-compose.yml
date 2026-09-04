@@ -9,8 +9,8 @@ services:
       - "5000:5000"
     environment:
       - FLASK_ENV=production
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
-      - CORS_ORIGINS=*
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
       - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/chikguard.db}
       - MONGODB_URI=${MONGODB_URI:-mongodb://mongo:27017/chikguard}
       - PYTHONPATH=/app
@@ -30,7 +30,8 @@ services:
     networks:
       - backend-network
     ports:
-      - "27017:27017"
+      # Restrito a localhost para evitar exposição pública sem autenticação
+      - "127.0.0.1:27017:27017"
     volumes:
       - mongo_data:/data/db
     environment:

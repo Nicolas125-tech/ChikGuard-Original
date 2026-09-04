@@ -27,11 +27,15 @@ elif "postgresql" in sync_url:
 else:
     async_url = sync_url
 
-async_engine = create_async_engine(
-    async_url,
-    connect_args={"check_same_thread": False} if "sqlite" in async_url else {}
-)
-AsyncSessionLocal = async_sessionmaker(autocommit=False, autoflush=False, bind=async_engine, class_=AsyncSession)
+try:
+    async_engine = create_async_engine(
+        async_url,
+        connect_args={"check_same_thread": False} if "sqlite" in async_url else {}
+    )
+    AsyncSessionLocal = async_sessionmaker(autocommit=False, autoflush=False, bind=async_engine, class_=AsyncSession)
+except Exception:
+    async_engine = None
+    AsyncSessionLocal = None
 
 
 # Base para os modelos
@@ -39,6 +43,13 @@ Base = declarative_base()
 
 # Dependência FastAPI (Assíncrona - Padrão Moderno)
 async def get_async_db():
+    if AsyncSessionLocal is None:
+        db = SessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+        return
     async with AsyncSessionLocal() as session:
         try:
             yield session

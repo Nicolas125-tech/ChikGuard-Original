@@ -1,3 +1,4 @@
+import os
 import sys
 import importlib
 if "cv2" in sys.modules and type(sys.modules["cv2"]).__name__ == "MagicMock":
@@ -6,7 +7,8 @@ import cv2
 import pytest
 from fastapi.testclient import TestClient
 import unittest.mock as mock
-import sys
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # Mock cv2 before importing main
 sys.modules["cv2"] = mock.MagicMock()
@@ -39,8 +41,8 @@ from sqlalchemy.orm import sessionmaker
 shared_engine = create_engine("sqlite:///file:memdb2?mode=memory&cache=shared", connect_args={"check_same_thread": False})
 shared_session = sessionmaker(autocommit=False, autoflush=False, bind=shared_engine)
 
-src.db.session.engine = shared_engine
-src.db.session.SessionLocal = shared_session
+src.infrastructure.db.session.engine = shared_engine
+src.infrastructure.db.session.SessionLocal = shared_session
 
 import database
 database.db.metadata.create_all(shared_engine)

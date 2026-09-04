@@ -850,6 +850,11 @@ def _run_coordinator_loop(model, plugins, logger):
         try:
             processed_frame = current_frame.copy()
             if current_detections:
+                try:
+                    from src.security.privacy import anonymize_human_detections
+                    processed_frame = anonymize_human_detections(processed_frame, current_detections)
+                except Exception as priv_err:
+                    logger.debug(f"Anonimização LGPD ignorada: {priv_err}")
                 processed_frame = CVOverlay.draw_detections(processed_frame, current_detections, set())
 
             backend_name = "pytorch"

@@ -39,7 +39,7 @@ def anonymize_human_detections(frame: np.ndarray, detections: list) -> np.ndarra
     # A classe '0' no dataset COCO padrao do YOLO e a classe "person".
     for det in detections:
         # Se detetarmos a classe '0' (Pessoa/Humano), entra em modo anonimizacao
-        if det.get("class") == 0:
+        if det.get("class") == 0 or det.get("class_id") == 0 or det.get("species") == "person":
             box = det.get("box", [])
             if not box or len(box) != 4:
                 continue

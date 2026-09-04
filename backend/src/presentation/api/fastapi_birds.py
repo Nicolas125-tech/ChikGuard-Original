@@ -49,7 +49,10 @@ def get_birds_history(
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user)
 ):
-    rows = db.query(BirdSnapshot).order_by(desc(BirdSnapshot.id)).limit(limit).all()
+    query = db.query(BirdSnapshot)
+    if user.role != "superadmin":
+        query = query.filter(BirdSnapshot.tenant_id == user.tenant_id)
+    rows = query.order_by(desc(BirdSnapshot.id)).limit(limit).all()
     return [row.to_dict() for row in reversed(rows)]
 
 @router_birds.get("/registry")
@@ -58,7 +61,10 @@ def get_birds_registry(
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user)
 ):
-    rows = db.query(BirdIdentity).order_by(desc(BirdIdentity.last_seen)).limit(limit).all()
+    query = db.query(BirdIdentity)
+    if user.role != "superadmin":
+        query = query.filter(BirdIdentity.tenant_id == user.tenant_id)
+    rows = query.order_by(desc(BirdIdentity.last_seen)).limit(limit).all()
     return {"count": len(rows), "items": [row.to_dict() for row in rows]}
 
 @router_birds.get("/path/{bird_uid}")
@@ -68,9 +74,11 @@ def get_bird_path(
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user)
 ):
+    query = db.query(BirdTrackPoint).filter(BirdTrackPoint.bird_uid == bird_uid)
+    if user.role != "superadmin":
+        query = query.filter(BirdTrackPoint.tenant_id == user.tenant_id)
     rows = (
-        db.query(BirdTrackPoint)
-        .filter(BirdTrackPoint.bird_uid == bird_uid)
+        query
         .order_by(desc(BirdTrackPoint.id))
         .limit(limit)
         .all()

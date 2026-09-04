@@ -114,7 +114,7 @@ from src.presentation.api.fastapi_webrtc import router as webrtc_router
 from src.presentation.api.fastapi_ws import socket_app
 from src.presentation.api.fastapi_zone_analytics import router as zone_analytics_router
 from src.security.fastapi_auth import RequireRole, UserContext, get_current_user
-from src.security.headers import ALLOWED_ORIGINS
+from src.security.headers import ALLOWED_ORIGINS, FastAPISecurityHeadersMiddleware
 
 fastapi_app = FastAPI(
     title="ChikGuard API",
@@ -135,6 +135,9 @@ fastapi_app.include_router(cameras_router)
 fastapi_app.include_router(heatmap_router)
 fastapi_app.include_router(zone_analytics_router)
 fastapi_app.include_router(agent_discovery_router)
+
+# Security Headers & Hardening Middleware
+fastapi_app.add_middleware(FastAPISecurityHeadersMiddleware)
 
 # CORS middleware
 # Ajustando os ALLOWED_ORIGINS buscando de src.security.headers para seguranca

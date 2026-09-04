@@ -71,7 +71,10 @@ async def accounts_users(user: UserContext = Depends(RequireRole(["admin", "supe
         raise HTTPException(status_code=500, detail="Supabase não configurado")
     try:
         def _get_users():
-            return supabase_client.table("profiles").select("*").execute()
+            query = supabase_client.table("profiles").select("*")
+            if user.role != "superadmin":
+                query = query.eq("tenant_id", user.tenant_id)
+            return query.execute()
 
         response = await run_in_threadpool(_get_users)
         return {"count": len(response.data or []), "items": response.data or []}
@@ -94,7 +97,10 @@ async def accounts_user_update(
 
     try:
         def _get_profile_role():
-            return supabase_client.table("profiles").select("role").eq("id", account_id).single().execute()
+            query = supabase_client.table("profiles").select("role, tenant_id").eq("id", account_id)
+            if user.role != "superadmin":
+                query = query.eq("tenant_id", user.tenant_id)
+            return query.single().execute()
 
         profile_response = await run_in_threadpool(_get_profile_role)
         if not profile_response.data:
@@ -121,7 +127,10 @@ async def accounts_user_update(
 
         if update_data:
             def _update_profile():
-                return supabase_client.table("profiles").update(update_data).eq("id", account_id).execute()
+                query = supabase_client.table("profiles").update(update_data).eq("id", account_id)
+                if user.role != "superadmin":
+                    query = query.eq("tenant_id", user.tenant_id)
+                return query.execute()
 
             await run_in_threadpool(_update_profile)
 
@@ -147,7 +156,10 @@ async def accounts_user_delete(
 
     try:
         def _get_profile_role():
-            return supabase_client.table("profiles").select("role").eq("id", account_id).single().execute()
+            query = supabase_client.table("profiles").select("role, tenant_id").eq("id", account_id)
+            if user.role != "superadmin":
+                query = query.eq("tenant_id", user.tenant_id)
+            return query.single().execute()
 
         profile_response = await run_in_threadpool(_get_profile_role)
         if not profile_response.data:
@@ -178,7 +190,10 @@ async def admin_pending_users(user: UserContext = Depends(RequireRole(["admin", 
         raise HTTPException(status_code=500, detail="Supabase não configurado")
     try:
         def _get_pending_users():
-            return supabase_client.table("profiles").select("*").eq("status", "PENDING").execute()
+            query = supabase_client.table("profiles").select("*").eq("status", "PENDING")
+            if user.role != "superadmin":
+                query = query.eq("tenant_id", user.tenant_id)
+            return query.execute()
 
         response = await run_in_threadpool(_get_pending_users)
         return {"items": response.data or []}
@@ -205,7 +220,10 @@ async def admin_approve_user(
 
     try:
         def _get_profile_role():
-            return supabase_client.table("profiles").select("role").eq("id", data.target_user_id).single().execute()
+            query = supabase_client.table("profiles").select("role, tenant_id").eq("id", data.target_user_id)
+            if user.role != "superadmin":
+                query = query.eq("tenant_id", user.tenant_id)
+            return query.single().execute()
 
         profile_response = await run_in_threadpool(_get_profile_role)
         if not profile_response.data:
@@ -246,7 +264,10 @@ async def admin_pending_count(user: UserContext = Depends(RequireRole(["admin", 
         return {"count": 0}
     try:
         def _count_pending():
-            return supabase_client.table("profiles").select("id", count="exact").eq("status", "PENDING").execute()
+            query = supabase_client.table("profiles").select("id", count="exact").eq("status", "PENDING")
+            if user.role != "superadmin":
+                query = query.eq("tenant_id", user.tenant_id)
+            return query.execute()
         response = await run_in_threadpool(_count_pending)
         count = response.count if hasattr(response, "count") and response.count is not None else len(response.data or [])
         return {"count": count}
@@ -266,9 +287,10 @@ async def admin_reject_user(
         raise HTTPException(status_code=500, detail="Supabase não configurado")
     try:
         def _reject():
-            supabase_client.table("profiles") \
-                .update({"status": "REJECTED", "rejection_reason": data.reason}) \
-                .eq("id", data.target_user_id).execute()
+            query = supabase_client.table("profiles").update({"status": "REJECTED", "rejection_reason": data.reason}).eq("id", data.target_user_id)
+            if user.role != "superadmin":
+                query = query.eq("tenant_id", user.tenant_id)
+            return query.execute()
         await run_in_threadpool(_reject)
         write_audit_log(db, user.user_id, "iam_user_rejected", {"target_user_id": data.target_user_id, "reason": data.reason})
         return {"message": "User rejected successfully"}
@@ -278,12 +300,20 @@ async def admin_reject_user(
 
 
 @router.post("/accounts/ensure-profile")
-async def ensure_profile(data: EnsureProfileRequest):
+async def ensure_profile(
+    data: EnsureProfileRequest,
+    user: UserContext = Depends(get_current_user),
+):
     """
-    Chamado pelo frontend logo após signUp bem-sucedido.
-    Cria a entrada em 'profiles' com status=PENDING se ainda não existir.
-    Não requer autenticação pois é chamado antes do primeiro login aprovado.
+    Sincroniza metadados do perfil após registro se ainda não existir.
+    Protegido por autenticação: usuário só pode criar/sincronizar o próprio perfil.
     """
+    if data.user_id != user.user_id and user.role not in ("admin", "superadmin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Não é permitido criar ou sincronizar perfis para outros identificadores de usuário."
+        )
+
     if not supabase_client:
         return {"created": False, "reason": "Supabase not configured"}
     try:
@@ -291,7 +321,7 @@ async def ensure_profile(data: EnsureProfileRequest):
             existing = supabase_client.table("profiles").select("id").eq("id", data.user_id).execute()
             if existing.data:
                 return {"created": False}  # Já existe (trigger criou)
-            # Cria manualmente com status PENDING
+            # Cria manualmente com status PENDING e tenant do usuário
             payload = {
                 "id": data.user_id,
                 "email": data.email,
@@ -302,6 +332,7 @@ async def ensure_profile(data: EnsureProfileRequest):
                 "age": data.age,
                 "role": "viewer",
                 "status": "PENDING",
+                "tenant_id": user.tenant_id,
             }
             supabase_client.table("profiles").insert(payload).execute()
             return {"created": True}

@@ -14,7 +14,11 @@ import threading
 import time
 from typing import Any, Dict, List, Optional
 
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+try:
+    from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+except ImportError:
+    AsyncIOMotorClient = None
+    AsyncIOMotorDatabase = None
 
 from src.core.config import load_settings
 
@@ -45,6 +49,10 @@ class _MongoSingleton:
 
         with self._lock:
             if self._initialized:
+                return
+
+            if AsyncIOMotorClient is None:
+                logger.warning("Driver 'motor' não está instalado. MongoDB (NoSQL) desabilitado.")
                 return
 
             settings = load_settings()
