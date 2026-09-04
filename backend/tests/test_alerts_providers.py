@@ -234,3 +234,89 @@ def test_alert_provider_send_twilio_error(mock_post, caplog):
 
     log_messages = [record.message for record in caplog.records]
     assert any("Erro ao enviar notificação via Twilio: Twilio connection error" in msg for msg in log_messages)
+
+@patch("smtplib.SMTP")
+def test_alert_provider_send_email_error(mock_smtp_class, caplog):
+    caplog.set_level(logging.ERROR)
+
+    settings = MagicMock()
+    settings.telegram_bot_token = None
+    settings.twilio_account_sid = None
+    settings.smtp_server = "smtp.example.com"
+    settings.smtp_port = 587
+    settings.smtp_user = "user@example.com"
+    settings.smtp_password = "password123"
+    settings.smtp_to = "dest@example.com"
+
+    mock_smtp_class.side_effect = Exception("SMTP connection failed")
+
+    provider = AlertProvider(settings)
+    result = provider.send("Email Test Alert Error")
+
+    assert result is True
+
+    log_messages = [record.message for record in caplog.records]
+    assert any("Erro ao disparar e-mail via SMTP: SMTP connection failed" in msg for msg in log_messages)
+
+@patch("requests.post")
+def test_alert_provider_send_telegram_status_code_error(mock_post, caplog):
+    caplog.set_level(logging.ERROR)
+
+    settings = MagicMock()
+    settings.telegram_bot_token = "fake_token"
+    settings.telegram_chat_id = "fake_chat_id"
+    settings.twilio_account_sid = None
+    settings.smtp_server = None
+
+    mock_response = MagicMock()
+    mock_response.status_code = 400
+    mock_response.text = "Bad Request"
+    mock_post.return_value = mock_response
+
+    provider = AlertProvider(settings)
+    provider.send("Telegram Test Status Error")
+
+    log_messages = [record.message for record in caplog.records]
+    assert any("Falha no Telegram (Status 400): Bad Request" in msg for msg in log_messages)
+
+@patch("requests.post")
+def test_alert_provider_send_twilio_status_code_error(mock_post, caplog):
+    caplog.set_level(logging.ERROR)
+
+    settings = MagicMock()
+    settings.telegram_bot_token = None
+    settings.twilio_account_sid = "AC_sid"
+    settings.twilio_auth_token = "auth_token"
+    settings.twilio_from_number = "+123456"
+    settings.twilio_to_number = "+654321"
+    settings.smtp_server = None
+
+    mock_response = MagicMock()
+    mock_response.status_code = 400
+    mock_response.text = "Bad Request"
+    mock_post.return_value = mock_response
+
+    provider = AlertProvider(settings)
+    provider.send("Twilio Test Status Error")
+
+    log_messages = [record.message for record in caplog.records]
+    assert any("Falha no Twilio (Status 400): Bad Request" in msg for msg in log_messages)
+
+def test_alert_provider_normalize_twilio_number():
+    settings = MagicMock()
+    provider = AlertProvider(settings)
+
+    # Test whatsapp normalization
+    assert provider._normalize_twilio_number("whatsapp+5511999999999") == "whatsapp:+5511999999999"
+    assert provider._normalize_twilio_number("WHATSAPP 5511999999999") == "whatsapp:5511999999999"
+    assert provider._normalize_twilio_number("whatsapp:+5511999999999") == "whatsapp:+5511999999999"
+
+    # Test normal number
+    assert provider._normalize_twilio_number("+1234567890") == "+1234567890"
+
+
+def test_build_alert_provider_returns_correct_instance():
+    settings = MagicMock()
+    provider = build_alert_provider(settings)
+    assert isinstance(provider, AlertProvider)
+    assert provider.settings == settings
