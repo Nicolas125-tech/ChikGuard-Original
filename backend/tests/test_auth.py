@@ -23,7 +23,7 @@ def test_get_supabase_client_missing_both():
     with patch.dict(os.environ, env_mock, clear=True):
         assert _get_supabase_client() is None
 
-@patch("src.api.auth.create_client")
+@patch("src.presentation.api.auth.create_client")
 def test_get_supabase_client_success(mock_create_client):
     mock_create_client.return_value = MagicMock()
 
