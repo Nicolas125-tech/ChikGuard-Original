@@ -4,8 +4,8 @@ import os
 from flask import Blueprint, jsonify, request
 from supabase import create_client
 
-from src.security.rate_limiter import limiter
 from src.security.auth import require_auth
+from src.security.rate_limiter import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -312,6 +312,7 @@ def create_auth_blueprint(deps):
 
     @bp.route("/api/admin/notify-new-user", methods=["POST"])
     @limiter.limit("10 per minute")
+    @require_auth(roles=["admin", "superadmin"])
     def webhook_notify_new_user():
         return _webhook_notify_new_user_handler()
 
