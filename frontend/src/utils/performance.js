@@ -1,10 +1,12 @@
 export function isDeepEqual(a, b) {
   if (a === b) return true;
+  if (a !== a && b !== b) return true;
   if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false;
 
   if (Array.isArray(a) && Array.isArray(b)) {
     if (a.length !== b.length) return false;
     for (let i = 0; i < a.length; i++) {
+      if ((i in a) !== (i in b)) return false;
       if (!isDeepEqual(a[i], b[i])) return false;
     }
     return true;
