@@ -31,3 +31,12 @@ aiofiles
 # MongoDB (Polyglot Persistence — CV Pipeline)
 motor>=3.3.0
 pymongo>=4.6.0
+flask
+flask-cors
+flask-sqlalchemy
+sqlalchemy
+paho-mqtt
+psutil
+motor
+aiortc
+aiohttp
