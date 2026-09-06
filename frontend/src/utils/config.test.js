@@ -16,12 +16,12 @@ describe('Config Utilities', () => {
     delete global.localStorage;
   });
 
-  it('deve retornar DEFAULT_PREFS quando o localStorage estiver vazio', () => {
+  it('should return DEFAULT_PREFS when localStorage is empty', () => {
     const prefs = readPrefs();
     assert.deepStrictEqual(prefs, DEFAULT_PREFS);
   });
 
-  it('deve fazer o merge parcial (incluindo defaults faltantes) se os dados locais estiverem incompletos', () => {
+  it('should do a partial merge (including missing defaults) if local data is incomplete', () => {
     global.localStorage.getItem = (key) => {
       if (key === STORAGE.prefs || key === STORAGE) return JSON.stringify({ theme: 'light' });
       return null;
@@ -32,9 +32,9 @@ describe('Config Utilities', () => {
     assert.strictEqual(prefs.statusMs, DEFAULT_PREFS.statusMs);
   });
 
-  it('deve retornar DEFAULT_PREFS e logar alerta em caso de JSON inválido', () => {
+  it('should return DEFAULT_PREFS in case of invalid JSON', () => {
     global.localStorage.getItem = (key) => {
-      if (key === STORAGE.prefs || key === STORAGE) return '{ inválido_json';
+      if (key === STORAGE.prefs || key === STORAGE) return '{ invalid_json';
       return null;
     };
 
@@ -46,6 +46,17 @@ describe('Config Utilities', () => {
     assert.deepStrictEqual(prefs, DEFAULT_PREFS);
 
     console.warn = oldWarn;
+  });
+
+  it('should return DEFAULT_PREFS if an error occurs when accessing localStorage', () => {
+    const originalGetItem = global.localStorage.getItem;
+    global.localStorage.getItem = () => {
+      throw new Error('Access denied');
+    };
+
+    const prefs = readPrefs();
+    assert.deepStrictEqual(prefs, DEFAULT_PREFS);
+    global.localStorage.getItem = originalGetItem;
   });
 });
 
