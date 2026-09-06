@@ -4,19 +4,6 @@
 # Or wait! If `time.sleep` blocks the worker thread (e.g. gunicorn with gevent or asyncio worker),
 # then standard `asyncio.sleep` won't work unless it's `async def`.
 # Wait, look at `backend/src/api/routes.py` lines 106-130:
-# ```python
-#         def generate():
-#             last_t = time.perf_counter()
-#             try:
-#                 while True:
-#                     t0 = time.perf_counter()
-#                     frame = get_global_frame()
-#                     # ...
-#                     elapsed = time.perf_counter() - t0
-#                     sleep_t = stream_interval - elapsed
-#                     if sleep_t > 0.001:
-#                         time.sleep(sleep_t)
-# ```
 # If this route is actually running via an ASGI adapter, like in `main.py`:
 # `socket_app.other_asgi_app = fastapi_app` (this doesn't include Flask app anymore)
 # But `backend/main.py` DOES include it? Wait, where is `app_flask_legacy` used?
