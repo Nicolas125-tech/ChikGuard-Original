@@ -1,7 +1,7 @@
 /* global global */
 import assert from 'node:assert';
 import { describe, it, beforeEach, afterEach } from 'node:test';
-import { readPrefs, getBaseUrl, DEFAULT_PREFS, STORAGE } from './config.js';
+import { readPrefs, getBaseUrl, isTunnelHost, DEFAULT_PREFS, STORAGE } from './config.js';
 
 describe('Config Utilities', () => {
   beforeEach(() => {
@@ -49,6 +49,36 @@ describe('Config Utilities', () => {
   });
 });
 
+
+describe('isTunnelHost', () => {
+  it('should return true for trycloudflare', () => {
+    assert.strictEqual(isTunnelHost('example.trycloudflare.com'), true);
+    assert.strictEqual(isTunnelHost('trycloudflare.com'), true);
+  });
+
+  it('should return true for cfargotunnel', () => {
+    assert.strictEqual(isTunnelHost('example.cfargotunnel.com'), true);
+    assert.strictEqual(isTunnelHost('cfargotunnel.com'), true);
+  });
+
+  it('should be case-insensitive', () => {
+    assert.strictEqual(isTunnelHost('TRYCLOUDFLARE.com'), true);
+    assert.strictEqual(isTunnelHost('CFargoTunnel.com'), true);
+  });
+
+  it('should return false for regular domains', () => {
+    assert.strictEqual(isTunnelHost('example.com'), false);
+    assert.strictEqual(isTunnelHost('localhost'), false);
+    assert.strictEqual(isTunnelHost('127.0.0.1'), false);
+  });
+
+  it('should return false for undefined or empty values', () => {
+    assert.strictEqual(isTunnelHost(), false);
+    assert.strictEqual(isTunnelHost(''), false);
+    assert.strictEqual(isTunnelHost(null), false);
+  });
+});
+
 describe('getBaseUrl', () => {
   let originalWindow;
 
@@ -82,6 +112,17 @@ describe('getBaseUrl', () => {
     global.window.location.origin = 'https://different-origin.com';
     assert.strictEqual(getBaseUrl(), 'https://different-origin.com');
   });
+
+  it('should handle uppercase/lowercase tunnel hosts correctly', () => {
+    global.window.location.hostname = 'TEST-TRYCLOUDFLARE.COM';
+    global.window.location.origin = 'https://TEST-TRYCLOUDFLARE.COM';
+    assert.strictEqual(getBaseUrl(), 'https://TEST-TRYCLOUDFLARE.COM');
+
+    global.window.location.hostname = 'test-CFargoTunnel.com';
+    global.window.location.origin = 'https://test-CFargoTunnel.com';
+    assert.strictEqual(getBaseUrl(), 'https://test-CFargoTunnel.com');
+  });
+
 
   it('should ignore ipOrUrl and return origin if hostname matches a tunnel host like cfargotunnel', () => {
     global.window.location.hostname = 'test-cfargotunnel.com';
