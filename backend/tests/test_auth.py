@@ -1,12 +1,15 @@
 import sys
-import importlib
-if "cv2" in sys.modules and type(sys.modules["cv2"]).__name__ == "MagicMock":
-    del sys.modules["cv2"]
-import cv2
+from unittest.mock import MagicMock
+
+sys.modules["cv2"] = MagicMock()
+sys.modules["torch"] = MagicMock()
+sys.modules["ultralytics"] = MagicMock()
+sys.modules["supervision"] = MagicMock()
 import os
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from src.presentation.api.auth import _get_supabase_client
+
 
 def test_get_supabase_client_missing_url():
     env_mock = {"SUPABASE_SERVICE_ROLE_KEY": "some-key"}
