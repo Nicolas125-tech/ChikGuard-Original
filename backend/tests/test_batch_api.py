@@ -1,8 +1,10 @@
 import sys
-import importlib
-if "cv2" in sys.modules and type(sys.modules["cv2"]).__name__ == "MagicMock":
-    del sys.modules["cv2"]
-import cv2
+from unittest.mock import MagicMock
+
+sys.modules["cv2"] = MagicMock()
+sys.modules["torch"] = MagicMock()
+sys.modules["ultralytics"] = MagicMock()
+sys.modules["supervision"] = MagicMock()
 import os
 import unittest.mock as mock
 from datetime import datetime

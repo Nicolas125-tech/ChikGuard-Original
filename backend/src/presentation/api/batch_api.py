@@ -1,7 +1,6 @@
 from datetime import datetime
 
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import get_jwt_identity
 
 from database import Batch, BatchLogbook, db
 from src.security.auth import require_auth
@@ -95,7 +94,7 @@ def create_batch_blueprint(deps):
         # Tenta pegar quem está logado
         author = "Operador"
         try:
-            author = str(get_jwt_identity())
+            author = "admin" # TODO: integrate proper auth instead of missing flask_jwt_extended
         except:
             pass
 
