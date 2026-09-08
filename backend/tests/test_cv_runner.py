@@ -93,3 +93,32 @@ def test_save_reading_error_handling(caplog):
 
             # Check if the error was logged
             assert "Erro ao salvar leitura termica: Simulated DB Error" in caplog.text
+
+def test_tamper_alert_db_error_handling(caplog):
+    """
+    Testa se o tratamento de erro no _emit_tamper_alerts
+    funciona corretamente e a notificação é feita mesmo se
+    a gravação no banco falhar.
+    """
+    import src.core.state as state
+
+    with patch("src.application.cv_master.cv_runner.SessionLocal") as mock_session_local, \
+         patch("src.application.cv_master.cv_runner.asyncio.run_coroutine_threadsafe") as mock_emit, \
+         patch("src.application.cv_master.cv_runner.emit_new_alert", new=MagicMock()) as _:
+
+        mock_db = MagicMock()
+        mock_db.commit.side_effect = Exception("Simulated DB Tamper Error")
+        mock_session_local.return_value = mock_db
+
+        runner = SOTAPipelineRunner()
+        runner.loop = MagicMock()
+
+        # Override cooldown checking state to ensure it attempts to emit
+        state.tamper_state["last_alert_ts"] = 0.0
+
+        with caplog.at_level(logging.ERROR):
+            runner._emit_tamper_alerts(["camera_obstruida"], 1000.0)
+
+        assert "Erro ao salvar alerta de tamper no DB: Simulated DB Tamper Error" in caplog.text
+        # Assert that the alert is still emitted even if DB fails
+        mock_emit.assert_called_once()
