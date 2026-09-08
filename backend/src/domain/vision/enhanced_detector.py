@@ -126,7 +126,7 @@ def _nms_detections(detections: List[Dict], iou_thresh: float = 0.45) -> List[Di
         class_to_dets[d.get("class_id", 0)].append(i)
 
     kept = []
-    for cls_id, indices in class_to_dets.items():
+    for _cls_id, indices in class_to_dets.items():
         cls_boxes = [boxes[i] for i in indices]
         cls_scores = [scores[i] for i in indices]
         # OpenCV NMSBoxes é altamente otimizado em C++
@@ -187,7 +187,7 @@ class AdvancedTrackerWrapper:
 
         # Prepare detections in format expected by tracker: [x1, y1, x2, y2, conf, cls]
         dets = []
-        for b, c, cls in zip(boxes, confs, classes):
+        for b, c, cls in zip(boxes, confs, classes, strict=False):
             dets.append([b[0], b[1], b[2], b[3], c, cls])
 
         dets_tensor = torch.tensor(dets, dtype=torch.float32)
@@ -365,18 +365,8 @@ class SAHITileEngine:
             translated.append(det_out)
         return translated
 
-    def infer(self, frame: np.ndarray, infer_fn) -> List[Dict]:
-        """
-        Inferência fatiada assíncrona sobre o frame completo.
-
-        Com PyTorch CPU: limita tiles a SAHI_MAX_TILES por frame (evita 0 FPS).
-        Com OpenVINO: pode processar todos os tiles sem limites.
-        """
-        h, w = frame.shape[:2]
-        all_tiles = self._compute_tiles(h, w)
-
-        # Limita o número de tiles se SAHI_MAX_TILES > 0
-        # Estratégia: distribui os tiles uniformemente para cobertura máxima
+    def _select_tiles(self, all_tiles: List[Tuple[int, int, int, int]]) -> List[Tuple[int, int, int, int]]:
+        """Limita o número de tiles se SAHI_MAX_TILES > 0."""
         if SAHI_MAX_TILES > 0 and len(all_tiles) > SAHI_MAX_TILES:
             step = len(all_tiles) / SAHI_MAX_TILES
             tiles = [all_tiles[int(i * step)] for i in range(SAHI_MAX_TILES)]
@@ -386,12 +376,13 @@ class SAHITileEngine:
                 len(all_tiles),
                 SAHI_MAX_TILES,
             )
-        else:
-            tiles = all_tiles
+            return tiles
+        return all_tiles
 
-        n_tiles = len(tiles)
-        LOGGER.debug("[SAHI] Frame %dx%d → %d tiles ativos", w, h, n_tiles)
-
+    def _process_tiles(
+        self, frame: np.ndarray, tiles: List[Tuple[int, int, int, int]], infer_fn
+    ) -> List[Dict]:
+        """Submete os tiles para inferência e coleta os resultados."""
         futures = {}
         for x1, y1, x2, y2 in tiles:
             tile_crop = frame[y1:y2, x1:x2]
@@ -405,6 +396,23 @@ class SAHITileEngine:
                 all_dets.extend(dets)
             except Exception as exc:
                 LOGGER.warning("[SAHI] Tile future exception: %s", exc)
+        return all_dets
+
+    def infer(self, frame: np.ndarray, infer_fn) -> List[Dict]:
+        """
+        Inferência fatiada assíncrona sobre o frame completo.
+
+        Com PyTorch CPU: limita tiles a SAHI_MAX_TILES por frame (evita 0 FPS).
+        Com OpenVINO: pode processar todos os tiles sem limites.
+        """
+        h, w = frame.shape[:2]
+        all_tiles = self._compute_tiles(h, w)
+        tiles = self._select_tiles(all_tiles)
+
+        n_tiles = len(tiles)
+        LOGGER.debug("[SAHI] Frame %dx%d → %d tiles ativos", w, h, n_tiles)
+
+        all_dets = self._process_tiles(frame, tiles, infer_fn)
 
         # NMS global para eliminar duplicatas nas bordas sobrepostas
         final = _nms_detections(all_dets, iou_thresh=self.nms_iou)
