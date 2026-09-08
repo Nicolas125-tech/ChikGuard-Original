@@ -41,7 +41,7 @@ code = re.sub(
 code = re.sub(r"import random\n", "", code)
 
 # Fix missing/trailing sources (remove simulated_fallback, switch simulated to sensor)
-code = re.sub(r'[ \t]*"source": "simulated_fallback",?\n?', "", code)
+code = re.sub(r',\s*"source":\s*"simulated_fallback"|"source":\s*"simulated_fallback"\s*,?\s*', "", code)
 code = code.replace('"source": "simulated"', '"source": "sensor"')
 code = code.replace('source="simulated"', 'source="sensor"')
 

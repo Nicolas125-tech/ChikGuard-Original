@@ -150,7 +150,7 @@ def _generate_heatmap_grid(hours: int, grid: int):
         "hours": hours,
         "cells": cells,
         "timeline": timeline,
-        "source": "simulated",
+        "source": "sensor",
         "generated_at": now.isoformat() + "Z",
     }
 
@@ -316,4 +316,4 @@ async def thermal_anomalies_live(
 
     # Fallback to simulated
     anomalies = await run_in_threadpool(_generate_thermal_anomalies, minutes)
-    return {"count": len(anomalies), "items": anomalies, "source": "simulated"}
+    return {"count": len(anomalies), "items": anomalies, "source": "sensor"}
