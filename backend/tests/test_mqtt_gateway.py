@@ -1,32 +1,27 @@
-import sys
-import importlib
-if "cv2" in sys.modules and type(sys.modules["cv2"]).__name__ == "MagicMock":
-    del sys.modules["cv2"]
-import cv2
 import os
-import sys
 import struct
-import pytest
+import sys
 from unittest.mock import MagicMock
+
+import pytest
+from flask import Flask
+
+# Mock do cv2 para evitar erros na inicialização de módulos de visão do app
+sys.modules["cv2"] = MagicMock()
 
 # Ajusta sys.path para enxergar src/ e o backend
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
-# Mock do cv2 para evitar erros na inicialização de módulos de visão do app
-import unittest.mock as mock
-sys.modules["cv2"] = mock.MagicMock()
-
 # Configuração de variáveis de ambiente para testes
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 from database import SensorReading, db
-from src.core.state import sensor_state, sensor_thresholds
-from src.core.state_machine import BusinessStateMachine
-from flask import Flask
 
 # Importamos o serviço que será desenvolvido na Fase GREEN
 from src.application.services.mqtt_gateway import LoRaMqttGateway
+from src.core.state import sensor_state, sensor_thresholds
+from src.core.state_machine import BusinessStateMachine
 
 app = Flask(__name__)
 app.config["TESTING"] = True
@@ -61,7 +56,7 @@ def test_lora_payload_decoding_and_persistence(db_session):
 
     # Instancia o gateway fornecendo a sessão do banco mockada
     gateway = LoRaMqttGateway(db_session=db_session)
-    
+
     # Simula o recebimento de mensagem MQTT no tópico da granja
     msg = MagicMock()
     msg.topic = "chikguard/farm/galpao-1/sensors/lora"
@@ -80,7 +75,7 @@ def test_lora_payload_decoding_and_persistence(db_session):
     readings = db_session.query(SensorReading).all()
     assert len(readings) == 1
     reading = readings[0]
-    
+
     assert reading.camera_id == "galpao-1"
     assert reading.temperature_c == 28.5
     assert reading.humidity_pct == 65.0
@@ -96,7 +91,7 @@ def test_lora_payload_invalid_size(db_session):
     """
     # Envia payload de 5 bytes (inválido para o struct de 7 bytes)
     payload_incompleto = struct.pack(">Bhh", 1, 285, 65)
-    
+
     gateway = LoRaMqttGateway(db_session=db_session)
     msg = MagicMock()
     msg.topic = "chikguard/farm/galpao-1/sensors/lora"
@@ -120,7 +115,7 @@ def test_lora_gateway_fsm_integration(db_session):
     """
     # Temperatura alta de 35.0°C -> 350
     payload = struct.pack(">BhBHB", 1, 350, 60, 500, 90)
-    
+
     gateway = LoRaMqttGateway(db_session=db_session)
     msg = MagicMock()
     msg.topic = "chikguard/farm/galpao-1/sensors/lora"
@@ -152,3 +147,31 @@ def test_lora_gateway_fsm_integration(db_session):
     # Com temperatura atual em 35.0°C (acima do threshold de 32.0°C), a ventilação deve ligar!
     assert fsm_output["ventilacao"] is True
     assert fsm_output["aquecedor"] is False
+
+def test_lora_payload_decoding_exception(db_session, caplog):
+    """
+    Testa se o tratador de exceção genérica captura erros inesperados
+    (ex: TypeError durante o struct.unpack) de forma resiliente, sem travar o gateway.
+    """
+    # Envia um payload de 7 caracteres (string ao invés de bytes).
+    # O tamanho (7) passa pela validação inicial, mas o struct.unpack
+    # falha por receber string ao invés de bytes (TypeError).
+    payload_invalido_tipo = "1234567"
+
+    gateway = LoRaMqttGateway(db_session=db_session)
+    msg = MagicMock()
+    msg.topic = "chikguard/farm/galpao-1/sensors/lora"
+    msg.payload = payload_invalido_tipo
+
+    # Não deve lançar erro para fora da função
+    try:
+        gateway.process_message(msg)
+    except Exception as e:
+        pytest.fail(f"Gateway falhou em conter a exceção genérica: {e}")
+
+    # Verifica se a mensagem de log apropriada foi registrada
+    assert any("Falha inesperada ao decodificar payload" in record.message for record in caplog.records)
+
+    # Não deve ter adicionado nada ao banco de dados
+    readings = db_session.query(SensorReading).all()
+    assert len(readings) == 0
