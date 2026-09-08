@@ -280,32 +280,32 @@ def create_auth_blueprint(deps):
         return _accounts_me_handler()
 
     @bp.route("/api/accounts/users", methods=["GET"])
-    @require_auth()
+    @require_auth(roles=["admin", "superadmin"])
     def accounts_users():
         return _accounts_users_handler(deps)
 
     @bp.route("/api/accounts/users/<string:account_id>", methods=["PATCH"])
-    @require_auth()
+    @require_auth(roles=["admin", "superadmin"])
     def accounts_user_update(account_id):
         return _accounts_user_update_handler(account_id, deps)
 
     @bp.route("/api/accounts/users/<string:account_id>", methods=["DELETE"])
-    @require_auth()
+    @require_auth(roles=["admin", "superadmin"])
     def accounts_user_delete(account_id):
         return _accounts_user_delete_handler(account_id, deps)
 
     @bp.route("/api/accounts/permissions", methods=["GET", "POST"])
-    @require_auth()
+    @require_auth(roles=["admin", "superadmin"])
     def accounts_permissions():
         return _accounts_permissions_handler(deps)
 
     @bp.route("/api/admin/pending-users", methods=["GET"])
-    @require_auth()
+    @require_auth(roles=["admin", "superadmin"])
     def admin_pending_users():
         return _admin_pending_users_handler(deps)
 
     @bp.route("/api/admin/approve-user", methods=["POST"])
-    @require_auth()
+    @require_auth(roles=["admin", "superadmin"])
     @limiter.limit("10 per minute")
     def admin_approve_user():
         return _admin_approve_user_handler(deps)
