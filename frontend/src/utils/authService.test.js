@@ -37,6 +37,21 @@ describe('authService', () => {
   });
 
   describe('login', () => {
+    it('should throw an error if Supabase is not configured', async () => {
+      const moduleWithoutSupabase = await esmock('./authService.js', {
+        './supabaseClient.js': {
+          supabase: mockSupabase,
+          isSupabaseConfigured: false
+        }
+      });
+      const authServiceUnconfigured = moduleWithoutSupabase.authService;
+
+      await assert.rejects(
+        authServiceUnconfigured.login('admin@test.com', 'password123'),
+        { message: 'Supabase não configurado neste ambiente.' }
+      );
+    });
+
     it('should login and return session and profile', async () => {
       mockSupabase.auth.signInWithPassword.mock.mockImplementationOnce(async () => {
         return { data: { session: { user: { id: 'user1' } } }, error: null };
