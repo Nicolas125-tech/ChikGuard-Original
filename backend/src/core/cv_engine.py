@@ -393,6 +393,7 @@ class CameraCapture:
         self.metrics = metrics
 
         self._frame_queue: queue.Queue = queue.Queue(maxsize=2)
+        self._stop_event = threading.Event()
         self._lock = threading.Lock()
         self._cap: Optional[cv2.VideoCapture] = None
         self._running = False
@@ -418,6 +419,7 @@ class CameraCapture:
 
     def start(self):
         self._running = True
+        self._stop_event.clear()
         self._thread = threading.Thread(target=self._run, daemon=True, name="cv-capture")
         self._thread.start()
         logger.info(
@@ -428,6 +430,7 @@ class CameraCapture:
 
     def stop(self):
         self._running = False
+        self._stop_event.set()
         if self._cap:
             self._cap.release()
 
@@ -502,7 +505,7 @@ class CameraCapture:
                         self._last_reconnect = now
                         if self._open_camera():
                             self._consecutive_failures = 0
-                    time.sleep(0.05)
+                    self._stop_event.wait(0.05)
                     continue
 
                 ret, frame = cap.read()
@@ -515,7 +518,7 @@ class CameraCapture:
                             "[CameraCapture] Câmera perdida após %d falhas.",
                             self._consecutive_failures,
                         )
-                    time.sleep(0.02)
+                    self._stop_event.wait(0.02)
                     continue
 
                 self._consecutive_failures = 0
@@ -532,13 +535,13 @@ class CameraCapture:
 
             except Exception as exc:
                 logger.exception("[CameraCapture] Erro inesperado: %s", exc)
-                time.sleep(0.1)
+                self._stop_event.wait(0.1)
 
             # Throttle mínimo para não queimar CPU em excesso
             elapsed = time.perf_counter() - t0
             sleep_t = min_interval - elapsed
             if sleep_t > 0.001:
-                time.sleep(sleep_t)
+                self._stop_event.wait(sleep_t)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
