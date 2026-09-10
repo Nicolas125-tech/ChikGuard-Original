@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 import {
   UserCheck, UserX, ShieldCheck, Clock, Users,
@@ -391,20 +391,24 @@ export default function AdminPanel({ token, serverIP, role: myRole }) {
   };
 
   // ── Filtro de busca ────────────────────────────────────────────────────────
-  const filtered = users.filter(u => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return (
-      (u.full_name || '').toLowerCase().includes(q) ||
-      (u.email    || '').toLowerCase().includes(q) ||
-      (u.role     || '').toLowerCase().includes(q) ||
-      (u.status   || '').toLowerCase().includes(q) ||
-      (u.location || '').toLowerCase().includes(q)
-    );
-  });
+  // Bolt Optimization: Memoize the filtered list to avoid O(N) string comparisons on every re-render
+  const filtered = useMemo(() => {
+    return users.filter(u => {
+      if (!search) return true;
+      const q = search.toLowerCase();
+      return (
+        (u.full_name || '').toLowerCase().includes(q) ||
+        (u.email    || '').toLowerCase().includes(q) ||
+        (u.role     || '').toLowerCase().includes(q) ||
+        (u.status   || '').toLowerCase().includes(q) ||
+        (u.location || '').toLowerCase().includes(q)
+      );
+    });
+  }, [users, search]);
 
   // ── Contagens de status ────────────────────────────────────────────────────
-  const pendingCount = users.filter(u => u.status === 'PENDING').length;
+  // Bolt Optimization: Memoize the pending count calculation to prevent unnecessary O(N) filtering on re-renders
+  const pendingCount = useMemo(() => users.filter(u => u.status === 'PENDING').length, [users]);
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
