@@ -31,7 +31,7 @@ class SensorSyncWorker:
                 from supabase import create_client
                 return create_client(url, key)
             except Exception as exc:
-                logger.warning(f"[Sensor Sync] Erro ao instanciar cliente Supabase: {exc}")
+                logger.warning(f"[Sensor Sync] Erro ao instanciar cliente Supabase: {type(exc).__name__}")
         return None
 
     async def run_once(self):
@@ -133,11 +133,11 @@ class SensorSyncWorker:
                 self.current_interval = min(self.current_interval * 2, 300)
                 logger.warning(
                     f"[Sensor Sync] Falha de comunicação com a Nuvem. Registros marcados para retentativa local. "
-                    f"Erro: {net_err}. Aplicando backoff. Novo intervalo: {self.current_interval}s."
+                    f"Erro: {type(net_err).__name__}. Aplicando backoff. Novo intervalo: {self.current_interval}s."
                 )
 
         except Exception as e:
-            logger.error(f"[Sensor Sync] Erro crítico no worker de sincronização: {e}")
+            logger.error(f"[Sensor Sync] Erro crítico no worker de sincronização: {type(e).__name__}")
             if created_session:
                 session.rollback()
         finally:

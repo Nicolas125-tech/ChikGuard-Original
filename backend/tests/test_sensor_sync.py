@@ -1,10 +1,7 @@
 import sys
-import importlib
-if "cv2" in sys.modules and type(sys.modules["cv2"]).__name__ == "MagicMock":
-    del sys.modules["cv2"]
-import cv2
+from unittest.mock import MagicMock
+sys.modules['cv2'] = MagicMock()
 import os
-import sys
 import pytest
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
@@ -74,7 +71,7 @@ def test_sensor_sync_success(db_session):
     supabase_mock.table.return_value.insert.return_value.execute = MagicMock()
 
     worker = SensorSyncWorker(db_session=db_session, supabase_client=supabase_mock, interval_seconds=2)
-    
+
     asyncio.run(worker.run_once())
 
     assert reading1.sync_status == "SYNCED"
@@ -106,7 +103,7 @@ def test_sensor_sync_network_failure_keeps_local_data(db_session):
     supabase_mock.table.return_value.insert.return_value.execute.side_effect = Exception("Network timeout")
 
     worker = SensorSyncWorker(db_session=db_session, supabase_client=supabase_mock, interval_seconds=2)
-    
+
     asyncio.run(worker.run_once())
 
     assert reading.sync_status == "FAILED"
