@@ -2,7 +2,6 @@ import logging
 import os
 
 from flask_cors import CORS
-
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -19,13 +18,22 @@ raw_origins = [
     if origin.strip()
 ]
 
-# Fallback seguro para desenvolvimento local se não configurado explicitamente
-ALLOWED_ORIGINS = raw_origins if raw_origins else [
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:3000",
-]
+is_dev = os.environ.get("ENVIRONMENT", "production").lower() == "development" or \
+         os.environ.get("FLASK_ENV", "").lower() == "development"
+
+if raw_origins:
+    ALLOWED_ORIGINS = raw_origins
+elif is_dev:
+    # Fallback seguro APENAS para desenvolvimento local se não configurado explicitamente
+    ALLOWED_ORIGINS = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000",
+    ]
+else:
+    # Em produção, sem CORS_ORIGINS configurado, não permite nenhuma origem externa
+    ALLOWED_ORIGINS = []
 
 
 class FastAPISecurityHeadersMiddleware(BaseHTTPMiddleware):
