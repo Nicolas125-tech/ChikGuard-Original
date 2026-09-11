@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import subprocess
 
 import onnxruntime as ort
@@ -15,6 +16,8 @@ class TPMModelLoader:
     """
 
     def __init__(self, tpm_handle_address: str = "0x81000000"):
+        if not re.match(r"^0x[0-9a-fA-F]+$", tpm_handle_address):
+            raise ValueError("Invalid TPM handle address format.")
         self.tpm_handle_address = tpm_handle_address
         self._key = None
 
@@ -47,7 +50,7 @@ class TPMModelLoader:
             logger.error(f"Erro ao acessar o TPM 2.0: {e.stderr.decode('utf-8')}")
             raise RuntimeError(
                 "Falha na autenticacao de hardware (TPM). O sistema nao pode inicializar a IA offline."
-            )
+            ) from e
         except Exception as e:
             logger.error(f"Erro inesperado no TPM: {e}")
             raise
