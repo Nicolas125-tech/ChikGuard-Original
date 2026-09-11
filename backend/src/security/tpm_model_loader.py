@@ -26,7 +26,17 @@ class TPMModelLoader:
         # Verifica se estamos em modo DEV (mock)
         if os.environ.get("DEV_MODE") == "true":
             logger.warning("DEV_MODE ativado: Usando chave MOCK para decriptacao do modelo.")
-            return b"0123456789abcdef0123456789abcdef"  # Chave Mock de 32 bytes (256 bit)
+            mock_key = os.environ.get("MOCK_TPM_KEY", "0123456789abcdef0123456789abcdef")
+            if isinstance(mock_key, str):
+                mock_key = mock_key.encode('utf-8')
+
+            # Garante que a chave tem tamanho valido
+            if len(mock_key) not in [16, 24, 32]:
+                # Faz padding ou trunca se necessario para desenvolvimento, mas avisa
+                logger.warning(f"Chave MOCK_TPM_KEY tem tamanho {len(mock_key)}, ajustando para 32 bytes.")
+                mock_key = mock_key.ljust(32, b'0')[:32]
+
+            return mock_key
 
         logger.info(f"Iniciando deselamento da chave do TPM no handle {self.tpm_handle_address}...")
         try:
@@ -47,7 +57,7 @@ class TPMModelLoader:
             logger.error(f"Erro ao acessar o TPM 2.0: {e.stderr.decode('utf-8')}")
             raise RuntimeError(
                 "Falha na autenticacao de hardware (TPM). O sistema nao pode inicializar a IA offline."
-            )
+            ) from e
         except Exception as e:
             logger.error(f"Erro inesperado no TPM: {e}")
             raise
