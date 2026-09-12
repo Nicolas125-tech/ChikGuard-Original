@@ -47,7 +47,7 @@ const ScoreRing = React.memo(function ScoreRing({ score, size = 100 }) {
   const color = s >= 80 ? '#10b981' : s >= 60 ? '#f59e0b' : '#ef4444';
 
   return (
-    <svg width={size} height={size} className="drop-shadow-md">
+    <svg width={size} height={size} className="drop-shadow-md" role="img" aria-label={`Pontuação: ${s} de 100`}>
       <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="hsl(222 38% 16%)" strokeWidth="6" />
       <circle
         cx={size/2} cy={size/2} r={radius} fill="none"
