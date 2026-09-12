@@ -83,8 +83,7 @@ class AlertProvider:
                     f"[ALERT] Falha no Telegram (Status {response.status_code}): {response.text}"
                 )
         except Exception as exc:
-            safe_msg = str(exc).replace(self.telegram_bot_token, "***") if self.telegram_bot_token else str(exc)
-            logger.error(f"[ALERT] Erro de rede ao enviar alerta para o Telegram: {safe_msg}")
+            logger.error(f"[ALERT] Erro de rede ao enviar alerta para o Telegram: {type(exc).__name__}")
 
     def _send_to_twilio(self, message):
         """Envia o alerta por SMS ou WhatsApp via serviço Twilio."""
@@ -115,7 +114,7 @@ class AlertProvider:
                     f"[ALERT] Falha no Twilio (Status {response.status_code}): {response.text}"
                 )
         except Exception as exc:
-            logger.error(f"[ALERT] Erro ao enviar notificação via Twilio: {exc}")
+            logger.error(f"[ALERT] Erro ao enviar notificação via Twilio: {type(exc).__name__}")
 
     def _normalize_twilio_number(self, phone_number):
         """Padroniza strings de contato para envio via SMS ou WhatsApp do Twilio."""
@@ -146,7 +145,7 @@ class AlertProvider:
 
             logger.info(f"[ALERT] E-mail de contingência enviado para {self.smtp_to}.")
         except Exception as exc:
-            logger.error(f"[ALERT] Erro ao disparar e-mail via SMTP: {exc}")
+            logger.error(f"[ALERT] Erro ao disparar e-mail via SMTP: {type(exc).__name__}")
 
 
 def build_alert_provider(settings):
