@@ -3,9 +3,9 @@ from functools import wraps
 
 import jwt
 from flask import jsonify, request
-from src.security.fastapi_auth import _get_supabase_public_key
-
 from supabase import Client, create_client
+
+from src.security.fastapi_auth import _get_supabase_public_key
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get(
@@ -81,6 +81,8 @@ def require_auth(roles=None, allow_query_token=False):
                         return jsonify({"error": "Profile not found"}), 403
                     if profile.get("status") == "PENDING":
                         return jsonify({"error": "Sua conta foi criada, mas aguarda a aprovação de um administrador da granja."}), 403
+                    if profile.get("status") in ("SUSPENDED", "REJECTED"):
+                        return jsonify({"error": "User access denied"}), 403
 
                     user_role = profile.get("role", "viewer").lower()
                     tenant_id = profile.get("tenant_id", 1)
