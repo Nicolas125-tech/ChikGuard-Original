@@ -15,7 +15,7 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET")
 
-if not SUPABASE_JWT_SECRET and not os.environ.get("TESTING"):
+if not SUPABASE_JWT_SECRET:
     raise RuntimeError("SUPABASE_JWT_SECRET environment variable is required for secure authentication.")
 
 if SUPABASE_URL and SUPABASE_KEY and not os.environ.get("TESTING"):
