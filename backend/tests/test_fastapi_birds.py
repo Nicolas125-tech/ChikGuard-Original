@@ -109,7 +109,7 @@ def test_live_birds_formatting_and_sorting():
 
     live_birds.clear()
     species_counts.clear()
-    species_counts["bird"] = 2
+    species_counts.update({"chicks": 0, "hens": 0, "total": 0, "bird": 2})
 
     # 1. Missing optional fields to test defaults
     live_birds["2"] = {
@@ -133,7 +133,7 @@ def test_live_birds_formatting_and_sorting():
     data = response.json()
 
     assert data["count"] == 2
-    assert data["species_counts"] == {"bird": 2}
+    assert data["species_counts"] == {"chicks": 0, "hens": 0, "total": 0, "bird": 2}
 
     items = data["items"]
 

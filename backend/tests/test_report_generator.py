@@ -28,7 +28,7 @@ def test_generate_weekly_report_db_error():
             return True
 
     # Patch the Reading attribute specifically to raise an exception
-    with patch("src.reports.generator.Reading") as mock_reading:
+    with patch("src.infrastructure.reports.generator.Reading") as mock_reading:
         # Prevent the > operator on MagicMock by directly mocking the timestamp property
         mock_reading.timestamp = MockTimestamp()
         mock_reading.query.filter.side_effect = Exception("Database connection failed")
@@ -53,7 +53,7 @@ def test_generate_esg_report_db_error():
             return True
 
     # Patch the Reading attribute specifically to raise an exception
-    with patch("src.reports.generator.Reading") as mock_reading:
+    with patch("src.infrastructure.reports.generator.Reading") as mock_reading:
         mock_reading.timestamp = MockTimestamp()
         mock_reading.query.filter.side_effect = Exception("Database connection failed for ESG")
 
@@ -71,11 +71,11 @@ def test_generate_weekly_report_success():
         def __ge__(self, other): return True
         def __le__(self, other): return True
 
-    with patch("src.reports.generator.Reading") as mock_reading, \
-         patch("src.reports.generator.SensorReading") as mock_sensor, \
-         patch("src.reports.generator.EventLog") as mock_event, \
-         patch("src.reports.generator.os.makedirs") as mock_makedirs, \
-         patch("src.reports.generator.canvas.Canvas") as mock_canvas:
+    with patch("src.infrastructure.reports.generator.Reading") as mock_reading, \
+         patch("src.infrastructure.reports.generator.SensorReading") as mock_sensor, \
+         patch("src.infrastructure.reports.generator.EventLog") as mock_event, \
+         patch("src.infrastructure.reports.generator.os.makedirs") as mock_makedirs, \
+         patch("src.infrastructure.reports.generator.canvas.Canvas") as mock_canvas:
 
         mock_reading.timestamp = MockTimestamp()
         mock_sensor.timestamp = MockTimestamp()
@@ -106,11 +106,11 @@ def test_generate_weekly_report_no_data():
         def __ge__(self, other): return True
         def __le__(self, other): return True
 
-    with patch("src.reports.generator.Reading") as mock_reading, \
-         patch("src.reports.generator.SensorReading") as mock_sensor, \
-         patch("src.reports.generator.EventLog") as mock_event, \
-         patch("src.reports.generator.os.makedirs") as mock_makedirs, \
-         patch("src.reports.generator.canvas.Canvas") as mock_canvas:
+    with patch("src.infrastructure.reports.generator.Reading") as mock_reading, \
+         patch("src.infrastructure.reports.generator.SensorReading") as mock_sensor, \
+         patch("src.infrastructure.reports.generator.EventLog") as mock_event, \
+         patch("src.infrastructure.reports.generator.os.makedirs") as mock_makedirs, \
+         patch("src.infrastructure.reports.generator.canvas.Canvas") as mock_canvas:
 
         mock_reading.timestamp = MockTimestamp()
         mock_sensor.timestamp = MockTimestamp()
