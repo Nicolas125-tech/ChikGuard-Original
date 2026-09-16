@@ -12,16 +12,16 @@ import cv2
 import numpy as np
 
 import src.core.state as state
-from database import Batch, BirdSnapshot, BirdTrackPoint, EventLog, Reading, SyncQueueItem
-from src.presentation.api.fastapi_ws import emit_new_alert
-from src.core.cv_engine import BirdPoseAnalyzer, PerfMetrics, SpeciesClassifier
-from src.core.state import cv_lock
+from database import Batch, BirdSnapshot, EventLog, Reading, SyncQueueItem
 from src.application.cv_master.behavior_engine import BehaviorEngine
 from src.application.cv_master.inference_sota import SOTAInferenceEngine
 from src.application.cv_master.tracker_spy import SpyTracker
-from src.infrastructure.db.session import SessionLocal
-from src.infrastructure.db.nosql_session import MongoDBBatchWriter
+from src.core.cv_engine import BirdPoseAnalyzer, PerfMetrics, SpeciesClassifier
+from src.core.state import cv_lock
 from src.domain.vision.gait_analyzer import GaitAnalyzer
+from src.infrastructure.db.nosql_session import MongoDBBatchWriter
+from src.infrastructure.db.session import SessionLocal
+from src.presentation.api.fastapi_ws import emit_new_alert
 
 
 def _estimate_keypoints_from_box(box, tid, now_ts):
@@ -258,8 +258,8 @@ class SOTAPipelineRunner:
             history=100, varThreshold=25, detectShadows=False
         )
 
-        import queue
         import concurrent.futures
+        import queue
         frame_queue = queue.Queue(maxsize=3)
         db_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
 
@@ -275,7 +275,7 @@ class SOTAPipelineRunner:
                     if not cap.isOpened():
                         time.sleep(5.0)
                         continue
-                
+
                 ret, frame = cap.read()
                 if not ret or frame is None:
                     if isinstance(self.video_src, str) and self.video_src.endswith(".mp4"):
@@ -285,7 +285,7 @@ class SOTAPipelineRunner:
                         cap.release()
                         cap = None
                     continue
-                
+
                 # Desacopla I/O: mantém apenas os frames mais recentes na fila
                 if frame_queue.full():
                     try:
@@ -293,7 +293,7 @@ class SOTAPipelineRunner:
                     except queue.Empty:
                         pass
                 frame_queue.put(frame)
-            
+
             if cap is not None:
                 cap.release()
 
@@ -694,7 +694,7 @@ class SOTAPipelineRunner:
                         db.close()
                     except Exception as db_err:
                         self.logger.error(f"Erro ao salvar snapshots: {db_err}")
-                
+
                 db_executor.submit(_save_snapshots, enriched_detections)
 
             # 8. Salva leituras térmicas estimadas no DB a cada 30 segundos
@@ -705,7 +705,7 @@ class SOTAPipelineRunner:
                         db = SessionLocal()
                         temp_c = 20.0 + (frame_mean / 255.0) * 20.0
                         status = "FRIO" if temp_c < 24.0 else ("CALOR" if temp_c > 32.0 else "NORMAL")
-                        
+
                         reading = Reading(
                             temperatura=round(temp_c, 1),
                             status=status,
@@ -723,7 +723,7 @@ class SOTAPipelineRunner:
                         db.close()
                     except Exception as db_err:
                         self.logger.error(f"Erro ao salvar leitura termica: {db_err}")
-                
+
                 gray = cv2.cvtColor(clean_frame, cv2.COLOR_BGR2GRAY)
                 db_executor.submit(_save_reading, float(np.mean(gray)))
 
