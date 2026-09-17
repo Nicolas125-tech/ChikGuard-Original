@@ -1,7 +1,7 @@
 import logging
 import math
 import time
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Tuple
 
 try:
     import supervision as sv
@@ -112,7 +112,7 @@ class BehaviorEngine:
     def calculate_clustering_index(self, detections) -> Tuple[float, str]:
         """
         Calcula o índice de agrupamento (Huddling Index) das aves detectadas.
-        Regra de Negócio Zootécnica: 
+        Regra de Negócio Zootécnica:
           - Baixa distância média entre indivíduos indica frio (aves se amontoam / huddling).
           - Distância normal indica conforto térmico.
           - Alta dispersão indica calor excessivo.
