@@ -1,9 +1,17 @@
+import collections
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Tuple
-from dataclasses import dataclass
 
-from database import AcousticReading, Batch, BatchLogbook, EventLog, SensorReading, WeightEstimate, db
-
+from database import (
+    AcousticReading,
+    Batch,
+    BatchLogbook,
+    EventLog,
+    SensorReading,
+    WeightEstimate,
+    db,
+)
 
 
 @dataclass
@@ -184,12 +192,15 @@ class VetWelfareAgent(ChikGuardAgent):
 
         # Contagem de eventos de visão
         events = telemetry["events"]
+
+        # Otimização de performance: O(N) em vez de O(N*5) usando um único passo.
+        counter = collections.Counter(e.get("event_type") for e in events)
         counts = {
-            "carcass": sum(1 for e in events if e["event_type"] == "carcass_alert"),
-            "prostration": sum(1 for e in events if e["event_type"] == "prostration_alert"),
-            "immobility": sum(1 for e in events if e["event_type"] == "immobility_alert"),
-            "behavior": sum(1 for e in events if e["event_type"] == "behavior_alert"),
-            "thermal_anomaly": sum(1 for e in events if e["event_type"] == "thermal_anomaly_alert"),
+            "carcass": counter.get("carcass_alert", 0),
+            "prostration": counter.get("prostration_alert", 0),
+            "immobility": counter.get("immobility_alert", 0),
+            "behavior": counter.get("behavior_alert", 0),
+            "thermal_anomaly": counter.get("thermal_anomaly_alert", 0),
         }
 
         return averages, counts
@@ -261,7 +272,7 @@ class VetWelfareAgent(ChikGuardAgent):
                 avg_w = latest_weight.avg_weight_g
                 ideal_w = latest_weight.ideal_weight_g
                 dev_pct = ((avg_w - ideal_w) / ideal_w) * 100.0
-                
+
                 if dev_pct < -15.0:
                     anomalies.append(
                         f"Desvio de Desempenho Zootécnico: Peso médio estimado ({avg_w:.1f}g) está {abs(dev_pct):.1f}% abaixo da curva genética Ross 308 (Esperado: {ideal_w:.1f}g)."
