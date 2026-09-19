@@ -149,7 +149,7 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
           aria-pressed={activeLayer === 'sensors'}
           onClick={() => setActiveLayer('sensors')}
           aria-label="Selecionar camada Mapa Térmico"
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition-all duration-200 ${
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
             activeLayer === 'sensors'
               ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 shadow-md shadow-emerald-500/5'
               : 'text-slate-400 hover:text-slate-200 border border-transparent'
@@ -161,7 +161,7 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
           aria-pressed={activeLayer === 'birds'}
           onClick={() => setActiveLayer('birds')}
           aria-label="Selecionar camada Densidade de Aves"
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition-all duration-200 ${
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
             activeLayer === 'birds'
               ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 shadow-md shadow-emerald-500/5'
               : 'text-slate-400 hover:text-slate-200 border border-transparent'
@@ -173,7 +173,7 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
           aria-pressed={activeLayer === 'devices'}
           onClick={() => setActiveLayer('devices')}
           aria-label="Selecionar camada Status Equipamentos"
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition-all duration-200 ${
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
             activeLayer === 'devices'
               ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 shadow-md shadow-emerald-500/5'
               : 'text-slate-400 hover:text-slate-200 border border-transparent'
@@ -185,7 +185,7 @@ export default function DigitalTwinPanel({ token, serverIP, cameras = [], active
           aria-pressed={activeLayer === 'alerts'}
           onClick={() => setActiveLayer('alerts')}
           aria-label={`Selecionar camada Alertas Clínicos (${thermalAnomalies.length} alertas)`}
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition-all duration-200 ${
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
             activeLayer === 'alerts'
               ? 'bg-rose-500/15 text-rose-400 border border-rose-500/20 shadow-md shadow-rose-500/5'
               : 'text-slate-400 hover:text-slate-200 border border-transparent'
