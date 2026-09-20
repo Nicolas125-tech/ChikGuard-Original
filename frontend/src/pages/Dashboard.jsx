@@ -45,7 +45,7 @@ const SidebarContent = React.memo(({ tabs, tab, handleTabChange, role, onLogout 
               <button
                 key={item.id}
                 onClick={() => handleTabChange(item.id)}
-                className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium flex items-center gap-3 transition-all duration-200 group relative ${
+                className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium flex items-center gap-3 transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
                   isActive
                     ? 'bg-emerald-500/12 text-emerald-400 shadow-sm shadow-emerald-500/5'
                     : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
@@ -85,7 +85,7 @@ const SidebarContent = React.memo(({ tabs, tab, handleTabChange, role, onLogout 
       </div>
       <button
         onClick={onLogout}
-        className="w-full bg-red-500/8 hover:bg-red-500/15 text-red-400 font-medium px-3 py-2.5 rounded-xl transition-all border border-transparent hover:border-red-500/20 flex justify-center items-center gap-2 text-sm"
+        className="w-full bg-red-500/8 hover:bg-red-500/15 text-red-400 font-medium px-3 py-2.5 rounded-xl transition-all border border-transparent hover:border-red-500/20 flex justify-center items-center gap-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
       >
         <LogOut size={15} /><span>Desconectar</span>
       </button>
