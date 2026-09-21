@@ -33,7 +33,8 @@ export default function ProtectedRoute({
           </p>
           <button
             onClick={() => window.location.reload()}
-            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-colors"
+            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+            aria-label="Fazer login novamente"
           >
             Fazer Login
           </button>
@@ -54,7 +55,8 @@ export default function ProtectedRoute({
           </p>
           <button
             onClick={onLogout}
-            className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-colors"
+            className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+            aria-label="Sair do sistema"
           >
             <LogOut size={16} /> Sair do Sistema
           </button>
@@ -78,13 +80,15 @@ export default function ProtectedRoute({
           <div className="flex flex-col gap-3">
             <button
               onClick={() => window.location.reload()}
-              className="w-full bg-slate-800 hover:bg-slate-700 text-white font-semibold py-3 rounded-xl transition-colors"
+              className="w-full bg-slate-800 hover:bg-slate-700 text-white font-semibold py-3 rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+              aria-label="Recarregar painel"
             >
               Recarregar Painel
             </button>
             <button
               onClick={onLogout}
-              className="w-full text-sm text-slate-500 hover:text-slate-300 transition-colors py-2"
+              className="w-full text-sm text-slate-500 hover:text-slate-300 transition-colors py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded-lg"
+              aria-label="Sair da conta"
             >
               Sair da Conta
             </button>
