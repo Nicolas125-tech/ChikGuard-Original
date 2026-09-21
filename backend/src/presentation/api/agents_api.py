@@ -1,6 +1,6 @@
 import os
 
-import requests
+import httpx
 from flask import Blueprint, jsonify, request
 
 from src.security.auth import require_auth
@@ -40,7 +40,7 @@ def _retrieve_knowledge_base(query: str) -> str:
         return ""
 
 
-def _call_gemini_api(api_key: str, system_prompt: str, user_message: str):
+async def _call_gemini_api(api_key: str, system_prompt: str, user_message: str):
     """Faz requisição direta para a API REST do Gemini 2.5 Flash."""
     url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
     headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
@@ -60,7 +60,8 @@ def _call_gemini_api(api_key: str, system_prompt: str, user_message: str):
         },
     }
 
-    res = requests.post(url, headers=headers, json=payload, timeout=12)
+    async with httpx.AsyncClient() as client:
+        res = await client.post(url, headers=headers, json=payload, timeout=12)
     if res.status_code != 200:
         return None, f"Erro na API do Gemini (Código {res.status_code}): {res.text}"
 
@@ -173,7 +174,7 @@ def create_agents_blueprint(api_deps):
     @bp.route("/chat", methods=["POST"])
     @require_auth()
     @limiter.limit("10 per minute")
-    def chat():
+    async def chat():
         """Endpoint de chat conversacional com o co-piloto do ChikGuard usando a API do Gemini."""
         data = request.json or {}
         user_message = data.get("message", "")
@@ -209,7 +210,7 @@ def create_agents_blueprint(api_deps):
                 EventLog,
                 api_deps.get("estado_dispositivos", {}),
             )
-            reply, error = _call_gemini_api(api_key, system_prompt, user_message)
+            reply, error = await _call_gemini_api(api_key, system_prompt, user_message)
 
             if error:
                 return jsonify({"error": error}), 500
