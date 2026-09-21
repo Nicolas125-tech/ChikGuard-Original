@@ -1,5 +1,6 @@
-import sys; import unittest.mock; sys.modules["cv2"] = unittest.mock.MagicMock()
 import sys
+import unittest.mock
+sys.modules["cv2"] = unittest.mock.MagicMock()  # noqa: E402, I001
 
 if "cv2" in sys.modules and type(sys.modules["cv2"]).__name__ == "MagicMock":
     pass
@@ -320,3 +321,20 @@ def test_build_alert_provider_returns_correct_instance():
     provider = build_alert_provider(settings)
     assert isinstance(provider, AlertProvider)
     assert provider.settings == settings
+
+def test_alert_provider_normalize_twilio_number_edge_cases():
+    settings = MagicMock()
+    provider = AlertProvider(settings)
+
+    # Test None and empty/whitespace strings
+    assert provider._normalize_twilio_number(None) == "None"
+    assert provider._normalize_twilio_number("") == ""
+    assert provider._normalize_twilio_number("   ") == ""
+
+    # Test integer input
+    assert provider._normalize_twilio_number(1234567890) == "1234567890"
+
+    # Test "whatsapp" without numbers or with non-numeric characters
+    assert provider._normalize_twilio_number("whatsapp") == "whatsapp:"
+    assert provider._normalize_twilio_number("whatsapp   ") == "whatsapp:"
+    assert provider._normalize_twilio_number("whatsapp+abc") == "whatsapp:+"
