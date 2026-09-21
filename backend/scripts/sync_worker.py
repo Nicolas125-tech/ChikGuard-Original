@@ -1,11 +1,12 @@
 import logging
 import os
+import signal
 import socket
-import time
+import threading
 from datetime import datetime, timedelta, timezone
 
 import requests
-from sqlalchemy import create_engine, MetaData, Table, update, select, or_, and_, bindparam
+from sqlalchemy import MetaData, Table, and_, bindparam, create_engine, or_, select, update
 from sqlalchemy.orm import sessionmaker
 
 # Configuração de Logs
@@ -13,6 +14,8 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] SYNC_WORKER: %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+shutdown_event = threading.Event()
 
 # Variáveis de Ambiente Críticas
 LOCAL_DB_URL = os.getenv("DATABASE_URL", "sqlite:///../instance/chikguard.db")
@@ -32,6 +35,12 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
 engine = create_engine(LOCAL_DB_URL)
 SessionLocal = sessionmaker(bind=engine)
 metadata = MetaData()
+
+
+
+def handle_sigterm(signum, frame):
+    logger.info("Signal received, stopping sync worker...")
+    shutdown_event.set()
 
 
 def check_internet(host="8.8.8.8", port=53, timeout=3):
@@ -158,10 +167,10 @@ def run_sync_loop():
     logger.info("Sync Worker inicializado.")
     tables_to_sync = ["sensor_reading", "event_log", "bird_snapshot"]
 
-    while True:
+    while not shutdown_event.is_set():
         if not check_internet():
             logger.warning("Sem conexao com a internet. Aguardando...")
-            time.sleep(SYNC_INTERVAL_SEC)
+            shutdown_event.wait(SYNC_INTERVAL_SEC)
             continue
 
         try:
@@ -171,12 +180,14 @@ def run_sync_loop():
                     total_synced += sync_table(session, table)
 
                 if total_synced < (BATCH_SIZE * len(tables_to_sync)):
-                    time.sleep(SYNC_INTERVAL_SEC)
+                    shutdown_event.wait(SYNC_INTERVAL_SEC)
 
         except Exception as e:
             logger.error(f"Falha inesperada no worker loop: {e}")
-            time.sleep(SYNC_INTERVAL_SEC)
+            shutdown_event.wait(SYNC_INTERVAL_SEC)
 
 
 if __name__ == "__main__":
+    signal.signal(signal.SIGINT, handle_sigterm)
+    signal.signal(signal.SIGTERM, handle_sigterm)
     run_sync_loop()

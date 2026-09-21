@@ -1,6 +1,7 @@
 ## 2024-09-10 - O(N) filtering within render loop
 **Learning:** In complex UI panels like `AdminPanel.jsx` that contain search and filtering logic, performing `Array.prototype.filter()` with multiple `.toLowerCase().includes()` comparisons on every component re-render creates a measurable CPU bottleneck, especially as the list size grows.
 **Action:** Always wrap heavy list transformations (filtering, sorting) inside a `useMemo` hook with appropriate dependency arrays (`[list, search]`) to ensure the expensive O(N) operations only run when the underlying data actually changes, not on unrelated state updates.
-## 2024-05-18 - Replacing requests with httpx in Flask 3.x
-**Learning:** Flask 3.0+ natively supports `async def` routes, allowing the direct use of `httpx.AsyncClient` without requiring ASGI servers or `run_in_threadpool` wrappers. However, calling `requests` inside these async routes will still block the main event loop because it is inherently synchronous.
-**Action:** When working in modern Flask (>= 2.0) on I/O bound tasks, convert synchronous requests to `httpx.AsyncClient()` inside `async def` views to release the worker thread during network operations, instead of resorting to ThreadPoolExecutors.
+
+## 2026-09-21 - Optimize Background Worker Sleep for Graceful Shutdown
+**Learning:** Python's `time.sleep()` blocks the entire thread and delays signal handling or graceful shutdowns in long-running loops.
+**Action:** Replace `time.sleep()` with `threading.Event().wait()` in continuous background tasks, and link the event to signal handlers (`SIGINT`, `SIGTERM`) to instantly interrupt the sleep and initiate teardown.
