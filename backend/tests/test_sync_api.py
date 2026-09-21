@@ -1,14 +1,6 @@
-import sys
-import importlib
-if "cv2" in sys.modules and type(sys.modules["cv2"]).__name__ == "MagicMock":
-    del sys.modules["cv2"]
-import cv2
 import os
-import pytest
-import jwt
-from flask import Flask
 
-# Set environment variables for testing
+# Set environment variables for testing BEFORE importing application code
 os.environ["SUPABASE_JWT_SECRET"] = os.environ.get("SUPABASE_JWT_SECRET", "dummy_secret_dummy_secret_dummy_secret")
 os.environ["ADMIN_PASSWORD"] = "testpassword"
 os.environ["ADMIN_EMAIL"] = "test@example.com"
@@ -21,6 +13,10 @@ import unittest.mock as mock
 # mock cv2 before importing any application code
 sys_modules_mock = mock.patch.dict("sys.modules", {"cv2": mock.MagicMock()})
 sys_modules_mock.start()
+
+import jwt
+import pytest
+from flask import Flask
 
 from src.presentation.api.sync_api import create_sync_blueprint
 
