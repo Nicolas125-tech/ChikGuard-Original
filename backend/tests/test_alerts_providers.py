@@ -31,6 +31,7 @@ def test_alert_provider_send_default(caplog):
     provider = AlertProvider(settings)
     test_message = "Test alert message"
     result = provider.send(test_message)
+    provider.executor.shutdown(wait=True)
 
     assert result is True
 
@@ -56,6 +57,7 @@ def test_alert_provider_send_telegram(mock_post, caplog):
 
     provider = AlertProvider(settings)
     result = provider.send("Telegram Test Alert")
+    provider.executor.shutdown(wait=True)
 
     assert result is True
     mock_post.assert_called_once_with(
@@ -86,6 +88,7 @@ def test_alert_provider_send_twilio_sms(mock_post, caplog):
 
     provider = AlertProvider(settings)
     result = provider.send("Twilio Test Alert")
+    provider.executor.shutdown(wait=True)
 
     assert result is True
     mock_post.assert_called_once_with(
@@ -117,6 +120,7 @@ def test_alert_provider_send_email(mock_smtp_class, caplog):
 
     provider = AlertProvider(settings)
     result = provider.send("Email Test Alert")
+    provider.executor.shutdown(wait=True)
 
     assert result is True
     mock_smtp_instance.starttls.assert_called_once()
@@ -207,6 +211,7 @@ def test_alert_provider_send_telegram_error(mock_post, caplog):
 
     provider = AlertProvider(settings)
     result = provider.send("Telegram Test Alert Error")
+    provider.executor.shutdown(wait=True)
 
     assert result is True
 
@@ -230,6 +235,7 @@ def test_alert_provider_send_twilio_error(mock_post, caplog):
 
     provider = AlertProvider(settings)
     result = provider.send("Twilio Test Alert Error")
+    provider.executor.shutdown(wait=True)
 
     assert result is True
 
@@ -253,6 +259,7 @@ def test_alert_provider_send_email_error(mock_smtp_class, caplog):
 
     provider = AlertProvider(settings)
     result = provider.send("Email Test Alert Error")
+    provider.executor.shutdown(wait=True)
 
     assert result is True
 
@@ -276,6 +283,7 @@ def test_alert_provider_send_telegram_status_code_error(mock_post, caplog):
 
     provider = AlertProvider(settings)
     provider.send("Telegram Test Status Error")
+    provider.executor.shutdown(wait=True)
 
     log_messages = [record.message for record in caplog.records]
     assert any("Falha no Telegram (Status 400): Bad Request" in msg for msg in log_messages)
@@ -299,6 +307,7 @@ def test_alert_provider_send_twilio_status_code_error(mock_post, caplog):
 
     provider = AlertProvider(settings)
     provider.send("Twilio Test Status Error")
+    provider.executor.shutdown(wait=True)
 
     log_messages = [record.message for record in caplog.records]
     assert any("Falha no Twilio (Status 400): Bad Request" in msg for msg in log_messages)

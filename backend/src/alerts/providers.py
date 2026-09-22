@@ -1,3 +1,4 @@
+import concurrent.futures
 import logging
 import os
 import re
@@ -22,6 +23,7 @@ class AlertProvider:
         self._load_telegram_config(settings)
         self._load_twilio_config(settings)
         self._load_smtp_config(settings)
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=5)
 
     def _load_telegram_config(self, settings):
         self.telegram_bot_token = getattr(settings, "telegram_bot_token", None) or os.getenv(
@@ -59,9 +61,9 @@ class AlertProvider:
         """
         logger.info(f"[ALERT-TRIGGER] Iniciando disparo de alerta ativo: {message}")
 
-        self._send_to_telegram(message)
-        self._send_to_twilio(message)
-        self._send_to_email(message)
+        self.executor.submit(self._send_to_telegram, message)
+        self.executor.submit(self._send_to_twilio, message)
+        self.executor.submit(self._send_to_email, message)
 
         # Fallback de logs do sistema
         logger.info(f"[ALERT] {message}")
