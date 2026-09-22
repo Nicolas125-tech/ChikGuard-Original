@@ -294,9 +294,15 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
     return sections;
   }, [role, alertCount, pendingCount]);
 
-  const allItems = tabs.flatMap(s => s.items);
-  const currentTab = allItems.find(t => t.id === tab);
-  const activeCameraData = cameras.find(c => c.camera_id === activeCamera) || null;
+  // Bolt Optimization: Memoize expensive array operations to prevent
+  // unnecessary recalculations on frequent state updates (like clock ticks)
+  const currentTab = useMemo(() => {
+    return tabs.flatMap(s => s.items).find(t => t.id === tab);
+  }, [tabs, tab]);
+
+  const activeCameraData = useMemo(() => {
+    return cameras.find(c => c.camera_id === activeCamera) || null;
+  }, [cameras, activeCamera]);
 
   // ── Métodos de Renderização Secundários (Clean Code Layout) ──
 
