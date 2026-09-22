@@ -162,7 +162,7 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
               {showHeatmapOverlay ? 'Ocultar Heatmap' : 'Mostrar Heatmap AI'}
             </button>
 
-            <button 
+            <button aria-label="Alternar Tela Cheia"
               onClick={toggleFullscreen}
               className="flex items-center gap-1.5 text-xs font-semibold bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 rounded-lg px-3 py-1.5 transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 focus:outline-none"
               title="Alternar Tela Cheia"
