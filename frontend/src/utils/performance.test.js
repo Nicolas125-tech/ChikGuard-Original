@@ -141,4 +141,15 @@ describe('isDeepEqual', () => {
     assert.strictEqual(isDeepEqual(arr1, arr3), false); // Object.keys check should catch this
   });
 
+
+  it('should throw RangeError for objects with circular references', () => {
+    const a = {};
+    a.self = a;
+    const b = {};
+    b.self = b;
+    assert.throws(() => {
+      isDeepEqual(a, b);
+    }, RangeError);
+  });
+
 });
