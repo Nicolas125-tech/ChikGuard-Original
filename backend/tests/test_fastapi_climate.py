@@ -8,7 +8,7 @@ from unittest.mock import patch, MagicMock, AsyncMock
 
 @pytest.mark.asyncio
 async def test_location_forecast_success():
-    with patch("src.api.fastapi_climate.aiohttp.ClientSession") as mock_session_cls:
+    with patch("src.presentation.api.fastapi_climate.aiohttp.ClientSession") as mock_session_cls:
 
         mock_loc_resp = AsyncMock()
         mock_loc_resp.status = 200
