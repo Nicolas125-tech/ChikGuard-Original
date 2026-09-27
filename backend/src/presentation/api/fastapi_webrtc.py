@@ -4,7 +4,6 @@ import time
 import uuid
 
 import cv2
-import jwt
 from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
 from aiortc.contrib.media import MediaRelay
 from av import VideoFrame
@@ -12,8 +11,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from src.core.state import get_global_frame, get_encoded_frame
-from src.security.fastapi_auth import SUPABASE_JWT_SECRET, UserContext, get_current_user, _get_supabase_public_key
+from src.core.state import get_encoded_frame, get_global_frame
+from src.security.fastapi_auth import (
+    UserContext,
+    get_current_user,
+)
 
 router = APIRouter(prefix="/api/webrtc", tags=["video"])
 logger = logging.getLogger(__name__)
