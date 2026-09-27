@@ -20,18 +20,31 @@ _cached_total_vistas_time = 0
 
 
 def _get_temperature_summary(Reading):
+    # Optimized multiple iteration on database result
     recentes = Reading.query.order_by(Reading.id.desc()).limit(30).all()
-    ultima = recentes[0] if recentes else None
-    temperaturas = [item.temperatura for item in recentes]
-    alertas = [item for item in recentes if item.status != "NORMAL"]
+
+    if not recentes:
+        return {
+            "temperatura_atual": 0,
+            "status_atual": "INICIANDO",
+            "media_temperatura": 0,
+            "total_alertas": 0,
+        }
+
+    ultima = recentes[0]
+    soma_temp = 0.0
+    total_alertas = 0
+
+    for item in recentes:
+        soma_temp += item.temperatura
+        if item.status != "NORMAL":
+            total_alertas += 1
 
     return {
-        "temperatura_atual": ultima.temperatura if ultima else 0,
-        "status_atual": ultima.status if ultima else "INICIANDO",
-        "media_temperatura": (
-            round(sum(temperaturas) / len(temperaturas), 1) if temperaturas else 0
-        ),
-        "total_alertas": len(alertas),
+        "temperatura_atual": ultima.temperatura,
+        "status_atual": ultima.status,
+        "media_temperatura": round(soma_temp / len(recentes), 1),
+        "total_alertas": total_alertas,
     }
 
 
