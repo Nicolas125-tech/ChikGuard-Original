@@ -1,16 +1,15 @@
 import time
+
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
 from sqlalchemy import desc
+from sqlalchemy.orm import Session
 
-from src.infrastructure.db.session import get_db
-from src.core.state import active_camera_id, live_birds, species_counts, weight_state, cv_lock
-from src.domain.schemas.birds import BirdsLiveResponse, WeightLiveResponse
-from src.security.fastapi_auth import get_current_user, UserContext
-from src.core.config import load_settings
-
-# Modelos do DB 
+# Modelos do DB
 from database import BirdIdentity, BirdSnapshot, BirdTrackPoint, WeightEstimate
+from src.core.state import active_camera_id, cv_lock, live_birds, species_counts, weight_state
+from src.domain.schemas.birds import BirdsLiveResponse, WeightLiveResponse
+from src.infrastructure.db.session import get_db
+from src.security.fastapi_auth import UserContext, get_current_user
 
 router_birds = APIRouter(prefix="/api/birds", tags=["birds"])
 router_weight = APIRouter(prefix="/api/weight", tags=["weight"])
@@ -45,7 +44,7 @@ def get_live_birds(user: UserContext = Depends(get_current_user)):
 
 @router_birds.get("/history")
 def get_birds_history(
-    limit: int = Query(300, ge=1, le=5000), 
+    limit: int = Query(300, ge=1, le=5000),
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user)
 ):
@@ -110,7 +109,7 @@ def weight_curve(
     rows = (
         db.query(WeightEstimate)
         .filter(
-            WeightEstimate.camera_id == active_camera_id, 
+            WeightEstimate.camera_id == active_camera_id,
             WeightEstimate.timestamp >= start_dt
         )
         .order_by(WeightEstimate.timestamp.asc())
