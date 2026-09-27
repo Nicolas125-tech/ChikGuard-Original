@@ -1,10 +1,11 @@
-import socketio
 import logging
-import jwt
-import os
 
+import socketio
+
+from src.security.fastapi_auth import (
+    get_current_user,
+)
 from src.security.headers import ALLOWED_ORIGINS
-from src.security.fastapi_auth import SUPABASE_JWT_SECRET, _get_supabase_public_key, get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ async def connect(sid, environ, auth):
     token = None
     if auth and "token" in auth:
         token = auth["token"]
-    
+
     if not token:
         logger.warning(f"Conexao SocketIO rejeitada (Sem token) - SID: {sid}")
         return False # Rejeita
@@ -36,7 +37,7 @@ async def connect(sid, environ, auth):
         user_context = await get_current_user(token)
         user_id = user_context.user_id
         tenant_id = user_context.tenant_id
-        
+
         async with sio.session(sid) as session:
             session['user_id'] = user_id
             session['tenant_id'] = tenant_id
@@ -46,7 +47,7 @@ async def connect(sid, environ, auth):
         await sio.enter_room(sid, f"tenant_{tenant_id}")
         if user_context.role in ("superadmin", "admin"):
             await sio.enter_room(sid, "elevated_admins")
-            
+
         logger.info(f"Cliente SocketIO conectado - SID: {sid} (User: {user_id}, Tenant: {tenant_id})")
         return True
     except Exception as e:
