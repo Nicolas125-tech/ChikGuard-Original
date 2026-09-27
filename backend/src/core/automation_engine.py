@@ -20,48 +20,50 @@ class AutomationEngine:
         self.cooldown_seconds = 120  # Evita ligar/desligar exaustor a cada segundo
         self.app_context_fn = app_context_fn
 
-    def process_telemetry(self, camera_id: str, temp_c: float, humidity_pct: float, ammonia_ppm: float = 0.0):
-        """Avalia telemetria básica (Temperatura/Umidade/Amônia) usando regras do DB e fallback"""
-        # Proteção contra Amônia (Gás Tóxico NH3) - Regra Zootécnica de Bem-Estar e Saúde Respiratória
-        if ammonia_ppm > 20.0:
-            self._trigger_action(
-                camera_id, "exhaust_fan", "on", reason=f"Renovação de ar por amônia elevada ({ammonia_ppm:.1f} ppm > 20.0 ppm)"
-            )
-        # Regras Dinâmicas
+        # Caches to avoid N+1 and repeated DB hits on every telemetry reading
+        self._rules_cache = None
+        self._rules_cache_time = 0
+        self._rules_cache_ttl = 60  # seconds
+
+        self._batch_cache = {}  # camera_id -> (target_temp, timestamp)
+        self._batch_cache_ttl = 3600  # seconds (batch age updates roughly once a day)
+
+    def _get_active_rules(self):
+        now = time.time()
+        if self._rules_cache is not None and (now - self._rules_cache_time) < self._rules_cache_ttl:
+            return self._rules_cache
+
+        class CachedRule:
+            def __init__(self, r):
+                self.name = r.name
+                self.condition_variable = r.condition_variable
+                self.condition_operator = r.condition_operator
+                self.condition_value = r.condition_value
+                self.action_device = r.action_device
+                self.action_state = r.action_state
+
         if self.app_context_fn:
             from database import AutomationRule
-
             with self.app_context_fn():
-                rules = AutomationRule.query.filter_by(active=True).all()
-                for rule in rules:
-                    val = None
-                    if rule.condition_variable == "temp_c":
-                        val = temp_c
-                    elif rule.condition_variable == "humidity_pct":
-                        val = humidity_pct
+                db_rules = AutomationRule.query.filter_by(active=True).all()
+                rules = [CachedRule(r) for r in db_rules]
+                self._rules_cache = rules
+                self._rules_cache_time = now
+                return rules
+        return []
 
-                    if val is not None:
-                        triggered = False
-                        if rule.condition_operator == ">" and val > rule.condition_value:
-                            triggered = True
-                        elif rule.condition_operator == "<" and val < rule.condition_value:
-                            triggered = True
-                        elif rule.condition_operator == "==" and val == rule.condition_value:
-                            triggered = True
+    def _get_target_temp(self, camera_id):
+        now = time.time()
+        if camera_id in self._batch_cache:
+            target_temp, last_time = self._batch_cache[camera_id]
+            if (now - last_time) < self._batch_cache_ttl:
+                return target_temp
 
-                        if triggered:
-                            self._trigger_action(
-                                camera_id,
-                                rule.action_device,
-                                rule.action_state,
-                                reason=f"Regra customizada: {rule.name} ({val} {rule.condition_operator} {rule.condition_value})",
-                            )
-
-        # Fallback de Automação Reativa Baseada em Comforto Térmico Zootécnico
         target_temp = 23.0
         if self.app_context_fn:
-            from database import Batch
             from datetime import datetime
+
+            from database import Batch
             from src.core.state_machine import get_ideal_temp_for_age
             with self.app_context_fn():
                 try:
@@ -71,6 +73,45 @@ class AutomationEngine:
                         target_temp = get_ideal_temp_for_age(age_day)
                 except Exception as db_err:
                     logger.error(f"Erro ao consultar lote ativo para fallback de automacao: {db_err}")
+
+        self._batch_cache[camera_id] = (target_temp, now)
+        return target_temp
+
+    def process_telemetry(self, camera_id: str, temp_c: float, humidity_pct: float, ammonia_ppm: float = 0.0):
+        """Avalia telemetria básica (Temperatura/Umidade/Amônia) usando regras do DB e fallback"""
+        # Proteção contra Amônia (Gás Tóxico NH3) - Regra Zootécnica de Bem-Estar e Saúde Respiratória
+        if ammonia_ppm > 20.0:
+            self._trigger_action(
+                camera_id, "exhaust_fan", "on", reason=f"Renovação de ar por amônia elevada ({ammonia_ppm:.1f} ppm > 20.0 ppm)"
+            )
+        # Regras Dinâmicas (Cached)
+        rules = self._get_active_rules()
+        for rule in rules:
+            val = None
+            if rule.condition_variable == "temp_c":
+                val = temp_c
+            elif rule.condition_variable == "humidity_pct":
+                val = humidity_pct
+
+            if val is not None:
+                triggered = False
+                if rule.condition_operator == ">" and val > rule.condition_value:
+                    triggered = True
+                elif rule.condition_operator == "<" and val < rule.condition_value:
+                    triggered = True
+                elif rule.condition_operator == "==" and val == rule.condition_value:
+                    triggered = True
+
+                if triggered:
+                    self._trigger_action(
+                        camera_id,
+                        rule.action_device,
+                        rule.action_state,
+                        reason=f"Regra customizada: {rule.name} ({val} {rule.condition_operator} {rule.condition_value})",
+                    )
+
+        # Fallback de Automação Reativa Baseada em Comforto Térmico Zootécnico (Cached)
+        target_temp = self._get_target_temp(camera_id)
 
         # Diferenciais dinâmicos adequados à idade/conforto das aves
         fan_on_temp = target_temp + 2.0
