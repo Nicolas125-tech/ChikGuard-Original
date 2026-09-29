@@ -5,3 +5,6 @@
 ## 2026-09-21 - Optimize Background Worker Sleep for Graceful Shutdown
 **Learning:** Python's `time.sleep()` blocks the entire thread and delays signal handling or graceful shutdowns in long-running loops.
 **Action:** Replace `time.sleep()` with `threading.Event().wait()` in continuous background tasks, and link the event to signal handlers (`SIGINT`, `SIGTERM`) to instantly interrupt the sleep and initiate teardown.
+## 2024-05-18 - Graceful Thread Shutdown in Background Workers
+**Learning:** Python's `time.sleep()` in background threads (like the continuous audio processing worker) prevents the thread from being instantly responsive to stop/shutdown signals, which delays application teardown and tests.
+**Action:** Replace `time.sleep(timeout)` loops in background threads with a `threading.Event` and `self._stop_event.wait(timeout)` to allow immediate interruption for a graceful and responsive shutdown.
