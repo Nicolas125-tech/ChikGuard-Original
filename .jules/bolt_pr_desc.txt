@@ -1,0 +1,4 @@
+* 💡 What: Replaced blocking `time.sleep` with `threading.Event().wait` in the ContinuousAudioMonitor worker.
+* 🎯 Why: Using `time.sleep()` blocks the thread and prevents immediate responses to stop signals, delaying graceful shutdowns. `Event.wait()` allows the thread to be instantly interrupted.
+* 📊 Impact: Improves application responsiveness and shutdown times.
+* 🔬 Measurement: Observe faster and cleaner shutdowns when the background worker is stopped.

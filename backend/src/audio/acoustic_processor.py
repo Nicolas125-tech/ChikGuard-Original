@@ -1,6 +1,5 @@
 import logging
 import threading
-import time
 from typing import Optional, Tuple
 
 import numpy as np
@@ -21,14 +20,14 @@ class ContinuousAudioMonitor:
         self.app_context_fn = app_context_fn
         self.interval_seconds = interval_seconds
 
-        self._running = False
+        self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
 
     def start(self):
         """Inicia a execução da thread do monitoramento contínuo."""
-        if self._running:
+        if not self._stop_event.is_set() and self._thread is not None and self._thread.is_alive():
             return
-        self._running = True
+        self._stop_event.clear()
         self._thread = threading.Thread(
             target=self._run, daemon=True, name="chikguard-audio-monitor"
         )
@@ -37,7 +36,7 @@ class ContinuousAudioMonitor:
 
     def stop(self):
         """Para a execução do monitoramento de áudio."""
-        self._running = False
+        self._stop_event.set()
 
     def _generate_mock_audio(self) -> Tuple[np.ndarray, int]:
         """Gera um buffer de áudio simulado de 16kHz com ruídos e espirros eventuais do lote."""
@@ -54,7 +53,7 @@ class ContinuousAudioMonitor:
         if cough_idx <= 50.0 and stress_idx <= 60.0:
             return
 
-        active_batch = Batch.query.filter(Batch.active == True).first()
+        active_batch = Batch.query.filter(Batch.active).first()
         batch_id = active_batch.id if active_batch else None
 
         severity_level = "high" if cough_idx > 70.0 else "warning"
@@ -96,7 +95,7 @@ class ContinuousAudioMonitor:
 
     def _run(self):
         """Loop de monitoramento executado de forma assíncrona na thread."""
-        while self._running:
+        while not self._stop_event.is_set():
             try:
                 audio_data, sample_rate = self._generate_mock_audio()
                 with self.app_context_fn():
@@ -104,4 +103,7 @@ class ContinuousAudioMonitor:
             except Exception as exc:
                 logger.error(f"[AudioMonitor] Erro inesperado na thread de áudio: {exc}")
 
-            time.sleep(self.interval_seconds)
+            # Bolt Optimization: Replace time.sleep() with Event().wait()
+            # This allows graceful shutdown to interrupt the sleep instantly
+            # instead of waiting for the full sleep interval to finish.
+            self._stop_event.wait(self.interval_seconds)
