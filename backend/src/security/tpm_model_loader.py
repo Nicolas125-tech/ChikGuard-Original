@@ -26,7 +26,9 @@ class TPMModelLoader:
         # Verifica se estamos em modo DEV (mock)
         if os.environ.get("DEV_MODE") == "true":
             logger.warning("DEV_MODE ativado: Usando chave MOCK para decriptacao do modelo.")
-            mock_key = os.environ.get("MOCK_TPM_KEY", "0123456789abcdef0123456789abcdef")
+            mock_key = os.environ.get("MOCK_TPM_KEY")
+            if not mock_key:
+                raise ValueError("MOCK_TPM_KEY environment variable is required in DEV_MODE")
             if isinstance(mock_key, str):
                 mock_key = mock_key.encode('utf-8')
 
