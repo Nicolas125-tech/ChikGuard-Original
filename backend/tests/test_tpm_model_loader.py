@@ -7,6 +7,7 @@ sys.modules['onnxruntime'] = MagicMock()
 sys.modules['ultralytics'] = MagicMock()
 sys.modules['supervision'] = MagicMock()
 
+import pytest
 from src.security.tpm_model_loader import TPMModelLoader
 
 
@@ -24,11 +25,11 @@ def test_tpm_model_loader_dev_mode_no_env_key(monkeypatch):
     monkeypatch.setenv("DEV_MODE", "true")
     monkeypatch.delenv("MOCK_TPM_KEY", raising=False)
 
-    loader = TPMModelLoader()
-    key = loader._unseal_key_from_tpm()
 
-    assert key == b"0123456789abcdef0123456789abcdef"
-    assert len(key) == 32
+    loader = TPMModelLoader()
+    with pytest.raises(ValueError, match="MOCK_TPM_KEY environment variable is required in DEV_MODE"):
+        loader._unseal_key_from_tpm()
+
 
 def test_tpm_model_loader_dev_mode_short_key(monkeypatch):
     monkeypatch.setenv("DEV_MODE", "true")
