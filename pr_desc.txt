@@ -1,0 +1,6 @@
+Fix Vercel build error caused by file casing mismatch.
+
+The Vercel build failed with:
+`[vite]: Rollup failed to resolve import "@/pages/OpeningScreen" from "/vercel/path0/frontend/src/App.jsx".`
+
+This was due to a case mismatch where the file was originally `OpeningScreen.jsx` but a rename wasn't fully tracked or recognized by Git on the case-sensitive Vercel build servers. By running a double rename in Git (`git mv` to a temporary lowercase name and back to camel case), we force Git to recognize the proper case of `OpeningScreen.jsx`.
