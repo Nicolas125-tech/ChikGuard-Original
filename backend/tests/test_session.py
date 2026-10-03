@@ -6,7 +6,7 @@ import cv2
 from unittest.mock import patch, MagicMock
 from src.infrastructure.db.session import get_db
 
-@patch("src.db.session.SessionLocal")
+@patch("src.infrastructure.db.session.SessionLocal")
 def test_get_db_success(mock_session_local):
     """
     Test the happy path where the db session is yielded and properly closed.
@@ -34,7 +34,7 @@ def test_get_db_success(mock_session_local):
     # Verify close was called
     mock_db.close.assert_called_once()
 
-@patch("src.db.session.SessionLocal")
+@patch("src.infrastructure.db.session.SessionLocal")
 def test_get_db_exception(mock_session_local):
     """
     Test the error path where an exception is thrown in the context using the session,

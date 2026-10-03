@@ -42,3 +42,4 @@ aiortc
 aiohttp
 flask-limiter
 Flask-JWT-Extended
+greenlet
