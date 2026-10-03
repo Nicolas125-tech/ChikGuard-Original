@@ -30,7 +30,7 @@ app.dependency_overrides[get_current_user] = override_get_current_user
 
 client = TestClient(app)
 
-@patch('src.api.fastapi_health.psutil')
+@patch('src.presentation.api.fastapi_health.psutil')
 def test_system_health_online(mock_psutil):
     # Setup mock for psutil
     mock_psutil.cpu_percent.return_value = 15.0
@@ -85,7 +85,7 @@ def test_system_health_online(mock_psutil):
 
     assert mock_db.execute.call_count == 3
 
-@patch('src.api.fastapi_health.psutil')
+@patch('src.presentation.api.fastapi_health.psutil')
 def test_system_health_db_offline(mock_psutil):
     # Setup mock for psutil
     mock_psutil.cpu_percent.return_value = 15.0
@@ -107,7 +107,7 @@ def test_system_health_db_offline(mock_psutil):
     data = response.json()
     assert data["database"] == "Offline"
 
-@patch('src.api.fastapi_health.psutil')
+@patch('src.presentation.api.fastapi_health.psutil')
 def test_system_health_db_check_error_path(mock_psutil):
     # Setup mock for psutil
     mock_psutil.cpu_percent.return_value = 20.0
