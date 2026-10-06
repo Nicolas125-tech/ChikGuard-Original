@@ -57,6 +57,7 @@ class SOTAPipelineRunner:
         self.logger = logging.getLogger("cv_runner.SOTAPipelineRunner")
         self.running = False
         self.thread = None
+        self._stop_event = threading.Event()
         self.loop = None
 
         # Load configs from ENV
@@ -273,7 +274,7 @@ class SOTAPipelineRunner:
                     cap = cv2.VideoCapture(self.video_src)
                     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                     if not cap.isOpened():
-                        time.sleep(5.0)
+                        self._stop_event.wait(5.0)
                         continue
 
                 ret, frame = cap.read()
@@ -281,7 +282,7 @@ class SOTAPipelineRunner:
                     if isinstance(self.video_src, str) and self.video_src.endswith(".mp4"):
                         cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                     else:
-                        time.sleep(3.0)
+                        self._stop_event.wait(3.0)
                         cap.release()
                         cap = None
                     continue
@@ -731,7 +732,7 @@ class SOTAPipelineRunner:
             elapsed = time.perf_counter() - start_time
             sleep_t = (1.0 / 30.0) - elapsed
             if sleep_t > 0.001:
-                time.sleep(sleep_t)
+                self._stop_event.wait(sleep_t)
 
         self.logger.info("Thread do SOTA Pipeline Runner finalizada com sucesso.")
 
@@ -742,6 +743,7 @@ class SOTAPipelineRunner:
         if not self.running:
             return
         self.running = False
+        self._stop_event.set()
 
         # Flush remaining MongoDB buffers before shutdown
         try:
