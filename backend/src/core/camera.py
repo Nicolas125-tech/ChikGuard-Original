@@ -56,6 +56,7 @@ class AsyncCameraReader:
         # --- Buffer atomico LIFO (1 slot) ------------------------------------
         self._frame: Optional[np.ndarray] = None
         self._lock = threading.Lock()  # protege apenas a troca do slot
+        self._stop_event = threading.Event()  # Bolt Optimization: Graceful shutdown
 
         # --- Controle de thread ----------------------------------------------
         self._running = False
@@ -77,6 +78,7 @@ class AsyncCameraReader:
     def start(self) -> "AsyncCameraReader":
         """Inicia a thread de captura. Encadeavel: cam.start()."""
         self._running = True
+        self._stop_event.clear()
         self._thread = threading.Thread(
             target=self._run,
             daemon=True,
@@ -95,6 +97,7 @@ class AsyncCameraReader:
     def stop(self):
         """Para a thread de captura e libera a camera."""
         self._running = False
+        self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=2.0)
         if self._cap:
@@ -178,7 +181,8 @@ class AsyncCameraReader:
                     self._last_reconnect = now
                     if self._open_camera():
                         continue
-                time.sleep(0.05)
+                if self._stop_event.wait(0.05):
+                    break
                 continue
 
             ok, frame = self._cap.read()
@@ -191,7 +195,8 @@ class AsyncCameraReader:
                         self._fail_streak,
                     )
                     self._is_live = False
-                time.sleep(0.01)
+                if self._stop_event.wait(0.01):
+                    break
                 continue
 
             self._fail_streak = 0
@@ -204,7 +209,7 @@ class AsyncCameraReader:
             elapsed = time.perf_counter() - t0
             sleep_t = min_interval - elapsed
             if sleep_t > 0.0005:
-                time.sleep(sleep_t)
+                self._stop_event.wait(sleep_t)
 
 
 class SimulatedCameraReader(AsyncCameraReader):
@@ -222,9 +227,11 @@ class SimulatedCameraReader(AsyncCameraReader):
         self._running = False
         self._thread: Optional[threading.Thread] = None
         self._is_live = False  # Simulada = nao e "live"
+        self._stop_event = threading.Event()  # Bolt Optimization: Graceful shutdown
 
     def start(self) -> "SimulatedCameraReader":
         self._running = True
+        self._stop_event.clear()
         self._thread = threading.Thread(
             target=self._run_sim,
             daemon=True,
@@ -236,6 +243,7 @@ class SimulatedCameraReader(AsyncCameraReader):
 
     def stop(self):
         self._running = False
+        self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=2.0)
 
@@ -253,7 +261,8 @@ class SimulatedCameraReader(AsyncCameraReader):
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # loop
                 ok, frame = cap.read()
                 if not ok:
-                    time.sleep(0.05)
+                    if self._stop_event.wait(0.05):
+                        break
                     continue
 
             with self._lock:
@@ -262,6 +271,6 @@ class SimulatedCameraReader(AsyncCameraReader):
             elapsed = time.perf_counter() - t0
             sleep_t = interval - elapsed
             if sleep_t > 0.0005:
-                time.sleep(sleep_t)
+                self._stop_event.wait(sleep_t)
 
         cap.release()
