@@ -1,0 +1,4 @@
+* 💡 What: Adicionado estados visuais de foco (`focus-visible:ring`) e atributos de acessibilidade em botões de navegação no header e barra lateral do Dashboard.
+* 🎯 Why: Melhorar a navegabilidade por teclado adicionando indicadores de foco e fornecer contexto apropriado para leitores de tela em botões apenas com ícones, traduzindo as `aria-label`s para português.
+* 📸 Before/After: Os botões de menu e ações do cabeçalho agora possuem anéis de foco esmeralda bem definidos ao navegar via teclado.
+* ♿ Accessibility: `aria-label`s traduzidas ("Abrir menu", "Fechar menu", "Ver alertas", "Sair"); `aria-hidden="true"` inserido nos SVGs decorativos; adição de suporte à navegação por tabulação nos elementos iterativos via utilitários Tailwind `focus-visible`.

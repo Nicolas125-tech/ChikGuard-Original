@@ -333,8 +333,8 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
               </div>
               <span className="text-lg font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-200">ChickGuard</span>
             </div>
-            <button aria-label="Close mobile menu" onClick={() => setMobileMenuOpen(false)} className="p-2 rounded-lg text-slate-400 hover:bg-slate-800 transition-colors">
-              <X size={20} />
+            <button aria-label="Fechar menu" onClick={() => setMobileMenuOpen(false)} className="p-2 rounded-lg text-slate-400 hover:bg-slate-800 transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none">
+              <X size={20} aria-hidden="true" />
             </button>
           </div>
           <SidebarContent tabs={tabs} tab={tab} handleTabChange={handleTabChange} role={role} onLogout={onLogout} />
@@ -347,11 +347,11 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
     <header className="glass-header px-4 md:px-6 py-3 flex justify-between items-center z-30 sticky top-0 shrink-0 shadow-lg shadow-black/20">
       <div className="flex items-center gap-3">
         <button
-          aria-label="Open mobile menu"
+          aria-label="Abrir menu"
           onClick={() => setMobileMenuOpen(true)}
-          className="md:hidden p-2 rounded-lg text-slate-400 hover:bg-slate-800 transition-colors border border-slate-800"
+          className="md:hidden p-2 rounded-lg text-slate-400 hover:bg-slate-800 transition-colors border border-slate-800 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none"
         >
-          <Menu size={20} />
+          <Menu size={20} aria-hidden="true" />
         </button>
 
         <div className="hidden sm:flex items-center gap-2 text-sm">
@@ -392,11 +392,11 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
         </div>
 
         <button
-          aria-label="View alerts"
+          aria-label="Ver alertas"
           onClick={() => handleTabChange('alerts')}
-          className="relative p-2 rounded-lg text-slate-400 hover:bg-slate-800 transition-colors border border-slate-800/50 hover:border-slate-700"
+          className="relative p-2 rounded-lg text-slate-400 hover:bg-slate-800 transition-colors border border-slate-800/50 hover:border-slate-700 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none"
         >
-          <Bell size={18} />
+          <Bell size={18} aria-hidden="true" />
           {alertCount > 0 && (
             <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-md">
               {alertCount > 9 ? '9+' : alertCount}
@@ -404,8 +404,8 @@ export default function Dashboard({ token, role, serverIP, prefs, onSavePrefs, o
           )}
         </button>
 
-        <button aria-label="Logout" onClick={onLogout} className="md:hidden p-2 border border-slate-800 rounded-lg text-slate-400 hover:bg-slate-800 transition-colors">
-          <LogOut size={18} />
+        <button aria-label="Sair" onClick={onLogout} className="md:hidden p-2 border border-slate-800 rounded-lg text-slate-400 hover:bg-slate-800 transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none">
+          <LogOut size={18} aria-hidden="true" />
         </button>
       </div>
     </header>
