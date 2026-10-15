@@ -167,9 +167,10 @@ def generate_esg_report(app_context, camera_id, utcnow_func, days=30):
         ).all()
 
     total = len(readings)
-    normal = len([r for r in readings if r.status == "NORMAL"])
-    calor = len([r for r in readings if r.status == "CALOR"])
-    frio = len([r for r in readings if r.status == "FRIO"])
+    # Bolt Optimization: use sum generator to avoid intermediate list allocation
+    normal = sum(1 for r in readings if r.status == "NORMAL")
+    calor = sum(1 for r in readings if r.status == "CALOR")
+    frio = sum(1 for r in readings if r.status == "FRIO")
     low_stress_pct = (normal / total * 100.0) if total else 0.0
     thermal_stress_pct = (100.0 - low_stress_pct) if total else 0.0
     avg_resp = (
@@ -177,7 +178,7 @@ def generate_esg_report(app_context, camera_id, utcnow_func, days=30):
         if acoustic_rows
         else 100.0
     )
-    critical_events = len([e for e in events if str(e.level).lower() == "high"])
+    critical_events = sum(1 for e in events if str(e.level).lower() == "high")
     esg_score = max(
         0.0, min(100.0, (low_stress_pct * 0.55) + (avg_resp * 0.35) - (critical_events * 0.8))
     )
