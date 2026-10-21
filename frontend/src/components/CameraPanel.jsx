@@ -138,7 +138,8 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
               >
                 Transmissão da Granja
               </button>
-              <button 
+              <button aria-label="Usar câmera local"
+                title="Usar câmera local"
                 onClick={() => {
                   setSource('local');
                   if (cameraPermission !== 'granted') {
@@ -184,7 +185,8 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
                   <p className="text-slate-400 text-sm mb-6 leading-relaxed">
                     Para visualizar a câmera USB local ou webcam no sistema, autorize o acesso no seu navegador.
                   </p>
-                  <button 
+                  <button aria-label="Autorizar e Iniciar câmera local"
+                    title="Autorizar e Iniciar câmera local"
                     onClick={initLocalCamera}
                     className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-emerald-500/25 flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                   >
@@ -201,7 +203,8 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
                   <p className="text-slate-400 text-sm mb-6 leading-relaxed">
                     O acesso à câmera local foi bloqueado. Por favor, redefina as permissões do site na barra de endereços do seu navegador e clique no botão abaixo.
                   </p>
-                  <button 
+                  <button aria-label="Tentar novamente conectar câmera local"
+                    title="Tentar novamente conectar câmera local"
                     onClick={initLocalCamera}
                     className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-6 py-2.5 rounded-xl font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                   >
