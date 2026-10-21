@@ -145,7 +145,8 @@ export default function DevicesPanel({ token, serverIP, canControlDevices, camer
           </h2>
           <p className="text-slate-400 text-sm mt-1">Gerencie remotamente a ventilação, aquecimento e iluminação.</p>
         </div>
-        <button
+        <button aria-label="Ativar resfriamento de emergência"
+          title="Ativar resfriamento de emergência"
           onClick={emergencyCooling}
           disabled={!canControlDevices}
           className="bg-rose-600 hover:bg-rose-500 text-white font-bold px-5 py-3 rounded-xl flex items-center gap-2 shadow-[0_0_20px_rgba(225,29,72,0.3)] transition-all hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wider text-sm whitespace-nowrap self-start sm:self-auto"

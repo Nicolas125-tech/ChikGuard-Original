@@ -14,7 +14,8 @@ export default function QueryErrorState({ message, onRetry, className = "" }) {
         {message || "Não foi possível carregar os dados. Verifique a conexão com o servidor da granja e tente novamente."}
       </p>
       {onRetry && (
-        <button
+        <button aria-label="Tentar Novamente"
+          title="Tentar Novamente"
           onClick={onRetry}
           className="flex items-center gap-2 px-5 py-2.5 bg-rose-500 hover:bg-rose-600 transition-all duration-300 text-white font-medium rounded-xl shadow-lg shadow-rose-500/10 hover:shadow-rose-500/20 text-sm active:scale-95 cursor-pointer focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none"
         >

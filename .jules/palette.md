@@ -11,3 +11,7 @@
 ## 2024-05-19 - Adding aria-label to Icon-Only Buttons
 **Learning:** Found that some buttons with only icons (e.g., the fullscreen button in CameraPanel) were lacking an `aria-label`. Without this, screen readers cannot announce the button's purpose, making the UI inaccessible to visually impaired users.
 **Action:** When adding or encountering icon-only buttons, ensure they have a descriptive `aria-label` attribute (like `aria-label="Alternar Tela Cheia"`).
+## 2024-05-24 - Accessibility improvements in Panels
+
+**Learning:** There are quite a few buttons with only an icon or ambiguous text that lack the `aria-label` or `title` tags to provide a description to screen readers or users on hover.
+**Action:** When adding or modifying buttons, ensure they have proper ARIA attributes to improve accessibility, especially for icon-only buttons.
