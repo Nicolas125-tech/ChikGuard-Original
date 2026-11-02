@@ -157,7 +157,9 @@ export default function DevicesPanel({ token, serverIP, canControlDevices, camer
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-      <button aria-label={autoMode.enabled ? "Desativar modo automático" : "Ativar modo automático"} disabled={!canControlDevices} onClick={() => toggleAuto(!autoMode.enabled)} className={`rounded-3xl border p-6 sm:p-8 text-left transition-all ${autoMode.enabled ? 'bg-emerald-600/10 border-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 'bg-slate-900 border-slate-800 hover:border-slate-700'} ${!canControlDevices ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-1'}`}>
+      <button aria-label={autoMode.enabled ? "Desativar modo automático" : "Ativar modo automático"}
+        title={!canControlDevices ? "Sem permissão para controlar dispositivos" : (autoMode.enabled ? "Desativar modo automático" : "Ativar modo automático")}
+        disabled={!canControlDevices} onClick={() => toggleAuto(!autoMode.enabled)} className={`rounded-3xl border p-6 sm:p-8 text-left transition-all ${autoMode.enabled ? 'bg-emerald-600/10 border-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 'bg-slate-900 border-slate-800 hover:border-slate-700'} ${!canControlDevices ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-1'}`}>
         <div className="flex items-center justify-between mb-4">
           <div className={`p-3 rounded-2xl ${autoMode.enabled ? 'bg-emerald-500/20' : 'bg-slate-800/50'}`}>
             <Cpu className={autoMode.enabled ? 'text-emerald-400' : 'text-slate-400'} size={28} />
@@ -179,7 +181,9 @@ export default function DevicesPanel({ token, serverIP, canControlDevices, camer
         )}
       </button>
 
-      <button aria-label={dispositivos.ventilacao ? "Desativar ventilação" : "Ativar ventilação"} disabled={!canControlDevices} onClick={() => toggleDevice('ventilacao', !dispositivos.ventilacao)} className={`rounded-3xl border p-6 sm:p-8 text-left transition-all ${dispositivos.ventilacao ? 'bg-blue-600/10 border-blue-500/40 shadow-[0_0_20px_rgba(59,130,246,0.1)]' : 'bg-slate-900 border-slate-800 hover:border-slate-700'} ${!canControlDevices ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-1'}`}>
+      <button aria-label={dispositivos.ventilacao ? "Desativar ventilação" : "Ativar ventilação"}
+        title={!canControlDevices ? "Sem permissão para controlar dispositivos" : (dispositivos.ventilacao ? "Desativar ventilação" : "Ativar ventilação")}
+        disabled={!canControlDevices} onClick={() => toggleDevice('ventilacao', !dispositivos.ventilacao)} className={`rounded-3xl border p-6 sm:p-8 text-left transition-all ${dispositivos.ventilacao ? 'bg-blue-600/10 border-blue-500/40 shadow-[0_0_20px_rgba(59,130,246,0.1)]' : 'bg-slate-900 border-slate-800 hover:border-slate-700'} ${!canControlDevices ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-1'}`}>
         <div className="flex items-center justify-between mb-4">
           <div className={`p-3 rounded-2xl ${dispositivos.ventilacao ? 'bg-blue-500/20' : 'bg-slate-800/50'}`}>
             <Wind className={dispositivos.ventilacao ? 'text-blue-400' : 'text-slate-400'} size={28} />
@@ -192,7 +196,9 @@ export default function DevicesPanel({ token, serverIP, canControlDevices, camer
         <p className="text-slate-400 text-sm leading-relaxed">Renovação de ar, controle de umidade e resfriamento do galpão.</p>
       </button>
 
-      <button aria-label={dispositivos.aquecedor ? "Desativar aquecedor" : "Ativar aquecedor"} disabled={!canControlDevices} onClick={() => toggleDevice('aquecedor', !dispositivos.aquecedor)} className={`rounded-3xl border p-6 sm:p-8 text-left transition-all ${dispositivos.aquecedor ? 'bg-orange-600/10 border-orange-500/40 shadow-[0_0_20px_rgba(249,115,22,0.1)]' : 'bg-slate-900 border-slate-800 hover:border-slate-700'} ${!canControlDevices ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-1'}`}>
+      <button aria-label={dispositivos.aquecedor ? "Desativar aquecedor" : "Ativar aquecedor"}
+        title={!canControlDevices ? "Sem permissão para controlar dispositivos" : (dispositivos.aquecedor ? "Desativar aquecedor" : "Ativar aquecedor")}
+        disabled={!canControlDevices} onClick={() => toggleDevice('aquecedor', !dispositivos.aquecedor)} className={`rounded-3xl border p-6 sm:p-8 text-left transition-all ${dispositivos.aquecedor ? 'bg-orange-600/10 border-orange-500/40 shadow-[0_0_20px_rgba(249,115,22,0.1)]' : 'bg-slate-900 border-slate-800 hover:border-slate-700'} ${!canControlDevices ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-1'}`}>
         <div className="flex items-center justify-between mb-4">
           <div className={`p-3 rounded-2xl ${dispositivos.aquecedor ? 'bg-orange-500/20' : 'bg-slate-800/50'}`}>
             <Zap className={dispositivos.aquecedor ? 'text-orange-400' : 'text-slate-400'} size={28} />
@@ -223,7 +229,7 @@ export default function DevicesPanel({ token, serverIP, canControlDevices, camer
 
         <div className="relative pt-4 pb-2">
           <label htmlFor="light-intensity" className="sr-only">Intensidade de iluminação</label>
-          <input id="light-intensity" aria-label="Intensidade de iluminação" disabled={!canControlDevices} type="range" min="0" max="100" value={lightPct} onChange={(e) => setLightPct(Number(e.target.value))} onMouseUp={(e) => setDimmer(Number(e.currentTarget.value))} onTouchEnd={(e) => setDimmer(Number(e.currentTarget.value))}
+          <input id="light-intensity" aria-label="Intensidade de iluminação" title={!canControlDevices ? "Sem permissão para controlar dispositivos" : "Ajustar intensidade da iluminação"} disabled={!canControlDevices} type="range" min="0" max="100" value={lightPct} onChange={(e) => setLightPct(Number(e.target.value))} onMouseUp={(e) => setDimmer(Number(e.currentTarget.value))} onTouchEnd={(e) => setDimmer(Number(e.currentTarget.value))}
             className={`w-full h-3 bg-slate-800 rounded-full appearance-none outline-none focus:ring-2 focus:ring-amber-500/50 transition-all ${!canControlDevices ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:bg-amber-400 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg`}
             style={{
               background: `linear-gradient(to right, rgb(251, 191, 36) ${lightPct}%, rgb(30, 41, 59) ${lightPct}%)`
