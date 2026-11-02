@@ -162,6 +162,7 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
             <div className="grid grid-cols-2 gap-4 h-48">
               <button 
                 aria-pressed={dispositivos.ventilacao}
+                title={!canControlDevices ? "Sem permissão para controlar dispositivos" : (isToggling === 'ventilacao' ? "Processando..." : (dispositivos.ventilacao ? "Desativar ventilação" : "Ativar ventilação"))}
                 disabled={!canControlDevices || isToggling === 'ventilacao'}
                 onClick={() => toggleDevice('ventilacao', !dispositivos.ventilacao)} 
                 className={`border p-5 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none ${dispositivos.ventilacao ? 'border-blue-500/50 bg-blue-500/10 shadow-[0_0_15px_rgba(59,130,246,0.15)]' : 'border-slate-800 bg-slate-950 hover:border-slate-700'} ${(!canControlDevices || isToggling === 'ventilacao') ? 'opacity-50 cursor-not-allowed hidden-disabled' : 'hover:-translate-y-1'}`}
@@ -172,6 +173,7 @@ export default function ClimatePanel({ token, serverIP, prefs, canControlDevices
               
               <button 
                 aria-pressed={dispositivos.aquecedor}
+                title={!canControlDevices ? "Sem permissão para controlar dispositivos" : (isToggling === 'aquecedor' ? "Processando..." : (dispositivos.aquecedor ? "Desativar aquecedor" : "Ativar aquecedor"))}
                 disabled={!canControlDevices || isToggling === 'aquecedor'}
                 onClick={() => toggleDevice('aquecedor', !dispositivos.aquecedor)} 
                 className={`border p-5 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none ${dispositivos.aquecedor ? 'border-orange-500/50 bg-orange-500/10 shadow-[0_0_15px_rgba(249,115,22,0.15)]' : 'border-slate-800 bg-slate-950 hover:border-slate-700'} ${(!canControlDevices || isToggling === 'aquecedor') ? 'opacity-50 cursor-not-allowed hidden-disabled' : 'hover:-translate-y-1'}`}
