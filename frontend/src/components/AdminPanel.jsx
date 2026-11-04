@@ -407,8 +407,8 @@ export default function AdminPanel({ token, serverIP, role: myRole }) {
   }, [users, search]);
 
   // ── Contagens de status ────────────────────────────────────────────────────
-  // Bolt Optimization: Memoize the pending count calculation to prevent unnecessary O(N) filtering on re-renders
-  const pendingCount = useMemo(() => users.filter(u => u.status === 'PENDING').length, [users]);
+  // Bolt Optimization: Use reduce instead of filter().length to avoid intermediate array allocation when counting
+  const pendingCount = useMemo(() => users.reduce((acc, u) => acc + (u.status === 'PENDING' ? 1 : 0), 0), [users]);
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (

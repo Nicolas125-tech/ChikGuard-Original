@@ -117,7 +117,8 @@ export default function OverviewPanel({ token, serverIP, prefs, cameras = [], ac
     : null;
 
   const { onlineFarms, offlineFarms, activeCameraName } = useMemo(() => {
-    const online = cameras.filter(c => c.status === 'online').length;
+    // Bolt Optimization: Use reduce instead of filter().length to avoid intermediate array allocation when counting
+    const online = cameras.reduce((acc, c) => acc + (c.status === 'online' ? 1 : 0), 0);
     const offline = cameras.length - online;
     const name = cameras.find(c => c.camera_id === activeCamera)?.name || 'Granja Principal';
     return { onlineFarms: online, offlineFarms: offline, activeCameraName: name };
