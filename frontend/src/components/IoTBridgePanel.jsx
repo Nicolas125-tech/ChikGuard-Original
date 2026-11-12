@@ -149,6 +149,7 @@ void loop() {
       {/* Arduino Code Generator Section */}
       <div className="mt-6 border-t border-slate-800 pt-6">
         <button 
+          aria-label={showCode ? "Ocultar Código C++ (ESP32/Arduino)" : "Conectar novo Arduino/ESP32"}
           aria-expanded={showCode}
           onClick={() => setShowCode(!showCode)}
           className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold py-2 px-4 rounded-xl transition-colors flex items-center gap-2 mb-4 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none"

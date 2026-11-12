@@ -15,3 +15,6 @@
 
 **Learning:** There are quite a few buttons with only an icon or ambiguous text that lack the `aria-label` or `title` tags to provide a description to screen readers or users on hover.
 **Action:** When adding or modifying buttons, ensure they have proper ARIA attributes to improve accessibility, especially for icon-only buttons.
+## 2025-02-12 - Adding aria-labels to buttons in Panels
+**Learning:** Found that there are buttons missing `aria-label` tags, such as adding a camera in `CamerasManager` or `IoTBridgePanel`.
+**Action:** When creating a button with an icon or ambiguous text (e.g. `+`), ensure it has an `aria-label` attribute.
