@@ -132,6 +132,8 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
             {/* Segmented Control for Source Selection */}
             <div className="bg-slate-900 border border-slate-800 rounded-lg p-0.5 flex gap-1 text-xs" role="group" aria-label="Fonte do Vídeo">
               <button 
+                aria-label="Usar transmissão da granja"
+                title="Usar transmissão da granja"
                 onClick={() => setSource('server')}
                 aria-pressed={source === 'server'}
                 className={`px-3 py-1.5 rounded-md font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:z-10 relative ${source === 'server' ? 'bg-emerald-500 text-white shadow shadow-emerald-500/25' : 'text-slate-400 hover:text-slate-200'}`}
@@ -155,6 +157,8 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
             </div>
 
             <button 
+              aria-label={showHeatmapOverlay ? "Ocultar Mapa de Calor Térmico" : "Mostrar Mapa de Calor Térmico"}
+              title={showHeatmapOverlay ? "Ocultar Mapa de Calor Térmico" : "Mostrar Mapa de Calor Térmico"}
               onClick={() => setShowHeatmapOverlay(v => !v)}
               aria-pressed={showHeatmapOverlay}
               className="flex items-center gap-1.5 text-xs font-semibold bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 rounded-lg px-3 py-1.5 transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 focus:outline-none"
@@ -258,6 +262,8 @@ export default function CameraPanel({ token, serverIP, cameras = [], activeCamer
                   <p className="text-slate-400 font-medium">Aguardando Conexão com Câmera Real</p>
                   <p className="text-slate-500 text-xs mt-2">Sem simuladores disponíveis</p>
                   <button 
+                    aria-label="Tentar novamente conectar vídeo da granja"
+                    title="Tentar novamente conectar vídeo da granja"
                     onClick={() => { setVideoBlocked(false); setUseWebRTC(false); }}
                     className="mt-4 flex items-center gap-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none"
                   >

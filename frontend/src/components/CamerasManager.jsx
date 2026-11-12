@@ -118,6 +118,7 @@ export default function CamerasManager({ serverIP, token }) {
           <p className="text-slate-400 text-sm mt-1">Conecte múltiplas granjas via RTSP/IP para gerenciar diferentes lotes.</p>
         </div>
         <button 
+          aria-label="Nova Câmera"
           onClick={() => { setEditingId(null); setFormData({ camera_id: '', name: '', connection_type: 'url', connection_url: '' }); setShowModal(true); }}
           className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-emerald-500/20 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none"
         >
@@ -161,6 +162,7 @@ export default function CamerasManager({ serverIP, token }) {
                       Adicione sua primeira câmera IP (RTSP), link de vídeo ou câmera USB para iniciar o monitoramento inteligente por IA.
                     </p>
                     <button 
+                      aria-label="Cadastrar Primeira Câmera"
                       onClick={() => { setEditingId(null); setFormData({ camera_id: '', name: '', connection_type: 'url', connection_url: '' }); setShowModal(true); }}
                       className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 px-5 py-2.5 rounded-lg flex items-center gap-2 transition-all font-semibold shadow-sm focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus:outline-none"
                     >
